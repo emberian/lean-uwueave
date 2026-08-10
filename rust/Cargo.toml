@@ -1,0 +1,12 @@
+[package]
+name = "leanuweave"
+version = "0.1.0"
+edition = "2021"
+license = "Unlicense OR MIT"
+description = "The coordination-free fragment of a weave, implemented as proved: content-addressed causal DAG + op-log moves. Companion to the Leanuweave theorems."
+repository = "https://github.com/emberian/leanuweave"
+categories = ["data-structures"]
+keywords = ["crdt", "loom", "weave", "dag", "causal"]
+
+[dependencies]
+blake3 = "1"

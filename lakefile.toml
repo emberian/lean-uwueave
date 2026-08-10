@@ -1,0 +1,11 @@
+name = "leanuweave"
+defaultTargets = ["Leanuweave"]
+
+# NO mathlib. This library depends on Lean core only, so `lake build` is seconds,
+# not an hour, and anyone can check the proofs without a mathlib checkout.
+# The lattice/order structure we need (a join-semilattice and the I-confluence
+# judgement over it) is ~40 lines; pulling mathlib for it would buy nothing and
+# cost every reader a large download.
+
+[[lean_lib]]
+name = "Leanuweave"
