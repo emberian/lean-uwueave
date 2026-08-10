@@ -18,6 +18,7 @@ import Leanuweave.MVRegister
 import Leanuweave.Segmented
 import Leanuweave.Undo
 import Leanuweave.Delta
+import Leanuweave.Sequence
 
 /--
 info: 'Leanuweave.Acyclicity.grounded_acyclic' does not depend on any axioms
@@ -319,3 +320,55 @@ info: 'Leanuweave.Delta.addDelta_frame' depends on axioms: [propext, Quot.sound]
 info: 'Leanuweave.Delta.addDelta_least' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in #print axioms Leanuweave.Delta.addDelta_least
+
+/-! ### Wave 3 — sequences -/
+
+/--
+info: 'Leanuweave.Sequence.wf_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.wf_iconfluent
+
+/--
+info: 'Leanuweave.Sequence.wf_unique_anchor_not_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.wf_unique_anchor_not_iconfluent
+
+/--
+info: 'Leanuweave.Sequence.sequence_view_sec' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.sequence_view_sec
+
+/--
+info: 'Leanuweave.Sequence.linearize_mem' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.linearize_mem
+
+/--
+info: 'Leanuweave.Sequence.dup_id_appears_twice' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.dup_id_appears_twice
+
+/--
+info: 'Leanuweave.Sequence.linearize_anchor_precedes' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.linearize_anchor_precedes
+
+/--
+info: 'Leanuweave.Sequence.interleaving_anomaly' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.interleaving_anomaly
+
+/--
+info: 'Leanuweave.Sequence.run_order_by_id' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.run_order_by_id
+
+/--
+info: 'Leanuweave.Sequence.linearize_count_one' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.linearize_count_one
+
+/--
+info: 'Leanuweave.Sequence.merged_head_exactly_once' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Sequence.merged_head_exactly_once
