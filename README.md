@@ -1,7 +1,10 @@
-# leanuweave
+# lean-uwueave
 
 **Machine-checked answers to "isn't the hard part of a DAG/tree CRDT just
 enforcing the requirements of a DAG/tree?" — plus the Rust that follows them.**
+
+(The lake library and Rust crate keep the identifier spelling `Leanuweave`/`leanuweave`;
+the project's name is lean-uwueave, and that was never a typo.)
 
 Built as a companion to [universal-weave](https://github.com/transkatgirl/universal-weave):
 a small Lean 4 development that classifies weave/loom invariants by whether they
