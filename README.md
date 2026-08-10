@@ -74,26 +74,27 @@ storage/index/codec glue, the shim, Lean's C backend, and the refinement of
 `Exec.lean` to `Move.lean`'s abstract model (named open work). The tests are
 good tests and zero formal evidence.
 
-## Mapping to the universal-weave roadmap
+## If you are building a loom
 
-- **M1 embedded DAG** — the data layer's verdict is `causal_dag_free`: if node
-  ids stay content-derived and parents fix at creation, the store needs no
-  coordination machinery, on a microcontroller or anywhere else. Node moving
-  should be log-derived, not stored-parent mutation (`Move.lean`).
-- **M2 multiplayer DAG** — the merge you need is the union in
-  `CausalWeave::merge` + `MoveLog::merge`; the DAG-CRDT that "no CRDT library
-  supports" is exactly the grounded fragment, and the part genuinely missing
-  from libraries is the part `acyclicity_not_iconfluent` proves *cannot* be a
-  library feature — it's a policy choice this repo makes explicit. Keep the
-  active path per-user (`active_path_not_iconfluent`).
-- **M3 UI/UX** — `view_not_stable` is the theorem your UI layer must design
+- **A single-device or embedded weave** — the data layer's verdict is
+  `causal_dag_free`: with content-derived ids and parents fixed at creation,
+  the store needs no coordination machinery on any hardware, and node moving
+  is best kept log-derived rather than stored-parent mutation (`Move.lean`).
+- **A multiplayer weave** — the merge you need is the union in
+  `CausalWeave::merge` + `MoveLog::merge`. The part that feels missing from
+  every CRDT library is the part `acyclicity_not_iconfluent` proves *cannot*
+  be a library feature — it is a policy choice, and this repo's job is to
+  price the choices. Keep the active path per-user
+  (`active_path_not_iconfluent`), let concurrent edits surface as visible
+  forks (`conflict_surfaces` — a loom is the one UI where forks are the
+  product), and hold equivocating peers accountable with monotone evidence
+  (`fork_evidence_iconfluent`).
+- **UI over replicated state** — `view_not_stable` is the theorem to design
   around: derived views can *shrink* when older ops sync in; treat replay
   output as watchable state, and consider surfacing skipped ops to the user
   rather than silently dropping their move.
-- **loro interop** — nothing here competes with loro's sequence CRDTs; this is
-  the structural layer around them. The `TODO.md` item "DAG-based documents
-  (waiting on Loro to implement DAG CRDTs)" doesn't need to wait: the grounded
-  fragment is implementable today (and is, in `rust/`).
+- **Text** — nothing here competes with loro's sequence CRDTs; this is the
+  structural layer around them.
 
 ## Building
 
