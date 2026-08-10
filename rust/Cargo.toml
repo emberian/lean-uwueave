@@ -10,3 +10,6 @@ keywords = ["crdt", "loom", "weave", "dag", "causal"]
 
 [dependencies]
 blake3 = "1"
+
+[build-dependencies]
+cc = "1"

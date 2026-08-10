@@ -1,7 +1,12 @@
 import Leanuweave.Confluence
+import Leanuweave.Exec
 import Leanuweave.Catalog
 import Leanuweave.Acyclicity
 import Leanuweave.Move
+import Leanuweave.ORSet
+import Leanuweave.Causality
+import Leanuweave.MVRegister
+import Leanuweave.Segmented
 import Leanuweave.Spec
 import Leanuweave.Weave
 import Leanuweave.Audit

@@ -38,27 +38,38 @@ the theorems bless. No mathlib — `lake build` finishes in seconds on a laptop.
 | `Leanuweave/Acyclicity.lean` | **The DAG dichotomy** (sentences 2 above): `acyclicity_not_iconfluent`, `grounded_iconfluent`, `grounded_acyclic`, packaged as `causal_dag_free`. |
 | `Leanuweave/Move.lean` | The op-log pattern's guarantee, generically (`derived_view_sec`: order-independence + redelivery-immunity + invariant enforcement), and its price on a concrete miniature (`view_not_stable`). |
 | `Leanuweave/Spec.lean` | **A fluid, proof-carrying composition DSL**: schemas are ordinary `×`/`→` types, and a `Verdict` is either an `IConfluent` proof or a counterexample that *transports through the combinators* — the worked example poisons one field of a loom document and gets a whole-document repro out. |
+| `Leanuweave/ORSet.lean` | Removable sets both ways: the OR-Set's add-wins guarantee correctly scoped (`orset_present_survives`) and unscoped presence refuted (`orset_present_not_iconfluent` — the both-sides-tombstone anomaly); the causal-length set's presence free by per-key selection (`clset_present_iconfluent`), with the cross-element failure (`clset_cross_element_not_iconfluent`) completing the "selection lattices compose into non-selection lattices" trilogy. |
+| `Leanuweave/Causality.lean` | The vector-clock order **is** the lattice order (`vclock_leq_iff`), concurrent merges make strict progress (`concurrent_merge_strict`), and fork/equivocation evidence is monotone-forever (`fork_evidence_iconfluent`) with no unilateral framing (`no_unilateral_evidence`) — the accountable-BFT primitive for multiplayer. |
+| `Leanuweave/MVRegister.lean` | The multi-value register as a derived view: the visible set is an antichain (`view_antichain`), concurrent writes both surface (`conflict_surfaces` — the anti-LWW), and resolution is just a write (`resolution_is_a_write`). |
+| `Leanuweave/Segmented.lean` | Whittaker-style segmented I-confluence: conservative over the plain judgement (`iconfluent_iff_trivially_segmented`), and the punchline pair — one budgeted invariant, *both* verdicts (`budget_not_iconfluent` / `budget_segmented`): spends free within an allocation, coordination only at re-allocation. |
 | `Leanuweave/Weave.lean` | universal-weave's README feature list, feature-by-feature verdicts, plus the loom-specific theorem: a **shared replicated active path is not a CRDT** (`active_path_not_iconfluent`) — make activation per-user (proved free). |
+| `Leanuweave/Exec.lean` | The **executable kernel**: the move-log replay (ordering + cycle-skip), authored in Lean, `@[export]`ed, compiled to C by lake. The refinement theorem to `Move.lean`'s abstract model is named open work in its header. |
 | `Leanuweave/Audit.lean` | Every keystone's axiom footprint pinned with `#guard_msgs`: a `sorry` or `native_decide` anywhere fails the build. Two theorems (`grounded_acyclic`, `derived_view_sec`) are axiom-free entirely. |
 
 ## The Rust (`rust/`)
 
-`leanuweave` (one dependency: blake3) implements the blessed fragment:
+`leanuweave` wraps the **Lean-compiled kernel** rather than re-implementing it:
+`build.rs` runs `lake build`, compiles the emitted C for every module plus a
+three-function shim (`shim.c`), and links the Lean runtime. Building the crate
+therefore requires a Lean toolchain ([elan](https://elan.lean-lang.org)) — by
+design: the semantics have one home.
 
-- **`causal::CausalWeave<T>`** — append-only content-addressed DAG. Grounded
-  by construction (`rank = 1 + max parent rank`; parents must exist to be
-  named), so `merge` is skip-if-present union with **no cycle check** — the
-  theorems are why that's sound. Same-id-different-bytes is refused as
-  corruption (`IdCollision`), never silently deduped: convergence proofs
-  assume ids resolve identically, so a collision must be loud.
-- **`movelog::MoveLog`** — moves as a grow-only op set + deterministic
-  timestamp-ordered cycle-skipping replay (Kleppmann-style). Tests replay the
-  Lean witnesses scenario-for-scenario, including `view_not_stable`.
+- **`causal::CausalWeave<T>`** — append-only content-addressed DAG (storage,
+  blake3 hashing, indexes: the deliberately dumb jobs Rust keeps). Grounded by
+  construction, so `merge` is skip-if-present union with **no cycle check** —
+  the theorems are why that's sound. Same-id-different-bytes is refused as
+  corruption (`IdCollision`), never silently deduped.
+- **`movelog::MoveLog`** — moves as a grow-only op set whose replay
+  (ordering + cycle-skip, the parts that must be *right*) is `Exec.lean`'s
+  kernel, called through FFI. **No Rust replay implementation exists to
+  drift.** Tests replay the Lean witnesses scenario-for-scenario through the
+  real kernel, including `view_not_stable`.
 
-**Claim discipline:** the Lean verifies the *design*; the Rust is an unverified
-implementation of it. The witness-mirror tests are good tests and zero formal
-evidence — no "translation validation" is claimed, because there is no formal
-semantics of Rust to state it in.
+**Claim discipline:** the Lean theorems verify the *design*; the replay
+semantics are Lean-authored and compiled in. Still unverified: the
+storage/index/codec glue, the shim, Lean's C backend, and the refinement of
+`Exec.lean` to `Move.lean`'s abstract model (named open work). The tests are
+good tests and zero formal evidence.
 
 ## Mapping to the universal-weave roadmap
 
@@ -85,7 +96,7 @@ semantics of Rust to state it in.
 
 ```sh
 lake build          # the proofs; Lean core only, no mathlib, ~30s cold
-cd rust && cargo test
+cd rust && cargo test   # builds the Lean kernel to C and links it (needs elan)
 ```
 
 ## Provenance

@@ -73,6 +73,46 @@ theorem le_merge_right {S : Type u} [MergeState S] (x y : S) : y ⊑ (x ⊔ y) :
   show y ⊔ (x ⊔ y) = x ⊔ y
   rw [merge_comm x y, ← merge_assoc, merge_idem]
 
+/-! The induced order is a genuine partial order, and the merge is the **least**
+upper bound in it — which is why "sync" loses nothing and adds nothing. These
+four lemmas are the working kit for causality reasoning (`Causality.lean`). -/
+
+theorem leq_refl {S : Type u} [MergeState S] (x : S) : x ⊑ x := merge_idem x
+
+theorem leq_trans {S : Type u} [MergeState S] {x y z : S}
+    (hxy : x ⊑ y) (hyz : y ⊑ z) : x ⊑ z := by
+  show x ⊔ z = z
+  calc x ⊔ z = x ⊔ (y ⊔ z) := by rw [hyz]
+    _ = (x ⊔ y) ⊔ z := by rw [merge_assoc]
+    _ = y ⊔ z := by rw [hxy]
+    _ = z := hyz
+
+theorem leq_antisymm {S : Type u} [MergeState S] {x y : S}
+    (hxy : x ⊑ y) (hyx : y ⊑ x) : x = y := by
+  calc x = y ⊔ x := hyx.symm
+    _ = x ⊔ y := merge_comm y x
+    _ = y := hxy
+
+/-- **The merge is the least upper bound**: it sits above both replicas, and
+below anything that does. Read operationally: the merged state knows everything
+either replica knew and *nothing else* — a sync can neither drop nor invent
+knowledge. -/
+theorem merge_le_iff {S : Type u} [MergeState S] {x y z : S} :
+    (x ⊔ y) ⊑ z ↔ x ⊑ z ∧ y ⊑ z := by
+  constructor
+  · intro h
+    have hx : x ⊔ (x ⊔ y) = x ⊔ y := by rw [← merge_assoc, merge_idem]
+    have hy : y ⊔ (x ⊔ y) = x ⊔ y := by
+      rw [merge_comm x y, ← merge_assoc, merge_idem]
+    constructor
+    · show x ⊔ z = z
+      rw [← h, ← merge_assoc, hx]
+    · show y ⊔ z = z
+      rw [← h, ← merge_assoc, hy]
+  · intro ⟨hx, hy⟩
+    show (x ⊔ y) ⊔ z = z
+    rw [merge_assoc, hy, hx]
+
 /-! ## §2. The judgement -/
 
 /-- An invariant is just a predicate on replica state: `balance ≥ 0`, "the parent
@@ -152,6 +192,18 @@ instance instMergeStatePi {K : Type u} {V : Type v} [MergeState V] :
   merge_comm f g := funext fun k => merge_comm (f k) (g k)
   merge_assoc f g h := funext fun k => merge_assoc (f k) (g k) (h k)
   merge_idem f := funext fun k => merge_idem (f k)
+
+/-- Merges compute componentwise/pointwise *by definition*; these `rfl` lemmas
+make that visible to `simp`/`rw`, which match syntactically and cannot see
+through instance projections on their own. -/
+@[simp] theorem prod_merge_fst {A : Type u} {B : Type v} [MergeState A] [MergeState B]
+    (x y : A × B) : (x ⊔ y).1 = x.1 ⊔ y.1 := rfl
+
+@[simp] theorem prod_merge_snd {A : Type u} {B : Type v} [MergeState A] [MergeState B]
+    (x y : A × B) : (x ⊔ y).2 = x.2 ⊔ y.2 := rfl
+
+@[simp] theorem pi_merge_apply {K : Type u} {V : Type v} [MergeState V]
+    (f g : K → V) (k : K) : (f ⊔ g) k = f k ⊔ g k := rfl
 
 /-- **The pointwise lift.** A per-key invariant that is I-confluent at every key
 is I-confluent over the whole map. Keys are independent, so each closes alone. -/

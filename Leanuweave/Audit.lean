@@ -12,6 +12,10 @@ Two theorems are pinned axiom-FREE — the well-foundedness argument
 are pure λ-calculus.
 -/
 import Leanuweave.Weave
+import Leanuweave.ORSet
+import Leanuweave.Causality
+import Leanuweave.MVRegister
+import Leanuweave.Segmented
 
 /--
 info: 'Leanuweave.Acyclicity.grounded_acyclic' does not depend on any axioms
@@ -92,3 +96,85 @@ info: 'Leanuweave.Move.view_not_stable' depends on axioms: [propext]
 info: 'Leanuweave.Weave.active_path_not_iconfluent' depends on axioms: [Quot.sound]
 -/
 #guard_msgs in #print axioms Leanuweave.Weave.active_path_not_iconfluent
+
+/-! ### Wave 2 — removable sets, causality, MV-register, segmentation -/
+
+/--
+info: 'Leanuweave.merge_le_iff' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.merge_le_iff
+
+/--
+info: 'Leanuweave.leq_antisymm' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.leq_antisymm
+
+/--
+info: 'Leanuweave.MVRegister.view_antichain' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.MVRegister.view_antichain
+
+/--
+info: 'Leanuweave.Segmented.iconfluent_iff_trivially_segmented' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Segmented.iconfluent_iff_trivially_segmented
+
+/--
+info: 'Leanuweave.ORSet.orset_present_survives' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.ORSet.orset_present_survives
+
+/--
+info: 'Leanuweave.ORSet.orset_present_not_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.ORSet.orset_present_not_iconfluent
+
+/--
+info: 'Leanuweave.ORSet.clset_present_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.ORSet.clset_present_iconfluent
+
+/--
+info: 'Leanuweave.ORSet.clset_cross_element_not_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.ORSet.clset_cross_element_not_iconfluent
+
+/--
+info: 'Leanuweave.Causality.vclock_leq_iff' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Causality.vclock_leq_iff
+
+/--
+info: 'Leanuweave.Causality.concurrent_merge_strict' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Causality.concurrent_merge_strict
+
+/--
+info: 'Leanuweave.Causality.fork_evidence_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Causality.fork_evidence_iconfluent
+
+/--
+info: 'Leanuweave.Causality.no_unilateral_evidence' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Causality.no_unilateral_evidence
+
+/--
+info: 'Leanuweave.MVRegister.conflict_surfaces' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.MVRegister.conflict_surfaces
+
+/--
+info: 'Leanuweave.MVRegister.resolution_is_a_write' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.MVRegister.resolution_is_a_write
+
+/--
+info: 'Leanuweave.Segmented.budget_not_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Segmented.budget_not_iconfluent
+
+/--
+info: 'Leanuweave.Segmented.budget_segmented' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Segmented.budget_segmented

@@ -102,6 +102,11 @@ instance instMergeStateNatMax : MergeState Nat where
   merge_assoc := Nat.max_assoc
   merge_idem := Nat.max_self
 
+/-- Core's `Nat.max_def` is stated via `Max.max`, which never matches the
+`Nat.max` applications our merges reduce to; this is the same fact in the
+spelling `rw` can find. -/
+theorem nat_max_def (m n : Nat) : Nat.max m n = if m ≤ n then n else m := Nat.max_def
+
 /-- A grow-only counter: per-replica counts, merged by per-key max (the
 pointwise lift — no new proof needed for the instance). -/
 abbrev GCounter (ι : Type) := ι → Nat
