@@ -1,117 +1,157 @@
 # lean-uwueave
 
-**Machine-checked answers to "isn't the hard part of a DAG/tree CRDT just
-enforcing the requirements of a DAG/tree?" — plus the Rust that follows them.**
+**For everyone who got three bugs deep into replicating a branching document and
+started wondering whether the problems were theirs or the universe's.**
 
-(The lake library and Rust crate keep the identifier spelling `Uwueave`/`uwueave`;
-the project's name is lean-uwueave, and that was never a typo.)
+Good news, of a particular flavor: many of them are the universe's — and the
+universe wrote down which ones. This repo is that list, machine-checked, with
+working code attached. It grew out of a real question asked by a real loom
+builder:
 
-Built as a companion to [universal-weave](https://github.com/transkatgirl/universal-weave):
-a small Lean 4 development that classifies weave/loom invariants by whether they
-can be replicated with **zero coordination**, refutes the ones that can't with
-concrete two-replica counterexamples, and a Rust crate implementing the fragment
-the theorems bless. No mathlib — `lake build` finishes in seconds on a laptop.
+> *"isn't the hard part of making a DAG/tree CRDT just enforcing the
+> requirements of a DAG/tree?"*
 
-## The three-sentence version
+Yes. And the honest answer to *that* has three parts, each of which is a
+theorem here rather than a vibe:
 
-1. **The question is never "is my merge a CRDT", it is "does my *invariant*
-   survive my merge."** Bailis et al. proved this test (*invariant confluence*)
-   is necessary *and* sufficient: if an invariant fails it, **no library,
-   however clever, can maintain it coordination-free** — you are choosing among
-   escalation (coordinate), arbitration (someone loses), and compensation
-   (repair after).
-2. **Acyclicity fails the test for arbitrary edge insertion** (`a→b` ∪ `b→a`:
-   two legal DAGs, one merged cycle) **but a stronger, edge-local invariant
-   passes it and implies acyclicity** — "every edge descends in rank", which
-   content-addressing gives you for free because a hash-linked node's parents
-   must exist before the child can be named. Append-only weaves get DAG-ness at
-   any replication scale with no cycle check at all.
-3. **The edits that leave that island — move, split, merge-nodes — go through
-   the op-log pattern**: replicate the grow-only set of operations, *derive*
-   the structure by deterministic cycle-skipping replay. Convergence and
-   DAG-ness are then theorems; the honest price (also a theorem) is that an
-   older remote op can retroactively un-apply a move you watched happen.
+1. **The question is never "is my merge a CRDT" — it's "does my *invariant*
+   survive my merge."** This test has a name (*invariant confluence*, Bailis
+   et al. 2015) and a wonderful property: it is necessary *and* sufficient. If
+   your invariant fails it, no library — however clever, including this one —
+   can maintain it without coordination. You aren't bad at this; the universe
+   said no. What's left is choosing *how* to pay: coordinate, arbitrate
+   (someone's edit loses), or repair afterward. Every design in this repo is
+   honest about which of those it chose.
+2. **"The graph stays acyclic" fails that test for arbitrary edge insertion**
+   (two replicas, two innocent edges, one merged cycle — we prove it) —
+   **but a stronger, humbler invariant passes it and gives you acyclicity for
+   free**: *every edge points to something older*. Content-addressing — ids
+   that are hashes of contents-plus-parents, like git — hands you that
+   invariant without asking. An append-only, hash-linked weave simply cannot
+   have a cycle, needs no cycle check, and merges freely at any scale.
+3. **The edits that don't fit that shape — moving a node, merging nodes —
+   go through a pattern**: replicate the grow-only *log of operations*, and
+   *derive* the structure by deterministic replay. Convergence becomes a
+   theorem. So does the price: an older edit arriving late can quietly un-do
+   a move you watched happen. We didn't hide that; we proved it, so you can
+   design your UI around it instead of discovering it from a bug report.
 
-## The theorems, by file
+(The lake library and Rust crate spell it `Uwueave`/`uwueave`; the project is
+lean-uwueave, and that was never a typo.)
 
-| File | What it proves |
+## If you don't read Lean
+
+You don't have to. Three things here are useful with zero formal-methods
+background:
+
+- **The verdict table below.** Each row tells you whether a feature can be
+  coordination-free, with the theorem named so you (or a friend, or a model)
+  can check the receipt.
+- **The counterexamples.** Every "no" comes with a concrete two-replica
+  scenario — real states, usually three lines each. They paste straight into
+  your test suite, whatever language it's in. A refutation here is a gift:
+  it's the exact bug your users would have found for you, delivered early
+  and politely.
+- **The design advice** in "If you are building a loom," which is just the
+  theorems wearing comfortable clothes.
+
+## The map
+
+| File | What it settles |
 |---|---|
-| `Uwueave/Confluence.lean` | The judgement: `MergeState` (join-semilattice), `IConfluent`, the constructive `escalation_witness` (a failed invariant always yields a runnable two-replica repro), and the product/pointwise lifts that make field-by-field classification sound. |
-| `Uwueave/Catalog.lean` | G-Set, G-Counter, PN-Counter, LWW, escrow — merge laws proved, keystone invariants classified. Highlights: uniqueness/ceilings escalate (`gset_atMostOne_not_iconfluent`), mutual exclusion escalates (`or_breaks_iconfluence`), balances escalate (`pncounter_nonneg_not_iconfluent`) but **escrow rephrases them free** (`escrow_local_bound_iconfluent`); a single LWW register can never merge-break any invariant (`lww_every_invariant_iconfluent`) yet two of them break relational ones (`lww_cross_field_not_iconfluent`). |
-| `Uwueave/Acyclicity.lean` | **The DAG dichotomy** (sentences 2 above): `acyclicity_not_iconfluent`, `grounded_iconfluent`, `grounded_acyclic`, packaged as `causal_dag_free`. |
-| `Uwueave/Move.lean` | The op-log pattern's guarantee, generically (`derived_view_sec`: order-independence + redelivery-immunity + invariant enforcement), and its price on a concrete miniature (`view_not_stable`). |
-| `Uwueave/Spec.lean` | **A fluid, proof-carrying composition DSL**: schemas are ordinary `×`/`→` types, and a `Verdict` is either an `IConfluent` proof or a counterexample that *transports through the combinators* — the worked example poisons one field of a loom document and gets a whole-document repro out. |
-| `Uwueave/ORSet.lean` | Removable sets both ways: the OR-Set's add-wins guarantee correctly scoped (`orset_present_survives`) and unscoped presence refuted (`orset_present_not_iconfluent` — the both-sides-tombstone anomaly); the causal-length set's presence free by per-key selection (`clset_present_iconfluent`), with the cross-element failure (`clset_cross_element_not_iconfluent`) completing the "selection lattices compose into non-selection lattices" trilogy. |
-| `Uwueave/Causality.lean` | The vector-clock order **is** the lattice order (`vclock_leq_iff`), concurrent merges make strict progress (`concurrent_merge_strict`), and fork/equivocation evidence is monotone-forever (`fork_evidence_iconfluent`) with no unilateral framing (`no_unilateral_evidence`) — the accountable-BFT primitive for multiplayer. |
-| `Uwueave/MVRegister.lean` | The multi-value register as a derived view: the visible set is an antichain (`view_antichain`), concurrent writes both surface (`conflict_surfaces` — the anti-LWW), and resolution is just a write (`resolution_is_a_write`). |
-| `Uwueave/Segmented.lean` | Whittaker-style segmented I-confluence: conservative over the plain judgement (`iconfluent_iff_trivially_segmented`), and the punchline pair — one budgeted invariant, *both* verdicts (`budget_not_iconfluent` / `budget_segmented`): spends free within an allocation, coordination only at re-allocation. |
-| `Uwueave/Weave.lean` | universal-weave's README feature list, feature-by-feature verdicts, plus the loom-specific theorem: a **shared replicated active path is not a CRDT** (`active_path_not_iconfluent`) — make activation per-user (proved free). |
-| `Uwueave/Exec.lean` | The **executable kernel**: the move-log replay (ordering + cycle-skip), authored in Lean, `@[export]`ed, compiled to C by lake. The refinement theorem to `Move.lean`'s abstract model is named open work in its header. |
-| `Uwueave/Audit.lean` | Every keystone's axiom footprint pinned with `#guard_msgs`: a `sorry` or `native_decide` anywhere fails the build. Two theorems (`grounded_acyclic`, `derived_view_sec`) are axiom-free entirely. |
+| `Uwueave/Confluence.lean` | The judgement itself: `MergeState`, `IConfluent`, and `escalation_witness` — a failed invariant *always* yields a runnable two-replica repro. Plus the lifts that let a document's verdict be computed field-by-field. |
+| `Uwueave/Catalog.lean` | The classic structures — G-Set, counters, LWW, escrow — with merge laws proved and keystone invariants classified. The pattern worth internalizing: ceilings, uniqueness, and mutual exclusion escalate; grow-only facts and per-replica quotas run free; a lone LWW register can never merge-break anything (`lww_every_invariant_iconfluent`) while two LWW registers can break any invariant *relating* them (`lww_cross_field_not_iconfluent`). |
+| `Uwueave/Acyclicity.lean` | The DAG dichotomy of part 2 above: `acyclicity_not_iconfluent`, `grounded_iconfluent`, `grounded_acyclic` — packaged as `causal_dag_free`. |
+| `Uwueave/Move.lean` | The op-log pattern's guarantee, once and generically (`derived_view_sec`), and its price on a concrete miniature (`view_not_stable`). |
+| `Uwueave/ORSet.lean` | Removable sets, both honest ways: add-wins correctly scoped (`orset_present_survives`), unscoped presence refuted (`orset_present_not_iconfluent`), and the causal-length set free per-element (`clset_present_iconfluent`). |
+| `Uwueave/Causality.lean` | Vector clocks: the clock order *is* the merge's order (`vclock_leq_iff`) — and fork evidence is forever (`fork_evidence_iconfluent`): a peer caught equivocating cannot gossip its way back to innocence. |
+| `Uwueave/MVRegister.lean` | The multi-value register: keep the fork, show the fork. Concurrent writes both surface (`conflict_surfaces`); resolving is just another write (`resolution_is_a_write`). For a loom this isn't conflict *handling* — forks are the product. |
+| `Uwueave/Undo.lean` | Multi-user undo/redo as ordinary writes at fresh clocks — the view restores (`undo_restores`), history is never rewritten (`undo_preserves_history`), and a concurrent undo conflicts *visibly* instead of losing silently. |
+| `Uwueave/Delta.lean` | Why shipping deltas instead of states is sound: `joinAll` is exactly the least upper bound, and `same_deltas_same_state` — same delta-set, any order, any duplication, any batching, same replica. Twelve of its sixteen theorems use no axioms at all. |
+| `Uwueave/Sequence.lean` | The text layer, with its boundary drawn precisely: membership and anchor-order hold from well-formedness alone; exactly-once needs an id-uniqueness premise *and we prove that premise isn't free*; and the centerpiece is a concrete interleaving-anomaly witness — two runs merging to `[4,3,2,1]`, strictly alternated. No-interleaving is explicitly *not* claimed; that's what real sequence CRDTs (loro, Fugue) are for. |
+| `Uwueave/Segmented.lean` | The gentlest verdict: some invariants that fail globally are free *within a seam* (`budget_segmented` vs `budget_not_iconfluent` — same invariant, both verdicts). Spend freely inside your quota; coordinate only to re-divide it. |
+| `Uwueave/Spec.lean` | A composition DSL where verdicts carry their evidence: a schema's answer is either a proof or a counterexample transported up from the exact field that caused it. |
+| `Uwueave/Weave.lean` | A real weave library's feature list classified feature-by-feature — including the loom-specific theorem that a *shared* replicated active path is not a CRDT (`active_path_not_iconfluent`); make it per-user, which is better UX anyway. |
+| `Uwueave/Exec.lean` | The executable kernel: the move-replay decision procedure, authored in Lean, exported to C, and linked into the Rust crate — so the part that must be right lives in one place, next to its model. |
+| `Uwueave/Audit.lean` | The trust ledger, enforced: every keystone theorem's axiom footprint is pinned with `#guard_msgs`. A `sorry` or `native_decide` sneaking in anywhere *fails the build*. Eighteen keystones use no axioms at all. |
 
-## The Rust (`rust/`)
+## The Rust crate (`rust/`)
 
 `uwueave` wraps the **Lean-compiled kernel** rather than re-implementing it:
-`build.rs` runs `lake build`, compiles the emitted C for every module plus a
-three-function shim (`shim.c`), and links the Lean runtime. Building the crate
-therefore requires a Lean toolchain ([elan](https://elan.lean-lang.org)) — by
-design: the semantics have one home.
+`build.rs` runs `lake build`, compiles the emitted C plus a three-function
+shim, and links the Lean runtime — so building it requires a Lean toolchain
+([elan](https://elan.lean-lang.org)), on purpose. The semantics have one home.
 
-- **`causal::CausalWeave<T>`** — append-only content-addressed DAG (storage,
-  blake3 hashing, indexes: the deliberately dumb jobs Rust keeps). Grounded by
-  construction, so `merge` is skip-if-present union with **no cycle check** —
-  the theorems are why that's sound. Same-id-different-bytes is refused as
-  corruption (`IdCollision`), never silently deduped.
-- **`movelog::MoveLog`** — moves as a grow-only op set whose replay
-  (ordering + cycle-skip, the parts that must be *right*) is `Exec.lean`'s
-  kernel, called through FFI. **No Rust replay implementation exists to
-  drift.** Tests replay the Lean witnesses scenario-for-scenario through the
-  real kernel, including `view_not_stable`.
+- `causal::CausalWeave<T>` — the append-only content-addressed DAG. Grounded
+  by construction, so `merge` is a plain union with **no cycle check** — the
+  theorems above are why that's not recklessness. A same-id-different-bytes
+  encounter is refused loudly as corruption, never silently deduplicated.
+- `movelog::MoveLog` — moves as a grow-only op set whose replay decision is
+  `Exec.lean`'s kernel, called through FFI. There is no Rust replay
+  implementation to drift out of sync, because there is no Rust replay
+  implementation.
+- `tests/properties.rs` — randomized law-checking (merge laws, groundedness,
+  replay determinism, view acyclicity) through the real kernel; the suite has
+  been mutation-tested, so its greens are known to be capable of turning red.
 
-**Claim discipline:** the Lean theorems verify the *design*; the replay
-semantics are Lean-authored and compiled in. Still unverified: the
-storage/index/codec glue, the shim, Lean's C backend, and the refinement of
-`Exec.lean` to `Move.lean`'s abstract model (named open work). The tests are
-good tests and zero formal evidence.
+**What we claim, plainly:** the Lean theorems verify the *design*; the replay
+semantics are Lean-authored and compiled in. Still unverified, and said so:
+the storage/index/codec glue, the C shim, Lean's own C backend, and the
+refinement connecting the executable kernel to the abstract model (named open
+work in `Exec.lean`). Tests — even lovely ones — are evidence, not proof, and
+we label them accordingly.
 
 ## If you are building a loom
 
-- **A single-device or embedded weave** — the data layer's verdict is
-  `causal_dag_free`: with content-derived ids and parents fixed at creation,
-  the store needs no coordination machinery on any hardware, and node moving
-  is best kept log-derived rather than stored-parent mutation (`Move.lean`).
+- **A single-device or embedded weave** — with content-derived ids and
+  parents fixed at creation, the store needs no coordination machinery on any
+  hardware. Keep node moving log-derived, not stored-parent mutation.
 - **A multiplayer weave** — the merge you need is the union in
   `CausalWeave::merge` + `MoveLog::merge`. The part that feels missing from
-  every CRDT library is the part `acyclicity_not_iconfluent` proves *cannot*
-  be a library feature — it is a policy choice, and this repo's job is to
-  price the choices. Keep the active path per-user
-  (`active_path_not_iconfluent`), let concurrent edits surface as visible
-  forks (`conflict_surfaces` — a loom is the one UI where forks are the
-  product), and hold equivocating peers accountable with monotone evidence
-  (`fork_evidence_iconfluent`).
-- **UI over replicated state** — `view_not_stable` is the theorem to design
-  around: derived views can *shrink* when older ops sync in; treat replay
-  output as watchable state, and consider surfacing skipped ops to the user
-  rather than silently dropping their move.
+  every CRDT library is the part that provably *cannot* be a library feature;
+  what a library can do is price your choices, which is what this one does.
+  Keep the active path per-user. Let concurrent edits surface as visible
+  forks — a loom is the one interface where forks are the product. Hold
+  equivocating peers accountable with evidence that never expires.
+- **UI over replicated state** — design around `view_not_stable`: derived
+  views can shrink when older ops sync in. Treat replay output as watchable
+  state; consider showing users a skipped op instead of silently dropping it.
 - **Text** — nothing here competes with loro's sequence CRDTs; this is the
-  structural layer around them.
+  structural layer around them, and `Sequence.lean` documents exactly where
+  the hard text problems begin.
+
+## How to read our claims
+
+We try to be kind by being precise. "FREE" means *the merge preserves the
+invariant, proved, coordination never required for it* — it does not mean an
+operation can't violate it locally (validate your ops), and it does not price
+metadata growth. Refutations are concrete states, not intuitions. Where a
+guarantee needs a cryptographic premise (hashes don't collide, signatures
+don't forge), the premise is stated as a premise, never absorbed into a
+theorem. And where our miniatures stop short of the real problem — sequences,
+nested maps, epochs — the module says so at the top, because an honest
+boundary is more useful to you than an impressive blur.
 
 ## Building
 
 ```sh
-lake build          # the proofs; Lean core only, no mathlib, ~30s cold
-cd rust && cargo test   # builds the Lean kernel to C and links it (needs elan)
+lake build              # every proof + the audit gate; Lean core only, no mathlib, ~30s cold
+cd rust && cargo test   # compiles the Lean kernel to C and links it (needs elan)
 ```
 
-## Provenance
+## Papers, and thanks
 
-Written by ember + Claude as a gift to the weaver ecosystem, drawing on the
-[dregg](https://dreggnet.com) metatheory's confluence/blocklace developments
-(re-proved here mathlib-free from Lean core). Literature: Bailis et al.
-(coordination avoidance, VLDB'15) · Shapiro et al. (CRDTs, SSS'11) ·
-Kleppmann et al. (move op, TPDS'21; SEC in Isabelle, OOPSLA'17) ·
-Almeida–Shapiro (blocklace, 2024) · Whittaker–Hellerstein (segmented
-I-confluence, VLDB'19). PDFs of most of these live in the authors' pockets;
-ask and we'll point you at them.
+The annotated bibliography — what each paper establishes, what we took from
+it by theorem name, and what we deliberately declined — lives in
+[`docs/BIBLIOGRAPHY.md`](docs/BIBLIOGRAPHY.md). The short list: Bailis et al.
+(the judgement), Shapiro et al. (CRDTs), Gomes–Kleppmann et al. (SEC in
+Isabelle), Kleppmann et al. (the move op, interleaving anomalies, BFT CRDTs,
+undo/redo), Almeida–Shoker–Baquero (deltas), Almeida–Shapiro (the blocklace),
+Whittaker–Hellerstein (segmented confluence), Sanjuán et al. (Merkle-CRDTs).
 
-License: Unlicense OR MIT, same spirit as universal-weave.
+Thanks to the weaver whose question shaped the whole thing, and to
+[universal-weave](https://github.com/transkatgirl/universal-weave) for being
+the kind of library worth building companions for. Made by ember + Claude,
+with the [dregg](https://dreggnet.com) metatheory humming in the background.
+
+License: Unlicense OR MIT — same spirit as universal-weave.
