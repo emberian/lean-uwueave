@@ -17,6 +17,7 @@ import Leanuweave.Causality
 import Leanuweave.MVRegister
 import Leanuweave.Segmented
 import Leanuweave.Undo
+import Leanuweave.Delta
 
 /--
 info: 'Leanuweave.Acyclicity.grounded_acyclic' does not depend on any axioms
@@ -236,3 +237,85 @@ info: 'Leanuweave.Undo.undo_preserves_history' depends on axioms: [Quot.sound]
 info: 'Leanuweave.Undo.redo_preserves_history' depends on axioms: [Quot.sound]
 -/
 #guard_msgs in #print axioms Leanuweave.Undo.redo_preserves_history
+
+/-! ### Wave 3 — delta-state soundness -/
+
+/--
+info: 'Leanuweave.Delta.joinAll_append' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_append
+
+/--
+info: 'Leanuweave.Delta.merge_joinAll' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.merge_joinAll
+
+/--
+info: 'Leanuweave.Delta.le_joinAll' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.le_joinAll
+
+/--
+info: 'Leanuweave.Delta.mem_le_joinAll' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.mem_le_joinAll
+
+/--
+info: 'Leanuweave.Delta.joinAll_le' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_le
+
+/--
+info: 'Leanuweave.Delta.joinAll_perm' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_perm
+
+/--
+info: 'Leanuweave.Delta.joinAll_dup' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_dup
+
+/--
+info: 'Leanuweave.Delta.joinAll_redeliver' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_redeliver
+
+/--
+info: 'Leanuweave.Delta.joinAll_group' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_group
+
+/--
+info: 'Leanuweave.Delta.joinAll_batch' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_batch
+
+/--
+info: 'Leanuweave.Delta.joinAll_append_merge' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_append_merge
+
+/--
+info: 'Leanuweave.Delta.same_deltas_same_state' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.same_deltas_same_state
+
+/--
+info: 'Leanuweave.Delta.joinAll_packets' depends on axioms: [propext]
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.joinAll_packets
+
+/--
+info: 'Leanuweave.Delta.addDelta_adds' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.addDelta_adds
+
+/--
+info: 'Leanuweave.Delta.addDelta_frame' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.addDelta_frame
+
+/--
+info: 'Leanuweave.Delta.addDelta_least' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Delta.addDelta_least

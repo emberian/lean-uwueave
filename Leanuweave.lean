@@ -7,6 +7,7 @@ import Leanuweave.ORSet
 import Leanuweave.Causality
 import Leanuweave.MVRegister
 import Leanuweave.Undo
+import Leanuweave.Delta
 import Leanuweave.Segmented
 import Leanuweave.Spec
 import Leanuweave.Weave
