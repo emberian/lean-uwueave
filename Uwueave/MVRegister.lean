@@ -1,5 +1,5 @@
 /-
-# Leanuweave.MVRegister — the multi-value register: keep the fork, show the fork.
+# Uwueave.MVRegister — the multi-value register: keep the fork, show the fork.
 
 `Catalog.lean` proved the LWW pair: a lone LWW register is invariant-proof
 *because its join throws one write away*, and that silent loss is exactly what
@@ -29,11 +29,11 @@ here:
   * `resolution_is_a_write` — clearing a conflict is an ordinary write at a
     dominating clock; the merge has no special resolution case to get wrong.
 -/
-import Leanuweave.Move
+import Uwueave.Move
 
-namespace Leanuweave.MVRegister
+namespace Uwueave.MVRegister
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 /-- A tagged write: value, then a two-replica vector clock (kept concrete —
 `(Nat × Nat)` — so every example below is decidable; the construction is
@@ -115,4 +115,4 @@ theorem resolution_is_a_write : ¬ InView sABR wA ∧ InView sABR wR := by
       · exact Or.inr (Or.inr (by cases w'; simp_all [wR]))
     rcases hw' with h | h | h <;> (subst h; decide)
 
-end Leanuweave.MVRegister
+end Uwueave.MVRegister

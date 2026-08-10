@@ -1,8 +1,8 @@
 /-
-# Leanuweave.Exec — the executable kernel the Rust crate calls into.
+# Uwueave.Exec — the executable kernel the Rust crate calls into.
 
 THIS IS LEAN-AUTHORED SEMANTICS COMPILED TO C. The Rust crate does not
-implement the move-log replay; it marshals bytes to `uweave_replay_kernel`
+implement the move-log replay; it marshals bytes to `uwueave_replay_kernel`
 (the `@[export]` below), which lake compiles to C alongside every other module
 here, and `build.rs` links into the cdylib/rlib. Rust's remaining jobs are the
 deliberately dumb ones: storage, hashing, indexes, IO.
@@ -24,7 +24,7 @@ Output `ByteArray`: `n` words, `override[i]` as i64 — `-2` = no override,
 
 Semantics: ops applied in total `(lamport, replica, child, dest)` order; an op
 whose destination's effective-ancestor chain passes through its child is
-**skipped** (the Kleppmann cycle rule — `Leanuweave/Move.lean` §2 is the
+**skipped** (the Kleppmann cycle rule — `Uwueave/Move.lean` §2 is the
 abstract account of exactly this rule, including its proved price,
 `view_not_stable`).
 
@@ -39,7 +39,7 @@ lands, the honest statement is: the semantics are *authored* in Lean, in one
 place, next to their abstract model — no longer twinned across languages.
 -/
 
-namespace Leanuweave.Exec
+namespace Uwueave.Exec
 
 /-- Byte at index, 0 out of range (total; malformed input degrades to junk
 output, never to unsoundness or a crash). -/
@@ -136,8 +136,8 @@ def replay (input : ByteArray) : ByteArray :=
   (Array.range n).foldl (fun b i => pushWord b (ofI (ov.getD i (-2)))) ByteArray.empty
 
 /-- The C entry point. Owned `ByteArray` in, owned `ByteArray` out. -/
-@[export uweave_replay_kernel]
+@[export uwueave_replay_kernel]
 def replayKernel (input : ByteArray) : ByteArray :=
   replay input
 
-end Leanuweave.Exec
+end Uwueave.Exec

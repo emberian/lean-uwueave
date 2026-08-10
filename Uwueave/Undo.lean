@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Undo — multi-user undo/redo as ordinary writes (Stewen–Kleppmann, PaPoC'24).
+# Uwueave.Undo — multi-user undo/redo as ordinary writes (Stewen–Kleppmann, PaPoC'24).
 
 `MVRegister.lean` closed with a promise: the MV-register "is also the substrate
 on which multi-user undo/redo is well-posed". This file keeps it. The core
@@ -58,11 +58,11 @@ the undo: user B, who has seen `w0` and `w1` but not `u1`, writes at `(2,1)`,
 incomparable with `u1`'s `(3,0)`. So `s01ur` (redo landed) and `s01uC` (race
 merged) are alternative continuations of `s01u`, not stages of one timeline.
 -/
-import Leanuweave.MVRegister
+import Uwueave.MVRegister
 
-namespace Leanuweave.Undo
+namespace Uwueave.Undo
 
-open Leanuweave Leanuweave.Catalog Leanuweave.MVRegister
+open Uwueave Uwueave.Catalog Uwueave.MVRegister
 
 /-! ### The cast -/
 
@@ -240,4 +240,4 @@ theorem undo_does_not_silently_lose : InView s01uC u1 ∧ InView s01uC wC :=
   ⟨(undo_conflicts_visibly u1).mpr (Or.inl rfl),
    (undo_conflicts_visibly wC).mpr (Or.inr rfl)⟩
 
-end Leanuweave.Undo
+end Uwueave.Undo

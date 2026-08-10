@@ -3,7 +3,7 @@
 **Machine-checked answers to "isn't the hard part of a DAG/tree CRDT just
 enforcing the requirements of a DAG/tree?" — plus the Rust that follows them.**
 
-(The lake library and Rust crate keep the identifier spelling `Leanuweave`/`leanuweave`;
+(The lake library and Rust crate keep the identifier spelling `Uwueave`/`uwueave`;
 the project's name is lean-uwueave, and that was never a typo.)
 
 Built as a companion to [universal-weave](https://github.com/transkatgirl/universal-weave):
@@ -36,22 +36,22 @@ the theorems bless. No mathlib — `lake build` finishes in seconds on a laptop.
 
 | File | What it proves |
 |---|---|
-| `Leanuweave/Confluence.lean` | The judgement: `MergeState` (join-semilattice), `IConfluent`, the constructive `escalation_witness` (a failed invariant always yields a runnable two-replica repro), and the product/pointwise lifts that make field-by-field classification sound. |
-| `Leanuweave/Catalog.lean` | G-Set, G-Counter, PN-Counter, LWW, escrow — merge laws proved, keystone invariants classified. Highlights: uniqueness/ceilings escalate (`gset_atMostOne_not_iconfluent`), mutual exclusion escalates (`or_breaks_iconfluence`), balances escalate (`pncounter_nonneg_not_iconfluent`) but **escrow rephrases them free** (`escrow_local_bound_iconfluent`); a single LWW register can never merge-break any invariant (`lww_every_invariant_iconfluent`) yet two of them break relational ones (`lww_cross_field_not_iconfluent`). |
-| `Leanuweave/Acyclicity.lean` | **The DAG dichotomy** (sentences 2 above): `acyclicity_not_iconfluent`, `grounded_iconfluent`, `grounded_acyclic`, packaged as `causal_dag_free`. |
-| `Leanuweave/Move.lean` | The op-log pattern's guarantee, generically (`derived_view_sec`: order-independence + redelivery-immunity + invariant enforcement), and its price on a concrete miniature (`view_not_stable`). |
-| `Leanuweave/Spec.lean` | **A fluid, proof-carrying composition DSL**: schemas are ordinary `×`/`→` types, and a `Verdict` is either an `IConfluent` proof or a counterexample that *transports through the combinators* — the worked example poisons one field of a loom document and gets a whole-document repro out. |
-| `Leanuweave/ORSet.lean` | Removable sets both ways: the OR-Set's add-wins guarantee correctly scoped (`orset_present_survives`) and unscoped presence refuted (`orset_present_not_iconfluent` — the both-sides-tombstone anomaly); the causal-length set's presence free by per-key selection (`clset_present_iconfluent`), with the cross-element failure (`clset_cross_element_not_iconfluent`) completing the "selection lattices compose into non-selection lattices" trilogy. |
-| `Leanuweave/Causality.lean` | The vector-clock order **is** the lattice order (`vclock_leq_iff`), concurrent merges make strict progress (`concurrent_merge_strict`), and fork/equivocation evidence is monotone-forever (`fork_evidence_iconfluent`) with no unilateral framing (`no_unilateral_evidence`) — the accountable-BFT primitive for multiplayer. |
-| `Leanuweave/MVRegister.lean` | The multi-value register as a derived view: the visible set is an antichain (`view_antichain`), concurrent writes both surface (`conflict_surfaces` — the anti-LWW), and resolution is just a write (`resolution_is_a_write`). |
-| `Leanuweave/Segmented.lean` | Whittaker-style segmented I-confluence: conservative over the plain judgement (`iconfluent_iff_trivially_segmented`), and the punchline pair — one budgeted invariant, *both* verdicts (`budget_not_iconfluent` / `budget_segmented`): spends free within an allocation, coordination only at re-allocation. |
-| `Leanuweave/Weave.lean` | universal-weave's README feature list, feature-by-feature verdicts, plus the loom-specific theorem: a **shared replicated active path is not a CRDT** (`active_path_not_iconfluent`) — make activation per-user (proved free). |
-| `Leanuweave/Exec.lean` | The **executable kernel**: the move-log replay (ordering + cycle-skip), authored in Lean, `@[export]`ed, compiled to C by lake. The refinement theorem to `Move.lean`'s abstract model is named open work in its header. |
-| `Leanuweave/Audit.lean` | Every keystone's axiom footprint pinned with `#guard_msgs`: a `sorry` or `native_decide` anywhere fails the build. Two theorems (`grounded_acyclic`, `derived_view_sec`) are axiom-free entirely. |
+| `Uwueave/Confluence.lean` | The judgement: `MergeState` (join-semilattice), `IConfluent`, the constructive `escalation_witness` (a failed invariant always yields a runnable two-replica repro), and the product/pointwise lifts that make field-by-field classification sound. |
+| `Uwueave/Catalog.lean` | G-Set, G-Counter, PN-Counter, LWW, escrow — merge laws proved, keystone invariants classified. Highlights: uniqueness/ceilings escalate (`gset_atMostOne_not_iconfluent`), mutual exclusion escalates (`or_breaks_iconfluence`), balances escalate (`pncounter_nonneg_not_iconfluent`) but **escrow rephrases them free** (`escrow_local_bound_iconfluent`); a single LWW register can never merge-break any invariant (`lww_every_invariant_iconfluent`) yet two of them break relational ones (`lww_cross_field_not_iconfluent`). |
+| `Uwueave/Acyclicity.lean` | **The DAG dichotomy** (sentences 2 above): `acyclicity_not_iconfluent`, `grounded_iconfluent`, `grounded_acyclic`, packaged as `causal_dag_free`. |
+| `Uwueave/Move.lean` | The op-log pattern's guarantee, generically (`derived_view_sec`: order-independence + redelivery-immunity + invariant enforcement), and its price on a concrete miniature (`view_not_stable`). |
+| `Uwueave/Spec.lean` | **A fluid, proof-carrying composition DSL**: schemas are ordinary `×`/`→` types, and a `Verdict` is either an `IConfluent` proof or a counterexample that *transports through the combinators* — the worked example poisons one field of a loom document and gets a whole-document repro out. |
+| `Uwueave/ORSet.lean` | Removable sets both ways: the OR-Set's add-wins guarantee correctly scoped (`orset_present_survives`) and unscoped presence refuted (`orset_present_not_iconfluent` — the both-sides-tombstone anomaly); the causal-length set's presence free by per-key selection (`clset_present_iconfluent`), with the cross-element failure (`clset_cross_element_not_iconfluent`) completing the "selection lattices compose into non-selection lattices" trilogy. |
+| `Uwueave/Causality.lean` | The vector-clock order **is** the lattice order (`vclock_leq_iff`), concurrent merges make strict progress (`concurrent_merge_strict`), and fork/equivocation evidence is monotone-forever (`fork_evidence_iconfluent`) with no unilateral framing (`no_unilateral_evidence`) — the accountable-BFT primitive for multiplayer. |
+| `Uwueave/MVRegister.lean` | The multi-value register as a derived view: the visible set is an antichain (`view_antichain`), concurrent writes both surface (`conflict_surfaces` — the anti-LWW), and resolution is just a write (`resolution_is_a_write`). |
+| `Uwueave/Segmented.lean` | Whittaker-style segmented I-confluence: conservative over the plain judgement (`iconfluent_iff_trivially_segmented`), and the punchline pair — one budgeted invariant, *both* verdicts (`budget_not_iconfluent` / `budget_segmented`): spends free within an allocation, coordination only at re-allocation. |
+| `Uwueave/Weave.lean` | universal-weave's README feature list, feature-by-feature verdicts, plus the loom-specific theorem: a **shared replicated active path is not a CRDT** (`active_path_not_iconfluent`) — make activation per-user (proved free). |
+| `Uwueave/Exec.lean` | The **executable kernel**: the move-log replay (ordering + cycle-skip), authored in Lean, `@[export]`ed, compiled to C by lake. The refinement theorem to `Move.lean`'s abstract model is named open work in its header. |
+| `Uwueave/Audit.lean` | Every keystone's axiom footprint pinned with `#guard_msgs`: a `sorry` or `native_decide` anywhere fails the build. Two theorems (`grounded_acyclic`, `derived_view_sec`) are axiom-free entirely. |
 
 ## The Rust (`rust/`)
 
-`leanuweave` wraps the **Lean-compiled kernel** rather than re-implementing it:
+`uwueave` wraps the **Lean-compiled kernel** rather than re-implementing it:
 `build.rs` runs `lake build`, compiles the emitted C for every module plus a
 three-function shim (`shim.c`), and links the Lean runtime. Building the crate
 therefore requires a Lean toolchain ([elan](https://elan.lean-lang.org)) — by

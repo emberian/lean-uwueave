@@ -1,6 +1,6 @@
-//! # leanuweave — the coordination-free fragment of a weave, implemented as proved.
+//! # uwueave — the coordination-free fragment of a weave, implemented as proved.
 //!
-//! Companion crate to the Leanuweave Lean development (`../Leanuweave/`), which
+//! Companion crate to the Uwueave Lean development (`../Uwueave/`), which
 //! classifies weave/loom invariants by *invariant confluence* — the
 //! Bailis-necessary-and-sufficient test for whether a replicated structure can
 //! maintain an invariant with zero coordination. This crate implements the
@@ -16,7 +16,7 @@
 //!   why its `merge` needs no cycle check, at any number of replicas.
 //! * [`movelog`] — node moving as a grow-only operation log whose
 //!   timestamp-ordered, cycle-skipping replay is **authored in Lean**
-//!   (`Leanuweave/Exec.lean`), compiled to C by lake, and called through a
+//!   (`Uwueave/Exec.lean`), compiled to C by lake, and called through a
 //!   three-function shim. This crate does not contain a replay
 //!   implementation.
 //!   `derived_view_sec` is the guarantee; `view_not_stable` is the priced,

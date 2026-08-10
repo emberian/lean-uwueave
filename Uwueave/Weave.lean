@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Weave — universal-weave's feature list, classified.
+# Uwueave.Weave — universal-weave's feature list, classified.
 
 This file walks `universal-weave`'s README feature list (v0.4.3) and pins each
 feature to its verdict under the judgement of this library. One feature gets a
@@ -73,11 +73,11 @@ never required for it. It does not mean an *operation* cannot violate it
 locally (op-validation is the application's job), and it does not price
 metadata growth (tombstones, op logs — engineering, not semantics).
 -/
-import Leanuweave.Spec
+import Uwueave.Spec
 
-namespace Leanuweave.Weave
+namespace Uwueave.Weave
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 /-- Active-node flags as a replicated set (node ids; `true` = active on this
 replica). The miniature world: root `0`, sibling children `1` and `2`. -/
@@ -112,4 +112,4 @@ theorem per_user_activation_free {User : Type} {J : User → Invariant (Nat → 
     IConfluent (S := User → Nat → LWW) (fun f => ∀ u, J u (f u)) :=
   pi_iconfluent h
 
-end Leanuweave.Weave
+end Uwueave.Weave

@@ -242,7 +242,7 @@ restricted to this universe": `miniInterp_acyclic` discharges, for the
 miniature, the enforcement obligation their Isabelle Theorem 1 discharges in
 general, and `view_not_stable` proves the price they surface informally as
 moves that "jump back". `Exec.lean`'s replay kernel (total timestamp order +
-cycle-skip, `@[export uweave_replay_kernel]`) implements the same rule, and
+cycle-skip, `@[export uwueave_replay_kernel]`) implements the same rule, and
 the Rust `movelog::MoveLog` calls it rather than reimplementing it.
 
 *Where we differ.* They verify the full algorithm over arbitrary trees and

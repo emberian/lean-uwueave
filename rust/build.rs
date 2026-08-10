@@ -12,7 +12,7 @@ fn main() {
     let ir = repo.join(".lake/build/ir");
 
     // Re-emit the C whenever the Lean sources change.
-    println!("cargo:rerun-if-changed={}", repo.join("Leanuweave").display());
+    println!("cargo:rerun-if-changed={}", repo.join("Uwueave").display());
     println!("cargo:rerun-if-changed={}", manifest.join("shim.c").display());
 
     // 1. Ask lake to (re)build the Lean library → .lake/build/ir/**/*.c
@@ -22,7 +22,7 @@ fn main() {
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
-    if !lake_ok && !ir.join("Leanuweave.c").exists() {
+    if !lake_ok && !ir.join("Uwueave.c").exists() {
         panic!(
             "`lake build` failed and no emitted C is present. \
              Install a Lean toolchain (https://elan.lean-lang.org) — this crate \
@@ -41,8 +41,8 @@ fn main() {
     let mut cc = cc::Build::new();
     cc.include(prefix.join("include"));
     cc.file(manifest.join("shim.c"));
-    cc.file(ir.join("Leanuweave.c"));
-    for entry in std::fs::read_dir(ir.join("Leanuweave")).expect("ir dir") {
+    cc.file(ir.join("Uwueave.c"));
+    for entry in std::fs::read_dir(ir.join("Uwueave")).expect("ir dir") {
         let p = entry.unwrap().path();
         if p.extension().map(|e| e == "c").unwrap_or(false) {
             cc.file(&p);
@@ -51,7 +51,7 @@ fn main() {
     // Lean-emitted C is not warning-clean under default cc flags; that's fine.
     cc.warnings(false);
     cc.opt_level(2);
-    cc.compile("leanuweave_kernel");
+    cc.compile("uwueave_kernel");
 
     // 4. Link the Lean runtime (shared, from the toolchain).
     let libdir = prefix.join("lib/lean");

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>leanuweave — machine-checked CRDT verdicts for weaves and looms</title>
+<title>uwueave — machine-checked CRDT verdicts for weaves and looms</title>
 <meta name="description" content="A small Lean 4 development that classifies weave/loom invariants by invariant confluence — proving which replicate with zero coordination and refuting the rest with concrete two-replica counterexamples — plus the Rust that follows the theorems. Companion to universal-weave.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='10' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='22' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='24' r='5' fill='none' stroke='%231d7a46' stroke-width='2.5'/%3E%3Cpath d='M12 13 L15 19 M20 13 L17 19' stroke='%2344509e' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
@@ -183,7 +183,7 @@
 
 <header class="site">
   <div class="wrap">
-    <span class="name">leanuweave</span>
+    <span class="name">uwueave</span>
     <nav>
       <a href="#dichotomy">the dichotomy</a>
       <a href="#verdicts">verdicts</a>
@@ -203,7 +203,7 @@
     the requirements of a DAG/tree?&rdquo;</span> &mdash; yes, and a small Lean&nbsp;4 development can
     say exactly where that hardness lives, where it vanishes, and what the workarounds
     provably cost.</p>
-    <p>leanuweave is a companion to
+    <p>uwueave is a companion to
     <a href="https://github.com/transkatgirl/universal-weave">universal-weave</a>: it
     classifies weave/loom invariants by whether they can be replicated with
     <strong>zero coordination</strong>, refutes the ones that can&rsquo;t with concrete
@@ -238,7 +238,7 @@
     <h2 class="prose">The DAG dichotomy</h2>
     <p class="prose">Same goal &mdash; a graph that stays acyclic under replication &mdash; two ways of
     inserting edges, opposite verdicts. Both panels below are actual states from the
-    proofs in <code>Leanuweave/Acyclicity.lean</code>, not illustrations of a vibe.</p>
+    proofs in <code>Uwueave/Acyclicity.lean</code>, not illustrations of a vibe.</p>
 
     <div class="figrow">
       <figure class="panel">
@@ -689,7 +689,7 @@ cd rust &amp;&amp; cargo test</code></pre>
 
 <footer>
   <div class="wrap">
-    <p><strong style="color:var(--fg)">leanuweave</strong> &mdash;
+    <p><strong style="color:var(--fg)">uwueave</strong> &mdash;
     <a href="https://github.com/emberian/lean-uwueave">github.com/emberian/lean-uwueave</a> ·
     companion to
     <a href="https://github.com/transkatgirl/universal-weave">universal-weave</a>.</p>

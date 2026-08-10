@@ -1,5 +1,5 @@
-name = "leanuweave"
-defaultTargets = ["Leanuweave"]
+name = "uwueave"
+defaultTargets = ["Uwueave"]
 
 # NO mathlib. This library depends on Lean core only, so `lake build` is seconds,
 # not an hour, and anyone can check the proofs without a mathlib checkout.
@@ -8,4 +8,4 @@ defaultTargets = ["Leanuweave"]
 # cost every reader a large download.
 
 [[lean_lib]]
-name = "Leanuweave"
+name = "Uwueave"

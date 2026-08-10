@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Spec — a fluid, proof-carrying composition DSL.
+# Uwueave.Spec — a fluid, proof-carrying composition DSL.
 
 The point of the catalog is to be *composed*: a real document schema is a
 record of fields — a node set here, a per-node register there, a quota, a
@@ -27,11 +27,11 @@ document schema assembled in six lines, classified field-by-field, with one
 deliberately-poisoned variant showing a single field's counterexample
 propagating to the whole document.
 -/
-import Leanuweave.Move
+import Uwueave.Move
 
-namespace Leanuweave.Spec
+namespace Uwueave.Spec
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 universe u v
 
@@ -167,4 +167,4 @@ and both answers are backed by the terms above, not by this `Bool`. -/
 example : (loomVerdict (fun _ => 64)).isFree = true := rfl
 example : pinnedVerdict.isFree = false := rfl
 
-end Leanuweave.Spec
+end Uwueave.Spec

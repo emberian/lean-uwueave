@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Confluence — the judgement everything else is stated against.
+# Uwueave.Confluence — the judgement everything else is stated against.
 
 A replicated structure has a **merge**. An application has **invariants** it wants
 to hold. The question that decides whether you need coordination is *not* "is my
@@ -34,7 +34,7 @@ Literature:
     in Distributed Systems", OOPSLA 2017. (The Isabelle account this mirrors.)
 -/
 
-namespace Leanuweave
+namespace Uwueave
 
 universe u v
 
@@ -176,7 +176,7 @@ makes the DSL's field-by-field report *sound* rather than a heuristic.
 
 ⚠ Read the quantifier: this covers invariants that mention **one field each**. A
 genuinely *cross-field* invariant (`node.parent ∈ nodes`, "the active path is a
-path") is not of this shape and gets no free ride — see `Leanuweave.Weave`, where
+path") is not of this shape and gets no free ride — see `Uwueave.Weave`, where
 exactly those are the ones that bite. -/
 theorem product_iconfluent {A : Type u} {B : Type v} [MergeState A] [MergeState B]
     {IA : Invariant A} {IB : Invariant B}
@@ -222,8 +222,8 @@ theorem and_iconfluent {S : Type u} [MergeState S] {I J : Invariant S}
 /-- ⚠ **Disjunction does NOT lift, and this is the trap.** "The document is
 locked by Alice OR locked by Bob" is a disjunction of two perfectly I-confluent
 invariants, and it is not I-confluent. We prove the counterexample concretely in
-`Leanuweave.Catalog.or_breaks_iconfluence` rather than stating a false lemma
+`Uwueave.Catalog.or_breaks_iconfluence` rather than stating a false lemma
 here. -/
 theorem or_lift_is_not_available : True := trivial
 
-end Leanuweave
+end Uwueave

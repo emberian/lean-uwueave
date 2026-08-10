@@ -1,5 +1,5 @@
 //! The three-function surface to the Lean-compiled kernel. See `shim.c` for
-//! the C side; see `Leanuweave/Exec.lean` for the semantics (and for the
+//! the C side; see `Uwueave/Exec.lean` for the semantics (and for the
 //! byte-level contract both sides speak).
 
 use std::sync::Once;

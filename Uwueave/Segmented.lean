@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Segmented — segmented I-confluence: coordination, but only at the seams.
+# Uwueave.Segmented — segmented I-confluence: coordination, but only at the seams.
 
 `escalation_witness` is a verdict, not a death sentence. Whittaker–Hellerstein
 ("Interactive Checks for Coordination Avoidance", VLDB'19) refine the binary
@@ -28,11 +28,11 @@ coordination events — such that the invariant is segmented over it. The clash
 tells you coordination is needed *somewhere*; the segmentation tells you it is
 needed *only there*.
 -/
-import Leanuweave.Catalog
+import Uwueave.Catalog
 
-namespace Leanuweave.Segmented
+namespace Uwueave.Segmented
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 universe u v
 
@@ -110,4 +110,4 @@ theorem budget_segmented (B : Nat) :
   · show x.1 ⊔ y.1 = x.1
     exact hq
 
-end Leanuweave.Segmented
+end Uwueave.Segmented

@@ -1,5 +1,5 @@
 //! Property-based laws over the real crate — including the Lean-compiled
-//! replay kernel called through FFI (`Leanuweave/Exec.lean` via `shim.c`).
+//! replay kernel called through FFI (`Uwueave/Exec.lean` via `shim.c`).
 //!
 //! Discipline: no property re-implements the replay *decision* (timestamp
 //! ordering, cycle-skip). Every property is a law — an equality between two
@@ -8,7 +8,7 @@
 //! chain, falling back to the first weave parent when no override exists),
 //! which is the reading direction the kernel's output contract defines.
 
-use leanuweave::{CausalWeave, MoveLog, MoveOp, NodeId};
+use uwueave::{CausalWeave, MoveLog, MoveOp, NodeId};
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 

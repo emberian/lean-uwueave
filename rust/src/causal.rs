@@ -3,7 +3,7 @@
 //! A node's identity is `blake3(parent ids ‖ contents)`, so parents are fixed
 //! at creation and must exist before the child can even be named. Rank
 //! (`1 + max parent rank`) therefore strictly descends along every edge — the
-//! `Grounded` invariant of `Leanuweave/Acyclicity.lean` — and by
+//! `Grounded` invariant of `Uwueave/Acyclicity.lean` — and by
 //! `grounded_acyclic` the store can never hold a cycle, while by
 //! `grounded_iconfluent` a merge of any two well-formed stores is well-formed
 //! with **no cycle check and no coordination**. That is the entire reason this
@@ -50,7 +50,7 @@ impl<T> CausalNode<T> {
 
 fn node_id(parents: &[NodeId], contents: &[u8]) -> NodeId {
     let mut h = blake3::Hasher::new();
-    h.update(b"leanuweave.causal.v1");
+    h.update(b"uwueave.causal.v1");
     h.update(&(parents.len() as u64).to_le_bytes());
     for p in parents {
         h.update(p);

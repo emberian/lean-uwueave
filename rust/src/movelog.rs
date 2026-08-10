@@ -2,7 +2,7 @@
 //! replay semantics **authored in Lean and called through FFI**, not
 //! re-implemented here.
 //!
-//! `Leanuweave/Move.lean` in one paragraph: reparenting cannot be a direct
+//! `Uwueave/Move.lean` in one paragraph: reparenting cannot be a direct
 //! CRDT mutation (`acyclicity_not_iconfluent`), so **replicate the monotone
 //! thing** — the set of move operations ever issued, a trivial grow-only set —
 //! **and derive the invariant-bearing thing**: replay the ops in total
@@ -15,7 +15,7 @@
 //! What this Rust file actually does is deliberately dumb: it keeps the op
 //! set (a `BTreeSet` — union merge), maps content-address ids to dense
 //! indices, encodes the request bytes, and hands them to
-//! `Leanuweave/Exec.lean`'s `uweave_replay_kernel` (compiled to C by lake,
+//! `Uwueave/Exec.lean`'s `uwueave_replay_kernel` (compiled to C by lake,
 //! linked by `build.rs`). The ordering rule and the cycle-skip decision — the
 //! parts that must be *right* — live in Lean, in one place, next to their
 //! abstract model.
@@ -138,7 +138,7 @@ mod tests {
         (w, n0, n1)
     }
 
-    /// Scenario mirror of `Leanuweave.Move.view_not_stable` — o₁ (t=2) moves
+    /// Scenario mirror of `Uwueave.Move.view_not_stable` — o₁ (t=2) moves
     /// n₀ under n₁; the *older* o₂ (t=1) moves n₁ under n₀. With o₁ alone the
     /// view shows the move; after o₂ arrives, replay applies o₂ first and
     /// skips o₁ as cycle-creating: the already-seen move is un-happened.

@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Catalog — the standard CRDTs, each with its keystone invariant classified.
+# Uwueave.Catalog — the standard CRDTs, each with its keystone invariant classified.
 
 Every entry is (a) a concrete `MergeState` instance whose merge laws are *proved*,
 not assumed, and (b) at least one invariant classified — `IConfluent` (runs
@@ -13,11 +13,11 @@ which is also the test an implementation must decide a policy for.
 Everything here is Lean core only. Sets are `α → Bool` (decidable membership,
 merge = pointwise `||`); counters are `ι → Nat` (merge = pointwise `max`).
 -/
-import Leanuweave.Confluence
+import Uwueave.Confluence
 
-namespace Leanuweave.Catalog
+namespace Uwueave.Catalog
 
-open Leanuweave
+open Uwueave
 
 /-! ## §1. G-Set — the grow-only set. The substrate of everything append-only. -/
 
@@ -307,4 +307,4 @@ theorem escrow_global_bound (q : Bool → Nat) (f : Escrow Bool)
     (h : ∀ i, f i ≤ q i) : f true + f false ≤ q true + q false :=
   Nat.add_le_add (h true) (h false)
 
-end Leanuweave.Catalog
+end Uwueave.Catalog

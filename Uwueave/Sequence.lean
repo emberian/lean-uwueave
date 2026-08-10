@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Sequence — RGA-style anchored text, as a derived view. Including the anomaly.
+# Uwueave.Sequence — RGA-style anchored text, as a derived view. Including the anomaly.
 
 A collaborative *text* is the CRDT everyone actually wants, and it is where the
 gap between "converges" and "does what the user meant" is widest. This file
@@ -91,11 +91,11 @@ below `n`, so a chain has length at most `n` and fuel `n` suffices
     *judgement* — which invariants of anchored text are coordination-free —
     not a competitor.
 -/
-import Leanuweave.Move
+import Uwueave.Move
 
-namespace Leanuweave.Sequence
+namespace Uwueave.Sequence
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 /-! ## §1. State and well-formedness -/
 
@@ -665,4 +665,4 @@ theorem run_order_by_id :
     ∧ linearize 5 (runA ⊔ runB) = [3, 4, 1, 2] :=
   ⟨runA_wf, runB_wf, by decide, by decide, by decide⟩
 
-end Leanuweave.Sequence
+end Uwueave.Sequence

@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Move — nonmonotonic edits by the derived-view (op-log) pattern.
+# Uwueave.Move — nonmonotonic edits by the derived-view (op-log) pattern.
 
 `Acyclicity.lean` ends at the island's shore: append-only, parents-fixed
 insertion is free, but **node moving** — which universal-weave's DAG weave
@@ -30,11 +30,11 @@ it moved out of the merge (where it would block convergence) and into the
 "my move undid itself"). That trade is usually right for a loom and it is
 still a trade.
 -/
-import Leanuweave.Acyclicity
+import Uwueave.Acyclicity
 
-namespace Leanuweave.Move
+namespace Uwueave.Move
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 /-! ## §1. The pattern's guarantee, once and generically.
 
@@ -147,4 +147,4 @@ theorem view_not_stable :
   subst h
   decide
 
-end Leanuweave.Move
+end Uwueave.Move

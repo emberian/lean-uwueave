@@ -1,5 +1,5 @@
 /-
-# Leanuweave.ORSet — removable sets: observed-remove and causal-length.
+# Uwueave.ORSet — removable sets: observed-remove and causal-length.
 
 The G-Set can only grow, and the 2P-Set can never re-add. The two standard
 designs that give a *removable, re-addable* set are classified here:
@@ -32,11 +32,11 @@ in tag metadata and gives finer concurrent semantics; CL-Set pays in
 arbitration (a longer remote history silently wins) and gives O(1) state per
 element.
 -/
-import Leanuweave.Catalog
+import Uwueave.Catalog
 
-namespace Leanuweave.ORSet
+namespace Uwueave.ORSet
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 /-! ## §1. The OR-Set -/
 
@@ -157,4 +157,4 @@ theorem clset_cross_element_not_iconfluent :
   show ¬ (Nat.max ((if (1:Nat) = 0 then 3 else 1)) ((if (1:Nat) = 0 then 2 else 2)) % 2 = 1)
   decide
 
-end Leanuweave.ORSet
+end Uwueave.ORSet

@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Acyclicity — the DAG dichotomy.
+# Uwueave.Acyclicity — the DAG dichotomy.
 
 > "isn't the hard part of making a DAG/tree CRDT just enforcing the requirements
 >  of a DAG/tree?"
@@ -42,13 +42,13 @@ The practical reading for a weave: **append-only, parents-fixed-at-creation
 node insertion needs no cycle check and no coordination, ever** — DAG-ness is
 free at any replication scale. The operations that genuinely leave this island
 are the ones that *re-point existing edges*: node moving, reparenting, merge-
-with-parent. Those are square edits (see `Leanuweave.Move`).
+with-parent. Those are square edits (see `Uwueave.Move`).
 -/
-import Leanuweave.Catalog
+import Uwueave.Catalog
 
-namespace Leanuweave.Acyclicity
+namespace Uwueave.Acyclicity
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 /-- A directed graph as a grow-only edge set: `g (a, b) = true` means the edge
 `a → b` is present. -/
@@ -131,4 +131,4 @@ theorem causal_dag_free (rank : Nat → Nat) :
     ∧ ∀ g : EdgeGraph, Grounded rank g → Acyclic g :=
   ⟨grounded_iconfluent rank, fun _ => grounded_acyclic⟩
 
-end Leanuweave.Acyclicity
+end Uwueave.Acyclicity

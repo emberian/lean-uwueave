@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Delta — delta shipping: the join cannot tell how the news arrived.
+# Uwueave.Delta — delta shipping: the join cannot tell how the news arrived.
 
 Everything so far syncs by shipping **whole states**. A delta-state CRDT
 (Almeida–Shoker–Baquero) ships **deltas** instead: a mutation also returns a
@@ -50,11 +50,11 @@ Literature:
     J. Parallel Distrib. Comput. 111, 2018. (Earlier as "Efficient State-based
     CRDTs by Delta-Mutation", NETYS 2015; arXiv:1603.01529.)
 -/
-import Leanuweave.Catalog
+import Uwueave.Catalog
 
-namespace Leanuweave.Delta
+namespace Uwueave.Delta
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 universe u
 
@@ -272,4 +272,4 @@ theorem addDelta_least {x δ : GSet α} {a : α}
 
 end GSetDeltas
 
-end Leanuweave.Delta
+end Uwueave.Delta

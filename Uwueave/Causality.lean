@@ -1,5 +1,5 @@
 /-
-# Leanuweave.Causality — vector clocks and fork evidence.
+# Uwueave.Causality — vector clocks and fork evidence.
 
 Two constructions a multiplayer weave needs around its merge:
 
@@ -24,11 +24,11 @@ The dual is also stated: evidence requires *both* branches
 (`no_unilateral_evidence`) — an honest replica holding one block of a slot
 frames nobody.
 -/
-import Leanuweave.Catalog
+import Uwueave.Catalog
 
-namespace Leanuweave.Causality
+namespace Uwueave.Causality
 
-open Leanuweave Leanuweave.Catalog
+open Uwueave Uwueave.Catalog
 
 /-! ## §1. Vector clocks -/
 
@@ -105,4 +105,4 @@ theorem no_unilateral_evidence :
   simp at h₁ h₂
   omega
 
-end Leanuweave.Causality
+end Uwueave.Causality
