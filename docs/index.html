@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>leanuweave — machine-checked CRDT verdicts for weaves and looms</title>
+<meta name="description" content="A small Lean 4 development that classifies weave/loom invariants by invariant confluence — proving which replicate with zero coordination and refuting the rest with concrete two-replica counterexamples — plus the Rust that follows the theorems. Companion to universal-weave.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='10' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='22' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='24' r='5' fill='none' stroke='%231d7a46' stroke-width='2.5'/%3E%3Cpath d='M12 13 L15 19 M20 13 L17 19' stroke='%2344509e' stroke-width='2.5'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #faf8f4;
+    --fg: #26241f;
+    --muted: #6f6a5e;
+    --card: #ffffff;
+    --border: #e5e0d5;
+    --code-bg: #f0ede5;
+    --accent: #44509e;
+    --free: #1d7a46;
+    --free-bg: #e3f2e9;
+    --clash: #b13f36;
+    --clash-bg: #f8e8e5;
+    --pattern: #8a5f10;
+    --pattern-bg: #f6efdb;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171613;
+      --fg: #e9e6df;
+      --muted: #a49f92;
+      --card: #201f1b;
+      --border: #38352e;
+      --code-bg: #262521;
+      --accent: #a4aff2;
+      --free: #63cb92;
+      --free-bg: #132e1f;
+      --clash: #ea9188;
+      --clash-bg: #3a1e1a;
+      --pattern: #e3b75f;
+      --pattern-bg: #322710;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { text-decoration-thickness: 2px; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem; }
+  .prose { max-width: 72ch; }
+  .prose p, .prose li { max-width: 72ch; }
+
+  header.site {
+    border-bottom: 1px solid var(--border);
+    padding: .8rem 0;
+    font-size: .92rem;
+  }
+  header.site .wrap { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  header.site .name { font-weight: 700; letter-spacing: .01em; }
+  header.site nav { margin-left: auto; display: flex; gap: 1rem; flex-wrap: wrap; }
+
+  section { margin: 3.5rem 0; }
+  h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.15; margin: 2.5rem 0 1rem; letter-spacing: -0.015em; }
+  h2 { font-size: 1.45rem; line-height: 1.3; margin: 0 0 1rem; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; margin: 0 0 .35rem; }
+  .kicker { font-size: .8rem; font-weight: 650; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 .4rem; }
+  .tagline { font-size: 1.18rem; line-height: 1.55; max-width: 62ch; }
+  .tagline .q { font-style: italic; }
+  .hero-note { color: var(--muted); font-size: .95rem; }
+
+  ol.three { padding-left: 1.4rem; }
+  ol.three > li { margin: .8rem 0; }
+  ol.three > li::marker { font-weight: 700; color: var(--accent); }
+
+  code {
+    font-family: var(--mono);
+    font-size: .9em;
+    background: var(--code-bg);
+    padding: .1em .32em;
+    border-radius: .3em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: .6em;
+    padding: 1em 1.2em;
+    overflow-x: auto;
+    line-height: 1.5;
+    font-size: .86rem;
+    max-width: 100%;
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+
+  .badge {
+    display: inline-block;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    padding: .3em .6em;
+    border-radius: 999px;
+    line-height: 1;
+    vertical-align: .12em;
+    white-space: nowrap;
+  }
+  .badge.free    { color: var(--free);    background: var(--free-bg); }
+  .badge.clash   { color: var(--clash);   background: var(--clash-bg); }
+  .badge.pattern { color: var(--pattern); background: var(--pattern-bg); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: .9rem 1.6rem; margin: 1.2rem 0; font-size: .92rem; }
+  .legend div { max-width: 30ch; }
+  .legend .badge { margin-right: .35rem; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: .8em;
+    padding: 1.1rem 1.25rem 1.2rem;
+  }
+  .card .sub { font-weight: 400; color: var(--muted); font-size: .88rem; }
+  .vlist { list-style: none; margin: .7rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .7rem; }
+  .vlist li { font-size: .92rem; line-height: 1.55; }
+  .vlist .badge { margin-right: .3rem; }
+
+  .figrow { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.4rem; }
+  figure.panel {
+    flex: 1 1 340px;
+    min-width: min(340px, 100%);
+    margin: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: .8em;
+    padding: 1rem 1.1rem 1.1rem;
+  }
+  figure.panel .panel-title { font-size: .95rem; font-weight: 650; margin: 0 0 .1rem; }
+  figure.panel .panel-thm { font-size: .82rem; color: var(--muted); margin: 0 0 .7rem; }
+  figure.panel svg { width: 100%; height: auto; display: block; color: var(--fg); }
+  figure.panel figcaption { font-size: .88rem; color: var(--muted); margin-top: .7rem; line-height: 1.5; }
+
+  .price {
+    border-left: 3px solid var(--pattern);
+    background: var(--pattern-bg);
+    border-radius: 0 .6em .6em 0;
+    padding: .8rem 1.1rem;
+    margin: 1.4rem 0;
+    max-width: 72ch;
+  }
+  .price p { margin: .3rem 0; }
+
+  ul.claims { padding-left: 1.3rem; }
+  ul.claims > li { margin: .7rem 0; max-width: 72ch; }
+
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 4rem;
+    padding: 2rem 0 3rem;
+    font-size: .92rem;
+    color: var(--muted);
+  }
+  footer p { max-width: 80ch; }
+  .lit { line-height: 1.9; }
+
+  @media (max-width: 640px) {
+    body { font-size: 15px; }
+    .card { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <span class="name">leanuweave</span>
+    <nav>
+      <a href="#dichotomy">the dichotomy</a>
+      <a href="#verdicts">verdicts</a>
+      <a href="#pattern">the pattern</a>
+      <a href="#dsl">the DSL</a>
+      <a href="#claims">claims</a>
+      <a href="https://github.com/emberian/leanuweave">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="prose" id="top">
+    <h1>Machine-checked answers to a question loom builders keep asking</h1>
+    <p class="tagline"><span class="q">&ldquo;Isn&rsquo;t the hard part of a DAG/tree CRDT just enforcing
+    the requirements of a DAG/tree?&rdquo;</span> &mdash; yes, and a small Lean&nbsp;4 development can
+    say exactly where that hardness lives, where it vanishes, and what the workarounds
+    provably cost.</p>
+    <p>leanuweave is a companion to
+    <a href="https://github.com/transkatgirl/universal-weave">universal-weave</a>: it
+    classifies weave/loom invariants by whether they can be replicated with
+    <strong>zero coordination</strong>, refutes the ones that can&rsquo;t with concrete
+    two-replica counterexamples, and ships a Rust crate implementing the fragment the
+    theorems bless. <span class="hero-note">No mathlib &mdash; <code>lake build</code> finishes in
+    seconds on a laptop.</span></p>
+
+    <h2 style="margin-top:2.2rem">The three-sentence version</h2>
+    <ol class="three">
+      <li><strong>The question is never &ldquo;is my merge a CRDT&rdquo;, it is &ldquo;does my
+      <em>invariant</em> survive my merge.&rdquo;</strong> Bailis et al. proved this test
+      (<em>invariant confluence</em>) is necessary <em>and</em> sufficient: if an invariant fails
+      it, <strong>no library, however clever, can maintain it coordination-free</strong> &mdash; you are
+      choosing among escalation (coordinate), arbitration (someone loses), and compensation
+      (repair after).</li>
+      <li><strong>Acyclicity fails the test for arbitrary edge insertion</strong>
+      (<code>a→b</code> ∪ <code>b→a</code>: two legal DAGs, one merged cycle) <strong>but a
+      stronger, edge-local invariant passes it and implies acyclicity</strong> &mdash; &ldquo;every edge
+      descends in rank&rdquo;, which content-addressing gives you for free because a hash-linked
+      node&rsquo;s parents must exist before the child can be named. Append-only weaves get
+      DAG-ness at any replication scale with no cycle check at all.</li>
+      <li><strong>The edits that leave that island &mdash; move, split, merge-nodes &mdash; go through
+      the op-log pattern</strong>: replicate the grow-only set of operations, <em>derive</em> the
+      structure by deterministic cycle-skipping replay. Convergence and DAG-ness are then
+      theorems; the honest price (also a theorem) is that an older remote op can
+      retroactively un-apply a move you watched happen.</li>
+    </ol>
+  </section>
+
+  <section id="dichotomy">
+    <p class="kicker">Sentence two, drawn</p>
+    <h2 class="prose">The DAG dichotomy</h2>
+    <p class="prose">Same goal &mdash; a graph that stays acyclic under replication &mdash; two ways of
+    inserting edges, opposite verdicts. Both panels below are actual states from the
+    proofs in <code>Leanuweave/Acyclicity.lean</code>, not illustrations of a vibe.</p>
+
+    <div class="figrow">
+      <figure class="panel">
+        <p class="panel-title">Arbitrary edge insertion
+          <span class="badge clash">escalates</span></p>
+        <p class="panel-thm"><code>acyclicity_not_iconfluent</code></p>
+        <svg viewBox="0 0 380 360" role="img" aria-label="Two replicas each hold a two-node DAG: replica A has the edge a to b, replica B has the edge b to a. Each is acyclic. Their merge contains both edges, forming a two-cycle.">
+          <defs>
+            <marker id="ah-fg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+            <marker id="ah-clash" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--clash)"/>
+            </marker>
+          </defs>
+          <!-- replica A: a -> b -->
+          <rect x="16" y="20" width="160" height="148" rx="10" fill="var(--bg)" stroke="var(--border)"/>
+          <text x="24" y="42" font-size="11" fill="var(--muted)">replica A</text>
+          <text x="24" y="60" font-size="11" fill="var(--muted)">adds a → b</text>
+          <circle cx="60" cy="102" r="14" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="60" y="106.5" font-size="13" text-anchor="middle" fill="currentColor" font-family="var(--mono)">a</text>
+          <circle cx="132" cy="102" r="14" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="132" y="106.5" font-size="13" text-anchor="middle" fill="currentColor" font-family="var(--mono)">b</text>
+          <line x1="78" y1="102" x2="112" y2="102" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah-fg)"/>
+          <text x="96" y="146" font-size="11.5" text-anchor="middle" fill="var(--free)">a DAG ✓</text>
+          <!-- replica B: b -> a -->
+          <rect x="204" y="20" width="160" height="148" rx="10" fill="var(--bg)" stroke="var(--border)"/>
+          <text x="212" y="42" font-size="11" fill="var(--muted)">replica B</text>
+          <text x="212" y="60" font-size="11" fill="var(--muted)">adds b → a</text>
+          <circle cx="248" cy="102" r="14" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="248" y="106.5" font-size="13" text-anchor="middle" fill="currentColor" font-family="var(--mono)">a</text>
+          <circle cx="320" cy="102" r="14" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="320" y="106.5" font-size="13" text-anchor="middle" fill="currentColor" font-family="var(--mono)">b</text>
+          <line x1="302" y1="102" x2="268" y2="102" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah-fg)"/>
+          <text x="284" y="146" font-size="11.5" text-anchor="middle" fill="var(--free)">a DAG ✓</text>
+          <!-- join -->
+          <line x1="96" y1="174" x2="172" y2="200" stroke="var(--muted)" stroke-width="1.2"/>
+          <line x1="284" y1="174" x2="208" y2="200" stroke="var(--muted)" stroke-width="1.2"/>
+          <text x="190" y="202" font-size="17" text-anchor="middle" fill="currentColor">⊔</text>
+          <!-- merged: the 2-cycle -->
+          <rect x="96" y="214" width="188" height="132" rx="10" fill="var(--bg)" stroke="var(--clash)"/>
+          <text x="104" y="236" font-size="11" fill="var(--muted)">merged</text>
+          <circle cx="146" cy="286" r="14" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="146" y="290.5" font-size="13" text-anchor="middle" fill="currentColor" font-family="var(--mono)">a</text>
+          <circle cx="234" cy="286" r="14" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="234" y="290.5" font-size="13" text-anchor="middle" fill="currentColor" font-family="var(--mono)">b</text>
+          <path d="M 157,276 C 178,258 202,258 223,276" fill="none" stroke="var(--clash)" stroke-width="1.6" marker-end="url(#ah-clash)"/>
+          <path d="M 223,296 C 202,314 178,314 157,296" fill="none" stroke="var(--clash)" stroke-width="1.6" marker-end="url(#ah-clash)"/>
+          <text x="190" y="338" font-size="11.5" text-anchor="middle" fill="var(--clash)">a → b and b → a: a cycle ✗</text>
+        </svg>
+        <figcaption>Each replica is a legal DAG; the union is not. By Bailis
+        <em>necessity</em>, no CRDT library can offer coordination-free arbitrary edge
+        insertion with a DAG guarantee &mdash; a design must pick an exit: refuse one insert
+        (coordination), drop an edge deterministically (arbitration), or admit the cycle
+        and repair it (compensation).</figcaption>
+      </figure>
+
+      <figure class="panel">
+        <p class="panel-title">Rank-grounded insertion
+          <span class="badge free">free</span></p>
+        <p class="panel-thm"><code>grounded_iconfluent</code> + <code>grounded_acyclic</code>, packaged as <code>causal_dag_free</code></p>
+        <svg viewBox="0 0 380 360" role="img" aria-label="Two replicas each extend a shared hash-linked chain g, p with a new child: replica A adds x above p, replica B adds y above p. Every edge points downward in rank. The merge holds both children as siblings above p; every edge still descends, so no cycle is possible.">
+          <defs>
+            <marker id="bh-fg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <!-- replica A: x -> p -> g -->
+          <rect x="16" y="20" width="160" height="148" rx="10" fill="var(--bg)" stroke="var(--border)"/>
+          <text x="24" y="42" font-size="11" fill="var(--muted)">replica A</text>
+          <text x="24" y="60" font-size="11" fill="var(--muted)">adds node x on p</text>
+          <circle cx="112" cy="78" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="112" y="82.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">x</text>
+          <circle cx="112" cy="116" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="112" y="120.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">p</text>
+          <circle cx="112" cy="154" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="112" y="158.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">g</text>
+          <line x1="112" y1="91" x2="112" y2="99" stroke="currentColor" stroke-width="1.5" marker-end="url(#bh-fg)"/>
+          <line x1="112" y1="129" x2="112" y2="137" stroke="currentColor" stroke-width="1.5" marker-end="url(#bh-fg)"/>
+          <!-- replica B: y -> p -> g -->
+          <rect x="204" y="20" width="160" height="148" rx="10" fill="var(--bg)" stroke="var(--border)"/>
+          <text x="212" y="42" font-size="11" fill="var(--muted)">replica B</text>
+          <text x="212" y="60" font-size="11" fill="var(--muted)">adds node y on p</text>
+          <circle cx="300" cy="78" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="300" y="82.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">y</text>
+          <circle cx="300" cy="116" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="300" y="120.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">p</text>
+          <circle cx="300" cy="154" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="300" y="158.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">g</text>
+          <line x1="300" y1="91" x2="300" y2="99" stroke="currentColor" stroke-width="1.5" marker-end="url(#bh-fg)"/>
+          <line x1="300" y1="129" x2="300" y2="137" stroke="currentColor" stroke-width="1.5" marker-end="url(#bh-fg)"/>
+          <!-- join -->
+          <line x1="96" y1="174" x2="172" y2="200" stroke="var(--muted)" stroke-width="1.2"/>
+          <line x1="284" y1="174" x2="208" y2="200" stroke="var(--muted)" stroke-width="1.2"/>
+          <text x="190" y="202" font-size="17" text-anchor="middle" fill="currentColor">⊔</text>
+          <!-- merged: sibling fork, still grounded -->
+          <rect x="96" y="214" width="188" height="132" rx="10" fill="var(--bg)" stroke="var(--free)"/>
+          <text x="104" y="232" font-size="11" fill="var(--muted)">merged</text>
+          <line x1="106" y1="250" x2="242" y2="250" stroke="var(--border)" stroke-dasharray="3 4"/>
+          <line x1="106" y1="288" x2="242" y2="288" stroke="var(--border)" stroke-dasharray="3 4"/>
+          <line x1="106" y1="324" x2="242" y2="324" stroke="var(--border)" stroke-dasharray="3 4"/>
+          <text x="276" y="253.5" font-size="9.5" text-anchor="end" fill="var(--muted)">rank 2</text>
+          <text x="276" y="291.5" font-size="9.5" text-anchor="end" fill="var(--muted)">rank 1</text>
+          <text x="276" y="327.5" font-size="9.5" text-anchor="end" fill="var(--muted)">rank 0</text>
+          <circle cx="148" cy="250" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="148" y="254.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">x</text>
+          <circle cx="220" cy="250" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="220" y="254.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">y</text>
+          <circle cx="184" cy="288" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="184" y="292.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">p</text>
+          <circle cx="184" cy="324" r="13" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>
+          <text x="184" y="328.5" font-size="12.5" text-anchor="middle" fill="currentColor" font-family="var(--mono)">g</text>
+          <line x1="155" y1="261" x2="172" y2="276" stroke="currentColor" stroke-width="1.5" marker-end="url(#bh-fg)"/>
+          <line x1="213" y1="261" x2="196" y2="276" stroke="currentColor" stroke-width="1.5" marker-end="url(#bh-fg)"/>
+          <line x1="184" y1="301" x2="184" y2="308" stroke="currentColor" stroke-width="1.5" marker-end="url(#bh-fg)"/>
+        </svg>
+        <figcaption>The invariant &ldquo;every edge strictly descends in rank&rdquo; is
+        per-edge-local, so it survives union trivially &mdash; and a cycle would have to descend
+        forever, so groundedness <em>implies</em> acyclicity. Content-addressing hands you
+        <code>rank</code> for free: a hash-linked node&rsquo;s parents must exist before the child
+        can be named, so every edge descends by construction. The merged state above ran
+        <strong>no cycle check</strong>.</figcaption>
+      </figure>
+    </div>
+
+    <div class="prose" style="margin-top:1.4rem">
+<pre><code>def Grounded (rank : Nat → Nat) (g : EdgeGraph) : Prop :=
+  ∀ a b : Nat, g (a, b) = true → rank b &lt; rank a
+
+theorem causal_dag_free (rank : Nat → Nat) :
+    IConfluent (S := EdgeGraph) (Grounded rank)
+    ∧ ∀ g : EdgeGraph, Grounded rank g → Acyclic g</code></pre>
+      <p>One honest footnote, stated in the source too: &ldquo;a reference cycle would require a
+      hash cycle&rdquo; is a <em>cryptographic premise</em>, not a theorem here. The Lean models rank
+      as an explicit function and says so, rather than pretending to have proved anything
+      about SHA-2.</p>
+    </div>
+  </section>
+
+  <section id="verdicts">
+    <p class="kicker">The catalog</p>
+    <h2 class="prose">Every construction, classified</h2>
+    <div class="prose">
+      <p>The whole library is stated against one judgement. An invariant <code>I</code> is
+      <strong>I-confluent</strong> when every merge of two legal replicas is legal:</p>
+<pre><code>def IConfluent {S : Type u} [MergeState S] (I : Invariant S) : Prop :=
+  ∀ x y : S, I x → I y → I (x ⊔ y)</code></pre>
+      <p>Failure is constructive &mdash; <code>escalation_witness</code> proves that a
+      non-confluent invariant always yields an actual pair of legal states whose merge is
+      illegal. That pair is the bug report: it is precisely the scenario your users will
+      hit, and it is what a test should replay.</p>
+    </div>
+
+    <div class="legend">
+      <div><span class="badge free">free</span> Proved I-confluent: the merge can never
+      break it. Zero coordination, at any number of replicas.</div>
+      <div><span class="badge clash">escalates</span> Refuted with a concrete clashing
+      pair. No library can save it; choose escalation, arbitration, or compensation.</div>
+      <div><span class="badge pattern">pattern</span> Not free as direct state mutation,
+      but a proved rephrasing (op-log, escrow, segmentation) is &mdash; at a proved, named
+      price.</div>
+    </div>
+
+    <div class="cards">
+      <article class="card">
+        <h3>G-Set <span class="sub">grow-only set</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>gset_mem_iconfluent</code> &mdash;
+          anything a replica has observed survives every merge: node presence, tombstones,
+          bookmarks, acks. Absence too (<code>gset_notmem_iconfluent</code>), and any
+          monotone-closed invariant (<code>gset_monotone_iconfluent</code>).</li>
+          <li><span class="badge clash">escalates</span> <code>gset_atMostOne_not_iconfluent</code>
+          &mdash; any <em>ceiling</em> on a grow-only structure: {0} and {1} are each singletons;
+          their union is not.</li>
+          <li><span class="badge clash">escalates</span> <code>or_breaks_iconfluence</code>
+          &mdash; mutual exclusion, however phrased: &ldquo;only Alice holds the lock or only Bob
+          does&rdquo; is a disjunction of two free invariants, and disjunction does not lift.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Counters <span class="sub">G-Counter / PN-Counter</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>gcounter_lowerBound_iconfluent</code>
+          &mdash; grow-only lower bounds survive, because merge only raises counts.</li>
+          <li><span class="badge clash">escalates</span> <code>pncounter_nonneg_not_iconfluent</code>
+          &mdash; Bailis&rsquo;s motivating example: both replicas legally spend the same 10 credits;
+          the merge has spent 20 against 10. A bounded shared resource cannot be
+          replicated coordination-free.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>LWW register <span class="sub">last-writer-wins</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>lww_every_invariant_iconfluent</code>
+          &mdash; the join <em>selects</em> one of its arguments, so a single register can never
+          merge-break <em>any</em> invariant (<code>selection_iconfluent</code>).</li>
+          <li><span class="badge clash">escalates</span> <code>lww_cross_field_not_iconfluent</code>
+          &mdash; two registers can: the merged document keeps field A from one replica and
+          field B from the other, an interleaving neither replica ever had. Per-field LWW
+          is safe alone and unsafe relationally.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Escrow <span class="sub">the bounded counter, done right</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>escrow_local_bound_iconfluent</code>
+          &mdash; same resource and safety goal as the PN-counter, opposite verdict: the bound
+          is pre-partitioned into per-replica quotas, per-replica invariants are pointwise,
+          and the global bound follows by summing (<code>escrow_global_bound</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>OR-Set <span class="sub">observed-remove, add-wins</span></h3>
+        <ul class="vlist">
+          <li><span class="badge clash">escalates</span> <code>orset_present_not_iconfluent</code>
+          &mdash; bare presence: each replica keeps the element alive through a tag the other
+          has tombstoned; the merge tombstones both and the element is gone.</li>
+          <li><span class="badge free">free</span> <code>orset_present_survives</code> &mdash;
+          the correctly scoped guarantee, and what &ldquo;add-wins&rdquo; actually means: presence
+          through a tag the other side has not tombstoned survives the merge.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Causal-length set <span class="sub">membership as parity</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>clset_present_iconfluent</code>
+          (and <code>clset_absent_iconfluent</code>) &mdash; per-key max selects one side&rsquo;s
+          count; the arbitration is baked into the counter: the longer history wins the
+          element.</li>
+          <li><span class="badge clash">escalates</span> <code>clset_cross_element_not_iconfluent</code>
+          &mdash; cross-element implications die exactly as LWW pairs did: selection lattices
+          compose into non-selection lattices.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>MV-register <span class="sub">keep the fork, show the fork</span></h3>
+        <ul class="vlist">
+          <li><span class="badge pattern">pattern</span> The replicated state is a
+          grow-only set of tagged writes; the value is a derived view. What you see is the
+          causal frontier (<code>view_antichain</code>), concurrent writes <em>both</em>
+          surface where LWW would coin-flip (<code>conflict_surfaces</code>), and clearing
+          a conflict is an ordinary write at a dominating clock
+          (<code>resolution_is_a_write</code>) &mdash; no special merge case to get wrong. For a
+          loom this is the product, not a consolation prize: a weave <em>wants</em> forks
+          visible.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Vector clocks &amp; fork evidence <span class="sub">causality and accountability</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>vclock_leq_iff</code> &mdash;
+          happened-before is <em>exactly</em> the lattice order of the merge, so sync can
+          neither drop nor invent knowledge (and merging genuinely concurrent states makes
+          real progress: <code>concurrent_merge_strict</code>).</li>
+          <li><span class="badge free">free</span> <code>fork_evidence_iconfluent</code>
+          &mdash; evidence of equivocation is a monotone fact of a grow-only set: once any
+          replica holds a fork proof, no future gossip erases it. And one block frames
+          nobody (<code>no_unilateral_evidence</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Moves as an op-log <span class="sub">the Kleppmann move-op shape</span></h3>
+        <ul class="vlist">
+          <li><span class="badge pattern">pattern</span> <code>derived_view_sec</code>
+          &mdash; replicate the grow-only op set, derive the tree by timestamp-ordered,
+          cycle-skipping replay: order-independence, redelivery-immunity, and invariant
+          enforcement in one generic statement (the miniature interpreter discharges the
+          enforcement obligation: <code>miniInterp_acyclic</code>).</li>
+          <li><span class="badge clash">the price</span> <code>view_not_stable</code>
+          &mdash; an older remote op can retroactively un-apply a move you watched happen. A
+          theorem, not a bug report. Details below.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Segmented confluence <span class="sub">coordination, only at the seams</span></h3>
+        <ul class="vlist">
+          <li><span class="badge pattern">pattern</span> One invariant, both verdicts:
+          a budgeted quota state fails I-confluence outright
+          (<code>budget_not_iconfluent</code> &mdash; two legal allocations merge over budget)
+          yet is segmented-confluent over the allocation (<code>budget_segmented</code>).
+          Spends never wait; re-allocation is the named coordination point. Plain
+          I-confluence is exactly the one-segment case
+          (<code>iconfluent_iff_trivially_segmented</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>The active path <span class="sub">loom-specific: activation / deactivation</span></h3>
+        <ul class="vlist">
+          <li><span class="badge clash">escalates</span> <code>active_path_not_iconfluent</code>
+          &mdash; a shared replicated active path is not a CRDT: two users activate sibling
+          branches, each state is a legal path, and the merged flag-set lights both &mdash;
+          no longer a path.</li>
+          <li><span class="badge free">free</span> <code>per_user_activation_free</code>
+          &mdash; make activation per-user (a keyed map). Also the better UX: &ldquo;whose cursor
+          wins&rdquo; is not a question a merge should answer.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="pattern" class="prose">
+    <p class="kicker">Sentence three, priced</p>
+    <h2>Square edits, round holes: the op-log pattern</h2>
+    <p>The dichotomy ends at the island&rsquo;s shore: append-only, parents-fixed insertion is
+    free, but <strong>node moving</strong> &mdash; which universal-weave&rsquo;s DAG weave supports, and
+    which every filesystem-shaped application wants &mdash; re-points existing edges. Concurrent
+    moves can close a cycle, so a naive &ldquo;the graph is the CRDT&rdquo; design is ruled out by
+    necessity, not by lack of cleverness. The pattern that works is:</p>
+    <p style="font-size:1.1rem"><strong>Replicate the monotone thing. Derive the
+    invariant-bearing thing.</strong></p>
+    <p>The replicated state is the set of operations ever issued &mdash; a grow-only set,
+    trivially a CRDT. The tree the user sees is a <em>pure function</em> of that set: order
+    the ops by timestamp, apply each, skip any whose application would violate the
+    invariant. Convergence is inherited from the log; the invariant holds at every replica
+    by construction of the interpreter. <code>derived_view_sec</code> proves all of this
+    once, generically, for any log-shaped CRDT, any deterministic interpreter, any
+    enforced invariant &mdash; and it is one of the two theorems in the library that depend on
+    <em>zero</em> axioms.</p>
+
+    <div class="price">
+      <p><strong>The honest price, also a theorem.</strong> The derived view is <em>not
+      stable</em> under log growth:</p>
+<pre><code>theorem view_not_stable :
+    ∃ l l' : GSet MoveOp, LogLe l l'
+      ∧ miniInterp l  false = some true
+      ∧ miniInterp l' false ≠ some true</code></pre>
+      <p>Concretely: at <code>t = 2</code> you move node n₀ under n₁ and watch it happen.
+      A remote op from <code>t = 1</code> arrives <em>later</em> &mdash; older, so it sorts first
+      in replay &mdash; moving n₁ under n₀. The replay applies the old op, finds yours
+      cycle-creating, and skips it. The edit the local user watched happen has been
+      un-happened by an op from the past.</p>
+      <p>The square edit&rsquo;s nonmonotonicity did not vanish; it moved out of the merge
+      (where it would block convergence) and into the <em>meaning</em> of your local history
+      (where it is an anomaly users can see). That trade is usually right for a loom, and
+      it is still a trade: treat replay output as watchable state, and consider surfacing
+      skipped ops to the user rather than silently dropping their move.</p>
+    </div>
+  </section>
+
+  <section id="dsl" class="prose">
+    <p class="kicker">Composition</p>
+    <h2>A fluid, proof-carrying schema DSL</h2>
+    <p>A real document is a record of fields, and the catalog is meant to be
+    <em>composed</em>: a schema is an ordinary Lean type built with <code>×</code> and
+    <code>→</code>, and its classification is a <code>Verdict</code> that carries its own
+    evidence &mdash; <code>Verdict.free</code> holds an actual <code>IConfluent</code> proof;
+    <code>Verdict.clash</code> holds a two-replica counterexample that transports up through
+    every combinator. A loom document schema, assembled and classified:</p>
+<pre><code>/-- nodes : grow-only id set · meta : per-node LWW · bookmarks : escrowed quota -/
+abbrev LoomDoc := GSet Nat × ((Nat → LWW) × Escrow Bool)
+
+def loomInv (quota : Bool → Nat) : Invariant LoomDoc := fun d =>
+  (d.1 0 = true)
+  ∧ ((∀ k, 1 ≤ (d.2.1 k).ts) ∧ (∀ i, d.2.2 i ≤ quota i))
+
+/-- The whole document replicates coordination-free — one combinator per
+schema node. The term *is* the classification report. -/
+def loomVerdict (quota : Bool → Nat) : Verdict (loomInv quota) :=
+  .free (product_iconfluent
+    (gset_mem_iconfluent 0)
+    (product_iconfluent
+      (pi_iconfluent fun _ => lww_every_invariant_iconfluent (fun r => 1 ≤ r.ts))
+      (escrow_local_bound_iconfluent quota)))</code></pre>
+    <p>Now poison one field. Add an innocent-looking feature &mdash; &ldquo;a document has at most
+    one pinned node&rdquo;, a uniqueness ceiling on a grow-only set &mdash; and the document stops
+    being coordination-free, with the pin-set&rsquo;s {0}/{1} clash transported to a
+    whole-document repro:</p>
+<pre><code>abbrev PinnedDoc := GSet Nat × GSet Nat  -- (nodes, pins)
+
+def pinnedInv : Invariant PinnedDoc := fun d =>
+  (d.1 0 = true) ∧ (∀ m n, d.2 m = true → d.2 n = true → m = n)
+
+/-- Two replicas that each pin a different node: both legal whole documents,
+their merge pins two. The evidence is a pair of complete document states —
+paste them into a test. -/
+def pinnedVerdict : Verdict pinnedInv :=
+  Verdict.prodClashRight (IA := fun s => s 0 = true)
+    (IB := fun s => ∀ m n, s m = true → s n = true → m = n)
+    (fun n => n == 0) (fun n => n == 1)
+    (fun m n hm hn => by simp at hm hn; omega)
+    (fun m n hm hn => by simp at hm hn; omega)
+    (fun hmerge => by
+      have := hmerge 0 1 (by decide) (by decide)
+      omega)
+    (fun n => n == 0) (by decide)
+
+example : (loomVerdict (fun _ => 64)).isFree = true  := rfl
+example : pinnedVerdict.isFree = false := rfl</code></pre>
+    <p>Both answers are backed by the terms, not by the <code>Bool</code>. When the DSL
+    hands you a clash, <code>Segmented.lean</code>&rsquo;s recipe applies: look for a projection
+    your application can hold fixed between explicit coordination events, and check
+    whether the invariant is segmented over it. The clash says coordination is needed
+    <em>somewhere</em>; the segmentation says it is needed <em>only there</em>.</p>
+  </section>
+
+  <section id="claims" class="prose">
+    <p class="kicker">Claim discipline</p>
+    <h2>What is and is not claimed</h2>
+    <ul class="claims">
+      <li><strong>Proved, in Lean, over Lean core only:</strong> every
+      <code>MergeState</code> instance&rsquo;s merge laws (commutative, associative, idempotent
+      &mdash; proved, not assumed), every classification above, and every refutation as a
+      concrete two-replica counterexample you can replay as a test.</li>
+      <li><strong>The Lean verifies the <em>design</em>; the Rust is an unverified
+      implementation of it.</strong> The companion crate (<code>rust/</code>, one dependency:
+      blake3) implements the blessed fragment &mdash; <code>causal::CausalWeave</code>, an
+      append-only content-addressed DAG whose <code>merge</code> is skip-if-present union
+      with <em>no cycle check</em>, the theorems being why that&rsquo;s sound; and
+      <code>movelog::MoveLog</code>, moves as a grow-only op set with cycle-skipping replay.
+      Its tests replay the Lean witness scenarios &mdash; good tests, and <em>zero formal
+      evidence</em>. No &ldquo;translation validation&rdquo; is claimed, because there is no formal
+      semantics of Rust to state it in.</li>
+      <li><strong>The content-addressing step is a premise, not a theorem.</strong>
+      &ldquo;A reference cycle would require a hash cycle&rdquo; is collision resistance &mdash; a
+      cryptographic assumption stated out loud. Rank is modeled as an explicit function;
+      nothing is proved about any hash function. Same seam on the implementation side:
+      same-id-different-bytes is refused as corruption (<code>IdCollision</code>), never
+      silently deduped, because the convergence proofs assume ids resolve identically.</li>
+      <li><strong><span class="badge free">free</span> means the merge preserves the
+      invariant.</strong> It does not mean an <em>operation</em> cannot violate it locally
+      (op-validation is the application&rsquo;s job), and it does not price metadata growth
+      (tombstones, op logs &mdash; engineering, not semantics).</li>
+      <li><strong>The axiom ledger is a build gate, not a printout.</strong>
+      <code>Audit.lean</code> pins every keystone theorem&rsquo;s axiom footprint with
+      <code>#guard_msgs</code>: a <code>sorry</code> (<code>sorryAx</code>) or
+      <code>native_decide</code> (<code>Lean.ofReduceBool</code>) anywhere fails the build.
+      The permitted floor is Lean&rsquo;s own three axioms &mdash; <code>propext</code>,
+      <code>Classical.choice</code>, <code>Quot.sound</code> &mdash; and two theorems are pinned
+      axiom-free entirely: <code>grounded_acyclic</code> and
+      <code>derived_view_sec</code>.</li>
+    </ul>
+    <p>Check it yourself:</p>
+<pre><code>lake build          # the proofs; Lean core only, no mathlib, ~30s cold
+cd rust &amp;&amp; cargo test</code></pre>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><strong style="color:var(--fg)">leanuweave</strong> &mdash;
+    <a href="https://github.com/emberian/leanuweave">github.com/emberian/leanuweave</a> ·
+    companion to
+    <a href="https://github.com/transkatgirl/universal-weave">universal-weave</a>.</p>
+    <p>Written by ember + Claude as a gift to the weaver ecosystem, drawing on the
+    <a href="https://dreggnet.com">dregg</a> metatheory&rsquo;s confluence/blocklace
+    developments (re-proved here mathlib-free from Lean core).</p>
+    <p class="lit"><strong style="color:var(--fg)">Literature:</strong>
+    Bailis, Fekete, Franklin, Ghodsi, Hellerstein, Stoica — <em>Coordination Avoidance in
+    Database Systems</em>, VLDB&nbsp;2015 ·
+    Shapiro, Preguiça, Baquero, Zawirski — <em>Conflict-free Replicated Data Types</em>,
+    SSS&nbsp;2011 ·
+    Kleppmann, Mulligan, Gomes, Beresford — <em>A Highly-Available Move Operation for
+    Replicated Trees</em>, TPDS&nbsp;2021, and <em>Verifying Strong Eventual Consistency in
+    Distributed Systems</em>, OOPSLA&nbsp;2017 ·
+    Almeida, Shapiro — the blocklace, 2024 ·
+    Whittaker, Hellerstein — segmented I-confluence, VLDB&nbsp;2019.
+    PDFs of most of these live in the authors&rsquo; pockets; ask and we&rsquo;ll point you at
+    them.</p>
+    <p>License: Unlicense OR MIT, same spirit as universal-weave.</p>
+  </div>
+</footer>
+
+</body>
+</html>
