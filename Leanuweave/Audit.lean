@@ -16,6 +16,7 @@ import Leanuweave.ORSet
 import Leanuweave.Causality
 import Leanuweave.MVRegister
 import Leanuweave.Segmented
+import Leanuweave.Undo
 
 /--
 info: 'Leanuweave.Acyclicity.grounded_acyclic' does not depend on any axioms
@@ -178,3 +179,60 @@ info: 'Leanuweave.Segmented.budget_not_iconfluent' depends on axioms: [propext, 
 info: 'Leanuweave.Segmented.budget_segmented' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in #print axioms Leanuweave.Segmented.budget_segmented
+
+/-! ### Wave 3 — undo/redo -/
+
+/--
+info: 'Leanuweave.Undo.mem_s01' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.mem_s01
+
+/--
+info: 'Leanuweave.Undo.mem_s01u' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.mem_s01u
+
+/--
+info: 'Leanuweave.Undo.mem_s01ur' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.mem_s01ur
+
+/--
+info: 'Leanuweave.Undo.mem_s01uC' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.mem_s01uC
+
+/--
+info: 'Leanuweave.Undo.overwrite_supersedes' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.overwrite_supersedes
+
+/--
+info: 'Leanuweave.Undo.undo_restores' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.undo_restores
+
+/--
+info: 'Leanuweave.Undo.redo_restores' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.redo_restores
+
+/--
+info: 'Leanuweave.Undo.undo_conflicts_visibly' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.undo_conflicts_visibly
+
+/--
+info: 'Leanuweave.Undo.undo_does_not_silently_lose' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.undo_does_not_silently_lose
+
+/--
+info: 'Leanuweave.Undo.undo_preserves_history' depends on axioms: [Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.undo_preserves_history
+
+/--
+info: 'Leanuweave.Undo.redo_preserves_history' depends on axioms: [Quot.sound]
+-/
+#guard_msgs in #print axioms Leanuweave.Undo.redo_preserves_history

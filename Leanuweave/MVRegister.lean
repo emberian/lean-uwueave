@@ -94,8 +94,8 @@ theorem conflict_surfaces : InView sAB wA ∧ InView sAB wB := by
       have hw' : w' = wA ∨ w' = wB := by
         simp [sAB, gset_mem_merge, wA, wB] at h'
         rcases h' with h | h
-        · exact Or.inl (by cases w'; simp_all [wA, wB, wR])
-        · exact Or.inr (by cases w'; simp_all [wA, wB, wR])
+        · exact Or.inl (by cases w'; simp_all [wA])
+        · exact Or.inr (by cases w'; simp_all [wB])
       rcases hw' with h | h <;> (subst h; decide)
 
 /-- **Resolution is just a write.** After `wR` (clock above both) lands, the
@@ -110,9 +110,9 @@ theorem resolution_is_a_write : ¬ InView sABR wA ∧ InView sABR wR := by
     have hw' : w' = wA ∨ w' = wB ∨ w' = wR := by
       simp [sABR, sAB, gset_mem_merge, wA, wB, wR] at h'
       rcases h' with (h | h) | h
-      · exact Or.inl (by cases w'; simp_all [wA, wB, wR])
-      · exact Or.inr (Or.inl (by cases w'; simp_all [wA, wB, wR]))
-      · exact Or.inr (Or.inr (by cases w'; simp_all [wA, wB, wR]))
+      · exact Or.inl (by cases w'; simp_all [wA])
+      · exact Or.inr (Or.inl (by cases w'; simp_all [wB]))
+      · exact Or.inr (Or.inr (by cases w'; simp_all [wR]))
     rcases hw' with h | h | h <;> (subst h; decide)
 
 end Leanuweave.MVRegister
