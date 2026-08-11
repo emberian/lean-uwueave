@@ -94,6 +94,7 @@ pub mod era;
 mod ffi;
 pub mod movelog;
 pub mod seq;
+pub mod status;
 pub mod weave;
 
 pub use causal::{CausalWeave, InsertError, MergeError, NodeId};
