@@ -25,6 +25,24 @@ that are *not* free:
      words are undisturbed, and the i64 two's-complement round trip is the
      identity on the range the kernel produces.
 
+  4. **The trace block** (format v2): `overrides_foldl_applyOpFull` — the
+     traced fold's view component is the plain `applyOp` fold, so every view
+     theorem transfers to the shipping kernel; `size_statuses_absReplayFull` —
+     one status word per request op; `applyOp_skip_of_opStatus_ne_zero` — a
+     nonzero status is a real no-op on the view; `opStatus_mem_range` — a
+     status word is one of the three documented values.
+
+  5. **SEC for the shipping kernel** (§6, `kernel_derived_view_sec` and the
+     `absReplay_perm` / `absReplay_append_mem` / `absReplay_ext_mem` family):
+     the replay is a function of the op *set* — order-blind and
+     redelivery-blind — so `Move.derived_view_sec`'s clauses are theorems
+     about `absReplay`, not informal inheritance.
+
+  6. **Input codec** (§8, `decodeBase_encodeRequest` /
+     `decodeOps_encodeRequest` / `replay_encodeRequest`): the canonical
+     request encoder round-trips through the decoders exactly, closing the
+     input side of the wire contract at the Lean level.
+
 No `sorry`, no `native_decide`, no `#guard`; axioms of every keystone are
 within `{propext, Classical.choice, Quot.sound}`.
 -/
@@ -502,6 +520,63 @@ theorem terminates_replicate {fp : Array Int} {n : Nat} {r : Nat → Nat}
         exact ⟨h0, rfl⟩
   exact fun i => key (r i + 1) i (Nat.lt_succ_self _)
 
+/-- Projecting the traced fold onto its override block is the plain `applyOp`
+fold over the same ops in the same order — the statuses ride along without
+influencing the view. This is the lemma that lets every view theorem below be
+proved against the plain fold and hold for the shipping `absReplayFull`. -/
+theorem overrides_foldl_applyOpFull {fp : Array Int} {n : Nat} :
+    ∀ (l : List (Op × Nat)) (acc : ReplayFull),
+      (l.foldl (applyOpFull fp n) acc).overrides
+        = (l.map Prod.fst).foldl (applyOp fp n) acc.overrides := by
+  intro l
+  induction l with
+  | nil => intro acc; rfl
+  | cons p t ih =>
+    intro acc
+    rw [List.foldl_cons, List.map_cons, List.foldl_cons, ih]
+    rfl
+
+private theorem size_statuses_foldl {fp : Array Int} {n : Nat} :
+    ∀ (l : List (Op × Nat)) (acc : ReplayFull),
+      (l.foldl (applyOpFull fp n) acc).statuses.size = acc.statuses.size := by
+  intro l
+  induction l with
+  | nil => intro acc; rfl
+  | cons p t ih =>
+    intro acc
+    rw [List.foldl_cons, ih]
+    simp [applyOpFull, Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]
+
+/-- **The status block is exactly one word per request op** (no hypotheses —
+this holds on an ungrounded base too): the size fact `replay`'s v2 output
+layout relies on. -/
+theorem size_statuses_absReplayFull (fp : Array Int) (ops : Array Op) :
+    (absReplayFull fp ops).statuses.size = ops.size := by
+  simp only [absReplayFull]
+  rw [size_statuses_foldl]
+  exact Array.size_replicate ..
+
+/-- **A reported skip is a real no-op.** Whenever `opStatus` reports anything
+but `0` (applied), `applyOp` returns the view unchanged: the status block
+faithfully partitions the replay into ops that acted and ops that did not.
+(The other direction is by construction: both functions branch on the same
+conditions in the same order.) -/
+theorem applyOp_skip_of_opStatus_ne_zero {fp : Array Int} {n : Nat}
+    {ov : Array Int} {op : Op} (h : opStatus fp n ov op ≠ 0) :
+    applyOp fp n ov op = ov := by
+  simp only [opStatus] at h
+  simp only [applyOp]
+  repeat' split at h <;> simp_all
+  all_goals intros
+  all_goals omega
+
+/-- A status word is one of the three documented values. -/
+theorem opStatus_mem_range (fp : Array Int) (n : Nat) (ov : Array Int) (op : Op) :
+    opStatus fp n ov op = 0 ∨ opStatus fp n ov op = 1 ∨ opStatus fp n ov op = 2 := by
+  simp only [opStatus]
+  repeat' split
+  all_goals simp
+
 private theorem terminates_foldl {fp : Array Int} {n : Nat} (hfp : fp.size = n) :
     ∀ (l : List Op) (ov : Array Int), ov.size = n → (∀ i, Terminates fp ov i) →
       ∀ i, Terminates fp (l.foldl (applyOp fp n) ov) i := by
@@ -525,8 +600,9 @@ private theorem size_foldl_applyOp {fp : Array Int} {n : Nat} :
 holds on an ungrounded base too). -/
 theorem size_absReplay (fp : Array Int) (ops : Array Op) :
     (absReplay fp ops).size = fp.size := by
-  simp only [absReplay]
-  rw [← Array.foldl_toList, size_foldl_applyOp, Array.size_replicate]
+  simp only [absReplay, absReplayFull]
+  rw [overrides_foldl_applyOpFull, size_foldl_applyOp]
+  exact Array.size_replicate ..
 
 /-- **Every chain of the replayed view reaches root** (grounded base ⇒
 terminating view, for any op array — order, duplication and content of the
@@ -534,8 +610,8 @@ ops are unconstrained). -/
 theorem absReplay_terminates (fp : Array Int) (ops : Array Op)
     (r : Nat → Nat) (hg : GroundedBase r fp) :
     ∀ i, Terminates fp (absReplay fp ops) i := by
-  simp only [absReplay]
-  rw [← Array.foldl_toList]
+  simp only [absReplay, absReplayFull]
+  rw [overrides_foldl_applyOpFull]
   exact terminates_foldl rfl _ _ (Array.size_replicate ..)
     (terminates_replicate hg)
 
@@ -557,7 +633,252 @@ theorem absReplay_chain_nodup (fp : Array Int) (ops : Array Op)
   exact ⟨l, hl,
     hl.nodup fun v => (absReplay_terminates fp ops r hg v).not_reaches_self⟩
 
-/-! ## §6. Codec: the word level round-trips
+/-! ## §6. SEC for the shipping kernel: the replay is a function of the op SET
+
+`Move.derived_view_sec` is generic: any log CRDT, any interpreter. Until this
+section, the *shipping* kernel inherited it only informally ("the log is a
+G-Set, so..."). Here the inheritance becomes theorems about `absReplay`
+itself: the replay is blind to delivery order (`absReplay_perm`,
+`absReplay_append_comm`), blind to redelivery (`absReplay_snoc_mem`,
+`absReplay_append_mem`), and in fact a function of the op *set*
+(`absReplay_ext_mem`) — with the three clauses of `derived_view_sec`
+packaged, for this kernel, as `kernel_derived_view_sec`.
+
+The two engines: (1) `opLe` is a total, transitive, *antisymmetric* order
+(ops tying on all four keys are equal), so any two sorted permutations of a
+log are equal lists (`Perm.eq_of_pairwise`); (2) replaying an op twice in a
+row is replaying it once (`applyOp_applyOp` — no hypotheses: the second
+application meets a view on which its own verdict cannot change), so the
+duplicate runs a stable sort produces collapse in the fold. -/
+
+private theorem opLt_eq_true_iff {a b : Op} :
+    opLt a b = true ↔
+      a.lamport.toNat < b.lamport.toNat
+      ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat < b.replica.toNat)
+      ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
+          ∧ a.child < b.child)
+      ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
+          ∧ a.child = b.child ∧ a.dest < b.dest) := by
+  simp only [opLt, UInt64.lt_iff_toNat_lt]
+  repeat' split
+  all_goals simp_all
+  all_goals omega
+
+private theorem opLt_eq_false_iff {a b : Op} :
+    opLt a b = false ↔
+      ¬(a.lamport.toNat < b.lamport.toNat
+        ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat < b.replica.toNat)
+        ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
+            ∧ a.child < b.child)
+        ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
+            ∧ a.child = b.child ∧ a.dest < b.dest)) := by
+  rw [← opLt_eq_true_iff]
+  cases h : opLt a b <;> simp
+
+theorem opLe_refl (a : Op) : opLe a a = true := by
+  simp only [opLe, Bool.not_eq_true']
+  rw [opLt_eq_false_iff]
+  omega
+
+theorem opLe_trans (a b c : Op) : opLe a b → opLe b c → opLe a c := by
+  simp only [opLe, Bool.not_eq_true']
+  rw [opLt_eq_false_iff, opLt_eq_false_iff, opLt_eq_false_iff]
+  intro h₁ h₂
+  omega
+
+theorem opLe_total (a b : Op) : opLe a b || opLe b a := by
+  simp only [opLe, Bool.not_eq_true', Bool.or_eq_true]
+  rw [opLt_eq_false_iff, opLt_eq_false_iff]
+  omega
+
+/-- `opLe` is antisymmetric: two ops that tie on all four keys are the same
+op — the fact that makes the sorted presentation of a log *unique*, and ties
+in the stable sort harmless. -/
+theorem opLe_antisymm {a b : Op} (h₁ : opLe a b) (h₂ : opLe b a) : a = b := by
+  simp only [opLe, Bool.not_eq_true'] at h₁ h₂
+  rw [opLt_eq_false_iff] at h₁ h₂
+  obtain ⟨hl, hr, hc, hd⟩ :
+      a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
+        ∧ a.child = b.child ∧ a.dest = b.dest := by omega
+  cases a; cases b
+  simp_all [← UInt64.toNat_inj]
+
+/-- The traced sort projects to the plain stable sort of the ops (core's
+stability lemma `List.mergeSort_zipIdx`), so `absReplay` is literally
+fold-over-`mergeSort`. -/
+theorem absReplay_eq_foldl_mergeSort (fp : Array Int) (ops : Array Op) :
+    absReplay fp ops
+      = (ops.toList.mergeSort opLe).foldl (applyOp fp fp.size)
+          (Array.replicate fp.size (-2)) := by
+  simp only [absReplay, absReplayFull]
+  rw [overrides_foldl_applyOpFull]
+  have h : List.map Prod.fst (ops.toList.zipIdx.mergeSort (List.zipIdxLE opLe))
+      = ops.toList.mergeSort opLe := List.mergeSort_zipIdx
+  rw [h]
+
+private theorem mergeSort_eq_of_perm {a b : List Op} (h : a.Perm b) :
+    a.mergeSort opLe = b.mergeSort opLe :=
+  List.Perm.eq_of_pairwise
+    (fun _ _ _ _ hxy hyx => opLe_antisymm hxy hyx)
+    (List.pairwise_mergeSort opLe_trans opLe_total a)
+    (List.pairwise_mergeSort opLe_trans opLe_total b)
+    ((List.mergeSort_perm a opLe).trans (h.trans (List.mergeSort_perm b opLe).symm))
+
+/-- **The replay is blind to delivery order**: logs that are permutations of
+each other replay identically. -/
+theorem absReplay_perm (fp : Array Int) {a b : Array Op}
+    (h : a.toList.Perm b.toList) : absReplay fp a = absReplay fp b := by
+  rw [absReplay_eq_foldl_mergeSort, absReplay_eq_foldl_mergeSort,
+      mergeSort_eq_of_perm h]
+
+/-- Deltas commute — `derived_view_sec`'s clause (1), for this kernel. -/
+theorem absReplay_append_comm (fp : Array Int) (a b : Array Op) :
+    absReplay fp (a ++ b) = absReplay fp (b ++ a) :=
+  absReplay_perm fp (by simp [List.perm_append_comm])
+
+/-- **Replaying an op twice in a row is replaying it once** — no hypotheses.
+A skip leaves the view unchanged, so the repeat meets the same view and skips
+again; an applied op wrote its child's slot, and whether the repeat applies
+(same write, collapsing) or skips, the view is the one write's. -/
+theorem applyOp_applyOp (fp : Array Int) (n : Nat) (ov : Array Int) (op : Op) :
+    applyOp fp n (applyOp fp n ov op) op = applyOp fp n ov op := by
+  by_cases h1 : op.child ≥ n
+  · simp only [applyOp, if_pos h1]
+  · by_cases h2 : (op.dest == -1) = true
+    · simp only [applyOp, if_neg h1, if_pos h2, Array.set!_eq_setIfInBounds,
+        Array.setIfInBounds_setIfInBounds]
+    · by_cases h3 : op.dest < 0
+      · simp only [applyOp, if_neg h1, if_neg h2, if_pos h3]
+      · by_cases h4 : op.dest.toNat ≥ n
+        · simp only [applyOp, if_neg h1, if_neg h2, if_neg h3, if_pos h4]
+        · by_cases h5 : chainHits fp ov op.dest.toNat op.child (n + 1) = true
+          · have hin : applyOp fp n ov op = ov := by
+              simp only [applyOp, if_neg h1, if_neg h2, if_neg h3, if_neg h4,
+                if_pos h5]
+            rw [hin]
+            exact hin
+          · have hin : applyOp fp n ov op = ov.set! op.child op.dest := by
+              simp only [applyOp, if_neg h1, if_neg h2, if_neg h3, if_neg h4,
+                if_neg h5]
+            rw [hin]
+            simp only [applyOp, if_neg h1, if_neg h2, if_neg h3, if_neg h4,
+              Array.set!_eq_setIfInBounds, Array.setIfInBounds_setIfInBounds,
+              ite_self]
+
+/-- The list-level replay every array theorem factors through. -/
+private def replayL (fp : Array Int) (l : List Op) : Array Int :=
+  (l.mergeSort opLe).foldl (applyOp fp fp.size) (Array.replicate fp.size (-2))
+
+private theorem absReplay_eq_replayL (fp : Array Int) (ops : Array Op) :
+    absReplay fp ops = replayL fp ops.toList :=
+  absReplay_eq_foldl_mergeSort fp ops
+
+private theorem replayL_perm {fp : Array Int} {a b : List Op} (h : a.Perm b) :
+    replayL fp a = replayL fp b := by
+  unfold replayL
+  rw [mergeSort_eq_of_perm h]
+
+/-- Appending one already-present op: the stable sort inserts the duplicate
+next to its twin, where the fold collapses it. -/
+private theorem replayL_snoc_mem {fp : Array Int} {l : List Op} {x : Op}
+    (hx : x ∈ l) : replayL fp (l ++ [x]) = replayL fp l := by
+  obtain ⟨l₁, l₂, hsplit⟩ := List.append_of_mem (List.mem_mergeSort.mpr hx)
+  have hsorted := List.pairwise_mergeSort opLe_trans opLe_total l
+  rw [hsplit] at hsorted
+  have hsorted' : (l₁ ++ x :: x :: l₂).Pairwise (opLe · ·) := by
+    rw [List.pairwise_append] at hsorted ⊢
+    obtain ⟨hp₁, hp₂, hcross⟩ := hsorted
+    rw [List.pairwise_cons] at hp₂
+    obtain ⟨hxl₂, hpl₂⟩ := hp₂
+    refine ⟨hp₁, ?_, ?_⟩
+    · rw [List.pairwise_cons]
+      refine ⟨?_, List.Pairwise.cons hxl₂ hpl₂⟩
+      intro b hb
+      rcases List.mem_cons.mp hb with rfl | hb
+      · exact opLe_refl _
+      · exact hxl₂ b hb
+    · intro a ha b hb
+      rcases List.mem_cons.mp hb with rfl | hb
+      · exact hcross a ha _ List.mem_cons_self
+      · exact hcross a ha b hb
+  have hperm : (l ++ [x]).Perm (l₁ ++ x :: x :: l₂) := by
+    have h₀ : l.Perm (l₁ ++ x :: l₂) := hsplit ▸ (List.mergeSort_perm l opLe).symm
+    exact List.perm_append_comm.trans ((h₀.cons x).trans List.perm_middle.symm)
+  have hsortEq : (l ++ [x]).mergeSort opLe = l₁ ++ x :: x :: l₂ :=
+    List.Perm.eq_of_pairwise
+      (fun _ _ _ _ hxy hyx => opLe_antisymm hxy hyx)
+      (List.pairwise_mergeSort opLe_trans opLe_total _)
+      hsorted'
+      ((List.mergeSort_perm _ opLe).trans hperm)
+  unfold replayL
+  rw [hsortEq, hsplit]
+  simp only [List.foldl_append, List.foldl_cons, applyOp_applyOp]
+
+/-- Absorption, delta-shaped: appending any batch of already-present ops
+changes nothing. -/
+private theorem replayL_append_mem {fp : Array Int} {l d : List Op}
+    (hd : ∀ op ∈ d, op ∈ l) : replayL fp (l ++ d) = replayL fp l := by
+  induction d generalizing l with
+  | nil => simp
+  | cons x d' ih =>
+    have hx : x ∈ l := hd x List.mem_cons_self
+    calc replayL fp (l ++ x :: d')
+        _ = replayL fp ((l ++ [x]) ++ d') := by rw [List.append_assoc]; rfl
+        _ = replayL fp (l ++ [x]) := ih fun op hop =>
+              List.mem_append_left _ (hd op (List.mem_cons_of_mem x hop))
+        _ = replayL fp l := replayL_snoc_mem hx
+
+/-- **Redelivery is invisible, op-level**: pushing an op the log already
+contains does not change the replay. -/
+theorem absReplay_snoc_mem (fp : Array Int) {ops : Array Op} {x : Op}
+    (hx : x ∈ ops.toList) : absReplay fp (ops.push x) = absReplay fp ops := by
+  rw [absReplay_eq_replayL, absReplay_eq_replayL, Array.toList_push]
+  exact replayL_snoc_mem hx
+
+/-- **Redelivery is invisible, delta-level**: appending a batch of
+already-seen ops does not change the replay. -/
+theorem absReplay_append_mem (fp : Array Int) {ops Δ : Array Op}
+    (h : ∀ op ∈ Δ.toList, op ∈ ops.toList) :
+    absReplay fp (ops ++ Δ) = absReplay fp ops := by
+  rw [absReplay_eq_replayL, absReplay_eq_replayL, Array.toList_append]
+  exact replayL_append_mem h
+
+/-- **The replay is a function of the op SET.** Two logs with the same
+members — any order, any duplication — replay identically. This is the
+missing Prop-level link between the kernel and the grow-only-log abstraction:
+`absReplay ∘ toSet⁻¹` is well-defined. -/
+theorem absReplay_ext_mem (fp : Array Int) {a b : Array Op}
+    (h : ∀ op, op ∈ a.toList ↔ op ∈ b.toList) :
+    absReplay fp a = absReplay fp b := by
+  have hab : absReplay fp (a ++ b) = absReplay fp a :=
+    absReplay_append_mem fp fun op hop => (h op).mpr hop
+  have hba : absReplay fp (b ++ a) = absReplay fp b :=
+    absReplay_append_mem fp fun op hop => (h op).mp hop
+  rw [← hab, absReplay_append_comm, hba]
+
+/-- **`derived_view_sec`, discharged for the shipping kernel.** `Move.lean`'s
+generic guarantee, instantiated on `absReplay` with log union = append:
+(1) deltas arriving in either order give the same view, (2) a redelivered
+delta changes nothing, (3) the view is acyclic regardless — on a grounded
+base. SEC for the real kernel is no longer informal inheritance from the log
+argument; it is these three clauses. (What `derived_view_sec` writes as
+`⊔` on an abstract `MergeState` appears here as `++` — `absReplay_ext_mem`
+is exactly the statement that `++` only matters through the set it
+builds.) -/
+theorem kernel_derived_view_sec (fp : Array Int) (r : Nat → Nat)
+    (hg : GroundedBase r fp) (base Δ₁ Δ₂ : Array Op) :
+    absReplay fp ((base ++ Δ₁) ++ Δ₂) = absReplay fp ((base ++ Δ₂) ++ Δ₁)
+    ∧ absReplay fp ((base ++ Δ₁) ++ Δ₁) = absReplay fp (base ++ Δ₁)
+    ∧ ∀ i, ¬ Reaches fp (absReplay fp ((base ++ Δ₁) ++ Δ₂)) i i := by
+  refine ⟨?_, ?_, absReplay_acyclic _ _ r hg⟩
+  · refine absReplay_perm fp ?_
+    simp only [Array.toList_append, List.append_assoc]
+    exact List.Perm.append_left _ List.perm_append_comm
+  · exact absReplay_append_mem fp fun op hop => by
+      rw [Array.toList_append]
+      exact List.mem_append_right _ hop
+
+/-! ## §7. Codec: the word level round-trips
 
 `pushWord`/`getWord` are inverse at every word boundary, `encodeView` is
 word-faithful, and `toI`/`ofI` round-trip on the i64 range. Together: reading
@@ -782,5 +1103,223 @@ theorem decode_encode_id (ov : Array Int) {i : Nat} (h : i < ov.size)
     (h1 : -(2 ^ 63) ≤ ov[i]) (h2 : ov[i] < 2 ^ 63) :
     toI (getWord (encodeView ov) i) = ov[i] := by
   rw [getWord_encodeView ov h, toI_ofI h1 h2]
+
+/-! ## §8. Input codec: the request round-trips
+
+The output side round-tripped in §7; here the *input* side stops being a
+one-way street. `encodeRequest` (in `Exec.lean`) is the canonical encoder for
+the request layout; these theorems prove `decodeBase`/`decodeOps` invert it
+exactly, under the range conditions every real request satisfies (sizes and
+children in u64 range, parents and destinations in i64 range). With
+`replay_encodeRequest`, the byte-level kernel applied to a canonical request
+is *literally* the decision layer plus the proved output codec — no unproved
+decode step remains between them. The one thing left outside any proof is
+that the Rust marshaller emits `encodeRequest`'s exact bytes: a finite,
+testable claim (exercised end-to-end by the property suite), not a semantic
+gap. -/
+
+private theorem size_foldl_pushWords (l : List UInt64) :
+    ∀ b : ByteArray, (l.foldl pushWord b).size = b.size + 8 * l.length := by
+  induction l with
+  | nil => simp
+  | cons x t ih =>
+    intro b
+    rw [List.foldl_cons, ih, size_pushWord, List.length_cons]
+    omega
+
+private theorem getWord_foldl_pushWords_lt (l : List UInt64) :
+    ∀ (b : ByteArray) (i : Nat), 8 * (i + 1) ≤ b.size →
+      getWord (l.foldl pushWord b) i = getWord b i := by
+  induction l with
+  | nil => intro b i _; rfl
+  | cons x t ih =>
+    intro b i h
+    rw [List.foldl_cons, ih _ _ (by rw [size_pushWord]; omega),
+        getWord_pushWord_lt _ _ h]
+
+private theorem getWord_foldl_pushWords (l : List UInt64) :
+    ∀ (b : ByteArray) (w : Nat), b.size = 8 * w →
+      ∀ (j : Nat), (hj : j < l.length) →
+        getWord (l.foldl pushWord b) (w + j) = l[j] := by
+  induction l with
+  | nil => intro b w _ j hj; simp at hj
+  | cons x t ih =>
+    intro b w hb j hj
+    rw [List.foldl_cons]
+    match j with
+    | 0 =>
+      rw [Nat.add_zero,
+          getWord_foldl_pushWords_lt t _ _ (by rw [size_pushWord, hb]; omega),
+          getWord_pushWord _ _ hb]
+      rfl
+    | j + 1 =>
+      have := ih (pushWord b x) (w + 1)
+        (by rw [size_pushWord, hb]; omega) j (by simpa using hj)
+      rw [show w + (j + 1) = w + 1 + j by omega, this]
+      rfl
+
+/-- Word `j` of the canonical request is word `j` of `requestWords`. -/
+private theorem getWord_encodeRequest (fp : Array Int) (ops : Array Op)
+    {j : Nat} (hj : j < (requestWords fp ops).length) :
+    getWord (encodeRequest fp ops) j = (requestWords fp ops)[j] := by
+  have h := getWord_foldl_pushWords (requestWords fp ops) ByteArray.empty 0
+    (by simp) j hj
+  simpa using h
+
+private theorem length_flatMap_quad (f : Op → List UInt64)
+    (h4 : ∀ op, (f op).length = 4) :
+    ∀ l : List Op, (l.flatMap f).length = 4 * l.length := by
+  intro l
+  induction l with
+  | nil => rfl
+  | cons a t ih =>
+    simp only [List.flatMap_cons, List.length_append, h4, ih, List.length_cons]
+    omega
+
+private theorem requestWords_length (fp : Array Int) (ops : Array Op) :
+    (requestWords fp ops).length = 2 + fp.size + 4 * ops.size := by
+  have h := length_flatMap_quad
+    (fun op => [op.lamport, op.replica, UInt64.ofNat op.child, ofI op.dest])
+    (fun _ => rfl) ops.toList
+  simp only [requestWords, List.length_cons, List.length_append,
+    List.length_map, Array.length_toList, h]
+  omega
+
+private theorem getElem?_flatMap_quad (f : Op → List UInt64)
+    (h4 : ∀ op, (f op).length = 4) :
+    ∀ (l : List Op) (q k : Nat) (hq : q < l.length), k < 4 →
+      (l.flatMap f)[4 * q + k]? = (f (l[q]'hq))[k]? := by
+  intro l
+  induction l with
+  | nil => intro q k hq _; simp at hq
+  | cons a t ih =>
+    intro q k hq hk
+    match q with
+    | 0 =>
+      simp only [List.flatMap_cons, Nat.mul_zero, Nat.zero_add,
+        List.getElem_cons_zero]
+      rw [List.getElem?_append_left (by rw [h4]; exact hk)]
+    | q + 1 =>
+      simp only [List.flatMap_cons, List.getElem_cons_succ]
+      rw [List.getElem?_append_right (by rw [h4]; omega)]
+      rw [show 4 * (q + 1) + k - (f a).length = 4 * q + k by rw [h4]; omega]
+      exact ih q k (by simpa using hq) hk
+
+private theorem getElem_of_getElem? {l : List UInt64} {i : Nat} {v : UInt64}
+    (h : i < l.length) (hv : l[i]? = some v) : l[i] = v := by
+  rw [List.getElem?_eq_getElem h] at hv
+  exact Option.some.inj hv
+
+/-- **The base decodes back exactly** from the canonical request. -/
+theorem decodeBase_encodeRequest (fp : Array Int) (ops : Array Op)
+    (hn : fp.size < 2 ^ 64)
+    (hfp : ∀ (i : Nat) (h : i < fp.size), -(2 ^ 63) ≤ fp[i] ∧ fp[i] < 2 ^ 63) :
+    decodeBase (encodeRequest fp ops) = fp := by
+  have hw0 : getWord (encodeRequest fp ops) 0 = UInt64.ofNat fp.size := by
+    rw [getWord_encodeRequest fp ops (by rw [requestWords_length]; omega)]
+    rfl
+  have hn' : (getWord (encodeRequest fp ops) 0).toNat = fp.size := by
+    rw [hw0, UInt64.toNat_ofNat']
+    omega
+  simp only [decodeBase, hn']
+  apply Array.ext
+  · simp
+  · intro i h1 h2
+    simp only [Array.getElem_map, Array.getElem_range]
+    have hidx : 2 + i < (requestWords fp ops).length := by
+      rw [requestWords_length]
+      simp at h1
+      omega
+    rw [getWord_encodeRequest fp ops hidx]
+    have h1' : i < fp.size := by simpa using h1
+    have hval : (requestWords fp ops)[2 + i]'hidx = ofI fp[i] := by
+      apply getElem_of_getElem? hidx
+      simp only [requestWords]
+      rw [show (2 : Nat) + i = i + 1 + 1 by omega,
+          List.getElem?_cons_succ, List.getElem?_cons_succ,
+          List.getElem?_append_left (by simpa using h1'),
+          List.getElem?_map, Array.getElem?_toList,
+          Array.getElem?_eq_getElem h1']
+      rfl
+    rw [hval, toI_ofI (hfp i h1').1 (hfp i h1').2]
+
+/-- **The ops decode back exactly** from the canonical request. -/
+theorem decodeOps_encodeRequest (fp : Array Int) (ops : Array Op)
+    (hn : fp.size < 2 ^ 64) (hm : ops.size < 2 ^ 64)
+    (hchild : ∀ (j : Nat) (h : j < ops.size), ops[j].child < 2 ^ 64)
+    (hdest : ∀ (j : Nat) (h : j < ops.size),
+      -(2 ^ 63) ≤ ops[j].dest ∧ ops[j].dest < 2 ^ 63) :
+    decodeOps (encodeRequest fp ops) = ops := by
+  have hw0 : (getWord (encodeRequest fp ops) 0).toNat = fp.size := by
+    rw [getWord_encodeRequest fp ops (by rw [requestWords_length]; omega)]
+    show (UInt64.ofNat fp.size).toNat = fp.size
+    rw [UInt64.toNat_ofNat']
+    omega
+  have hw1 : (getWord (encodeRequest fp ops) 1).toNat = ops.size := by
+    rw [getWord_encodeRequest fp ops (by rw [requestWords_length]; omega)]
+    show (UInt64.ofNat ops.size).toNat = ops.size
+    rw [UInt64.toNat_ofNat']
+    omega
+  -- One quad word, extracted: word 2 + n + (4j + k) is field k of op j.
+  have hquad : ∀ (j k : Nat) (hj : j < ops.size) (hk : k < 4),
+      getWord (encodeRequest fp ops) (2 + fp.size + (4 * j + k))
+        = ([ops[j].lamport, ops[j].replica, UInt64.ofNat ops[j].child,
+            ofI ops[j].dest][k]'(by simpa using hk)) := by
+    intro j k hj hk
+    have hidx : 2 + fp.size + (4 * j + k) < (requestWords fp ops).length := by
+      rw [requestWords_length]
+      omega
+    rw [getWord_encodeRequest fp ops hidx]
+    apply getElem_of_getElem? hidx
+    simp only [requestWords]
+    have hj' : j < ops.toList.length := by simpa using hj
+    rw [show 2 + fp.size + (4 * j + k) = fp.size + (4 * j + k) + 1 + 1 by omega,
+        List.getElem?_cons_succ, List.getElem?_cons_succ,
+        List.getElem?_append_right (by simp),
+        show fp.size + (4 * j + k) - (List.map ofI fp.toList).length
+          = 4 * j + k by simp,
+        getElem?_flatMap_quad _ (fun _ => rfl) ops.toList j k hj' hk]
+    simp only [Array.getElem_toList]
+    rw [List.getElem?_eq_getElem (by simpa using hk)]
+  simp only [decodeOps, hw0, hw1]
+  apply Array.ext
+  · simp
+  · intro j h1 h2
+    simp only [Array.getElem_map, Array.getElem_range]
+    have hj : j < ops.size := by simpa using h1
+    have q0 := hquad j 0 hj (by omega)
+    have q1 := hquad j 1 hj (by omega)
+    have q2 := hquad j 2 hj (by omega)
+    have q3 := hquad j 3 hj (by omega)
+    rw [show (2 : Nat) + fp.size + j * 4 = 2 + fp.size + (4 * j + 0) by omega]
+    rw [show 2 + fp.size + (4 * j + 0) + 1 = 2 + fp.size + (4 * j + 1) by omega,
+        show 2 + fp.size + (4 * j + 0) + 2 = 2 + fp.size + (4 * j + 2) by omega,
+        show 2 + fp.size + (4 * j + 0) + 3 = 2 + fp.size + (4 * j + 3) by omega]
+    rw [q0, q1, q2, q3]
+    show Op.mk ops[j].lamport ops[j].replica (UInt64.ofNat ops[j].child).toNat
+        (toI (ofI ops[j].dest)) = ops[j]
+    have hc : (UInt64.ofNat ops[j].child).toNat = ops[j].child := by
+      rw [UInt64.toNat_ofNat']
+      have := hchild j hj
+      omega
+    rw [hc, toI_ofI (hdest j hj).1 (hdest j hj).2]
+
+/-- **Whole-request round trip**: the byte-level kernel applied to the
+canonical encoding of `(base, ops)` is exactly the decision layer followed by
+the proved output codec. Nothing unverified stands between
+`uwueave_replay_kernel`'s bytes and `absReplayFull`'s mathematics for
+canonical requests. -/
+theorem replay_encodeRequest (fp : Array Int) (ops : Array Op)
+    (hn : fp.size < 2 ^ 64) (hm : ops.size < 2 ^ 64)
+    (hfp : ∀ (i : Nat) (h : i < fp.size), -(2 ^ 63) ≤ fp[i] ∧ fp[i] < 2 ^ 63)
+    (hchild : ∀ (j : Nat) (h : j < ops.size), ops[j].child < 2 ^ 64)
+    (hdest : ∀ (j : Nat) (h : j < ops.size),
+      -(2 ^ 63) ≤ ops[j].dest ∧ ops[j].dest < 2 ^ 63) :
+    replay (encodeRequest fp ops)
+      = encodeView ((absReplayFull fp ops).overrides
+          ++ (absReplayFull fp ops).statuses) := by
+  simp only [replay]
+  rw [decodeBase_encodeRequest fp ops hn hfp,
+      decodeOps_encodeRequest fp ops hn hm hchild hdest]
 
 end Uwueave.Exec

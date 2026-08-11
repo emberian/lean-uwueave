@@ -14,6 +14,7 @@ extern void lean_initialize_runtime_module(void);
 
 extern lean_object *initialize_uwueave_Uwueave(uint8_t builtin);
 extern lean_object *uwueave_replay_kernel(lean_object *bytes);
+extern lean_object *uwueave_request_canonical(lean_object *bytes);
 
 static int g_initialized = 0;
 
@@ -47,3 +48,16 @@ uint8_t *shim_uweave_replay(const uint8_t *in, size_t len, size_t *out_len) {
 }
 
 void shim_uweave_free(uint8_t *p) { free(p); }
+
+/* Ask the Lean kernel whether `len` bytes are the canonical request encoding
+ * (decode → re-encode with the proven `encodeRequest` → compare). Returns 1
+ * iff canonical. Used by the Rust side as a debug-build self-check of its
+ * marshaller against the proven encoder. */
+uint8_t shim_uweave_request_canonical(const uint8_t *in, size_t len) {
+  lean_object *arr = lean_alloc_sarray(1, len, len);
+  memcpy(lean_sarray_cptr(arr), in, len);
+  lean_object *out = uwueave_request_canonical(arr); /* consumes arr */
+  uint8_t v = lean_sarray_size(out) > 0 ? lean_sarray_cptr(out)[0] : 0;
+  lean_dec_ref(out);
+  return v;
+}

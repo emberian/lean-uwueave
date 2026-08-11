@@ -43,8 +43,8 @@ records whether `Uwueave/Audit.lean` pins the theorem's axiom footprint
 | `Uwueave/Segmented.lean` | The gentlest verdict: some invariants that fail globally are free *within a seam* (`budget_segmented` vs `budget_not_iconfluent` — same invariant, both verdicts). Spend freely inside your quota; coordinate only to re-divide it. |
 | `Uwueave/Spec.lean` | A composition DSL where verdicts carry their evidence: a schema's answer is either a proof or a counterexample transported up from the exact field that caused it. |
 | `Uwueave/Weave.lean` | A real weave library's feature list classified feature-by-feature — including the loom-specific theorem that a *shared* replicated active path is not a CRDT (`active_path_not_iconfluent`); make it per-user, which is better UX anyway. |
-| `Uwueave/Exec.lean` | The executable kernel: the move-replay decision procedure, authored in Lean, exported to C, and linked into the Rust crate — now factored so `replay` is *by definition* decode → `absReplay` → encode, leaving no bytes-vs-decision gap to prove. Remaining opens stated in its header: the Prop-level `Move.lean` connection, the input-side codec, C-backend trust. |
-| `Uwueave/ExecRefine.lean` | The kernel's theorems: **`absReplay_acyclic`** — for a grounded base and *arbitrary* op arrays (any order, duplicates, junk indices), the replayed view has no cycle; fuel adequacy (`chainHits_decides`, from-scratch pigeonhole); the output codec round-trip capped by `decode_encode_id`. `miniInterp_acyclic`, generalized from the two-op toy to the real kernel. |
+| `Uwueave/Exec.lean` | The executable kernel: the move-replay decision procedure, authored in Lean, exported to C, and linked into the Rust crate — now factored so `replay` is *by definition* decode → `absReplay` → encode, leaving no bytes-vs-decision gap to prove. Format v2 returns a per-op applied/skipped trace (`view_not_stable`, made visible to UIs). Sole remaining open, stated in its header: C-backend trust — the terminal TCB, named, not undone work. |
+| `Uwueave/ExecRefine.lean` | The kernel's theorems: **`absReplay_acyclic`** — for a grounded base and *arbitrary* op arrays (any order, duplicates, junk indices), the replayed view has no cycle; fuel adequacy (`chainHits_decides`, from-scratch pigeonhole); the output codec round-trip capped by `decode_encode_id`. `miniInterp_acyclic`, generalized from the two-op toy to the real kernel. Wave 5 closed the rest: **`kernel_derived_view_sec`** (SEC's three clauses for `absReplay` itself) via **`absReplay_ext_mem`** (the kernel is a function of the op *set*), the miniInterp bridge (`miniReplay_eq_miniInterp` + `absReplay_matches_miniInterp` — same rule, two presentations, machine-checked), and the input codec (`replay_encodeRequest`). |
 | `Uwueave/Audit.lean` | The trust gate, total: `#audit_floor` audits **every** constant in the `Uwueave` namespace against the axiom floor `{propext, Classical.choice, Quot.sound}` — `sorry` (`sorryAx`) and `native_decide` (`ofReduceBool`) are build failures everywhere, with a vacuity tripwire so the gate itself cannot pass on an empty walk. Replaced 113 per-theorem pins on 2026-08-10; the file's header carries the honest accounting. |
 | `Uwueave/ORMap.lean` | The observed-remove map — documents are maps. Add-wins scoped (`ormap_get_survives`), the **doomed-update anomaly** as a theorem (a nested write concurrent with its key's removal survives the merge but is masked by the view), and the centerpiece: remove-wins and update-wins views provably *disagree on the same merged state* (`ormap_policy_divergence`) — the merge is policy-neutral; the choice is yours and visible. |
 | `Uwueave/Automata.lean` | Replicated automata sorted by the same verdicts: semilattice-action runs converge as instances of the delta laws (`run_same_inputs`); commuting inputs may be replayed in any order (`exec_perm`, axiom-free — the seed of the Mazurkiewicz/Zielonka connection, cited not claimed); DFA determinism is the uniqueness ceiling (concrete clash), with LWW-arbitration vs accept-the-NFA priced as exits; token firing under escrow reads the segmented theorems as Petri nets. |
@@ -105,6 +105,11 @@ verified by grepping `Uwueave/Audit.lean`.
 | `Verdict.keyedClash` (def) | Spec | ∀-general | — | yes |
 | `active_path_not_iconfluent` | Weave | finite-story | Live | yes |
 | `absReplay_acyclic` | ExecRefine | ∀-general | — | yes |
+| `kernel_derived_view_sec` | ExecRefine | ∀-general | — | total gate |
+| `absReplay_ext_mem` | ExecRefine | ∀-general | — | total gate |
+| `replay_encodeRequest` | ExecRefine | ∀-general | — | total gate |
+| `miniReplay_eq_miniInterp` | Move | finite-story | — | total gate |
+| `absReplay_matches_miniInterp` | Move | finite-story | — | total gate |
 | `chainHits_decides` | ExecRefine | ∀-general | — | yes |
 | `decode_encode_id` | ExecRefine | ∀-general | — | yes |
 | `ormap_get_survives` | ORMap | ∀-general | — | yes |
@@ -123,7 +128,7 @@ verified by grepping `Uwueave/Audit.lean`.
 | `duelling_revocations_not_iconfluent` | Authority | finite-story | Live | yes |
 | `uniqueness_ceiling` | Ceiling | ∀-general | — | no |
 
-60 rows: 22 ∀-general · 14 parametric · 24 finite-story. Of the 18 negative
+65 rows: 25 ∀-general · 14 parametric · 26 finite-story. Of the 18 negative
 results tagged: 11 Live · 2 LatticeOnly · 5 Unknown. Reachability derivations,
 per module docstring: **Live** — `pncounter` ("each spends 10 on its own
 decrement key"), `lww_cross_field` (the two-writer timestamp story),

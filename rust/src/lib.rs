@@ -21,21 +21,32 @@
 //!   implementation.
 //!   `derived_view_sec` is the guarantee; `view_not_stable` is the priced,
 //!   documented anomaly (an older remote op can retroactively skip a move you
-//!   watched happen).
+//!   watched happen) — and the kernel's v2 per-op trace
+//!   ([`MoveLog::replay_traced`]) makes that anomaly observable, naming the
+//!   exact op each replay skipped.
 //!
 //! ## What is and is not claimed
 //!
-//! The Lean theorems are about the *design*; the replay **semantics** are
-//! Lean-authored and compiled in (no Rust twin exists to drift). What remains
-//! unverified: this crate's storage/index/codec glue, the C shim, Lean's C
-//! backend, and the refinement of `Exec.lean`'s kernel to `Move.lean`'s
-//! abstract model — the last is named open work in `Exec.lean`'s header. The
-//! tests replay the Lean witnesses scenario-for-scenario through the real
-//! kernel, which makes them good tests and zero formal evidence.
+//! The replay **semantics** are Lean-authored and compiled in (no Rust twin
+//! exists to drift), and the once-open refinement debts are paid:
+//! `Move.lean` §3 machine-checks the 2-node bridge both ways (table =
+//! kernel-shaped replay; the shipping `absReplay` on the encoded sub-logs =
+//! the table's answers), `ExecRefine` §6 proves SEC for the kernel itself
+//! (the replay is a function of the op *set* — order- and redelivery-blind,
+//! `kernel_derived_view_sec`), and `ExecRefine` §8 proves the input codec
+//! round-trips the canonical encoder (`replay_encodeRequest`).
+//!
+//! What remains unverified is exactly the TCB: this crate's storage/index
+//! glue, the marshaller (checked in debug builds byte-for-byte against the
+//! *proven* canonical encoder via `Exec.requestCanonicalKernel` — a
+//! differential, not a proof: Rust has no formal semantics), the C shim, and
+//! Lean's C backend. The tests replay the Lean witnesses
+//! scenario-for-scenario through the real kernel, which makes them good
+//! tests and zero formal evidence.
 
 pub mod causal;
 mod ffi;
 pub mod movelog;
 
 pub use causal::{CausalWeave, InsertError, MergeError, NodeId};
-pub use movelog::{MoveLog, MoveOp};
+pub use movelog::{MoveLog, MoveOp, OpOutcome, TracedReplay};

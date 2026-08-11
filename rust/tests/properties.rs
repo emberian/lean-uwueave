@@ -8,7 +8,7 @@
 //! chain, falling back to the first weave parent when no override exists),
 //! which is the reading direction the kernel's output contract defines.
 
-use uwueave::{CausalWeave, MoveLog, MoveOp, NodeId};
+use uwueave::{CausalWeave, MoveLog, MoveOp, NodeId, OpOutcome};
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 
@@ -264,6 +264,43 @@ proptest! {
                         Some(p) => *p,
                     },
                 };
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (d2) trace completeness (Lean kernel v2 status block, via FFI)
+// ---------------------------------------------------------------------------
+
+proptest! {
+    /// Format v2's per-op trace is total: `replay_traced` reports exactly one
+    /// outcome for every op in the log — applied, or a named skip — its view
+    /// agrees with `replay`, and the ops naming nodes this replica has not
+    /// seen are exactly the omitted ones. (The *decision* of which sent ops
+    /// applied stays in Lean; this walks only the report's coverage.)
+    #[test]
+    fn replay_trace_complete(
+        plans in plan_seq(8),
+        specs in prop::collection::vec(op_spec(), 0..16),
+    ) {
+        let (w, ids) = build_weave(&plans, &[]);
+        let mut log = MoveLog::new();
+        for s in &specs {
+            log.record(resolve_op(s, &ids));
+        }
+        let traced = log.replay_traced(&w);
+        prop_assert_eq!(&traced.view, &log.replay(&w));
+        prop_assert_eq!(traced.outcomes.len(), log.len());
+        let mut seen = BTreeSet::new();
+        for (op, outcome) in &traced.outcomes {
+            prop_assert!(seen.insert(*op), "one outcome per op, no duplicates");
+            let resolvable = w.contains(&op.child)
+                && op.dest.map(|d| w.contains(&d)).unwrap_or(true);
+            match outcome {
+                OpOutcome::OmittedUnknownNode =>
+                    prop_assert!(!resolvable, "omitted ops are exactly the unresolvable ones"),
+                _ => prop_assert!(resolvable, "sent ops name known nodes"),
             }
         }
     }
