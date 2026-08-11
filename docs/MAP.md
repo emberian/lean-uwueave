@@ -53,6 +53,11 @@ curiosity.)
 | `Uwueave/Automata.lean` | Replicated automata sorted by the same verdicts: semilattice-action runs converge as instances of the delta laws (`run_same_inputs`); commuting inputs may be replayed in any order (`exec_perm`, axiom-free — the seed of the Mazurkiewicz/Zielonka connection, cited not claimed); DFA determinism is the uniqueness ceiling (concrete clash), with LWW-arbitration vs accept-the-NFA priced as exits; token firing under escrow reads the segmented theorems as Petri nets. |
 | `Uwueave/Authority.lean` | Local-first permissions: delegation chains as a grounded CRDT — issuing narrowed grants is coordination-free (`wf_iconfluent`), authority provably only narrows (`scope_le_root`), sole-admin escalates (the duelling-admins clash), revocation's late arrivals only ever *shrink* authority (`authority_view_antitone`) — the derived view's instability points fail-closed, the security dual of `view_not_stable` — and the per-id uniqueness premise is priced like Sequence's: `uniqueGrant_violation_extracts_collision` turns any violation into a hash-collision exhibit (collision resistance, not injectivity, is what a deployment supplies). |
 | `Uwueave/SeqKernel.lean` | The sequence CRDT, **implemented** the house way: RGA-with-tombstones order decision authored in Lean, exported as `uwueave_seq_kernel` beside the move kernel. Proved: every visible element appears (`linearizeK_mem`), exactly once (`linearizeK_nodup` — groundedness alone), ancestors precede (`linearizeK_ancestor_precedes`), and deletes filter without reordering (`linearizeK_sublist_emitAll`). The brief's index-ordered hypothesis was refuted by the lane as vacuous-for-real-inputs and replaced by rank-groundedness. Non-claims: `interleaving_anomaly` still governs (reproduced through the shipping kernel in a Rust test); Fugue cited, not implemented. |
+| `Uwueave/RALin.lean` | **Correctness ≠ safety**, against Sal (arXiv:2603.27202): `ra_linearizable_but_unsafe` — Sal's own Table-2 PN-counter, RA-linearizable for any fork and branches, every branch legal at every prefix, and the merge overdraws. Converse: the max-counter loses updates, making *every* invariant I-confluent while failing RA-lin — safety bought by data loss. `quadrants` inhabits all four cells; `ra_lin_preserves_inductive_invariants` (axiom-free) is what RA-lin *does* buy; `guarding_moves_the_bug` shows the verdicts entangled through op preconditions. |
+| `Uwueave/Ancestral.lean` | **The LCA question, answered: incomparable.** Two-way I-confluence can be bought by a join that drops a committed op (effect-faithfulness is the honesty condition); mutual exclusion under hand-off is free with an ancestor (`lock_ancestral_confluent`) and provably beyond every two-way join; the bounded counter is beyond every honest merge (`budget_defeats_every_faithful_merge`) — escrow stands. `clash_dichotomy` names the rule: **resurrection** clashes an LCA repairs; **accumulation** clashes nothing repairs. |
+| `Uwueave/SeamAlgebra.lean` | The calculus segmented confluence lacked: product/pi/and lifts hold; refinement REFUTED (a conjunctive observation over grow-only fields is not a seam); free-riding refuted with stability pinned necessary and sufficient; the dividing line as an iff (`left_only_seam_iff`); and the prize, `linked_segmented` — two seams collapse into one exactly where well-formedness makes one seam a function of the other. |
+| `Uwueave/GatedEra.lean` | Arbitrated authority composed with the op gate: `ge_deterministic`, `ge_duel_resolved` (the survivor's op stands where fail-closed denied both), `ge_finalised_stable`. The finding: `antitone_forbids_enabling` — any permission rule antitone in event growth makes promotion impossible. Fail-closed guarantees shrinkage; arbitration guarantees agreement; the trade is a theorem. |
+| `Uwueave/Tactics.lean` | `classify` — five kernel-checked routes to a verdict; failure is loud and carries the clash, and "no clash found" is explicitly **NO VERDICT**. Adversarially verified against false goals. Plus the idiom kit with a measured ~161→25-line shrink list beside a measured not-replaceable list. |
 | `Uwueave/Era.lean` | The ERA protocol core, **implemented** from the paper (cuts, epochs, the four-op grammar, authorised execution, sorted-insert canonicalisation): delivery-independence by the set-function route (`resolve_same_sets`), rollback-immunity of the finalised prefix (`final_view_immune`), and the payoff — `duelling_admins_resolved`: one deterministic survivor at every replica, where `Authority.duelling_admins_annihilate` killed both. Corrects four guesses in `Seams.lean` (headline: the arbiter never names a winner, only orders events — and nobody coordinates; the epoch boundary is a trusted announcement priced in rollback). |
 | `Uwueave/Necessity.lean` | **Bailis necessity, modeled** (delivered by grok via `GROKJOB.md`): an execution model where coordination-freedom is definitional (`Impl.tryApply` sees local state only), and the theorem the library previously only cited — a *reachable* clash refutes coordination-free-convergent-safety (`necessity`, axiom-free core), with sufficiency back (`iconfluent_implies_cfcs`). Satisfiable (`gset_true_is_cfcs`) and refutable (`atMostOneBit_necessity`) per the job's falsifiability bar; the MAP's Live/LatticeOnly axis is now a formal hypothesis (`ReachableClash`). |
 | `Uwueave/CausalReach.lean` | **Op-based causal cuts** (JOB 2 + residuals): `FinHistory` / `Cut` / `Joint`; clash states are definitionally cut interpretations. Tag-scoped rem-after-add ⇒ OR-Set presence clash **Live** (`orset_clash_joint`); **element-wide rem after both adds** ⇒ same lattice pair **unreachable** (`ew_clashL_unreachable` / `orset_reachability_depends_on_remove_shape` — protocol dichotomy). Concurrent miniatures Live; free-id dup fragments Live; illegal cuts rejected. Content-addressing out of band. |
@@ -71,7 +76,7 @@ each `Live` / `LatticeOnly` tag cites nothing beyond the named module's own
 docstrings (upgraded by `CausalReach` theorems where those supersede them);
 `—` marks rows the axis does not apply to. Every row is covered by
 `#audit_floor`'s total gate — there is no per-row trust column to read. The
-table currently holds 98 rows:
+table currently holds 111 rows:
 
 | Theorem | Module | Generality | Reachability |
 |---|---|---|---|
@@ -124,6 +129,19 @@ table currently holds 98 rows:
 | `active_path_not_iconfluent` | Weave | finite-story | Live |
 | `absReplay_acyclic` | ExecRefine | ∀-general | — |
 | `kernel_derived_view_sec` | ExecRefine | ∀-general | — |
+| `ra_linearizable_but_unsafe` | RALin | finite-story | Live |
+| `ra_lin_preserves_inductive_invariants` | RALin | ∀-general | — |
+| `maxctr_every_invariant_iconfluent` | RALin | ∀-general | — |
+| `clash_dichotomy` | Ancestral | ∀-general | — |
+| `lock_ancestral_confluent` | Ancestral | parametric | Live |
+| `budget_defeats_every_faithful_merge` | Ancestral | ∀-general | — |
+| `linked_segmented` | SeamAlgebra | ∀-general | — |
+| `left_only_seam_iff` | SeamAlgebra | ∀-general | — |
+| `antitone_forbids_enabling` | GatedEra | ∀-general | — |
+| `ge_duel_resolved` | GatedEra | finite-story | Live |
+| `fugue_runs_never_interleave` | Fugue | ∀-general | Live |
+| `kernel_gate_agrees_gatedOps` | Exec | ∀-general | — |
+| `applied_set_not_antitone` | Exec | finite-story | Live |
 | `resolve_same_sets` | Era | ∀-general | — |
 | `final_view_immune` | Era | ∀-general | — |
 | `encode_merge` | Era | ∀-general | — |
