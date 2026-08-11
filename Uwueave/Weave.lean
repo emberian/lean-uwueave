@@ -74,6 +74,7 @@ locally (op-validation is the application's job), and it does not price
 metadata growth (tombstones, op logs — engineering, not semantics).
 -/
 import Uwueave.Spec
+import Uwueave.Tactics
 
 namespace Uwueave.Weave
 
@@ -97,12 +98,7 @@ Design consequence, not workaround: make activation *per-user* state (a keyed
 map, free by `pi_iconfluent`) — which multiplayer looms want anyway, because
 "whose cursor wins" is not a question a merge should answer. -/
 theorem active_path_not_iconfluent : ¬ IConfluent (S := ActiveSet) IsActivePath := by
-  intro h
-  have hmerge := h (fun n => n == 0 || n == 1) (fun n => n == 0 || n == 2)
-    ⟨rfl, Or.inl ⟨rfl, rfl⟩⟩ ⟨rfl, Or.inr ⟨rfl, rfl⟩⟩
-  cases hmerge.2 with
-  | inl hbad => exact absurd hbad.2 (by decide)
-  | inr hbad => exact absurd hbad.2 (by decide)
+  classify
 
 /-- The positive half of the recommendation: per-user activation is free —
 whatever per-user invariant you keep, keyed independence lifts it. Stated for

@@ -86,6 +86,7 @@ ERA, arXiv:2601.22963 — see `docs/BIBLIOGRAPHY.md`) · blocklace
 (Almeida–Shapiro 2024 — the grounded hash-DAG substrate; `Acyclicity.lean`).
 -/
 import Uwueave.Catalog
+import Uwueave.Tactics
 
 namespace Uwueave.Authority
 
@@ -553,10 +554,7 @@ lock. Keeping a survivor requires exactly the coordination ERA introduces
 (epoch-resolved arbitration); coordination-free, the duel annihilates. -/
 theorem duelling_revocations_not_iconfluent :
     ¬ IConfluent (S := Revoked) (fun r => r 1 = false ∨ r 2 = false) := by
-  intro h
-  cases h aliceRevokesBob bobRevokesAlice (Or.inl rfl) (Or.inr rfl) with
-  | inl hbad => exact absurd hbad (by decide)
-  | inr hbad => exact absurd hbad (by decide)
+  classify
 
 /-- The duel, played out on the derived view: merge the two admins' grants
 and the two revocations, and **neither admin is active** — fail-closed
