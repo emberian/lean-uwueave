@@ -69,6 +69,17 @@ Lean over the house substrates, with the safety theorems the design rests on.
     (`final_view_immune`): events still outside every epoch cannot perturb
     the finalised view. `duel_finalised_verdict` shows the arbiter's cut
     placement — never a named winner — flipping the duel's survivor.
+  * **(e) §1's membership lifecycle** (§8), carried beside the role codes
+    because it provably cannot be carried inside them
+    (`departed_indistinguishable_from_stranger`): `traceLife` computes
+    invited/member/left alongside the paper's own semantics and
+    `traceLife_role` proves that free — the resolved view is `resolve`'s, so
+    (a)-(d) stand verbatim. Two doors §3 leaves open are exhibited
+    (`departed_rejoins_unchecked`, `promote_admits_nonmember`) and closed by
+    the invitation discipline `lifeAuthorised`/`resolveGated`, which refuses
+    strictly more than §3 (`lifeAuthorised_refuses_more`), admits the founder
+    (`gated_founder_admitted`), and keeps delivery-independence
+    (`resolveGated_same_sets`).
 
 ## Corrections to `Seams.lean`'s reading, from the paper
 
@@ -121,7 +132,9 @@ Lean over the house substrates, with the safety theorems the design rests on.
 
 Arbitration semantics is the paper's; every protocol-semantic choice below
 cites its section. `Nat` role codes add `0` ("not a member") to §3's three
-roles so membership is explicit; §1's invited/left lifecycle is out of scope.
+roles so membership is explicit; §1's invited/left lifecycle is §8, where the
+invitation is a new event kind and the admission rule that reads it is a
+second, parallel authorisation predicate — §3's is never touched.
 -/
 import Uwueave.Catalog
 
@@ -1000,5 +1013,391 @@ example : authorised (resolve setupCuts duelLog) (writeEv 9 bob) = false := by
 
 example : authorised (resolve setupCuts duelLog) (writeEv 9 alice) = true := by
   decide
+
+/-! ## §8. The membership lifecycle — invited, member, left (paper §1)
+
+§3's role codes answer *what may this user do*. §1's membership lifecycle
+answers *how did they get here*: invited, joined, left. They are different
+questions, and the role codes cannot express the second — `outsider` is worn
+by a user who never appeared and by one an Admin expelled a minute ago. That
+is not a modelling nicety:
+
+  * `departed_indistinguishable_from_stranger` — **no** admission policy
+    reading the joiner's own role code (which is all §3's join rule reads) can
+    tell a departed member from a stranger; the two histories present the same
+    two observables.
+  * `departed_rejoins_unchecked` — so under §3 alone the expelled Admin walks
+    straight back in as a Reader, with nobody's consent, at every replica.
+  * `promote_admits_nonmember` — and the *other* door: §3's promote reads role
+    codes only, so an Admin can install a user who never joined.
+
+This section adds the lifecycle **beside** the role machinery, never inside
+it. Nothing in §1-§7 changes shape:
+
+  * `inviteEv` is a new event kind (`4`). `authorised` refuses every kind
+    above `3` by construction, so an invitation is inert for the role fold
+    (`applyEvent_invite_noop`): it carries lifecycle information only.
+  * `traceLife` computes the lifecycle alongside the paper's own semantics,
+    and `traceLife_role` proves that layer **conservative** — the resolved
+    view is `resolve`'s, so every verdict of §7 stands verbatim.
+  * `lifeAuthorised` / `resolveGated` are the §1 discipline: a join needs an
+    invitation (except for the founder, whom nobody could have invited), and a
+    promotion only reaches a member. `lifeAuthorised_refuses_more` keeps
+    authorisation safety — the gate can only refuse what §3 allowed, never
+    admit what it refused — `gated_founder_admitted` keeps it from refusing
+    everything, and `resolveGated_same_sets` keeps the arbitration theorem:
+    the gate reads a lifecycle that is itself a function of the execution
+    order, so delivery-independence survives the extension.
+
+`gated_return_needs_reinvitation` is the payoff: on one history, §3 readmits
+the departed Alice and the gated protocol refuses her until Bob invites her
+back. `gated_duel_refuses_uninvited` prices the discipline honestly — on §7's
+own history, which contains no invitations at all, only the founder is
+admitted. The gate is a different protocol, not a correction to the paper's. -/
+
+/-- `invite(a, b)` — §1's invitation, as event kind `4`. Inert for §3's role
+machinery by construction (`authorised` answers `false` for every kind above
+`3`), so adding it to a log cannot perturb any verdict of §1-§7; the
+lifecycle folds of this section are what read it. -/
+def inviteEv (eid a b : Nat) : Event := ⟨eid, 4, a, b, 0⟩
+
+/-- Every kind outside §3's four operations is refused outright — the clause
+that makes `inviteEv` inert, stated for all of them, not just kind `4`. -/
+theorem authorised_kind_gt_three {v : GroupView} {e : Event} (h : 4 ≤ e.kind) :
+    authorised v e = false := by
+  obtain ⟨eid, kind, actor, target, role⟩ := e
+  revert h
+  match kind with
+  | 0 => intro h; exact absurd (show (4:Nat) ≤ 0 from h) (by decide)
+  | 1 => intro h; exact absurd (show (4:Nat) ≤ 1 from h) (by decide)
+  | 2 => intro h; exact absurd (show (4:Nat) ≤ 2 from h) (by decide)
+  | 3 => intro h; exact absurd (show (4:Nat) ≤ 3 from h) (by decide)
+  | _ + 4 => intro _; rfl
+
+/-- An invitation is an exact no-op on the role view. -/
+theorem applyEvent_invite_noop (v : GroupView) (eid a b : Nat) :
+    applyEvent v (inviteEv eid a b) = v :=
+  applyEvent_unauthorised (authorised_kind_gt_three (Nat.le_refl 4))
+
+/-- **An outsider can only join.** A user at `outsider` — never a member, or
+expelled — fails every §3 rule but join: write wants Writer, promote and
+demote want Admin. The one door left open is the join door, which is exactly
+where §1 puts the invitation. -/
+theorem outsider_authorised_only_join {v : GroupView} {e : Event}
+    (hout : v.role e.actor = outsider) (hkind : e.kind ≠ 0) :
+    authorised v e = false := by
+  obtain ⟨eid, kind, actor, target, role⟩ := e
+  match kind with
+  | 0 => exact absurd rfl hkind
+  | 1 => simp [authorised, hout, writer, outsider]
+  | 2 => simp [authorised, hout, admin, outsider]
+  | 3 => simp [authorised, hout, admin, outsider]
+  | _ + 4 => rfl
+
+/-- **A departed member's later history is invisible.** Every non-join event
+they issue is unauthorised at its execution point and skipped exactly, so the
+whole fold is the identity — expulsion is effective without any further
+bookkeeping. -/
+theorem outsider_log_noop {v : GroupView} {u : Nat} (hout : v.role u = outsider) :
+    ∀ l : List Event, (∀ e ∈ l, e.actor = u ∧ e.kind ≠ 0) →
+      l.foldl applyEvent v = v := by
+  intro l
+  induction l with
+  | nil => intro _; rfl
+  | cons e t ih =>
+    intro hl
+    have he := hl e (List.Mem.head t)
+    have hun : authorised v e = false :=
+      outsider_authorised_only_join (by rw [he.1]; exact hout) he.2
+    show t.foldl applyEvent (applyEvent v e) = v
+    rw [applyEvent_unauthorised hun]
+    exact ih fun e' he' => hl e' (List.Mem.tail e he')
+
+/-- ⚠ **§3's promote does not check membership.** The rule reads role codes
+only, and `outsider < r` is exactly the condition it wants, so an Admin may
+promote a user who never joined straight into the group. Gating *join* on an
+invitation therefore does not by itself gate membership — `lifeAuthorised`
+below gates promote on the target's lifecycle too. -/
+theorem promote_admits_nonmember {v : GroupView} {i a b : Nat}
+    (hadmin : v.role a = admin) (hout : v.role b = outsider) :
+    authorised v (promoteEv i a b admin) = true := by
+  simp [authorised, promoteEv, hadmin, hout, admin, outsider]
+
+/-- §1's membership lifecycle: never seen, invited, joined, departed. Carried
+beside the role codes, because no function of the role codes can compute it
+(`departed_indistinguishable_from_stranger`). -/
+inductive Life where
+  | never | invited | member | left
+  deriving DecidableEq, Repr
+
+/-- The lifecycle of every user — derived state, like `GroupView`. -/
+abbrev LifeMap := Nat → Life
+
+/-- Nobody has been seen. -/
+def initLife : LifeMap := fun _ => Life.never
+
+/-- Is this invitation good? Kind `4`, the inviter can write (Writer or Admin
+— §3's "can write events into the DAG" is the weakest role with standing),
+and the invitee is not already in the group. -/
+def inviteAuthorised (v : GroupView) (e : Event) : Bool :=
+  decide (e.kind = 4) && decide (writer ≤ v.role e.actor) &&
+    decide (v.role e.target = outsider)
+
+/-- The lifecycle transition of an event that *executes*: a join makes its
+actor a member, a demotion to `outsider` marks its target departed (§1's
+"left" — the expulsion `authorised`'s docstring already names), and nothing
+else moves the lifecycle. -/
+def lifeMark (ls : LifeMap) (e : Event) : LifeMap :=
+  match e.kind with
+  | 0 => fun u => if u = e.actor then Life.member else ls u
+  | 3 => if e.role = outsider
+         then fun u => if u = e.target then Life.left else ls u
+         else ls
+  | _ => ls
+
+/-- One step of the *observational* machine: the paper's semantics unchanged,
+with the lifecycle computed alongside it. -/
+def traceStep (st : GroupView × LifeMap) (e : Event) : GroupView × LifeMap :=
+  if inviteAuthorised st.1 e then
+    (st.1, fun u => if u = e.target then Life.invited else st.2 u)
+  else if authorised st.1 e then
+    (applyEvent st.1 e, lifeMark st.2 e)
+  else st
+
+/-- Resolve a log against the arbiter's announcements, tracking the lifecycle
+— same execution order, same authorisation, one extra observable. -/
+def traceLife (cuts : List Cut) (log : List Event) : GroupView × LifeMap :=
+  (execOrder cuts log).foldl traceStep (initView, initLife)
+
+/-- Each observational step's view component is exactly `applyEvent`'s: an
+authorised invitation leaves the view alone (it is kind `4`, which §3 refuses)
+and every other branch either applies or skips as before. -/
+theorem traceStep_view (st : GroupView × LifeMap) (e : Event) :
+    (traceStep st e).1 = applyEvent st.1 e := by
+  unfold traceStep
+  by_cases hinv : inviteAuthorised st.1 e = true
+  · rw [if_pos hinv]
+    have hk : e.kind = 4 := by
+      have := (Bool.and_eq_true _ _ |>.mp ((Bool.and_eq_true _ _).mp hinv).1).1
+      exact of_decide_eq_true this
+    exact (applyEvent_unauthorised
+      (authorised_kind_gt_three (Nat.le_of_eq hk.symm))).symm
+  · rw [if_neg hinv]
+    by_cases hau : authorised st.1 e = true
+    · rw [if_pos hau]
+    · rw [if_neg hau]
+      exact (applyEvent_unauthorised (Bool.not_eq_true _ ▸ hau)).symm
+
+theorem foldl_traceStep_view : ∀ (l : List Event) (st : GroupView × LifeMap),
+    (l.foldl traceStep st).1 = l.foldl applyEvent st.1
+  | [], _ => rfl
+  | e :: t, st => by
+    show (t.foldl traceStep (traceStep st e)).1 = t.foldl applyEvent (applyEvent st.1 e)
+    rw [← traceStep_view st e]
+    exact foldl_traceStep_view t (traceStep st e)
+
+/-- **The lifecycle layer is conservative.** Tracking invited/member/left
+costs the protocol nothing: the resolved view is `resolve`'s, so every verdict
+of §7 — the duel's survivor included — holds verbatim in the extended
+machine. -/
+theorem traceLife_role (cuts : List Cut) (log : List Event) :
+    (traceLife cuts log).1 = resolve cuts log :=
+  foldl_traceStep_view (execOrder cuts log) (initView, initLife)
+
+/-! ### The two holes, exhibited -/
+
+/-- Alice founds the group (first joiner, so Admin), Bob joins, and Alice then
+demotes herself out of the group entirely — §1's "left". -/
+def departLog : List Event :=
+  [joinEv 1 alice, joinEv 2 bob, demoteEv 3 alice alice outsider]
+
+/-- The same group without Alice in it: Bob founds it and departs the same
+way, so Alice is a user this history has never mentioned. -/
+def strangerLog : List Event :=
+  [joinEv 1 bob, demoteEv 2 bob bob outsider]
+
+/-- ⚠ **A departed member is indistinguishable from a stranger** to every
+policy §3's join rule could consult. `P` ranges over ALL functions of the two
+things that rule reads — whether the group has started, and the joiner's own
+role code — and on these two histories it must answer the same, because both
+observables agree: `started = true`, `role alice = outsider`. Alice was an
+Admin expelled from the group in one history and has never been mentioned in
+the other. No re-phrasing of a *role* predicate escapes this; the lifecycle
+has to be carried. -/
+theorem departed_indistinguishable_from_stranger (P : Bool → Nat → Bool) :
+    P (resolve [] departLog).started ((resolve [] departLog).role alice)
+      = P (resolve [] strangerLog).started ((resolve [] strangerLog).role alice) := by
+  have hstart : (resolve [] departLog).started
+      = (resolve [] strangerLog).started := by decide
+  have hrole : (resolve [] departLog).role alice
+      = (resolve [] strangerLog).role alice := by decide
+  rw [hstart, hrole]
+
+/-- The lifecycle does distinguish them — the same two histories, told apart
+by the layer `traceLife` carries. -/
+theorem departed_lifecycle_distinguishes :
+    (traceLife [] departLog).2 alice = Life.left ∧
+    (traceLife [] strangerLog).2 alice = Life.never := by decide
+
+/-- Alice leaves, then simply joins again. -/
+def rejoinLog : List Event := departLog ++ [joinEv 4 alice]
+
+/-- ⚠ **The expelled Admin walks back in.** Under §3 alone her rejoin is
+authorised — she is an `outsider`, which is the join rule's entire
+precondition — and it executes at every replica, deterministically, returning
+her as a Reader. Nobody consented; there is no rule to consult, because the
+state that would justify refusing (she *left*) is not in the role view. -/
+theorem departed_rejoins_unchecked :
+    (resolve [] rejoinLog).role alice = reader ∧
+    (traceLife [] rejoinLog).2 alice = Life.member := by decide
+
+/-! ### The §1 discipline: admission by invitation -/
+
+/-- **Authorisation under the §1 lifecycle**: §3's rule, and additionally —
+a join needs a standing invitation, unless the group has not started (the
+founder has nobody to invite them, §3 op 1); a promotion only reaches a user
+who is actually a member, closing `promote_admits_nonmember`. Every other
+operation is judged exactly as §3 judges it. -/
+def lifeAuthorised (v : GroupView) (ls : LifeMap) (e : Event) : Bool :=
+  authorised v e &&
+    (match e.kind with
+     | 0 => decide (ls e.actor = Life.invited) || !v.started
+     | 2 => decide (ls e.target = Life.member)
+     | _ => true)
+
+/-- **The gate only ever refuses.** Authorisation safety (P2) survives the
+extension: nothing the lifecycle admits was refused by §3, so no theorem of
+§4 about unauthorised events is weakened. -/
+theorem lifeAuthorised_refuses_more {v : GroupView} {ls : LifeMap} {e : Event}
+    (h : lifeAuthorised v ls e = true) : authorised v e = true :=
+  ((Bool.and_eq_true _ _).mp h).1
+
+/-- Away from admission the gate is invisible: for writes and demotions it IS
+§3's rule. -/
+theorem lifeAuthorised_of_write_demote {v : GroupView} {ls : LifeMap} {e : Event}
+    (h : e.kind = 1 ∨ e.kind = 3) : lifeAuthorised v ls e = authorised v e := by
+  unfold lifeAuthorised
+  rcases h with h | h <;> rw [h] <;> simp
+
+/-- **A join without an invitation is refused** — the §1 precondition, in
+general form (the founder exemption is the `v.started = true` hypothesis). -/
+theorem gated_join_needs_invitation {v : GroupView} {ls : LifeMap} {e : Event}
+    (hk : e.kind = 0) (hstart : v.started = true)
+    (hinv : ls e.actor ≠ Life.invited) : lifeAuthorised v ls e = false := by
+  unfold lifeAuthorised
+  rw [hk]
+  simp [hstart, hinv]
+
+/-- **A promotion cannot reach a non-member** — the other door, closed. -/
+theorem gated_promote_needs_member {v : GroupView} {ls : LifeMap} {e : Event}
+    (hk : e.kind = 2) (hmem : ls e.target ≠ Life.member) :
+    lifeAuthorised v ls e = false := by
+  unfold lifeAuthorised
+  rw [hk]
+  simp [hmem]
+
+/-- **The gate is not a refusal machine**: the founder is admitted, with no
+invitation in existence — so the discipline is satisfiable, and a group can
+start under it. -/
+theorem gated_founder_admitted :
+    lifeAuthorised initView initLife (joinEv 1 alice) = true := by decide
+
+/-- One step of the gated machine: invitations are recorded, admissible events
+execute and mark the lifecycle, everything else is skipped exactly. -/
+def gatedStep (st : GroupView × LifeMap) (e : Event) : GroupView × LifeMap :=
+  if inviteAuthorised st.1 e then
+    (st.1, fun u => if u = e.target then Life.invited else st.2 u)
+  else if lifeAuthorised st.1 st.2 e then
+    (applyEvent st.1 e, lifeMark st.2 e)
+  else st
+
+/-- ERA under the §1 lifecycle: the same epoch arbitration, the same guarded
+fold, with admission judged against the lifecycle as well as the roles. -/
+def resolveGated (cuts : List Cut) (log : List Event) : GroupView × LifeMap :=
+  (execOrder cuts log).foldl gatedStep (initView, initLife)
+
+/-- **The extension keeps the arbitration theorem.** Replicas holding
+membership-equivalent cut and event sets resolve to the same gated view and
+the same lifecycle — the gate reads state that is itself a function of the
+execution order, so §5's delivery-independence survives it untouched. -/
+theorem resolveGated_same_sets {cuts cuts' : List Cut} {log log' : List Event}
+    (hc : ∀ c, c ∈ cuts ↔ c ∈ cuts') (hl : ∀ e, e ∈ log ↔ e ∈ log') :
+    resolveGated cuts log = resolveGated cuts' log' := by
+  unfold resolveGated
+  rw [execOrder_same_sets hc hl]
+
+/-- The same for the observational machine. -/
+theorem traceLife_same_sets {cuts cuts' : List Cut} {log log' : List Event}
+    (hc : ∀ c, c ∈ cuts ↔ c ∈ cuts') (hl : ∀ e, e ∈ log ↔ e ∈ log') :
+    traceLife cuts log = traceLife cuts' log' := by
+  unfold traceLife
+  rw [execOrder_same_sets hc hl]
+
+/-- A lifecycle-complete history: Alice founds the group, invites Bob, Bob
+joins on that invitation, Alice promotes him to Admin, and Alice then leaves.
+Every admission in it has a warrant. -/
+def invitedLog : List Event :=
+  [joinEv 1 alice, inviteEv 2 alice bob, joinEv 3 bob,
+   promoteEv 4 alice bob admin, demoteEv 5 alice alice outsider]
+
+/-- Alice, having left, tries to walk back in exactly as `rejoinLog` did. -/
+def returnLog : List Event := invitedLog ++ [joinEv 6 alice]
+
+/-- Bob invites her back, and she joins on that invitation. -/
+def reinviteLog : List Event := returnLog ++ [inviteEv 7 bob alice, joinEv 8 alice]
+
+/-- **The return needs a re-invitation** — the two protocols on one history.
+§3 readmits Alice as a Reader (first conjunct: this is
+`departed_rejoins_unchecked` again, now inside a history where every other
+admission was warranted). The §1 discipline refuses her: her lifecycle reads
+`left`, not `invited`, so the join is skipped and she stays outside (second
+and third). Bob then invites her, and the same gate admits her (fourth and
+fifth) — the refusal is a precondition, not a ban.
+
+Note which layer decided: the merge, the epoch arbitration and the execution
+order are identical in all three runs. What changed is the authorisation
+predicate, and `lifeAuthorised_refuses_more` bounds how much it could change:
+strictly fewer admissions than §3, never more. -/
+theorem gated_return_needs_reinvitation :
+    (resolve [] returnLog).role alice = reader ∧
+    (resolveGated [] returnLog).1.role alice = outsider ∧
+    (resolveGated [] returnLog).2 alice = Life.left ∧
+    (resolveGated [] reinviteLog).1.role alice = reader ∧
+    (resolveGated [] reinviteLog).2 alice = Life.member := by decide
+
+/-- Bob's own membership is warranted throughout: invited by Alice, admitted
+on that invitation, and an Admin by the time she leaves — so the refusal above
+is about Alice's missing invitation, not about a gate that refuses everyone. -/
+theorem gated_invited_join_admitted :
+    (resolveGated [] invitedLog).1.role bob = admin ∧
+    (resolveGated [] invitedLog).2 bob = Life.member := by decide
+
+/-- **On a history where every admission carries a warrant, the gate is
+invisible**: `invitedLog` resolves identically under §3 and under the §1
+discipline, user by user. The extension is not a different semantics for
+ordinary histories — it refuses exactly the admissions §1 says need a warrant
+and had none (`gated_return_needs_reinvitation`,
+`gated_duel_refuses_uninvited`), and nothing else. -/
+theorem gated_agrees_on_warranted_history :
+    (resolveGated [] invitedLog).1.role alice = (resolve [] invitedLog).role alice ∧
+    (resolveGated [] invitedLog).1.role bob = (resolve [] invitedLog).role bob ∧
+    (resolveGated [] invitedLog).2 alice = (traceLife [] invitedLog).2 alice ∧
+    (resolveGated [] invitedLog).2 bob = (traceLife [] invitedLog).2 bob := by decide
+
+/-- ⚠ **What the discipline costs, on §7's own history.** `duelLog` contains
+no invitations — it is written against §3, where none exist — so under the
+gate only the founder is admitted: Bob's join is refused for want of an
+invitation, and Alice's promotion of him is refused because he is not a
+member (`gated_promote_needs_member`; under §3 alone
+`promote_admits_nonmember` would have installed him anyway). The duel then
+has one duellist and no duel.
+
+This is the honest price of the extension, and the reason it is a *parallel*
+machine: §7's theorems are about §3's protocol, which `traceLife_role` leaves
+exactly as it was. A deployment picks one. -/
+theorem gated_duel_refuses_uninvited :
+    (resolveGated setupCuts duelLog).1.role alice = admin ∧
+    (resolveGated setupCuts duelLog).1.role bob = outsider ∧
+    (resolveGated setupCuts duelLog).2 bob = Life.never := by decide
 
 end Uwueave.Era

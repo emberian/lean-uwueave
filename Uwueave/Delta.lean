@@ -29,6 +29,15 @@ indicator — it delivers `a` (`addDelta_adds`), touches no other element
 `a` to a replica lacking it (`addDelta_least`). The minimal patch and the
 full state meet the same join.
 
+§6 is the paper's mutator interface itself (`DeltaMutator`: an operation given
+as a state transformer *and* as a patch, `s ⊔ delta s = op s`), with the
+theorem the design rests on — `mutator_delta_sound`: for a receiver holding
+the sender's pre-state, joining the patch and joining the sender's whole
+successor state are the same state, one step (`mutator_delta_sound`) or a
+whole run (`joinAll_deltas_eq_state`, `run_eq_joinAll`). Four instances past
+the G-Set add, three with state-dependent patches; and the general minimality
+claim is refuted rather than assumed (`sufficient_delta_not_least`).
+
 ## What is NOT formalized — the paper's network layer
 
   * **The causal-delta-merging condition and delta-interval anti-entropy**
@@ -41,16 +50,20 @@ full state meet the same join.
   * **Anti-entropy algorithms and eventual delivery.** Every theorem below is
     conditional on what arrived; making "the same delta-set arrives
     everywhere" true is the protocol's job. No liveness is proved here.
-  * **Delta-mutators in general.** A delta here is an arbitrary lattice
-    element. The paper's mutator interface — and delta minimality for anything
-    beyond the G-Set `add` — is not modeled.
+  * **Which patch an implementation should pick.** §6 models the mutator
+    interface and proves patch-shipping and state-shipping interchangeable for
+    any receiver holding the pre-state — but *minimality* of a patch is not a
+    consequence of the interface, and `sufficient_delta_not_least` shows it
+    fails in general. What is true is instance-level and carries a
+    news hypothesis (`addDelta_least`); the size of a mutator's patch is an
+    engineering choice this file bounds (`delta_le_op`) rather than dictates.
 
 Literature:
   * Almeida, Shoker, Baquero — "Delta State Replicated Data Types",
     J. Parallel Distrib. Comput. 111, 2018. (Earlier as "Efficient State-based
     CRDTs by Delta-Mutation", NETYS 2015; arXiv:1603.01529.)
 -/
-import Uwueave.Catalog
+import Uwueave.ORSet
 
 namespace Uwueave.Delta
 
@@ -271,5 +284,261 @@ theorem addDelta_least {x δ : GSet α} {a : α}
   · simp [addDelta, hb]
 
 end GSetDeltas
+
+/-! ## §6. The delta-mutator interface — the paper's `mᵟ`, and what it buys.
+
+§1-§4 take a delta to be an arbitrary lattice element and ask what the
+receiver can tell apart. The paper's actual programming interface is narrower:
+an operation is given **twice** — as the state transformer `op` a state-based
+CRDT would ship whole, and as the patch `delta` a delta-CRDT ships instead —
+tied by one law, `ships : s ⊔ delta s = op s`. Read the type: `delta : S → S`,
+a function of the *pre-state*, not a constant. `orsetRemoveAll` is why — the
+patch an element-wide remove must ship is the tombstone set for the tags this
+replica has observed, which no constant knows.
+
+What the interface buys, and what it does not:
+
+  * `mutator_delta_sound` — **the prize**: to a receiver that already has the
+    sender's pre-state, joining the delta and joining the sender's whole
+    successor state are the *same state*. Delta shipping is not an
+    approximation of state shipping; it is observationally identical to it.
+  * `joinAll_deltas_eq_state`, `run_eq_joinAll` — the same over a whole run of
+    mutators, not one step: a receiver folding the delta stream lands exactly
+    where merging the sender's final state would put it, and a receiver that
+    started from the base reconstructs that final state on the nose. With
+    `same_deltas_same_state` (`run_reconstructed`), any order, any
+    duplication.
+  * `le_op` / `delta_le_op` / `ofInflationary` — the honest structural
+    reading: a delta-mutator is exactly a **monotone** operation (every
+    inflationary op is one, shipping its result), so the interface itself
+    constrains nothing more. All of the engineering is in *which* delta, and
+    `delta_le_op` is its whole economics: the patch never exceeds the state it
+    replaces.
+  * ⚠ `sufficient_delta_not_least` — minimality is **not** part of the deal
+    and is false in general: an operation whose news the receiver already has
+    is served by the empty delta, which the mutator's own patch does not sit
+    below. Least-ness is an instance-level fact with a hypothesis
+    ("the delivery was news"), which is exactly the shape of `addDelta_least`.
+
+Instances beyond §5's G-Set add: `gcounterInc` (a state-dependent patch — you
+cannot ship "+k", only "your key is now at least n"), `lwwWrite`,
+`orsetAddTag`, and `orsetRemoveAll`. -/
+
+/-- **A delta-mutator**: an operation presented as a state transformer and as
+a patch, with the law that joining the patch into the pre-state IS the
+operation (Almeida–Shoker–Baquero's `mᵟ`). -/
+structure DeltaMutator (S : Type u) [MergeState S] where
+  /-- The state-based operation: what a CvRDT would apply and ship whole. -/
+  op : S → S
+  /-- The patch a delta-CRDT ships instead — a function of the pre-state. -/
+  delta : S → S
+  /-- The interface law. -/
+  ships : ∀ s, s ⊔ delta s = op s
+
+/-- A mutator only moves a replica up the lattice: it never forgets. -/
+theorem le_op (m : DeltaMutator S) (s : S) : s ⊑ m.op s := by
+  rw [← m.ships s]
+  exact le_merge_left s (m.delta s)
+
+/-- The patch never exceeds the state it replaces — the reason to ship it. -/
+theorem delta_le_op (m : DeltaMutator S) (s : S) : m.delta s ⊑ m.op s := by
+  rw [← m.ships s]
+  exact le_merge_right s (m.delta s)
+
+/-- Conversely, **every inflationary operation is a delta-mutator**: ship the
+result. So the interface is exactly monotonicity — it is not a constraint that
+buys the theorems below, it is a *presentation*, and the content is which
+delta an implementation picks. -/
+def ofInflationary (f : S → S) (h : ∀ s, s ⊑ f s) : DeltaMutator S where
+  op := f
+  delta := f
+  ships := h
+
+/-- **Delta shipping is observationally identical to state shipping.** For a
+receiver `r` that already holds the sender's pre-state `s` — the condition a
+delta protocol maintains — joining the small patch and joining the sender's
+whole successor state give *the same state*, not merely equivalent ones. This
+is the theorem the entire delta-CRDT design rests on, and it is three lines of
+the three merge laws.
+
+(The hypothesis is load-bearing, and is exactly what the paper's causal
+delta-merging condition is for: a receiver *missing* `s` gets strictly less
+from the patch than from the state — see the header's §4-§5 note.) -/
+theorem mutator_delta_sound (m : DeltaMutator S) (s r : S) (h : s ⊑ r) :
+    r ⊔ m.delta s = r ⊔ m.op s := by
+  have hrs : r ⊔ s = r := by rw [merge_comm]; exact h
+  rw [← m.ships s, ← merge_assoc, hrs]
+
+/-- A patch is **sufficient** from `s` when every up-to-date receiver joining
+it lands where the sender's whole state would have put it. -/
+def Sufficient (m : DeltaMutator S) (s d : S) : Prop :=
+  ∀ r : S, s ⊑ r → r ⊔ d = r ⊔ m.op s
+
+/-- The mutator's own patch is sufficient — `mutator_delta_sound`, quantified. -/
+theorem delta_sufficient (m : DeltaMutator S) (s : S) : Sufficient m s (m.delta s) :=
+  fun r h => mutator_delta_sound m s r h
+
+/-- Shipping the whole successor state is the degenerate sufficient patch, so
+"delta shipping" and "state shipping" are two points of one notion. -/
+theorem op_sufficient (m : DeltaMutator S) (s : S) : Sufficient m s (m.op s) :=
+  fun _ _ => rfl
+
+/-- A run of mutators from a base state: the sender's own history. -/
+def run : List (DeltaMutator S) → S → S
+  | [], s => s
+  | m :: ms, s => run ms (m.op s)
+
+/-- The patches that run ships, each computed against the state it was applied
+to — the delta stream a replica gossips. -/
+def deltasOf : List (DeltaMutator S) → S → List S
+  | [], _ => []
+  | m :: ms, s => m.delta s :: deltasOf ms (m.op s)
+
+/-- A run only moves up the lattice (`le_op`, history-long). -/
+theorem le_run : ∀ (ms : List (DeltaMutator S)) (s : S), s ⊑ run ms s
+  | [], s => leq_refl s
+  | m :: ms, s => leq_trans (le_op m s) (le_run ms (m.op s))
+
+/-- **The delta stream reconstructs the sender's state exactly.** A replica
+holding the base and folding the shipped patches — nothing else, no whole
+state ever transmitted — ends at the sender's final state, on the nose. -/
+theorem run_eq_joinAll : ∀ (ms : List (DeltaMutator S)) (s : S),
+    joinAll s (deltasOf ms s) = run ms s
+  | [], _ => rfl
+  | m :: ms, s => by
+    show joinAll (s ⊔ m.delta s) (deltasOf ms (m.op s)) = run ms (m.op s)
+    rw [m.ships s]
+    exact run_eq_joinAll ms (m.op s)
+
+/-- **And for a receiver that is ahead of the base**: folding the sender's
+delta stream lands exactly where merging the sender's whole final state would
+— `mutator_delta_sound` iterated over a history. Whole-state anti-entropy and
+delta gossip are interchangeable for any receiver that has the pre-state, at
+every prefix. -/
+theorem joinAll_deltas_eq_state : ∀ (ms : List (DeltaMutator S)) (s r : S),
+    s ⊑ r → joinAll r (deltasOf ms s) = r ⊔ run ms s
+  | [], s, r, h => by
+    show r = r ⊔ s
+    rw [merge_comm, h]
+  | m :: ms, s, r, h => by
+    have hnext : m.op s ⊑ r ⊔ m.delta s := by
+      rw [← m.ships s]
+      exact merge_le_iff.mpr ⟨leq_trans h (le_merge_left r (m.delta s)),
+        le_merge_right r (m.delta s)⟩
+    show joinAll (r ⊔ m.delta s) (deltasOf ms (m.op s)) = r ⊔ run ms (m.op s)
+    rw [joinAll_deltas_eq_state ms (m.op s) (r ⊔ m.delta s) hnext, merge_assoc]
+    have hd : m.delta s ⊔ run ms (m.op s) = run ms (m.op s) :=
+      leq_trans (delta_le_op m s) (le_run ms (m.op s))
+    rw [hd]
+
+/-- The gossip laws apply to mutator runs unchanged: a receiver that got the
+same *set* of patches — any order, any duplication, any batching — holds the
+sender's state. §4's punchline, now about an actual program's output. -/
+theorem run_reconstructed {ms : List (DeltaMutator S)} {l : List S} (s : S)
+    (h : ∀ d, d ∈ l ↔ d ∈ deltasOf ms s) : joinAll s l = run ms s := by
+  rw [same_deltas_same_state h s, run_eq_joinAll]
+
+/-! ### Instances — four mutators, three of them state-dependent. -/
+
+/-- G-Set `add`, §5's case study, as a mutator: the one instance whose patch
+is a constant, which is why it is the misleading one to generalise from. -/
+def gsetAdd {α : Type} [DecidableEq α] (a : α) : DeltaMutator (GSet α) where
+  op s := fun b => s b || decide (b = a)
+  delta _ := addDelta a
+  ships _ := rfl
+
+/-- G-Counter increment. The patch is **not** "+k" — a lattice has no such
+element — it is "key `i` is now at least `n`", which the mutator can only
+compute from the pre-state. -/
+def gcounterInc {ι : Type} [DecidableEq ι] (i : ι) (k : Nat) :
+    DeltaMutator (GCounter ι) where
+  op s := fun j => if j = i then s j + k else s j
+  delta s := fun j => if j = i then s j + k else 0
+  ships s := by
+    funext j
+    show Nat.max (s j) (if j = i then s j + k else 0) = if j = i then s j + k else s j
+    by_cases h : j = i
+    · rw [if_pos h, if_pos h, nat_max_def]
+      split <;> omega
+    · rw [if_neg h, if_neg h, nat_max_def]
+      split <;> omega
+
+/-- LWW write: the patch is the register itself, stamped past whatever the
+replica had — again a function of the pre-state, since the timestamp must beat
+the one being overwritten. -/
+def lwwWrite (v : Nat) : DeltaMutator LWW where
+  op s := ⟨s.ts + 1, v⟩
+  delta s := ⟨s.ts + 1, v⟩
+  ships s := by
+    have hlt : LWW.Lt s ⟨s.ts + 1, v⟩ := Or.inl (Nat.lt_succ_self s.ts)
+    show LWW.join s ⟨s.ts + 1, v⟩ = ⟨s.ts + 1, v⟩
+    unfold LWW.join
+    exact if_pos hlt
+
+/-- OR-Set add-with-tag: a one-pair patch into the adds component, whatever
+the replica has accumulated. -/
+def orsetAddTag {α τ : Type} [DecidableEq α] [DecidableEq τ] (a : α) (t : τ) :
+    DeltaMutator (ORSet.ORSet α τ) where
+  op s := ORSet.addTag s a t
+  delta _ := (fun p => decide (p = (a, t)), fun _ => false)
+  ships s := by
+    have h2 : (s.2 ⊔ (fun _ => false)) = s.2 := by
+      funext p
+      show (s.2 p || false) = s.2 p
+      exact Bool.or_false (s.2 p)
+    show ((s.1 ⊔ fun p => decide (p = (a, t))), s.2 ⊔ (fun _ => false))
+        = ORSet.addTag s a t
+    rw [h2]
+    rfl
+
+/-- ⚠ **Element-wide remove — the instance the constant-delta reading cannot
+express.** "Remove everything I have seen of `a`" ships the tombstones for the
+tags *this replica observed*: the patch is a genuine function of the
+pre-state, and two replicas running the same operation ship different deltas.
+That is the whole reason the interface is `S → S`. -/
+def orsetRemoveAll {α τ : Type} [DecidableEq α] (a : α) :
+    DeltaMutator (ORSet.ORSet α τ) where
+  op s := ORSet.removeAll s a
+  delta s := (fun _ => false, fun p => decide (p.1 = a) && s.1 p)
+  ships s := by
+    have h1 : (s.1 ⊔ (fun _ => false)) = s.1 := by
+      funext p
+      show (s.1 p || false) = s.1 p
+      exact Bool.or_false (s.1 p)
+    show (s.1 ⊔ (fun _ => false), s.2 ⊔ fun p => decide (p.1 = a) && s.1 p)
+        = ORSet.removeAll s a
+    rw [h1]
+    rfl
+
+/-- ⚠ **The mutator's patch is not least among the sufficient ones.** Take
+`gsetAdd 0` applied to a replica that already holds `0`: the operation is a
+no-op there, so the *empty* patch is sufficient — every up-to-date receiver
+joining it lands exactly where the sender's whole state would put it — and the
+mutator still ships the singleton, which does not sit ⊑-below the empty one.
+
+So "delta minimality" is not a consequence of the interface, and any general
+claim of it is false. What is true is instance-level and carries a news
+hypothesis: `addDelta_least`, whose `x a = false` ("the delivery was news, not
+an echo") is precisely the premise missing here. -/
+theorem sufficient_delta_not_least :
+    ∃ (m : DeltaMutator (GSet Nat)) (s d : GSet Nat),
+      Sufficient m s d ∧ ¬ (m.delta s ⊑ d) := by
+  refine ⟨gsetAdd 0, addDelta 0, (fun _ => false), ?_, ?_⟩
+  · intro r hr
+    -- `r` is above the singleton, so it already holds `0` and the op adds nothing.
+    have h0 : r 0 = true := by
+      cases hr0 : r 0 with
+      | true => rfl
+      | false =>
+        have h : (addDelta 0 0 || r 0) = r 0 := congrFun hr 0
+        rw [hr0] at h
+        simp [addDelta] at h
+    funext b
+    show (r b || false) = (r b || (addDelta 0 b || decide (b = 0)))
+    by_cases hb : b = 0
+    · subst hb; simp [h0]
+    · simp [addDelta, hb]
+  · intro h
+    exact absurd (congrFun h 0) (by decide)
 
 end Uwueave.Delta
