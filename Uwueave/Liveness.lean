@@ -15,8 +15,10 @@ This file is that job, miniaturized to an honest model:
   * **fairness** is a *finite* covering predicate (`FairOn`): every
     participant's received set is membership-equivalent to the issued set
     (one successful delivery of each delta to each replica is enough for a
-    join-semilattice; the infinite "exchanges infinitely often" reading is
-    the same obligation, unrolled);
+    join-semilattice). This is a finite completion certificate, **not** the
+    infinite "exchanges infinitely often" assumption: `Uwueave.Temporal`
+    separately defines weak and strong fairness over infinite traces and does
+    not identify either one with `FairOn`;
   * under fairness, every listed replica reaches `joinAll base issued` —
     the least upper bound already characterized by `le_joinAll` /
     `mem_le_joinAll` / `joinAll_le` — via `same_deltas_same_state` and
@@ -27,9 +29,12 @@ This file is that job, miniaturized to an honest model:
 ## What this model does NOT capture
 
   * Real networks (packet loss as a probability, RTT, topology dynamics).
-  * Wall clocks, timeouts, or "eventually" as a temporal modality over
-    infinite traces — fairness is a finite covering, not a coinductive
-    stream.
+  * Wall clocks, timeouts, or an infinite execution in this module — `FairOn`
+    remains a finite covering. `Uwueave.Temporal` supplies `Eventually`,
+    action-labelled infinite traces, weak/strong fairness, a genuine
+    `WorldFuture` delivery trace, and a `RenderProgress` pending exit. It still
+    treats `Nat` as an event index rather than elapsed time and assumes rather
+    than derives scheduler fairness.
   * Byzantine replicas, authenticated channels, or causal-delta-interval
     constraints (`Delta.lean`'s header lists those as network-layer
     obligations; they stay out of scope here too).
@@ -374,10 +379,18 @@ end GSetWitness
 /-! ## §7. Scope seal
 
 Everything above is a finite schedule over an abstract join-semilattice.
-No network, no clocks, no Byzantine model, no infinite traces. The
-keystone is `fair_converges`: fairness (set-covering delivery) + the
-already-proved LUB character of `joinAll` ⇒ every replica attains the
-same least upper bound of everything issued. The G-Set section shows the
-hypothesis is inhabitible and that dropping it is refutable. -/
+This module has no network, clocks, Byzantine model, or infinite traces. Its
+successor `Uwueave.Temporal` supplies the infinite-trace vocabulary without
+rewriting this finite contract: `WorldAdapter.pendingDeliveryTrace_adjacent`
+is a genuine adjacent delivery run,
+`RenderAdapter.fair_bob_delivery_exits_pending` connects fairness to a real
+pending exit, and `WorldAdapter.starvedPendingTrace_not_weakFair` proves that a
+constant transition-valid run may still starve. No theorem there turns event
+indices into wall-clock time or proves a deployed scheduler fair.
+
+The keystone here remains `fair_converges`: finite set-covering delivery + the
+already-proved LUB character of `joinAll` ⇒ every replica attains the same
+least upper bound of everything issued. The G-Set section shows the hypothesis
+is inhabitable and that dropping it is refutable. -/
 
 end Uwueave.Liveness

@@ -101,11 +101,15 @@ import Uwueave.CoordEffect
 import Uwueave.SeamColoring
 import Uwueave.Budget
 import Uwueave.WorldFuture
+import Uwueave.Temporal
 import Uwueave.MinimalSummary
+import Uwueave.ContextCompiler
 import Uwueave.Repair
 import Uwueave.MergeModel
 import Uwueave.ResultStatus
+import Uwueave.StatusEffects
 import Uwueave.Recoverable
+import Uwueave.CompositeDelta
 import Uwueave.HonestRender
 import Uwueave.Histories
 import Uwueave.FiniteHistory
@@ -113,6 +117,7 @@ import Uwueave.TextSummary
 import Uwueave.LiveBudget
 import Uwueave.EraCertificate
 import Uwueave.CliqueLive
+import Uwueave.ClashGraph
 import Uwueave.RepairMenu
 import Uwueave.HistoryPolicy
 import Uwueave.LiveCost
@@ -122,9 +127,11 @@ import Uwueave.ForkGrade
 import Uwueave.RenderProgress
 import Uwueave.HistoryBase
 import Uwueave.RenderSix
+import Uwueave.WovenEdit
 import Uwueave.Bounds
 import Uwueave.MenuTotality
 import Uwueave.Preo.Demo
+import Uwueave.ChoreoChoice
 import Uwueave.Scheduling
 import Uwueave.ScheduleSynthesis
 import Uwueave.Protocol
@@ -141,8 +148,10 @@ import Uwueave.Preo.Future
 import Uwueave.Preo.Artifact
 import Uwueave.Preo.Export
 import Uwueave.Preo.Expr
+import Uwueave.Preo.Incremental
 import Uwueave.Preo.ArtifactDurable
 import Uwueave.Preo.ProjectionV1
+import Uwueave.Preo.ProjectionV2
 import Uwueave.RepairSynthesis
 import Uwueave.Tactics
 

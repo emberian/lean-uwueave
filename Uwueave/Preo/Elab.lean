@@ -153,7 +153,9 @@ exists** — a `sorry`-backed `Verdict` prints exactly like a real one.
   * a declaration with no fields.
 -/
 import Uwueave.Preo.Classification
+import Uwueave.Preo.ArtifactDurable
 import Uwueave.Preo.Future
+import Uwueave.Preo.ProjectionV2
 import Uwueave.Protocol
 import Uwueave.SeamAlgebra
 
@@ -193,6 +195,19 @@ private def isCheckedCertificateType (tyStx : Term) : CommandElabM Bool :=
       let ty ← withDefault <| whnf ty
       pure (ty.getAppFn.constName? ==
         some ``Uwueave.Preo.Future.CheckedCertificate)
+    catch _ => pure false
+
+/-- Does a source term have `Protocol.Elaboration` at the head of its reduced
+type? Export uses this positive check rather than guessing from a source name:
+a composed `ProfilePlan` is intentionally not an ordinary checked session. -/
+private def isProtocolElaborationTerm (termStx : Term) : CommandElabM Bool :=
+  liftTermElabM do
+    try
+      let value ← Term.elabTerm termStx none
+      Term.synthesizeSyntheticMVarsNoPostponing
+      let ty ← instantiateMVars (← inferType value)
+      let ty ← withDefault <| whnf ty
+      pure (ty.getAppFn.constName? == some ``Uwueave.Protocol.Elaboration)
     catch _ => pure false
 
 /-- Reduce a `Classification`'s **accumulated answer**. This is how the report
@@ -780,8 +795,8 @@ def elabPreoDecl : CommandElab := fun stx => do
                       "pin/self seam (SegVerdict.selfSeam)"]
             discharge := $(Syntax.mkStrLit why)))
         oblId? := some oId
-      -- ── The accumulated Classification. Every column the report prints is
-      -- reduced out of THIS constant.
+      -- ── The accumulated Classification. Every verdict answer the report
+      -- prints is reduced out of THIS constant.
       let classId := mkIdent (declName ++ (nm.getId ++ `classification))
       let gList ← `([$(globals.map (·.const)),*])
       let sList : Term ← match seam? with
@@ -1263,6 +1278,167 @@ def elabPreoBudget : CommandElab := fun stx => do
       Uwueave.Scheduling.ProfileUpperBound.toUpperBound $nm))
   let ns ← getCurrNamespace
   floorCheck nm "five-currency budget" (ns ++ nm.getId)
+
+/-! §3.11 Explicit checked export manifests. Every row extends one
+`Export.DeclarationBundle` term immediately. The elaborator retains source
+names only long enough to select already checked constants; stable IDs remain
+the literal manifest terms and no report metadata enters the builder. -/
+
+@[command_elab preoExport]
+def elabPreoExport : CommandElab := fun stx => do
+  let `(command| preo_export $exportId from $declId : $config :=
+    declaration := {
+      id := $declarationId, stateType := $stateTypeId,
+      schema := $schemaVersion }
+    $items:preoExportItem*) := stx
+    | throwError "preo_export: malformed manifest"
+  let exportName := exportId.getId
+  let declName := declId.getId
+  let stateId := mkIdent (declName ++ `State)
+  let declarationName := mkIdent (exportName ++ `Declaration)
+  let bundleName := mkIdent (exportName ++ `Bundle)
+  let artifactName := mkIdent (exportName ++ `Artifact)
+  let projectionName := mkIdent (exportName ++ `Projection)
+  let encodingName := mkIdent (exportName ++ `Encoding)
+  let formatName := mkIdent (exportName ++ `ArtifactDurableFormat)
+  let bytesName := mkIdent (exportName ++ `ArtifactDurableBytes)
+  let v2Name := mkIdent (exportName ++ `ProjectionV2)
+  let configName := mkIdent (exportName ++ `ValidationConfig)
+  let validationName := mkIdent (exportName ++ `Validation)
+  let validationOkName := mkIdent (exportName ++ `validation_ok)
+  let validatedName := mkIdent (exportName ++ `Validated)
+  let renderedName := mkIdent (exportName ++ `Rendered)
+  let renderResultName := mkIdent (exportName ++ `RenderResult)
+
+  elabCommand (← `(command|
+    /-- The declaration row, indexed by the actual elaborated state type. -/
+    def $declarationName :
+        Uwueave.Preo.Artifact.CheckedDeclaration $stateId :=
+      Uwueave.Preo.Artifact.CheckedDeclaration.ofState
+        ⟨$declarationId⟩ $stateTypeId $schemaVersion))
+
+  let mut bundle : Term ←
+    `(Uwueave.Preo.Export.DeclarationBundle.ofDeclaration $declarationName)
+  for item in items do
+    if item.raw.getKind == ``preoExportField then
+      let `(preoExportItem| | field $fieldId:ident := {
+          id := $id, kind := $kindId, carrier := $carrierId, key := $keyId }) := item
+        | throwErrorAt item "preo_export: malformed field row"
+      let carrierName := mkIdent (declName ++ (fieldId.getId ++ `Carrier))
+      bundle ← `(Uwueave.Preo.Export.DeclarationBundle.addField
+        (Carrier := $carrierName) $bundle ⟨$id⟩ $kindId $carrierId $keyId)
+    else if item.raw.getKind == ``preoExportInvariant then
+      let `(preoExportItem| | invariant $invId:ident := {
+          id := $id, carrier := $carrierId, codec := $codec,
+          answered := $answered }) := item
+        | throwErrorAt item "preo_export: malformed invariant row"
+      let classificationName :=
+        mkIdent (declName ++ (invId.getId ++ `classification))
+      bundle ← `(Uwueave.Preo.Export.DeclarationBundle.addClassification
+        $bundle $classificationName $answered ⟨$id⟩ $carrierId $codec)
+    else if item.raw.getKind == ``preoExportFuture then
+      let `(preoExportItem| | future $futureId:ident := {
+          certificate := $certificate:ident, id := $id,
+          world := $worldId, relation := $relationId }) := item
+        | throwErrorAt item "preo_export: malformed future row"
+      let futureName := mkIdent (declName ++ futureId.getId)
+      bundle ← `(Uwueave.Preo.Export.DeclarationBundle.addCertifiedFuture
+        $bundle $futureName $certificate ⟨$id⟩ $worldId $relationId)
+    else if item.raw.getKind == ``preoExportSession then
+      let `(preoExportItem| | session $sessionId:ident := {
+          id := $id, plan := $planId }) := item
+        | throwErrorAt item "preo_export: malformed session row"
+      let sessionName := mkIdent (declName ++ sessionId.getId)
+      unless ← isProtocolElaborationTerm sessionName do
+        throwErrorAt sessionId "preo_export: session `{sessionId.getId}` must be a \
+          generated `Protocol.Elaboration`. Composed `ProfilePlan` values are \
+          refused in V2: `DeclarationBundle` has no checked builder that can \
+          project one as a single session/plan pair."
+      bundle ← `(Uwueave.Preo.Export.DeclarationBundle.addElaboration
+        $bundle $sessionName ⟨$id⟩ ⟨$planId⟩)
+    else if item.raw.getKind == ``preoExportBudget then
+      let `(preoExportItem| | budget $budget:ident for $sessionId:ident := {
+          id := $budgetId, session := $stableSessionId,
+          plan := $stablePlanId, samePlan := $samePlan }) := item
+        | throwErrorAt item "preo_export: malformed budget row"
+      let sessionName := mkIdent (declName ++ sessionId.getId)
+      unless ← isProtocolElaborationTerm sessionName do
+        throwErrorAt sessionId "preo_export: budget `{budget.getId}` must be tied \
+          to a generated `Protocol.Elaboration`; composed `ProfilePlan` values \
+          have no exact plan-indexed budget builder in V2."
+      bundle ← `(Uwueave.Preo.Export.DeclarationBundle.addElaborationWithBudget
+        $bundle $sessionName ⟨$stableSessionId⟩ ⟨$stablePlanId⟩
+          ⟨$budgetId⟩ $budget $samePlan)
+    else
+      throwErrorAt item "preo_export: unknown manifest row"
+
+  elabCommand (← `(command|
+    /-- The one proof-indexed builder chain, in manifest row order. -/
+    noncomputable def $bundleName :
+        Uwueave.Preo.Export.DeclarationBundle $stateId := $bundle))
+  elabCommand (← `(command|
+    /-- The checked bundle with all proof indices eliminated to neutral data. -/
+    noncomputable def $artifactName : Uwueave.Preo.Artifact.Artifact :=
+      Uwueave.Preo.Export.DeclarationBundle.toArtifact $bundleName))
+  elabCommand (← `(command|
+    /-- Artifact paired with its uniquely canonical first-order encoding. -/
+    noncomputable def $projectionName :
+        Uwueave.Preo.Export.DeclarationBundle.Projection :=
+      Uwueave.Preo.Export.DeclarationBundle.project $bundleName))
+  elabCommand (← `(command|
+    /-- The canonical first-order encoding selected by the checked projection. -/
+    noncomputable def $encodingName : Uwueave.Preo.Artifact.ArtifactEncoding :=
+      ($projectionName).encoding))
+  elabCommand (← `(command|
+    /-- The explicit durable format tag for this generated byte sequence. -/
+    def $formatName : Uwueave.Durable.FormatTag :=
+      Uwueave.Preo.ArtifactDurable.artifactFormat))
+  elabCommand (← `(command|
+    /-- Canonical, versioned bytes of the neutral encoding; no runtime FFI. -/
+    noncomputable def $bytesName : Uwueave.Preo.ArtifactDurable.Bytes :=
+      Uwueave.Preo.ArtifactDurable.projectionBytes $encodingName))
+  elabCommand (← `(command|
+    /-- The raw V2 input, still requiring fail-closed validation. -/
+    noncomputable def $v2Name : Uwueave.Preo.ProjectionV2.Projection :=
+      Uwueave.Preo.ProjectionV2.Projection.ofEncoding $encodingName))
+  elabCommand (← `(command|
+    /-- The application's explicit finite validation policy. -/
+    def $configName : Uwueave.Preo.ProjectionV2.ValidationConfig := $config))
+  elabCommand (← `(command|
+    /-- Validation result before private-boundary extraction. -/
+    noncomputable def $validationName :
+        Uwueave.Preo.ProjectionV2.ValidationResult
+          Uwueave.Preo.ProjectionV2.ValidatedProjectionV2 :=
+      Uwueave.Preo.ProjectionV2.validate $configName $v2Name))
+  elabCommand (← `(command|
+    /-- Compile-time validation gate. Literal duplicate stable IDs, invalid
+    references, noncanonical profiles and bounds violations cannot pass it. -/
+    theorem $validationOkName : ($validationName).isOk = true := by decide))
+  elabCommand (← `(command|
+    /-- The private validated boundary, obtained only from successful
+    `ProjectionV2.validate`; the error branch contradicts `validation_ok`. -/
+    noncomputable def $validatedName :
+        Uwueave.Preo.ProjectionV2.ValidatedProjectionV2 :=
+      match h : $validationName with
+      | .ok value => value
+      | .error _ => False.elim (by
+          have accepted := $validationOkName
+          rw [h] at accepted
+          cases accepted)))
+  elabCommand (← `(command|
+    /-- Deterministic data-only source rendered from the validated boundary. -/
+    noncomputable def $renderedName : String :=
+      Uwueave.Preo.ProjectionV2.renderRustSource $validatedName))
+  elabCommand (← `(command|
+    /-- The public validation-first render route, retained for direct equality
+    checks against the separately named validated output. -/
+    noncomputable def $renderResultName :
+        Uwueave.Preo.ProjectionV2.ValidationResult String :=
+      Uwueave.Preo.ProjectionV2.validateAndRender $configName $v2Name))
+
+  let ns ← getCurrNamespace
+  floorCheck exportId "export bundle" (ns ++ bundleName.getId)
+  floorCheck exportId "validated export" (ns ++ validatedName.getId)
 
 /-! ## §4. The report -/
 

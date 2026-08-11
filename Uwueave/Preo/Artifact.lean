@@ -67,6 +67,10 @@ structure PlanId where
   value : Nat
   deriving DecidableEq, Repr
 
+structure BudgetId where
+  value : Nat
+  deriving DecidableEq, Repr
+
 /-! ## §2. Checked sources
 
 The constructors are private.  Public creation functions require the actual
@@ -158,6 +162,47 @@ def CheckedPlan.ofPlan {session : Scheduling.Session}
     {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
     (id : PlanId) : CheckedPlan checkedSession plan :=
   ⟨id⟩
+
+/-- A checked five-currency budget is tied to both the checked session and the
+exact checked plan whose realized profile it bounds. The only public
+constructor consumes an actual `Scheduling.ProfileUpperBound`; neither
+crossings nor a peer-meeting floor can substitute for that witness. -/
+structure CheckedBudget {session : Scheduling.Session}
+    (checkedSession : CheckedSession session) (plan : Scheduling.Plan session)
+    (limits : Scheduling.Currency → Nat) where private mk ::
+  id : BudgetId
+  planId : PlanId
+  bound : Scheduling.ProfileUpperBound session limits
+  samePlan : bound.plan = plan
+
+def CheckedBudget.ofProfileUpperBound {session : Scheduling.Session}
+    {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
+    (checkedPlan : CheckedPlan checkedSession plan)
+    {limits : Scheduling.Currency → Nat}
+    (bound : Scheduling.ProfileUpperBound session limits)
+    (samePlan : bound.plan = plan) (id : BudgetId) :
+    CheckedBudget checkedSession plan limits :=
+  ⟨id, checkedPlan.id, bound, samePlan⟩
+
+/-- The semantic acceptance retained by a checked budget is pointwise over the
+exact plan named by its checked plan, not merely over some schedule. -/
+theorem CheckedBudget.realized_fits {session : Scheduling.Session}
+    {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
+    {limits : Scheduling.Currency → Nat}
+    (checked : CheckedBudget checkedSession plan limits)
+    (currency : Scheduling.Currency) : plan.profile currency ≤ limits currency := by
+  rw [← checked.samePlan]
+  exact checked.bound.fits currency
+
+/-- Every checked budget exposes the actual profile-bound witness from which
+it was built. Because `CheckedBudget.mk` is private, a crossing count or
+`LeastMeetings`/floor fact has no constructor path into this source type. -/
+theorem CheckedBudget.has_exact_profile_witness {session : Scheduling.Session}
+    {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
+    {limits : Scheduling.Currency → Nat}
+    (checked : CheckedBudget checkedSession plan limits) :
+    ∃ bound : Scheduling.ProfileUpperBound session limits, bound.plan = plan :=
+  ⟨checked.bound, checked.samePlan⟩
 
 /-! ## §3. First-order semantic artifacts -/
 
@@ -273,6 +318,17 @@ structure PlanArtifact where
   profile : List (Currency × Nat)
   deriving DecidableEq, Repr
 
+/-- First-order budget data. `limits` are the five promised maxima and
+`realizedProfile` is the exact profile of the same checked plan identified by
+`plan`. Arbitrary decoded values remain data until V2 validation. -/
+structure BudgetArtifact where
+  id : BudgetId
+  session : SessionId
+  plan : PlanId
+  limits : List (Currency × Nat)
+  realizedProfile : List (Currency × Nat)
+  deriving DecidableEq, Repr
+
 def CheckedDeclaration.toArtifact {State : Type u}
     (checked : CheckedDeclaration State) : DeclarationArtifact :=
   ⟨checked.id, checked.stateTypeId, checked.schemaVersion⟩
@@ -307,11 +363,26 @@ private def planProfile {session : Scheduling.Session}
    (.userPrompt, plan.profile .userPrompt),
    (.rollback, plan.profile .rollback)]
 
+private def limitsProfile (limits : Scheduling.Currency → Nat) :
+    List (Currency × Nat) :=
+  [(.peerBarrier, limits .peerBarrier),
+   (.arbiterCut, limits .arbiterCut),
+   (.networkRound, limits .networkRound),
+   (.userPrompt, limits .userPrompt),
+   (.rollback, limits .rollback)]
+
 def CheckedPlan.toArtifact {session : Scheduling.Session}
     {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
     (checked : CheckedPlan checkedSession plan) : PlanArtifact :=
   ⟨checked.id, checkedSession.id,
     plan.schedule.actions.map DemandArtifact.ofDemand, planProfile plan⟩
+
+def CheckedBudget.toArtifact {session : Scheduling.Session}
+    {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
+    {limits : Scheduling.Currency → Nat}
+    (checked : CheckedBudget checkedSession plan limits) : BudgetArtifact :=
+  ⟨checked.id, checkedSession.id, checked.planId,
+    limitsProfile limits, planProfile plan⟩
 
 /-! ## §4. Bundling is append-only
 
@@ -327,11 +398,12 @@ structure Artifact where
   futures : List FutureArtifact
   sessions : List SessionArtifact
   plans : List PlanArtifact
+  budgets : List BudgetArtifact
   deriving DecidableEq, Repr
 
 def Artifact.ofDeclaration {State : Type u}
     (declaration : CheckedDeclaration State) : Artifact :=
-  ⟨declaration.toArtifact, [], [], [], [], []⟩
+  ⟨declaration.toArtifact, [], [], [], [], [], []⟩
 
 def Artifact.addField {Carrier : Type u} (artifact : Artifact)
     (field : CheckedField Carrier) : Artifact :=
@@ -353,6 +425,12 @@ def Artifact.addPlan {session : Scheduling.Session}
     {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
     (artifact : Artifact) (checked : CheckedPlan checkedSession plan) : Artifact :=
   { artifact with plans := artifact.plans ++ [checked.toArtifact] }
+
+def Artifact.addBudget {session : Scheduling.Session}
+    {checkedSession : CheckedSession session} {plan : Scheduling.Plan session}
+    {limits : Scheduling.Currency → Nat} (artifact : Artifact)
+    (checked : CheckedBudget checkedSession plan limits) : Artifact :=
+  { artifact with budgets := artifact.budgets ++ [checked.toArtifact] }
 
 /-! ## §5. Canonical first-order encoding and its left inverse -/
 
@@ -472,6 +550,28 @@ def PlanArtifactEncoding.decode (wire : PlanArtifactEncoding) : PlanArtifact :=
   cases artifact
   rfl
 
+structure BudgetArtifactEncoding where
+  id : Nat
+  sessionId : Nat
+  planId : Nat
+  limits : List (Currency × Nat)
+  realizedProfile : List (Currency × Nat)
+  deriving DecidableEq, Repr
+
+def BudgetArtifact.canonicalEncoding
+    (artifact : BudgetArtifact) : BudgetArtifactEncoding :=
+  ⟨artifact.id.value, artifact.session.value, artifact.plan.value,
+    artifact.limits, artifact.realizedProfile⟩
+
+def BudgetArtifactEncoding.decode (wire : BudgetArtifactEncoding) : BudgetArtifact :=
+  ⟨⟨wire.id⟩, ⟨wire.sessionId⟩, ⟨wire.planId⟩,
+    wire.limits, wire.realizedProfile⟩
+
+@[simp] theorem BudgetArtifactEncoding.decode_canonicalEncoding
+    (artifact : BudgetArtifact) : artifact.canonicalEncoding.decode = artifact := by
+  cases artifact
+  rfl
+
 structure ArtifactEncoding where
   declaration : DeclarationArtifactEncoding
   fields : List FieldArtifactEncoding
@@ -479,6 +579,7 @@ structure ArtifactEncoding where
   futures : List FutureArtifactEncoding
   sessions : List SessionArtifactEncoding
   plans : List PlanArtifactEncoding
+  budgets : List BudgetArtifactEncoding
   deriving DecidableEq, Repr
 
 def Artifact.canonicalEncoding (artifact : Artifact) : ArtifactEncoding where
@@ -488,6 +589,7 @@ def Artifact.canonicalEncoding (artifact : Artifact) : ArtifactEncoding where
   futures := artifact.futures.map FutureArtifact.canonicalEncoding
   sessions := artifact.sessions.map SessionArtifact.canonicalEncoding
   plans := artifact.plans.map PlanArtifact.canonicalEncoding
+  budgets := artifact.budgets.map BudgetArtifact.canonicalEncoding
 
 def ArtifactEncoding.decode (wire : ArtifactEncoding) : Artifact where
   declaration := wire.declaration.decode
@@ -496,6 +598,7 @@ def ArtifactEncoding.decode (wire : ArtifactEncoding) : Artifact where
   futures := wire.futures.map FutureArtifactEncoding.decode
   sessions := wire.sessions.map SessionArtifactEncoding.decode
   plans := wire.plans.map PlanArtifactEncoding.decode
+  budgets := wire.budgets.map BudgetArtifactEncoding.decode
 
 /-- The canonical first-order encoder has a structural left inverse.  This is
 transport faithfulness, not semantic acceptance of arbitrary wire data. -/
@@ -574,18 +677,24 @@ def session : CheckedSession Scheduling.oneCrossingPeerSession :=
 def plan : CheckedPlan session Scheduling.oneCrossingPeerPlan :=
   CheckedPlan.ofPlan ⟨105⟩
 
-def bundle : Artifact :=
-  ((((((Artifact.ofDeclaration declaration).addField field).addInvariant invariant).addInvariant
-    clashingInvariant).addFuture future).addSession session).addPlan plan
+def budget : CheckedBudget session Scheduling.oneCrossingPeerPlan
+    Scheduling.peerOnlyLimits :=
+  CheckedBudget.ofProfileUpperBound plan Scheduling.oneCrossingPeerProfileUpperBound
+    rfl ⟨107⟩
 
-/-- All six declaration surfaces are present; this is not an empty-list
+def bundle : Artifact :=
+  (((((((Artifact.ofDeclaration declaration).addField field).addInvariant invariant).addInvariant
+    clashingInvariant).addFuture future).addSession session).addPlan plan).addBudget budget
+
+/-- All seven declaration surfaces are present; this is not an empty-list
 roundtrip dressed up as an acceptance test. -/
 example : bundle.fields.length = 1
     ∧ bundle.invariants.length = 2
     ∧ bundle.futures.length = 1
     ∧ bundle.sessions.length = 1
-    ∧ bundle.plans.length = 1 :=
-  ⟨rfl, rfl, rfl, rfl, rfl⟩
+    ∧ bundle.plans.length = 1
+    ∧ bundle.budgets.length = 1 :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- Both verdict constructors were eliminated from checked terms, not supplied
 to the artifact constructor; the clash retains its two runnable witnesses. -/
@@ -596,6 +705,15 @@ example : bundle.invariants.map InvariantArtifact.verdict =
 example : bundle.plans.map (fun p => (p.actions.length, p.profile)) =
     [(1, [(.peerBarrier, 1), (.arbiterCut, 0), (.networkRound, 0),
       (.userPrompt, 0), (.rollback, 0)])] := rfl
+
+/-- The checked budget names that exact session and plan, preserves all five
+promised limits, and records the same exact five-currency realized profile. -/
+example : bundle.budgets =
+    [⟨⟨107⟩, ⟨104⟩, ⟨105⟩,
+      [(.peerBarrier, 1), (.arbiterCut, 0), (.networkRound, 0),
+       (.userPrompt, 0), (.rollback, 0)],
+      [(.peerBarrier, 1), (.arbiterCut, 0), (.networkRound, 0),
+       (.userPrompt, 0), (.rollback, 0)]⟩] := rfl
 
 /-- Whole-bundle canonical roundtrip, with every list nonempty. -/
 example : bundle.canonicalEncoding.decode = bundle :=

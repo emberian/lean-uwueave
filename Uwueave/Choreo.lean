@@ -134,11 +134,13 @@ depends on it):
     and that is a theorem, not an assumption. It is **not** an operational network:
     there is no message-loss LTS and no channel. `sync` is a barrier over an explicit
     roster, evaluated in one step.
-  * ⟨TERMINAL⟩ **There is no `send`/`recv`.** This is a CRDT choreography: the
-    channel is the lattice. So the MPST notion of duality has no analogue here, and
-    `projection_sound` is correspondingly *not* head-duality but a pointwise state
-    equality — strictly more informative for this fragment, and inapplicable to
-    theirs.
+  * ⟨TERMINAL⟩ **There is no `send`/`recv` in this core.** This is a CRDT
+    choreography: the channel is the lattice. So the MPST notion of general
+    channel duality has no analogue here, and `projection_sound` is correspondingly
+    *not* head-duality but a pointwise state equality — strictly more informative
+    for this fragment, and inapplicable to theirs. `Uwueave.ChoreoChoice` adds one
+    finite explicit label-delivery adapter; it does not turn this core into a
+    channel calculus or prove general duality.
   * ⟨DONE in `Uwueave.ChoreoRec`⟩ **Finite guarded recursion approximants.**
     `Choreo` itself remains finite, while `ChoreoRec` adds guarded anonymous
     recursion through fuel-bounded approximants. `approximate_embed` and
@@ -155,13 +157,19 @@ depends on it):
     reaches a barrier remains a *liveness* question (`Uwueave.Liveness` owns that
     axis): no fairness, eventual-delivery, or temporal deadlock-freedom theorem is
     claimed.
-  * ⟨UNDONE⟩ **`ReadsAgree` at non-reader replicas.** Projecting a `read` sends no
-    message — every replica evaluates the *same* predicate on *its own* copy — so
-    agreement is a **hypothesis**, not a theorem. It is discharged for read-free
-    choreographies (`readFree_readsAgree`) and immediately after a barrier
-    (`readsAgree_sync_read`), and `reads_can_disagree` shows it is not free. A
-    general account needs the branch to be communicated, which is where MPST's
-    select/branch lives and this fragment does not go.
+  * ⟨DONE in `Uwueave.ChoreoChoice`⟩ **Communicated finite choices remove
+    `ReadsAgree` from their projection theorem.** This core's silent `read` still
+    sends no message: every replica evaluates the same predicate on its own copy,
+    so `ReadsAgree` remains its honest hypothesis and `reads_can_disagree` remains
+    the refutation of dropping it. The sibling adapter instead stages read-free
+    `Choreo` blocks around an observer `select` and remote `branch`, carries the
+    chosen Boolean in its delivery trace, and proves
+    `ChoreoChoice.projection_sound` without `ReadsAgree`.
+    `ChoreoChoice.twoParty_remote_takes_true` and
+    `twoParty_remote_takes_false_branch` exercise both labels from disagreeing
+    replica views; `twoParty_remote_missing_label` refuses to invent an absent
+    label. This is finite safety over generated traces, not channel duality,
+    recursion liveness, fairness, authenticity, or eventual delivery.
   * ⟨UNDONE⟩ **Liveness of delivery.** `coordination_free_converges` says *given*
     that a delivery list contains the run's results, every replica agrees. That every
     result is eventually delivered is the CRDT premise and is not proved here.
@@ -265,7 +273,9 @@ The one asymmetry worth staring at: `project` **ignores** the `read`'s replica.
 A projected read is "evaluate `o` on my own copy", at *every* replica; no message
 is sent. That is faithful to a CRDT deployment (there is no channel), and it is
 exactly why `ReadsAgree` below is a hypothesis carried into `projection_sound`
-rather than a theorem — see the ⟨UNDONE⟩ note in the header. -/
+rather than a theorem. The communicated alternative is the explicitly distinct
+`select`/`branch` adapter in `Uwueave.ChoreoChoice`; it does not change this
+silent constructor's semantics. -/
 
 /-- **A local (endpoint) program** — what one replica actually runs. -/
 inductive Local (S : Type u) [MergeState S] : Type u where
@@ -1078,8 +1088,9 @@ theorem project_loomRead_writer :
 /-- **Projection, computed — the other endpoint.** The remote write is erased, but
 the barrier and the *branch* remain: a projected read sends no message, so every
 replica re-evaluates the same predicate on its own copy. That is the shape the
-⟨UNDONE⟩ note in the header is about, and `loomRead_readsAgree` is why it is safe
-here. -/
+silent-read boundary in the header describes, and `loomRead_readsAgree` is why it
+is safe here. `Uwueave.ChoreoChoice` takes the other route: its remote endpoint
+consumes a delivered label instead of re-evaluating this predicate. -/
 theorem project_loomRead_other :
     project loomRead true = .barrier (.obs loomPinned .fin .fin) := rfl
 

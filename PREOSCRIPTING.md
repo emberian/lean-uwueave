@@ -301,12 +301,44 @@ preo_certificate Quiesced :
   Future.CheckedCertificate Swarm.Delivered answer key accepts exactWorld := proof
 
 preo_budget WaveLimit for Swarm.Wave : fiveCurrencyLimits := checkedProfileBound
+
+preo_export SwarmManifest from Swarm : hostValidationConfig :=
+  declaration := { id := 100, stateType := 101, schema := 1 }
+  | field findings := { id := 102, kind := 10, carrier := 103, key := none }
+  | invariant one_writer := {
+    id := 104, carrier := 103, codec := findingsCodec, answered := rfl }
+  | future Delivered := {
+    certificate := Quiesced, id := 105, world := 106, relation := 107 }
+  | budget WaveLimit for Wave := {
+    id := 110, session := 108, plan := 109,
+    samePlan := checkedProfileBound_is_wave_plan }
 ```
 
 `preo_certificate` requires its written type to reduce to
 `Future.CheckedCertificate`; it never infers an index from materialized state.
 `preo_budget` pins `checkedProfileBound` to `Swarm.Wave.session`. The earlier
 pretty in-declaration budget block and schedule synthesis remain unbuilt.
+
+`preo_export` is a checked manifest rather than a report serializer. It starts
+one `Export.DeclarationBundle` at the generated state and folds each row
+directly through the corresponding proof-indexed builder. Field rows name the
+generated carrier; invariant rows require an existing answered classification
+equality and an explicit `FirstOrderCodec`; future rows require the exact named
+certificate; session rows accept only a `Protocol.Elaboration`. Numeric IDs are
+written data—not hashes of Lean names. The command emits the checked bundle,
+artifact, canonical encoding, durable format/bytes, raw V2 projection, explicit
+validation result, private validated value and deterministic rendered source.
+Its kernel-computed validation gate rejects duplicate stable IDs and malformed
+references at compile time. An unresolved invariant has no `answered` proof, a
+certificate for another future/world does not typecheck, and a composed
+`ProfilePlan` is refused until `DeclarationBundle` grows a semantic builder for
+that shape. A budget row is also the session/plan row: it calls
+`addElaborationWithBudget` and requires an explicit proof that the named
+`preo_budget` carries exactly the elaboration's plan. A valid bound for a
+different plan of the same session is refused rather than silently relabelled.
+The encoding retains its five written limits and five realized coordinates.
+Decoding remains one-way first-order data and never reconstructs a verdict,
+certificate or scheduling plan.
 
 ### 7.1 Deep only where analysis requires it
 
@@ -394,7 +426,7 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | summary synthesis | `MinimalSummary`, `TextSummary` | **proved semantically** through contextual quotients; the fixed text window now has an exact iff, while executable quotient construction for arbitrary evaluators remains open |
 | arbitrary refined outcomes | `Specification` | **proved semantically**: under totality, coordination-freedom is exactly history monotonicity plus fiber directedness, and `IConfluent` is the singleton-outcome instance |
 | classification → `Verdict` term | `Tactics.classifyFinite` | proved |
-| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built**: built-in and explicit-seed application carriers, invariants/derives, keyed fields, named world futures/certificates, typed protocols, proof-carrying sessions and five-currency budgets |
+| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built**: built-in and explicit-seed application carriers, invariants/derives, keyed fields, named world futures/certificates, typed protocols, proof-carrying sessions, five-currency budgets and explicit checked export manifests |
 | classification ACCUMULATES facets | `Preo/Classification` | **built**: `Classification` holds `global`/`seams`/`mergeability`/`obligations` as *lists*; rules add, never replace |
 | route-order invariance | `Preo.run_answer_congr` | **proved**: two registries with the same rules in any order certify the same answer. Bottoms out in `Preo.verdict_agree` (two verdicts for one invariant cannot disagree — the pair is uninhabitable), not in bookkeeping. `run_answer_of_perm` is the permutation corollary. |
 | ✅ seam verdicts in the surface | `Preo.budgetSeam`, `Preo.seamAlong`, `Segmented.budget_segmented` | **CLOSED** (was "inexpressible"). A globally clashing invariant now carries a `SegVerdict` facet *alongside* its clash — `Preo.seam_forces_clash` proves a seam is not a third alternative but forces the ESCALATES column. `Demo`'s `LoomDoc2.in_budget.seam` **is** `WeaveState.quotaVerdict`, by `rfl`. `seamAlong` lifts it to the whole declared document, using the emitted section (`<field>.plant`) that fragment 1 said the elaborator could not synthesize. |
@@ -405,7 +437,7 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | ✅ **named world futures in the surface** | `Preo.Future.FutureDecl`, `WorldIndex`, `CheckedStability`, `CheckedCertificate` | **CLOSED.** `future N on M := D` checks `D : FutureDecl M`; `preo_certificate N : CheckedCertificate ... := proof` retains the complete world index and is whole-value `rfl` to the hand certificate. Same-state/different-world refusal and one-way delivery⊆extension variance remain theorem-visible in `Demo`. |
 | ✅ **protocol/session surface** | `Protocol.Term`, `Protocol.Elaboration`, `elaborateProfilePlan`, `elaborateComposedProfilePlan` | **CLOSED with a typed opaque protocol body.** Sessions expose checked plans/upper bounds and composed profiles select one global strategy. Reports name semantic artifacts and deliberately contain no invented verdict bit or meeting scalar. A dedicated pretty protocol parser remains optional UI. |
 | ✅ **five-currency budget surface** | `Scheduling.ProfileUpperBound`, `preo_budget` | **CLOSED for witnessed acceptance.** A standalone command consumes one real plan satisfying `Currency → Nat` pointwise at the exact generated session. `Demo` rediscovers `coalescedProfileUpperBound` by `rfl`; separate theorems refute acceptance from crossings or a peer-meeting floor. **Unbuilt:** schedule synthesis and a pretty inline budget block. |
-| ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export` | **BUILT.** Private proof-indexed builders project verdict witnesses, world futures/certificates and protocol sessions/plans into one canonical first-order artifact with a proved decoder left inverse. Stable IDs/codecs are explicit; decoded wire tags have no path back to semantic proof constructors. |
+| ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export`, `Preo.ArtifactDurable`, `Preo.ProjectionV2`, `preo_export` | **BUILT AND SURFACED.** Private proof-indexed builders project answered classifications, certified world futures, ordinary/profile protocol elaborations and exact-plan five-currency budgets into one canonical first-order artifact. The manifest supplies every stable ID, witness codec and budget plan equality explicitly; it emits canonical durable bytes and must pass V2 structural/resource validation before rendering. Unresolved invariants, wrong certificates, wrong-plan budgets and duplicate IDs fail closed. Published V1 remains the budget-empty legacy schema. Composed profile plans wait for a dedicated checked export builder; decoded wire tags have no path back to semantic proof constructors. |
 | **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
 | ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, and exact crossing/meeting non-function refutations. **Unbuilt:** schedule synthesis and the pretty inline budget block. |
 | recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |

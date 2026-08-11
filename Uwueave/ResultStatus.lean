@@ -104,19 +104,27 @@ clothes.
     produced-but-uninspectable is an independent axis rather than a seventh
     cell. Nothing here contradicts that and nothing here builds it: the six
     cells are candidates × closure only.
-  * **`Capability` is three flags, not a lattice of statuses.** ⟨UNDONE⟩
-    `Capability.Admits` is a hand-written table over six constructors, so a
-    capability cannot express "may fork only at closed futures" or any other
-    correlation between the axes. The general shape is a downward-closed set of
-    statuses; the three flags are the smallest thing that makes `Declares`
-    statable and refutable.
+  * **`Capability` remains three flags; the general effect lattice is shipped.**
+    ⟨HISTORICAL LIMIT, DISCHARGED BY `StatusEffects`⟩
+    `StatusEffects.Shape` retains all six cells and `StatusEffects.Effect` is a
+    downward-closed set under their refinement order, with bottom, top, meet,
+    join and distributivity laws. `StatusEffects.fromLegacy_matches` embeds
+    this hand-written `Capability.Admits` table exactly. The embedding is
+    strict: `StatusEffects.correlated_effect_has_no_legacy_encoding` exhibits
+    a capability that permits provisional singletons and closed forks while
+    rejecting open forks, a correlation no assignment of the three independent
+    flags can express.
   * **`statusOf` is noncomputable.** ⟨TERMINAL at this carrier⟩ Inherited
     verbatim from `Evidence.render`: both decisions quantify over an unbounded
     value type. `Classical.choice` is inside the audit floor.
-  * **A declaration here is checked, never inferred.** ⟨UNDONE⟩ `Declares` is a
-    proposition a proof discharges. Nothing computes the least capability of a
-    computation, which is what an elaborator would have to do; §3's `Status` is
-    the codomain such an inference would range over and no inference exists.
+  * **Finite-reach declarations are inferred; arbitrary reach remains open.**
+    ⟨UNDONE at running/arbitrary reach and surface integration⟩ `Declares`
+    here is still a proposition a proof discharges. For an explicitly supplied
+    finite list of states, `StatusEffects.infer` now returns the downward
+    closure of the observed six-way shapes, and `infer_is_least` proves both
+    support and leastness. It does not discover the states a running system can
+    reach, infer over an unbounded reach predicate, or install that inference
+    in the surface elaborator.
   * **The reach set is a hypothesis.** ⟨TERMINAL for the refutation, ⟨UNDONE⟩
     as deployment⟩ `declaration_is_relative_to_the_reach` shows a declaration
     that holds over one state set fails over a wider one. Which states a

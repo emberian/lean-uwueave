@@ -19,7 +19,7 @@ it. Counts move; the mechanisms are what to check.*
 This is the delta audit after the execution encoder, durability, authenticity,
 Byzantine, recursive-choreography, structured-evidence, frontier, outcome-spec,
 protocol, world-context, and preoscript artifact work landed, followed by the
-Cycle-20 authoring/export foundations. The new modules, their root/gate wiring,
+Cycle-20 authoring foundations and Cycle-21 checked-manifest/result foundations. The new modules, their root/gate wiring,
 and their MAP and TRANSPORTS entries are checkpointed together: a clean checkout
 cannot receive only one side of that assembly.
 
@@ -31,16 +31,22 @@ was repaired during this audit and is now complete in the live working tree.
 | Surface | Live evidence | Current verdict |
 |---|---|---|
 | Root → gate | `#gate_covers_root` at `Uwueave/Audit.lean:175-191` checks every direct root import is in the gate environment; `Choreo` is in both (`Uwueave.lean:71`, `Uwueave/Audit.lean:62`). | **The original A.1 defect is closed.** |
-| Disk → root → gate | There are **98** Lean module files under `Uwueave/`; both the `Uwueave.lean` and `Uwueave/Audit.lean` transitive closures reach **98/98**. The live gate reports **92** direct root modules (excluding `Audit`) and audits **15,903** constants. `lake build` passed after the imports landed. | **The current-wave assembly defect is closed.** |
-| Checkpoint → disk | Cycle 20 adds seven Lean modules and the matching root, audit, MAP and TRANSPORTS changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
-| MAP → disk → gate | The module table has **98 rows for 98 files**, and every module is now inside the root and audit closures. The keystone ledger says **403 rows**. | **The former 34-row exposure is closed in the live tree.** The table remains a reading aid, not a per-name trust gate. |
-| TRANSPORTS | The ledger has **98/98** rows, including authenticated admission, witnessed five-currency budgets, finite schedule/repair/history search, canonical artifact bytes, projection validation, and data-only Rust rendering. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
+| Disk → root → gate | There are **107** Lean module files under `Uwueave/`; both the `Uwueave.lean` and `Uwueave/Audit.lean` transitive closures reach **107/107**. The live gate reports **101** direct root modules (excluding `Audit`) and audits **17,559** constants. `lake build` and the fail-closed Cargo suite pass. | **The current-wave assembly defect is closed.** |
+| Checkpoint → disk | Cycle 21 adds nine Lean modules and the matching root, audit, MAP, TRANSPORTS, census, and surface changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
+| MAP → disk → gate | The module table has **107 rows for 107 files**, and every module is inside the root and audit closures. The keystone ledger says **433 rows**. | **The former 34-row exposure remains closed.** The table is a reading aid, not a per-name trust gate. |
+| TRANSPORTS | The ledger has **108** rows, including checked manifests, budget-bearing V2 validation, communicated choice, composite deltas, contextual compilation, differential evaluation, status effects, temporal fairness, and typed edits. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
 | Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest` (`Uwueave/Exec.lean:763-781`); Rust supplies typed records (`rust/src/ffi.rs:31-50,82-113`) and no longer owns FORMAT-v3 bytes. | The wire-encoder decision is closed; ABI, shim, runtime, codegen and host storage remain open. |
 
 Cycle 20 adds:
 
 `AuthenticatedAdmission` · `FiniteHistory` · `Preo.ArtifactDurable` ·
 `Preo.Expr` · `Preo.ProjectionV1` · `RepairSynthesis` · `ScheduleSynthesis`.
+
+Cycle 21 adds:
+
+`ChoreoChoice` · `ClashGraph` · `CompositeDelta` · `ContextCompiler` ·
+`Preo.Incremental` · `Preo.ProjectionV2` · `StatusEffects` · `Temporal` ·
+`WovenEdit`.
 
 The previous checkpoint's twelve modules were:
 
@@ -169,21 +175,17 @@ one judgement.” It still has exactly one central **lattice** judgement,
   projection/lift theorems make the relation explicit. This is the good form of
   duplication.
 
-Two seams are not yet tied:
+Two former seams are now tied at their model boundaries:
 
-1. `Authenticity.AuthenticIssuer` (`Authenticity.lean:255-269`) speaks about
-   accepted signed records; `Byzantine.SignatureAuthentic`
-   (`Byzantine.lean:86-103`) speaks about admitted `(author, sequence, id)`
-   triples. `Byzantine` does not import `Authenticity`, and no theorem transports
-   one predicate to the other. “Signature authentic” therefore has two model
-   meanings with no codec/admission bridge.
-2. `Preo.Artifact.FirstOrderCodec` (`Preo/Artifact.lean:74-80`) encodes to
-   `List Nat` and proves only `decode_encode`; `Durable.CanonicalCodec`
-   (`Durable.lean:60-70`) encodes to `List UInt8` and additionally proves
-   accepted-byte canonicality through `encode_decode`. Neither imports the
-   other. The first-order artifact is therefore not yet a durable canonical
-   payload, despite both surfaces using “canonical” language around their
-   enclosing encodings.
+1. `AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic` transports
+   accepted signed event records to Byzantine attribution through an explicit
+   event codec, while `AuthenticatedGatedOp.ofAuthenticIssuer` adds holder and
+   authorization evidence. Concrete cryptography and FORMAT-v3 admission remain
+   deployment obligations rather than being smuggled into this theorem.
+2. `Preo.ArtifactDurable.artifactCodec` gives the complete first-order
+   `ArtifactEncoding` a canonical byte codec and format-v2 frame. `preo_export`
+   now reaches that exact encoding and the budget-bearing Projection V2. The
+   surviving boundary is host persistence, not a second semantic codec.
 
 ### Execution-boundary reconciliation after the Lean encoder change
 
@@ -206,19 +208,18 @@ wire encoder” must not be shortened to “the FFI is proved.”
 
 ### Current prioritized action list for root
 
-**P1 — connect the remaining model rungs**
+**P1 — turn landed foundations into end-to-end consumers**
 
-1. Connect `Authenticity.AuthenticIssuer` to
-   `Byzantine.SignatureAuthentic` through an explicit record/triple codec and
-   admission theorem, then connect that result to the gate. Until then the
-   constructive extractor does not authenticate a shipping operation.
-2. Choose one artifact-codec layering: either make `Preo.Artifact.FirstOrderCodec`
-   refine `Durable.CanonicalCodec`, or state and prove the adapter. Do not grow a
-   second durability format around `List Nat` by accident.
-3. Wire `Preo.Export` into the actual language/elaborator path, or label it as a
-   manually assembled checked builder. Its example is nonempty and honest, but
-   `Preo.Demo`/`Preo.Elab` do not import it. The root now builds it; that does
-   not by itself make the path user-facing.
+1. Wire `Preo.Expr`, `Preo.Incremental`, `ContextCompiler`, and `StatusEffects`
+   through one typed query/derive surface and into the checked export. They are
+   individually proved but remain foundation modules rather than one language
+   path.
+2. Generate useful repair and schedule catalogs instead of searching only
+   caller-supplied entries; keep full prices/profiles and exhaustive refusal
+   evidence through the surface.
+3. Consume Projection V2 as deterministic data in a real host, then bind the
+   canonical artifact bytes to a host journal. Separately add an authenticated
+   request lane before claiming the shipping kernel receives signed operations.
 
 ---
 

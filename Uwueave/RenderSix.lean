@@ -104,13 +104,15 @@ sanctioned renderer *does* make, at six named pieces of evidence.
   * **`report` is public here too.** ⟨TERMINAL for this file's question⟩ A
     renderer must be able to say `absent`, including one that should not — which
     is exactly what makes §5 exhibitable.
-  * **The contract constrains three of the six cells.** ⟨UNDONE⟩ `SoundEvaluator6`
-    has clauses for `exact`, `absent` and `pending`. `provisional` and the two
-    forks carry no clause, so a renderer may report `forkedOpen` where the
-    evidence forks *closed* and this file does not refute it. The three
-    constrained cells are the ones §4 and §5 turn on; the other three would need
-    the same treatment to make the contract total, and that is undone work, not
-    a theorem of the model.
+  * **The original contract constrains three cells; its total extension is
+    shipped.** ⟨HISTORICAL LIMIT, DISCHARGED BY `StatusEffects`⟩
+    `SoundEvaluator6` deliberately remains the compatibility contract for
+    `exact`, `absent` and `pending`. `StatusEffects.TotalSoundEvaluator6` adds
+    exact candidate and settledness clauses for `provisional`, `forkedClosed`
+    and `forkedOpen`; `statusOf_totalSound6` discharges all six and
+    `toSoundEvaluator6` projects back to this API. The boundary is load-bearing:
+    `closedForkAsOpen_old_sound` constructs the closed-fork-as-open lie admitted
+    here, while `closedForkAsOpen_not_total` refutes it under the total contract.
   * **Noncomputability is inherited.** ⟨TERMINAL at this carrier⟩ `statusOf`,
     `spinnerRender` and `giveUpRender` all quantify over an unbounded value type.
     `Classical.choice` is inside the audit floor.

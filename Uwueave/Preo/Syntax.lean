@@ -62,6 +62,16 @@ preo <Name> where
 
 preo_certificate <name> : <Future.CheckedCertificate ...> := <proof>
 preo_budget <name> for <session> : <Currency → Nat limits> := <ProfileUpperBound>
+preo_export <name> from <declaration> : <ValidationConfig> :=
+  declaration := { id := <Nat>, stateType := <Nat>, schema := <Nat> }
+  | field <field> := { id := <Nat>, kind := <Nat>, carrier := <Nat>, key := <Option Nat> }
+  | invariant <invariant> := { id := <Nat>, carrier := <Nat>,
+    codec := <FirstOrderCodec>, answered := <classification.answer = some _> }
+  | future <future> := { certificate := <named certificate>, id := <Nat>,
+    world := <Nat>, relation := <Nat> }
+  | session <session> := { id := <Nat>, plan := <Nat> }
+  | budget <named budget> for <session> := {
+    id := <Nat>, session := <Nat>, plan := <Nat>, samePlan := <equality proof> }
 ```
 
 Fragment 2 closed three of fragment 1's refusals — **seam facets** (a globally
@@ -92,7 +102,12 @@ Lean term: the command checks that its reduced head is
 `Scheduling.ProfileUpperBound` at one emitted session and does no synthesis.
 The typed Lean-term escape hatches reach every current protocol constructor,
 certificate index and schedule plan without duplicating their semantics in the
-parser.
+parser. `preo_export` is likewise a thin checked manifest: its rows call the
+proof-indexed `Export.DeclarationBundle` builders immediately, then expose only
+their canonical artifact, durable bytes, and validated V2 projection. IDs are
+literal manifest data, never hashes of source names. A composed profile plan is
+not a `Protocol.Elaboration`, so it has no session row in this first export
+surface.
 -/
 import Uwueave.Tactics
 
@@ -390,6 +405,54 @@ session carried by a named `Protocol.Elaboration`. The limit is an ordinary
 bound, or independently selected coordinate plans fit the generated type. -/
 syntax (name := preoBudget) "preo_budget " ident ppSpace &"for" ppSpace ident
   " : " colGt term:51 " := " colGt term : command
+
+/-! ### Checked export manifests
+
+The export command has one mandatory declaration row and one repeated *sum*
+of tagged rows. Keeping a single repeated syntax category avoids the adjacent
+`item* item*` ambiguity that previously made session forms unreachable. Its
+leading `|` is also load-bearing: the following row words are non-reserved, so
+the punctuation tells the command parser that another manifest row follows.
+Braces, commas and `:=` are parser-hard boundaries around arbitrary Lean terms.
+Every stable ID is explicit; source names select checked constants only. -/
+
+declare_syntax_cat preoExportItem
+syntax (name := preoExportField) "|" &"field" ident " := " "{"
+  &"id" " := " colGt term:51 ","
+  &"kind" " := " colGt term:51 ","
+  &"carrier" " := " colGt term:51 ","
+  &"key" " := " colGt term "}" : preoExportItem
+syntax (name := preoExportInvariant) "|" &"invariant" ident " := " "{"
+  &"id" " := " colGt term:51 ","
+  &"carrier" " := " colGt term:51 ","
+  &"codec" " := " colGt term:51 ","
+  &"answered" " := " colGt term "}" : preoExportItem
+syntax (name := preoExportFuture) "|" &"future" ident " := " "{"
+  &"certificate" " := " ident ","
+  &"id" " := " colGt term:51 ","
+  &"world" " := " colGt term:51 ","
+  &"relation" " := " colGt term "}" : preoExportItem
+syntax (name := preoExportSession) "|" &"session" ident " := " "{"
+  &"id" " := " colGt term:51 ","
+  &"plan" " := " colGt term "}" : preoExportItem
+syntax (name := preoExportBudget) "|" &"budget" ident
+  ppSpace &"for" ppSpace ident " := " "{"
+  &"id" " := " colGt term:51 ","
+  &"session" " := " colGt term:51 ","
+  &"plan" " := " colGt term:51 ","
+  &"samePlan" " := " colGt term "}" : preoExportItem
+
+/-- Build one checked declaration bundle from explicit manifest rows, then
+emit its canonical artifact/encoding, durable bytes and validated ProjectionV2
+view. The validation configuration is explicit and compilation fails unless
+the emitted projection validates (including stable-ID uniqueness). -/
+syntax (name := preoExport) "preo_export " ident ppSpace &"from" ppSpace ident
+  " : " colGt term:51 " := "
+  ppLine colGe (&"declaration" " := " "{"
+    &"id" " := " colGt term:51 ","
+    &"stateType" " := " colGt term:51 ","
+    &"schema" " := " colGt term "}")
+  (ppLine colGe preoExportItem)* : command
 
 /-- Print the verdict table of a `preo` declaration: every field with its kind
 and carrier, every invariant with the field it reads, its verdict, the route

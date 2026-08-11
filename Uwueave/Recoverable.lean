@@ -103,25 +103,24 @@ iff-shaped form of the dichotomy the two files together now have.
 
 ## Honest boundary — what is claimed and what is not
 
-  * ⟨UNDONE⟩ **The converse is proved at one-operation resolution**
+  * ⟨UNDONE, narrowed to endpoint-only reconstruction/generic merge synthesis⟩
+    **This file's converse is proved at one-operation resolution**
     (`StepConfluent`), which is the resolution `Ancestral.Serializing` and
-    `serialization_clash_defeats_every_merge` are stated in. Lifting it to the
-    full `AncestralConfluent` (branches are *runs*, not single ops) is §5, and
-    it needs one extra hypothesis: `StepGenerated`, "every reachable branch is
-    the ancestor or one admitted step from it". The lock satisfies it
-    (`lock_stepGenerated`, by induction on runs); the counter does not, away from
-    the critical ancestor. **The hypothesis is not removable and the gap is
-    exhibited, not merely conceded**: `stepConfluent_does_not_imply_ancestralConfluent`
-    gives an effect-faithful, step-confluent merge that fails at branches of
-    length two, and `step_repair_does_not_lift` shows the failure is *not* a
-    missing legal serialization — that side of §5's iff holds there. So the
-    general multi-operation case is genuinely open here: a run's composite delta
-    is not an `Op`, so `Serializing` says nothing about it, and closing it needs
-    the composites to be recoverable and legality closed under composition. That
-    is codex's ingredient (5), history coherence, and it is the sibling lane's
-    file `Uwueave/Histories.lean` — not imported, not assumed, not anticipated by
-    any definition here. `StepGenerated` is the cheapest possible stand-in and is
-    named as such, not as a solution.
+    `serialization_clash_defeats_every_merge` are stated in. §5 lifts it with
+    `StepGenerated`, "every reachable branch is the ancestor or one admitted
+    step from it". The lock satisfies that local bridge; the counter does not.
+    The sibling `Uwueave.CompositeDelta` now closes the explicit-patch route for
+    arbitrary finite runs: `Patch.admitted_of_runsTo` exposes successful runs,
+    `LegalUnderComposition` is proved equivalent to full
+    `AncestralConfluent`, and `Algebra` carries residual admission, commutation,
+    merge execution, and legality. Its `stepConfluent_counter_fails_composite_law`
+    preserves this file's length-two counter as a failure of that named law,
+    while `cheapLockAlgebra` supplies a one-step positive instance. What remains
+    genuinely open is a generic **state-only** constructor that reconstructs or
+    residualizes an arbitrary run delta from endpoints and synthesizes the merge
+    without a carried patch. Cyclic operations show why no such reconstruction
+    follows from `DeltaRecoveryOn`; no theorem here or in `CompositeDelta`
+    claims otherwise.
   * **Recoverability is guard-relative.** `DeltaRecoverableOn` is the exact
     hypothesis used by the construction: only deltas an implementation can
     actually commit need be recoverable. `DeltaRecoveryOn` is its equivalent
@@ -1157,15 +1156,18 @@ theorem faithful_stepConfluent_iff_legalSerialization [DecidableEq S]
   ⟨fun ⟨M, hser, hst⟩ => legalSerialization_of_stepConfluent M hser hst,
    fun hleg => exists_faithful_stepConfluent_merge I D T hleg⟩
 
-/-! ### §5.1 From one operation to a whole run — the honest gap, and the
-cheapest bridge across it.
+/-! ### §5.1 From one operation to a whole run — the state-only boundary and
+the cheapest local bridge.
 
 `AncestralConfluent` quantifies over branches that are *runs*. A run's composite
 delta is not an `Op`, so `Serializing` — which speaks only of single operations —
-says nothing about it, and the construction above cannot see it. The general
-repair needs the composites to be recoverable and legality to be closed under
-composition: codex's ingredient (5), history coherence, which is a sibling file's
-subject and is **not** built here.
+says nothing about it, and this file's endpoint-only construction cannot see it.
+`Uwueave.CompositeDelta` now supplies the explicit-patch alternative: admitted
+finite patches, residual/commutation laws, an exact
+`LegalUnderComposition ↔ AncestralConfluent` transport, and a minimal
+patch-labelled history-edge adapter. The remaining gap is narrower: generically
+recovering those composite patches from states alone, or synthesizing the merge
+without carrying them, is neither assumed nor proved.
 
 `StepGenerated` is the cheapest sufficient stand-in: the state space itself
 collapses runs to steps. The lock satisfies it; the counter does not. -/
@@ -1212,12 +1214,13 @@ and **step-confluent** — the guard admits an operation only at `0` and `1`, an
 both one-operation merges land on `2` and `3` — yet two branches that each spend
 twice reach `2` and merge to `4`.
 
-So `stepConfluent_implies_ancestralConfluent` cannot drop `StepGenerated`, and
-the omission §5.1 declares is not a proof artifact: a repair that is complete at
-one operation per branch can fail at two. Note also what this does **not** say —
-a different merge may well be ancestrally confluent here, since nothing pins its
-behaviour on composite deltas. *Which* merges lift is the run-level existence
-question, i.e. ingredient (5), and it is not answered in this file. -/
+So `stepConfluent_implies_ancestralConfluent` cannot drop `StepGenerated`, and a
+repair complete at one operation per branch can fail at two. `CompositeDelta`
+does not erase this witness: `stepConfluent_counter_fails_composite_law` proves
+that the same merge fails `LegalUnderComposition`. Note also what this does
+**not** say — a different merge may be ancestrally confluent here. The remaining
+open construction problem is the generic endpoint-only synthesis named above,
+not the now-formal explicit-patch residual law. -/
 theorem stepConfluent_does_not_imply_ancestralConfluent :
     Serializing counterAM (spendOps 2)
       ∧ StepConfluent counterAM (spendOps 2) (fun n => n ≤ 3)
@@ -1242,9 +1245,9 @@ theorem stepConfluent_does_not_imply_ancestralConfluent :
 /-- **And the missing ingredient is not the legal serialization.** The same
 implementation *has* one everywhere — the guard keeps every admitted ancestor at
 `1` or below, so both spends fit under the ceiling — hence by §5's iff a faithful
-step-confluent merge exists for it, and the run-level failure above is a
-statement about histories and nothing else. This is the cleanest available
-description of what codex's ingredient (5) is for. -/
+step-confluent merge exists for it, and the run-level failure above is exactly
+the failure of `CompositeDelta.LegalUnderComposition` for `counterAM`. This is
+the cleanest available description of what the composite law adds. -/
 theorem step_repair_does_not_lift :
     LegalSerialization (spendOps 2) (fun n => n ≤ 3)
       ∧ ∃ M : AncestralMerge Nat, Serializing M (spendOps 2) ∧

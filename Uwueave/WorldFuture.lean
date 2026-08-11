@@ -145,14 +145,19 @@ projection, and:
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's
 clothes.
 
-  * **No network, no messages, no time.** ⟨TERMINAL for this file's question,
-    ⟨UNDONE⟩ as a system model⟩ A delivery future here is a *relation between
-    two worlds*, not a run of a protocol. Nothing models loss, reordering,
-    partition, retransmission or latency, and no theorem below says any
-    delivery ever happens — `Liveness.lean` owns fairness and this file
-    inherits none of it. The separation in §3 is about what a future *may* be,
-    which is exactly the question codex asked; when it will *occur* is not
-    asked and not answered.
+  * **No deployed network, scheduler proof, or time.** ⟨TERMINAL for this
+    file's question, ⟨UNDONE⟩ as a system model⟩ A delivery future here is a
+    *relation between two worlds*, not a run of a protocol. The successor
+    `Uwueave.Temporal` now supplies the missing formal run layer:
+    `WorldAdapter.pendingDeliveryTrace_adjacent` is an infinite adjacent trace
+    whose first step is the genuine `wPending`-to-`wDelivered` delivery;
+    `RenderAdapter.fair_bob_delivery_exits_pending` connects weak fairness to
+    a real pending exit; and `WorldAdapter.starvedPendingTrace_not_weakFair`
+    proves the constant pending trace valid but unfair. The marker remains:
+    no network implementation is proved fair, and nothing models loss,
+    reordering, partition, retry/retransmission, latency, timeouts, or
+    wall-clock bounds. The separation in §3 still answers what a future *may*
+    be; `Temporal` states explicitly which scheduler premise makes one occur.
   * **This carrier drops two of codex's six components; the successor restores
     them.** `Uwueave.WorldContext` adds outstanding active grants, a
     downward-closed `CausalReach.Cut`, and a known version base/head in a real

@@ -80,18 +80,34 @@ Write ω for the clique number of the clash graph, χ for its chromatic number, 
   * **`Width = ω` is NOT claimed in general, and this file does not claim it.**
     Two independent gaps sit between them, and they are different gaps:
       1. `χ ≥ ω` can be strict — the classical witness is `C₅` (ω = 2, χ = 3).
-         ⟨UNDONE⟩ No clash graph realising `C₅` is exhibited here, so this file
-         does not even settle whether the gap is *reachable* in this setting; it
-         is cited as graph theory, not proved as a fact about clash graphs.
+         The downstream `ClashGraph.FiniteSimpleGraph.singleton_clashes_iff`
+         realises every explicitly enumerated finite simple graph as the induced
+         singleton clash graph of an independent-set invariant on `Catalog.GSet`.
+         Its concrete `ClashGraph.c5_singleton_clashes_iff`,
+         `c5_cycle_edges`, `c5_has_no_chords`, and
+         `c5_singletons_have_no_triangle` therefore make this gap reachable in
+         the present setting; `c5_forces_three_domains` transports the odd cycle
+         to the exact lower bound `3 ≤ n` for every global segmented width.
+         That downstream theorem deliberately takes an explicit finite vertex
+         enumeration; it does not enumerate or classify arbitrary infinite
+         clash graphs, and it does not construct a live protocol realising C₅.
       2. `Width ≥ χ` can be strict for a reason that is **not** graph theory: a
          seam is a proper colouring *and* fiber-stable
          (`LiveSegmented.liveSegmented_iff_liveProperColoring`), so every colour
          class must be closed under the joins of its own members. §5 shows the
          first non-trivial instance of that constraint is clique-visible anyway
          (`triple_clash_forces_triangle`, realised on a carrier in §5.1);
-         ⟨UNDONE⟩ the general `k`-wise case is
-         argued in §5's docstring and not proved, and no numeric separation of
-         `Width` from `χ` is exhibited.
+         The downstream finite form is proved by
+         `ClashGraph.LeaveOneOutObstruction.clique`: an explicitly supplied
+         finite list of legal leave-one-out joins whose distinct listed pairs
+         merge to one illegal full join is a clique. Its companion
+         `LeaveOneOutObstruction.forces_domains` transports the list length to a
+         global-width lower bound, and
+         `triple_clash_forces_triangle_via_leave_one_out` recovers this file's
+         triangle at `k = 3`. The caller still supplies the finite list and its
+         pair-join equations; no arbitrary infinite family is enumerated, no
+         live co-reachability witness is manufactured, and no numeric separation
+         of `Width` from `χ` is claimed.
   * **What replaces the general theorem** is a certificate: `Width = k` is
     *witnessed* by a `k`-clique and a `k`-domain seam together
     (`least_liveWidth_of_clique_and_seam`). On the slot carrier both witnesses
@@ -668,12 +684,20 @@ the first case where it bites: three states with pairwise-legal joins whose trip
 join is illegal. The answer is **no** — that configuration forces a genuine
 triangle among the three pairwise joins, so the clique number already reports 3.
 
-⟨UNDONE⟩ The same argument works for `k` states with all `(k-1)`-wise joins legal
-and the `k`-wise join illegal: the `k` leave-one-out joins are pairwise distinct
-(two equal ones would make the full join legal) and pairwise clash (their join is
-the full join). That generalisation is **not proved here** — it needs joins over
-sublists and the erase-two-indices bookkeeping — and no numeric separation of
-`Width` from the chromatic number is exhibited either way. -/
+The downstream `ClashGraph.LeaveOneOutObstruction` packages the exact finite
+generalisation: an explicit list of legal leave-one-out joins, a `Pairwise`
+proof that any two listed leaves merge to the same illegal full join, and the
+illegality proof. `LeaveOneOutObstruction.clique` proves that list is a clique,
+and `LeaveOneOutObstruction.forces_domains` gives the exact list-length lower
+bound on global width. Its `tripleLeaveOneOut` constructor and
+`triple_clash_forces_triangle_via_leave_one_out` recover the theorem below at
+`k = 3`.
+
+The finiteness and explicitness are load-bearing: this does not synthesise the
+leave-one-out list from an arbitrary or infinite carrier, and it does not turn a
+global obstruction into a live one without the separate co-reachability data.
+No numeric separation of `Width` from the chromatic number is claimed either
+way. -/
 
 private theorem merge_self_left {S : Type w} [MergeState S] (x y : S) :
     x ⊔ (x ⊔ y) = x ⊔ y := by

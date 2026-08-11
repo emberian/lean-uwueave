@@ -179,10 +179,18 @@ replaced.
     root-reachable set is not merge-closed. The exact replacement is
     `HistorySafeFrom`, characterized by `historySafeFrom_iff`; the ceiling
     counter refutes it and the lock satisfies it.
-  * ⟨UNDONE⟩ **No delta/patch algebra.** D-0005's route (1) wants residual and
-    commutation laws over the operation semantics. This file works with states
-    and a merge, as `Ancestral` does; the negative it returns is about that
-    setting and does not close the residual question either way.
+  * ⟨UNDONE, narrowed to VersionDag-native patch integration⟩ **Residual and
+    patch algebra now exists beside this state-level history model.**
+    `Uwueave.CompositeDelta.PatchEdge.reachable` forgets a patch-labelled edge
+    soundly to ordinary reachability, and
+    `CompositeDelta.Algebra.residualDiamond` grows two sibling patch edges to an
+    admitted common merge using proved residual, commutation, execution, and
+    legality laws. Its `LegalUnderComposition` is exactly equivalent to full
+    `AncestralConfluent`, and the existing length-two counter is retained as a
+    named failure of that law. What remains is native integration with this
+    file's `VersionDag`/`Coherent` structures: nodes and parent edges do not yet
+    carry `PatchEdge` evidence, and no theorem transports a residual diamond
+    through base selection or repeated/criss-cross history construction.
 
 Literature: Kaki, Priya, Sivaramakrishnan, Jagannathan, "Mergeable Replicated
 Data Types", OOPSLA 2019 (the version-store/LCA model whose *repeated* merge is

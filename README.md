@@ -176,9 +176,10 @@ is a bigger, real schema that deliberately contains one.
   derived summaries, retained-world futures, typed protocol terms, and
   proof-carrying sessions. Standalone commands name fully indexed certificates
   and accept five-currency budgets only through one witnessed plan. The checked
-  meanings can project to canonical first-order artifacts, canonical framed
-  bytes, and a bounded data-only Rust representation; none of those transport
-  layers can manufacture a verdict, certificate, plan, or permit.
+  `preo_export` manifest projects those meanings to canonical first-order
+  artifacts, format-v2 framed bytes, and a validated budget-bearing data-only
+  Rust representation; none of those transport layers can manufacture a
+  verdict, certificate, plan, or permit.
 
 ## Some things we found that surprised us
 

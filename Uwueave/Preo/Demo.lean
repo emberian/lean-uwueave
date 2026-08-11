@@ -822,6 +822,8 @@ def unitStrategies : CoordEffect.Admissible Unit where
 preo SemanticSurface where
   field marker : Counter
 
+  invariant nonnegative : marker ≤ marker
+
   future Delivered on (Future.evidenceWorldModel Holes.Val) :=
     Future.Delivery Holes.Val
   future Working on (Future.evidenceWorldModel Holes.Val) :=
@@ -880,6 +882,28 @@ theorem meeting_floor_does_not_accept_profile_budget :
           Scheduling.peerOnlyLimits :=
   Scheduling.meeting_floor_does_not_entail_profile_acceptance
 
+/- An exportable budget is explicitly about the exact plan carried by its
+source elaboration. This second witness preserves all five realized coordinates
+and makes the plan-equality licence definitionally visible to the manifest. -/
+preo_budget GeneratedCoalescedProfileBudget for SemanticSurface.Coalesced :
+    SemanticSurface.Coalesced.plan.profile :=
+  SemanticSurface.Coalesced.exactProfileUpperBound
+
+theorem generatedCoalescedProfileBudget_is_exact_elaboration_bound :
+    GeneratedCoalescedProfileBudget =
+      SemanticSurface.Coalesced.exactProfileUpperBound := rfl
+
+/-- The historical coalesced plan uses one barrier, while conservative protocol
+elaboration retains one action per obligation. It is a valid bound for the same
+session, but cannot be attached to the generated plan under a false equality. -/
+theorem coalescedHandBudget_has_no_generated_plan_equality :
+    ¬ CoalescedProfileBudget.plan = SemanticSurface.Coalesced.plan := by
+  intro same
+  have profileSame := congrArg
+    (fun plan => plan.profile Scheduling.Currency.peerBarrier) same
+  change 1 = 2 at profileSame
+  omega
+
 /-! ### 4.2 Named certificates retain their complete dependent type -/
 
 preo_certificate QuiescedRenderCertificate :
@@ -912,7 +936,135 @@ theorem constantCertificate_restricts_extension_to_delivery :
     ConstantDeliveryCertificate =
     Future.extensionCertificateToDelivery ConstantExtensionCertificate := rfl
 
-/-! ### 4.3 Future declarations retain worlds and variance -/
+/-! ### 4.3 One explicit checked export manifest
+
+Every numeric identity below is manifest data. The source names select checked
+field, classification, future/certificate and elaboration constants; none is
+hashed, inferred from state, or read back out of `#preo_report`. Both the plain
+and profiled session names denote one `Protocol.Elaboration`; the composed
+`SemanticSurface.Combined` is deliberately not exportable by the V2 command. -/
+
+preo_export SemanticExport from SemanticSurface :
+    ProjectionV2.Examples.config :=
+  declaration := { id := 700, stateType := 701, schema := 1 }
+  | field marker := { id := 702, kind := 10, carrier := 701, key := none }
+  | invariant nonnegative := {
+    id := 703, carrier := 701, codec := Export.Examples.natCodec,
+    answered := rfl }
+  | future Delivered := {
+    certificate := QuiescedRenderCertificate, id := 704,
+    world := 705, relation := 706 }
+  | budget GeneratedCoalescedProfileBudget for Coalesced := {
+    id := 711, session := 707, plan := 708, samePlan := rfl }
+  | session Profiled := { id := 709, plan := 710 }
+
+/-- The exact hand builder chain. Its type index is the real generated state,
+and each semantic row is eliminated at the checked Export API immediately. -/
+noncomputable def semanticExportHandBundle :
+    Export.DeclarationBundle SemanticSurface.State :=
+  Export.DeclarationBundle.addElaboration
+    (Export.DeclarationBundle.addElaborationWithBudget
+      (Export.DeclarationBundle.addCertifiedFuture
+        (Export.DeclarationBundle.addClassification
+          (Export.DeclarationBundle.addField
+            (Carrier := SemanticSurface.marker.Carrier)
+            (Export.DeclarationBundle.ofDeclaration SemanticExport.Declaration)
+            ⟨702⟩ 10 701 none)
+          SemanticSurface.nonnegative.classification rfl
+          ⟨703⟩ 701 Export.Examples.natCodec)
+        SemanticSurface.Delivered QuiescedRenderCertificate
+        ⟨704⟩ 705 706)
+      SemanticSurface.Coalesced ⟨707⟩ ⟨708⟩ ⟨711⟩
+      GeneratedCoalescedProfileBudget rfl)
+    SemanticSurface.Profiled ⟨709⟩ ⟨710⟩
+
+/-- Whole-value acceptance: surface elaboration is exactly the direct checked
+builder chain, including row order and every explicit stable ID. -/
+theorem semanticExport_bundle_is_hand_builder :
+    SemanticExport.Bundle = semanticExportHandBundle := rfl
+
+theorem semanticExport_artifact_is_hand_builder :
+    SemanticExport.Artifact = semanticExportHandBundle.toArtifact := rfl
+
+/-- The paired projection selects the canonical structural encoding and that
+encoding decodes to the exact checked artifact emitted beside it. -/
+theorem semanticExport_canonical_roundtrip :
+    SemanticExport.Encoding.decode = SemanticExport.Artifact :=
+  SemanticExport.Projection.decode_encoding
+
+/-- The durable frame is canonical and returns the exact neutral encoding with
+no trailing bytes; decoding it does not reconstruct any proof object. -/
+theorem semanticExport_durable_roundtrip :
+    ArtifactDurable.decodeProjection SemanticExport.ArtifactDurableBytes =
+      some (SemanticExport.Encoding, []) :=
+  ArtifactDurable.decodeProjection_projectionBytes SemanticExport.Encoding
+
+/-- The generated stable IDs and row counts are data-visible exactly as
+written. There is one field/invariant/future and two session/plan pairs. -/
+theorem semanticExport_exact_ids_and_lengths :
+    SemanticExport.Encoding.declaration.id = 700
+      ∧ SemanticExport.Encoding.declaration.stateTypeId = 701
+      ∧ SemanticExport.Encoding.declaration.schemaVersion = 1
+      ∧ SemanticExport.Encoding.fields.map (fun row => row.id) = [702]
+      ∧ SemanticExport.Encoding.invariants.map (fun row => row.id) = [703]
+      ∧ SemanticExport.Encoding.futures.map (fun row => row.id) = [704]
+      ∧ SemanticExport.Encoding.sessions.map (fun row => row.id) = [707, 709]
+      ∧ SemanticExport.Encoding.plans.map (fun row => row.id) = [708, 710]
+      ∧ SemanticExport.Encoding.budgets.map (fun row => row.id) = [711]
+      ∧ SemanticExport.Encoding.fields.length = 1
+      ∧ SemanticExport.Encoding.invariants.length = 1
+      ∧ SemanticExport.Encoding.futures.length = 1
+      ∧ SemanticExport.Encoding.sessions.length = 2
+      ∧ SemanticExport.Encoding.plans.length = 2
+      ∧ SemanticExport.Encoding.budgets.length = 1 := by
+  decide
+
+/-- Representation identities and every cross-row reference remain exactly the
+written manifest values; no source-name hashing fills any of these columns. -/
+theorem semanticExport_exact_manifest_rows :
+    SemanticExport.Encoding.fields.map (fun row =>
+        (row.id, row.declarationId, row.kindId, row.carrierTypeId, row.keyTypeId)) =
+      [(702, 700, 10, 701, none)]
+      ∧ SemanticExport.Encoding.invariants.map (fun row =>
+        (row.id, row.declarationId, row.carrierTypeId)) = [(703, 700, 701)]
+      ∧ SemanticExport.Encoding.futures.map (fun row =>
+        (row.id, row.declarationId, row.worldTypeId, row.relationId)) =
+          [(704, 700, 705, 706)]
+      ∧ SemanticExport.Encoding.sessions.map (fun row =>
+        (row.id, row.declarationId)) = [(707, 700), (709, 700)]
+      ∧ SemanticExport.Encoding.plans.map (fun row =>
+        (row.id, row.sessionId)) = [(708, 707), (710, 709)]
+      ∧ SemanticExport.Encoding.budgets.map (fun row =>
+        (row.id, row.sessionId, row.planId)) = [(711, 707, 708)] := by
+  decide
+
+/-- Both exported plans retain the actual five-coordinate realized profile;
+the source neither inserts crossing counts nor invents a meeting scalar. -/
+theorem semanticExport_exact_profiles :
+    SemanticExport.Encoding.plans.map (fun row => row.profile) =
+      [[(.peerBarrier, 2), (.arbiterCut, 0), (.networkRound, 0),
+        (.userPrompt, 0), (.rollback, 0)],
+       [(.peerBarrier, 2), (.arbiterCut, 0), (.networkRound, 0),
+        (.userPrompt, 0), (.rollback, 0)]] := rfl
+
+/-- The budget row retains both sides of the checked claim: the written five
+limits and the realized five-coordinate profile of the exact exported plan. -/
+theorem semanticExport_exact_budget :
+    SemanticExport.Encoding.budgets.map
+        (fun row => (row.limits, row.realizedProfile)) =
+      [([(.peerBarrier, 2), (.arbiterCut, 0), (.networkRound, 0),
+          (.userPrompt, 0), (.rollback, 0)],
+        [(.peerBarrier, 2), (.arbiterCut, 0), (.networkRound, 0),
+          (.userPrompt, 0), (.rollback, 0)])] := rfl
+
+/-- Validation gates all generated outputs before the private value reaches the
+renderer. This equality is computational because the manifest is closed. -/
+theorem semanticExport_validated_and_rendered :
+    SemanticExport.Validation.isOk = true
+      ∧ SemanticExport.RenderResult.isOk = true := by
+  exact ⟨SemanticExport.validation_ok, by decide⟩
+
+/-! ### 4.4 Future declarations retain worlds and variance -/
 
 /-- Whole-value acceptance: the surface future is exactly the semantic
 delivery declaration, including its name, scope and world relation. -/
@@ -946,7 +1098,8 @@ example : ¬ Future.CheckedStability SemanticSurface.Working
 
 /-- The concrete delivery certificate cannot be promoted in the unsound
 direction: such a certificate would project the refuted extension stability. -/
-example : ¬ Future.CheckedCertificate SemanticSurface.Working
+theorem deliveryCertificate_cannot_export_as_working :
+    ¬ Future.CheckedCertificate SemanticSurface.Working
     WorldFuture.renderW (fun w => w) (fun w => WorldFuture.Quiesced w)
       Future.quiescedIndex := by
   intro certificate
@@ -966,7 +1119,7 @@ example :
             WorldFuture.observe C Future.quiescedIndex) :=
   Future.same_state_different_worlds_block_certificate_reuse
 
-/-! ### 4.4 Protocol/session elaboration is one semantic API call -/
+/-! ### 4.5 Protocol/session elaboration is one semantic API call -/
 
 example : SemanticSurface.Coalescing = Protocol.coalescingProtocol := rfl
 example : SemanticSurface.Ambient = Protocol.ambientProtocol := rfl

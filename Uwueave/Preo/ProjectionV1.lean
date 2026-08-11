@@ -112,6 +112,7 @@ inductive ValidationError where
   | crossingIndexOutOfRange
       (sessionId obligationIndex crossingIndex crossings : Nat)
   | nonCanonicalPlanProfile (planId : Nat) (found : List Currency)
+  | budgetsNotSupported (actual : Nat)
   deriving DecidableEq, Repr
 
 abbrev ValidationResult (alpha : Type) := Except ValidationError alpha
@@ -226,6 +227,10 @@ def validate (config : ValidationConfig) (projection : Projection) :
     throw (.wrongSchema schema projection.schema)
 
   let encoding := projection.encoding
+  if encoding.budgets.isEmpty then
+    pure ()
+  else
+    throw (.budgetsNotSupported encoding.budgets.length)
   let bounds := config.bounds
   checkBound .fields encoding.fields.length bounds.maxFields
   checkBound .invariants encoding.invariants.length bounds.maxInvariants
@@ -585,7 +590,8 @@ def emptyProjection : Projection :=
     invariants := []
     futures := []
     sessions := []
-    plans := [] }
+    plans := []
+    budgets := [] }
 
 /-- Canonical escaping has one exact spelling for delimiters, controls, and
 non-ASCII Unicode. -/
@@ -728,10 +734,12 @@ pub mod uwueave_preo_projection_v1 {
 "###
 
 def artifactExample : Projection :=
-  Projection.ofEncoding Artifact.Examples.bundle.canonicalEncoding
+  let encoding := Artifact.Examples.bundle.canonicalEncoding
+  Projection.ofEncoding { encoding with budgets := [] }
 
 def exportExample : Projection :=
-  Projection.ofEncoding Export.Examples.bundle.project.encoding
+  let encoding := Export.Examples.bundle.project.encoding
+  Projection.ofEncoding { encoding with budgets := [] }
 
 def rendererDemand : DemandArtifact where
   currency := .peerBarrier
@@ -756,7 +764,8 @@ def rendererFixture : Projection :=
     invariants := [⟨102, 100, 200, .free⟩, ⟨106, 100, 201, .clash [1, 0] [0, 1]⟩]
     futures := [⟨103, 100, 200, 300⟩]
     sessions := [⟨104, 100, 1, [⟨.crossing 0, rendererDemand⟩]⟩]
-    plans := [⟨105, 104, [rendererDemand], rendererProfile⟩] }
+    plans := [⟨105, 104, [rendererDemand], rendererProfile⟩]
+    budgets := [] }
 
 /-- Exact static-value fixture for the empty shape.  Even this degenerate case
 must pass validation before the renderer implementation can be called. -/
@@ -847,6 +856,15 @@ def duplicateField : Projection :=
 
 theorem duplicate_field_refused : validationError? (validate config duplicateField) =
     some (.duplicateStableId .field 101) := by decide
+
+def budgetBearingArtifactExample : Projection :=
+  Projection.ofEncoding Artifact.Examples.bundle.canonicalEncoding
+
+/-- V1's generated Rust contract predates budget rows.  New encodings must use
+the version that specifies their shape instead of silently dropping them. -/
+theorem nonempty_budgets_refused :
+    validationError? (validate config budgetBearingArtifactExample) =
+      some (.budgetsNotSupported 1) := by decide
 
 /-- The public raw-input convenience path preserves the refusal; it has no
 fallback constructor with which to invoke `renderRustSource`. -/

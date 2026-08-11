@@ -17,9 +17,11 @@ The builder accepts six kinds of source:
 * a `Preo.Future.FutureDecl` together with a checked certificate at an exact
   world index;
 * a `Protocol.Elaboration`, whose checked session and plan are projected
-  together; and
-* stable declaration, field, invariant, future, session, plan, type, kind and
-  relation IDs supplied by the caller.
+  together;
+* optionally, a five-currency `Scheduling.ProfileUpperBound` proved about that
+  exact elaborated plan; and
+* stable declaration, field, invariant, future, session, plan, budget, type,
+  kind and relation IDs supplied by the caller.
 
 No ID is derived from a Lean or source name.  No report string, Boolean verdict
 or host-authored verdict tag enters a checked constructor.  Certificates,
@@ -62,6 +64,7 @@ structure DeclarationBundle (State : Type u) where private mk ::
   futures : List Artifact.FutureArtifact
   sessions : List Artifact.SessionArtifact
   plans : List Artifact.PlanArtifact
+  budgets : List Artifact.BudgetArtifact
 
 namespace DeclarationBundle
 
@@ -69,7 +72,7 @@ namespace DeclarationBundle
 def ofDeclaration {State : Type u}
     (declaration : Artifact.CheckedDeclaration State) :
     DeclarationBundle State :=
-  ⟨declaration, [], [], [], [], []⟩
+  ⟨declaration, [], [], [], [], [], []⟩
 
 /-- Add a typed field.  Every stable identity and representation identity is
 an explicit input; `none` versus `some keyTypeId` is never inferred from a
@@ -81,7 +84,8 @@ def addField {State : Type u} {Carrier : Type u}
   let checked : Artifact.CheckedField Carrier :=
     Artifact.CheckedField.ofCarrier bundle.declaration id kindId carrierTypeId keyTypeId
   ⟨bundle.declaration, bundle.fields ++ [checked.toArtifact],
-    bundle.invariants, bundle.futures, bundle.sessions, bundle.plans⟩
+    bundle.invariants, bundle.futures, bundle.sessions, bundle.plans,
+    bundle.budgets⟩
 
 /-- Add a checked global verdict.  The artifact's verdict tag is obtained only
 by eliminating `verdict`; the caller supplies no tag.  The explicit codec is
@@ -95,7 +99,7 @@ def addVerdict {State S : Type u} [MergeState S]
     Artifact.CheckedInvariant.ofVerdict bundle.declaration id carrierTypeId verdict codec
   ⟨bundle.declaration, bundle.fields,
     bundle.invariants ++ [checked.toArtifact], bundle.futures,
-    bundle.sessions, bundle.plans⟩
+    bundle.sessions, bundle.plans, bundle.budgets⟩
 
 /-- Add an answered semantic classification. The answer equality is the
 licence: `Classification.checkedVerdict` eliminates the classification
@@ -129,7 +133,8 @@ def addCertifiedFuture {State : Type u}
   let checked : Artifact.CheckedFuture futureDecl.future :=
     Artifact.CheckedFuture.ofRelation bundle.declaration futureId worldTypeId relationId
   ⟨bundle.declaration, bundle.fields, bundle.invariants,
-    bundle.futures ++ [checked.toArtifact], bundle.sessions, bundle.plans⟩
+    bundle.futures ++ [checked.toArtifact], bundle.sessions, bundle.plans,
+    bundle.budgets⟩
 
 /-- Add the session and plan projected from one proof-carrying protocol
 elaboration.  They cannot drift: the plan is indexed by `result.session`, and
@@ -146,7 +151,30 @@ def addElaboration {State : Type u}
     Artifact.CheckedPlan.ofPlan planId
   ⟨bundle.declaration, bundle.fields, bundle.invariants, bundle.futures,
     bundle.sessions ++ [checkedSession.toArtifact],
-    bundle.plans ++ [checkedPlan.toArtifact]⟩
+    bundle.plans ++ [checkedPlan.toArtifact], bundle.budgets⟩
+
+/-- Add one elaborated session, its exact checked plan, and a witnessed
+five-currency budget for that same plan. `samePlan` is the non-drift licence:
+an unrelated bound for the same session cannot be attached under these IDs. -/
+def addElaborationWithBudget {State : Type u}
+    (bundle : DeclarationBundle State)
+    {Strategy : Type} {term : Protocol.Term Strategy} {strategy : Strategy}
+    (result : Protocol.Elaboration term strategy)
+    (sessionId : Artifact.SessionId) (planId : Artifact.PlanId)
+    (budgetId : Artifact.BudgetId)
+    {limits : Scheduling.Currency → Nat}
+    (bound : Scheduling.ProfileUpperBound result.session limits)
+    (samePlan : bound.plan = result.plan) : DeclarationBundle State :=
+  let checkedSession : Artifact.CheckedSession result.session :=
+    Artifact.CheckedSession.ofSession bundle.declaration sessionId
+  let checkedPlan : Artifact.CheckedPlan checkedSession result.plan :=
+    Artifact.CheckedPlan.ofPlan planId
+  let checkedBudget : Artifact.CheckedBudget checkedSession result.plan limits :=
+    Artifact.CheckedBudget.ofProfileUpperBound checkedPlan bound samePlan budgetId
+  ⟨bundle.declaration, bundle.fields, bundle.invariants, bundle.futures,
+    bundle.sessions ++ [checkedSession.toArtifact],
+    bundle.plans ++ [checkedPlan.toArtifact],
+    bundle.budgets ++ [checkedBudget.toArtifact]⟩
 
 /-! ## §2. The unique first-order projection -/
 
@@ -154,7 +182,7 @@ def addElaboration {State : Type u}
 def toArtifact {State : Type u} (bundle : DeclarationBundle State) :
     Artifact.Artifact :=
   ⟨bundle.declaration.toArtifact, bundle.fields, bundle.invariants,
-    bundle.futures, bundle.sessions, bundle.plans⟩
+    bundle.futures, bundle.sessions, bundle.plans, bundle.budgets⟩
 
 /-- The paired output of an export.  Its private constructor ensures the
 encoding shipped beside an artifact is the canonical one. -/
@@ -286,17 +314,21 @@ def protocolResult :
     Protocol.Elaboration Protocol.coalescingProtocol () :=
   Protocol.elaborate Protocol.coalescingProtocol ()
 
-/-- All five row classes are nonempty.  Stable IDs, type IDs, kind IDs,
+def protocolBudget :
+    Scheduling.ProfileUpperBound protocolResult.session protocolResult.plan.profile :=
+  protocolResult.plan.exactProfileUpperBound
+
+/-- All six row classes are nonempty.  Stable IDs, type IDs, kind IDs,
 relation IDs and the witness codec occur explicitly at their builder calls. -/
 def bundle : DeclarationBundle Nat :=
-  DeclarationBundle.addElaboration
+  DeclarationBundle.addElaborationWithBudget
     (DeclarationBundle.addCertifiedFuture
       (DeclarationBundle.addVerdict
         (DeclarationBundle.addField (Carrier := Nat)
           (DeclarationBundle.ofDeclaration declaration) ⟨402⟩ 10 401)
         ⟨403⟩ 401 nonnegativeVerdict natCodec)
       eraFuture eraCertificate ⟨404⟩ 405 406)
-    protocolResult ⟨407⟩ ⟨408⟩
+    protocolResult ⟨407⟩ ⟨408⟩ ⟨411⟩ protocolBudget rfl
 
 /-! ## §4. The corresponding hand composition -/
 
@@ -316,18 +348,24 @@ def checkedSession : Artifact.CheckedSession protocolResult.session :=
 def checkedPlan : Artifact.CheckedPlan checkedSession protocolResult.plan :=
   Artifact.CheckedPlan.ofPlan ⟨408⟩
 
+def checkedBudget : Artifact.CheckedBudget checkedSession protocolResult.plan
+    protocolResult.plan.profile :=
+  Artifact.CheckedBudget.ofProfileUpperBound checkedPlan protocolBudget rfl ⟨411⟩
+
 /-- The same output assembled by the primitive artifact combinators. -/
 def handArtifact : Artifact.Artifact :=
-  Artifact.Artifact.addPlan
-    (Artifact.Artifact.addSession
-      (Artifact.Artifact.addFuture
-        (Artifact.Artifact.addInvariant
-          (Artifact.Artifact.addField
-            (Artifact.Artifact.ofDeclaration declaration) checkedField)
-          checkedInvariant)
-        checkedFuture)
-      checkedSession)
-    checkedPlan
+  Artifact.Artifact.addBudget
+    (Artifact.Artifact.addPlan
+      (Artifact.Artifact.addSession
+        (Artifact.Artifact.addFuture
+          (Artifact.Artifact.addInvariant
+            (Artifact.Artifact.addField
+              (Artifact.Artifact.ofDeclaration declaration) checkedField)
+            checkedInvariant)
+          checkedFuture)
+        checkedSession)
+      checkedPlan)
+    checkedBudget
 
 /-- The whole builder projection is definitionally the corresponding hand
 composition; no report parser or reconciliation pass intervenes. -/
@@ -349,8 +387,9 @@ theorem every_export_surface_is_nonempty :
       ∧ bundle.toArtifact.invariants.length = 1
       ∧ bundle.toArtifact.futures.length = 1
       ∧ bundle.toArtifact.sessions.length = 1
-      ∧ bundle.toArtifact.plans.length = 1 :=
-  ⟨rfl, rfl, rfl, rfl, rfl⟩
+      ∧ bundle.toArtifact.plans.length = 1
+      ∧ bundle.toArtifact.budgets.length = 1 :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- The protocol rows retain the real elaborated session and its plan rather
 than equating crossings with meetings. -/
@@ -358,6 +397,19 @@ theorem protocol_export_is_nontrivial :
     bundle.toArtifact.sessions.map Artifact.SessionArtifact.crossings = [2]
       ∧ bundle.toArtifact.plans.map (fun plan => plan.actions.length) = [2] :=
   ⟨rfl, rfl⟩
+
+/-- The budget row is tied to the exact session and plan rows emitted beside
+it, and preserves both promised and realized five-currency coordinates. -/
+theorem budget_export_is_exact :
+    bundle.toArtifact.budgets.map
+        (fun budget => (budget.session.value, budget.plan.value,
+          budget.limits, budget.realizedProfile)) =
+      [(407, 408,
+        [(.peerBarrier, 2), (.arbiterCut, 0), (.networkRound, 0),
+         (.userPrompt, 0), (.rollback, 0)],
+        [(.peerBarrier, 2), (.arbiterCut, 0), (.networkRound, 0),
+         (.userPrompt, 0), (.rollback, 0)])] := by
+  rfl
 
 end Examples
 
@@ -386,5 +438,19 @@ def arbitraryFreeWire : Artifact.InvariantArtifactEncoding :=
 
 theorem arbitrary_free_tag_decodes_only_as_data :
     arbitraryFreeWire.decode.verdict = Artifact.VerdictEvidence.free := rfl
+
+/-- A host can author budget-shaped wire data, but structural decoding yields
+only `BudgetArtifact`: it does not construct `CheckedBudget` or the
+`ProfileUpperBound` required by the checked builder. -/
+def arbitraryBudgetWire : Artifact.BudgetArtifactEncoding :=
+  ⟨999, 998, 997,
+    [(.peerBarrier, 0), (.arbiterCut, 0), (.networkRound, 0),
+     (.userPrompt, 0), (.rollback, 0)],
+    [(.peerBarrier, 42), (.arbiterCut, 0), (.networkRound, 0),
+     (.userPrompt, 0), (.rollback, 0)]⟩
+
+theorem arbitrary_budget_decodes_only_as_data :
+    arbitraryBudgetWire.decode.realizedProfile.head? =
+      some (Artifact.Currency.peerBarrier, 42) := rfl
 
 end Uwueave.Preo.Export

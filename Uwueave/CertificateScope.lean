@@ -137,13 +137,21 @@ and the answer is split, both halves proved:
     repair: a known roster turns every delivery into an `Evidence.SealedFuture`,
     and `Evidence.render_congr` transports stability of `(values, Closed)` to
     the rendered view.
-  * ⟨UNDONE⟩ **One evaluator at a time.** A replica answering a family of
-    queries needs the common refinement of their residual quotients. Not stated,
-    not proved — `MinimalSummary`'s ⟨UNDONE⟩, inherited.
-  * ⟨UNDONE⟩ **The witnesses are witnesses.** §5's separations are the three
-    worlds `WorldFuture.lean` built. No theorem here characterises which
-    world-pairs a given key glues, and there is no decision procedure for
-    sufficiency.
+  * ⟨UNDONE outside finite context-indexed query families⟩ **One residual
+    evaluator at a time.** `ContextCompiler` now constructs the common
+    refinement for a finite homogeneous family of merge-context-indexed
+    queries. That is not this file's residual construction: a residual forgets
+    which future produced an answer and keeps only the image. Common refinements
+    of arbitrary future relations, residual images, heterogeneous queries, or
+    infinite evaluator families remain unstated.
+  * ⟨UNDONE beyond a supplied finite contextual compiler⟩ **The witnesses
+    are witnesses.** §5's separations are the three worlds `WorldFuture.lean`
+    built. `ContextCompiler.sameClass` decides equality of its own finite,
+    context-indexed signature and `sufficient_refines_signature` proves that
+    key's partition property. Neither theorem decides whether an arbitrary key
+    preserves this file's residual images. No theorem here characterises every
+    world-pair a given residual key glues, and general key sufficiency remains
+    undecidable by this development.
   * ⟨UNDONE⟩ **The evidence/world boundary remains `Type 0`.** Residuals,
     sufficient keys, their quotient, and the `MinimalSummary` bridges are now
     universe-polymorphic. The theorems phrased through

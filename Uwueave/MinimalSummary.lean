@@ -89,24 +89,40 @@ context is observable, so a set-valued carrier does not degrade to a counter.
 
 ## Honest boundary
 
-  * **This says nothing about how to REPRESENT the quotient.** ⟨UNDONE⟩ The
-    coarsest *partition* is not the smallest *message*. `CtxQuot f` is a
-    quotient type: no bound on the bits a class takes, no claim that class
-    membership is decidable or computable, no encoding, no cost model. The one
-    place a representation *is* exhibited is the membership pole, where the
-    class really is a `Bool` (`mem_quot_bit`). Everything else is a partition.
-  * **`decodeSummary` is `Classical.choice`, not an algorithm.** ⟨UNDONE⟩ Same
-    caveat as `JoinHom.canonicalCombine`: it witnesses that a decoder exists.
-    The quotient's own decoder `ctxAnswer` is choice-free (it is
-    `Quotient.lift f`), which is the better statement, and it is the one
-    `ctxQuot_fold_answers` uses.
-  * **`∀ z` ranges over the whole carrier, including unreachable states.**
-    ⟨UNDONE⟩ If the shipping API cannot construct some `z`, the *true* coarsest
-    summary for the reachable sub-lattice may be coarser than `CtxQuot f`.
-    Nothing here restricts contexts to reachable states, and nothing here
-    proves that would not matter.
-  * **One query at a time.** ⟨UNDONE⟩ A replica answering a family of queries
-    needs the common refinement of their quotients. Not stated, not proved.
+  * **The global quotient still has no message representation.**
+    ⟨UNDONE beyond an explicit finite universe⟩ The coarsest *partition* is not the
+    smallest *message*. `CtxQuot f` is a quotient type: no bound on the bits a
+    class takes, no encoding, and no cost model. `ContextCompiler.Spec.classKeys`
+    does make class membership computable for caller-supplied finite state,
+    context, and homogeneous-query lists; that concrete list representation is
+    not a bit-optimal encoding or a representation of an unrestricted quotient.
+    The membership pole remains the one global case where the class itself is
+    exhibited as a `Bool` (`mem_quot_bit`).
+  * **`decodeSummary` is `Classical.choice`, not a global algorithm.**
+    ⟨UNDONE beyond an explicit finite universe⟩ Same caveat as
+    `JoinHom.canonicalCombine`: it witnesses that a decoder exists. The
+    quotient's own decoder `ctxAnswer` is choice-free (`Quotient.lift f`), and
+    `ContextCompiler.Spec.representative?` now gives a second, executable,
+    choice-free decoder by selecting the first state in a caller-supplied finite
+    enumeration; `representative_sound`, `representative_complete`, and
+    `encode_decode_exact` state its exact scope.
+  * **`∀ z` still ranges over the whole carrier, including unreachable
+    states.** ⟨UNDONE beyond a supplied finite context universe⟩
+    `ContextCompiler` can instead compile exactly the contexts a caller lists;
+    `signature_eq_iff` proves exactness for that relative relation, and
+    `restricted_contexts_can_coarsen` exhibits `{0}` and `{1}` collapsing when
+    the separating context is unavailable. What remains is deriving a complete
+    reachable-context enumeration from an actual shipping API, rather than
+    trusting the caller's list.
+  * **Finite homogeneous query families have their common refinement.**
+    ⟨TERMINAL at the supplied finite universe⟩ `ContextCompiler.signature`
+    is the contextual answer matrix for a finite `List (S → R)`;
+    `signature_eq_iff` is its exact multi-query relation,
+    `signature_eq_iff_all_ctxEquiv_of_complete` identifies it with the common
+    refinement of the global quotients when the context enumeration is
+    complete, and `sufficient_refines_signature` proves the partition-order
+    universal property. Heterogeneous or infinite query families are outside
+    that compiler's claim.
   * **No syntax, so no classifier.** ⟨UNDONE⟩ `f` is an arbitrary Lean
     function; the quotient is computed per query by hand. Exactly the unbuilt
     part named in `Holes.lean` and `JoinHom.lean`, unchanged.

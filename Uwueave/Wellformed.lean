@@ -105,21 +105,28 @@ ids, root scope 9, budget 10), and that is upstream's stated boundary.
 Grove is a **calculus**: a term language, a bidirectional typing judgement,
 an operational semantics, an edit log that is a CmRDT, holes and cross-tree
 references as the *representation* of a relocation conflict. This module is
-none of that. It is a **state-based structural predicate** over a record of
-CvRDT fields, and its theorem is about the join of two states.
+a **state-based structural predicate** over a record of CvRDT fields, and its
+theorem is about the join of two states. `WovenEdit.lean` now supplies the
+smaller local operational layer over this exact predicate; the remaining
+differences below are not erased by that layer.
 
-  * ⟨UNDONE⟩ **No bidirectional typing — no typing at all.** There is no term
-    language here, so "well-typed" has no referent and `WellFormed` is not a
-    typing judgement; it is referential integrity plus per-structure
-    well-formedness. Building a typed AST with a judgement over it is real
-    work that nobody here has done, not a fact about the world.
-  * ⟨UNDONE⟩ **No edit-log CmRDT, so this is not Grove's quantifier.** Grove
-    (as reported) quantifies over *sequences of concurrent edits*; we
-    quantify over *pairs (and folds) of states*. Ours needs no reachability
-    premise, which is stronger in one direction — but it says **nothing about
-    whether an edit preserves well-formedness**, because operations are not
-    modeled in this file. `Exec.lean` / `Traces.lean` are where that bridge
-    would be built; it is not built.
+  * ⟨UNDONE, narrowed to bidirectional term typing⟩ **Typed edits are not a
+    typed term language.** `WovenEdit.Edit` is a state-indexed command type:
+    its constructors carry freshness, target-existence, and clock/horizon
+    evidence. That pays operation admissibility, but there is still no term
+    AST, synthesis/checking judgement, or hole-aware bidirectional typing;
+    `WellFormed` remains referential integrity plus per-structure
+    well-formedness, not a term-typing judgement.
+  * ⟨UNDONE, narrowed to the CmRDT delivery quantifier⟩ **There is no edit-log
+    CmRDT, so this is still not Grove's quantifier.** `WovenEdit.apply_preserves`
+    proves every typed local create/reference/update/tombstone step preserves
+    `WellFormed`; `WovenEdit.Trace.preserves` and
+    `WovenEdit.runCommands_preserves` extend that result to finite dependent
+    traces and checked command lists. What remains is specifically the
+    distributed operation layer: stable operation identities, concurrent edit
+    histories, delivery/redelivery semantics, and a CmRDT theorem quantifying
+    over their interleavings. This file still quantifies over pairs and folds
+    of states, not delivered edit logs.
   * ⟨UNDONE⟩ **No cross-tree references and no holes.** Our conflict
     representation is *retention* — both pins present, both writes in view —
     not a hole term carrying provenance. Retention is a different
@@ -145,11 +152,16 @@ CvRDT fields, and its theorem is about the join of two states.
     stands: a well-formed merge can interleave two users' runs. Intention
     preservation is not formalized anywhere in this repo, and `WellFormed`
     does not smuggle it in.
-  * ⟨UNDONE⟩ **The horizon is a premise on the write path.** `WellFormed`
-    requires every write's clock to sit under the document's horizon. Nothing
-    in this file checks that the shipping write path maintains that — it is
-    an operation-level obligation of the same family as `Authority.lean`'s
-    signature premises, and it is unmodeled here.
+  * ⟨DONE downstream in `Uwueave.WovenEdit`⟩ **The local write path enforces
+    the horizon.** `Edit.create`, `Edit.update`, and `Edit.tombstone` carry
+    `Clock.le clock (horizon d)` in their constructors; `check` rejects raw
+    commands that cannot supply it, with the named witnesses
+    `outsideHorizonUpdate_rejected` and
+    `outsideHorizonTombstone_rejected`. `apply_preserves`, `Trace.preserves`,
+    and `runCommands_preserves` show the invariant survives one step and every
+    accepted finite list. This does not implement horizon advancement,
+    distributed delivery, physical deletion/garbage collection, text edits,
+    pin edits, or grant edits; those remain outside the paid local subset.
 
 Both directions of falsifiability are named rather than assumed:
 `docX_wellFormed` inhabits the predicate and `wellFormed_refutable` exhibits a
@@ -344,8 +356,10 @@ def mergeAll : WovenDoc → List WovenDoc → WovenDoc
 sequence of concurrent edits".** Merge in any finite list of well-formed
 replicas, in any order, and the result is a well-formed document. (Order is
 immaterial by the merge laws; this statement does not need that, since it
-holds for *every* list.) What it is still not: a statement about *edits*.
-Operations are not modeled in this file — see the header's ⟨UNDONE⟩ note. -/
+holds for *every* list.) `WovenEdit.lean` separately proves local typed-edit
+and checked-list preservation. What neither theorem is yet: the CmRDT claim
+over concurrent delivery interleavings named in the header's narrowed
+⟨UNDONE⟩ item. -/
 theorem mergeAll_wellformed (n root : Nat) :
     ∀ (ds : List WovenDoc) (base : WovenDoc), WellFormed n root base →
       (∀ d ∈ ds, WellFormed n root d) → WellFormed n root (mergeAll base ds) := by

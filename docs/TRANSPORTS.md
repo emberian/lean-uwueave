@@ -19,7 +19,7 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 98 numbered transport rows.**
+**Ledger total: 108 numbered transport rows.**
 
 ---
 
@@ -1163,7 +1163,8 @@ inside the version/domain-separated `Durable` frame · *transport*
 arbitrary following journal bytes; `decodeProjection_projectionBytes` is the
 exact one-frame form · *needs* the compositional `WireCodec` roundtrip, exact
 consumption and re-encoding in `canonicalCodecOfWire`, and the exact
-`artifactFormat` · *without exact acceptance* the raw prefix parser retains
+`artifactFormat` — explicitly **format v2**, whose product adds witnessed
+five-currency budgets and therefore refuses superseded v1 bytes · *without exact acceptance* the raw prefix parser retains
 surplus bytes (`parseArtifact_encode_append`) while
 `Examples.overlong_artifact_refused` rejects the same surplus as one artifact;
 *without the exact tag* `wrong_version_refused` and `wrong_domain_refused`
@@ -1178,12 +1179,15 @@ refinement, and decoded bytes remain first-order data rather than proof.
 `Preo.ProjectionV1.validate` · *needs* the exact V1 schema, explicit limits for
 every variable-length collection, unique stable IDs, matching declaration and
 plan/session references, in-range crossing origins, and the exact ordered
-five-currency profile shape · *without each check* the named executable
+five-currency plan-profile shape — **plus an empty budget list**. V1 is the
+exact legacy schema, not a compatibility alias for budget-bearing artifacts;
+nonempty budgets return `budgetsNotSupported actual` · *without each check* the named executable
 refusals include `duplicate_field_refused`,
 `wrong_field_declaration_refused`, `dangling_plan_session_refused`,
 `out_of_range_crossing_refused`, `noncanonical_profile_refused`, the resource
-bound refusals, and `wrong_schema_refused`. Positive nonempty projections are
-`artifact_example_validates` and `export_example_validates`. Validation
+bound refusals, `nonempty_budgets_refused`, and `wrong_schema_refused`.
+Positive acceptances `artifact_example_validates` and
+`export_example_validates` are deliberately budget-empty. Validation
 transports structural well-shapedness only: its public encoding still contains
 no `Spec.Verdict`, authorization, admission token, or permit.
 
@@ -1203,6 +1207,164 @@ and `Examples.empty_projection_rust_fixture` pins one complete source file ·
 This is a data renderer only: there is no theorem that the emitted Rust
 compiles, reconstructs semantic proofs, or issues authorization or a permit,
 and caller-local validation limits are intentionally not serialized.
+
+**44q. Budget-bearing neutral projection → privately validated V2 projection** ⚠
+*source* `Preo.ProjectionV2.Projection` plus a caller-supplied
+`ValidationConfig` · *target* the private
+`Preo.ProjectionV2.ValidatedProjectionV2` · *transport*
+`Preo.ProjectionV2.validate` · *needs* all V1 declaration/reference/resource
+checks on the budget-cleared base, then exact action histograms, coverage of
+every session obligation by the referenced plan, unique budget IDs, existing
+session and plan references, plan/session agreement, canonical five-currency
+limits and realized profiles, equality with the plan profile, and pointwise
+realized ≤ promised limits. `Examples.full_export_validates` accepts the
+nonempty proof-originated export · *without those hypotheses* the concrete
+refusals include `action_profile_lie_refused`,
+`uncovered_obligation_refused`, `duplicate_budget_refused`, the dangling and
+mismatched budget-reference fixtures, `noncanonical_budget_limits_refused`,
+`mismatched_budget_profile_refused`, and `exceeded_budget_limit_refused`.
+V2 validation still transports only bounded first-order consistency; it does
+not reconstruct the checked plan, budget proof, verdict, permit, or authority.
+
+**44r. Explicit `preo_export` manifest → one checked durable, validated host value** ⚠
+*source* a `preo_export` declaration whose rows name already elaborated fields,
+answered classifications, exact-world certificates, protocol elaborations,
+and exact-plan `preo_budget` witnesses · *target* the generated
+`Bundle`, `Artifact`, canonical `Encoding`, format-v2 `ArtifactDurableBytes`,
+V2 `Validated`, and data-only `Rendered` constants · *transport* the
+`elabPreoExport` builder fold invokes `DeclarationBundle.addField`,
+`addClassification`, `addCertifiedFuture`, `addElaboration`, or
+`addElaborationWithBudget` at each row, then requires the generated
+`validation_ok` theorem before extracting the private validated value · *needs*
+literal stable/type/kind/relation IDs, an explicit witness codec, the
+classification answer equality, the certificate's full dependent type, an
+actual generated `Protocol.Elaboration`, the budget's exact plan equality, and
+an explicit V2 host config. The whole positive value is
+`Preo.Demo.SemanticExport`: `semanticExport_bundle_is_hand_builder`,
+`semanticExport_exact_manifest_rows`, `semanticExport_durable_roundtrip`, and
+`semanticExport_validated_and_rendered` pin construction, bytes, validation,
+and rendering · *without a row licence* unresolved classifications are blocked
+by `Preo.Export.unresolved_classification_has_no_export_licence`, wrong
+certificate/plan terms fail elaboration, composed profile plans are explicitly
+refused because no checked single-session builder exists, and duplicate IDs,
+bad references, dishonest profiles, or exceeded limits make row 44q's whole
+`validation_ok` obligation false. No report text or source-name hash enters the
+manifest value.
+
+**44s. Conservative typed environment delta → correct differential result** ⚠
+*source* a proof-carrying `Preo.Incremental.EnvDelta`, a cache tied to its base
+environment, and a typed `Preo.Expr.Term` · *target* a `Result` equal to fresh
+evaluation at the new environment · *transport*
+`Preo.Incremental.incremental_correct`; `off_dependency_zero` additionally
+transports a false structural touch test to exact cached reuse with zero counted
+root evaluations · *needs* `EnvDelta.unchanged`, which proves every field
+reported unchanged really is equal, and the cache's own correctness proof ·
+*without an explicit extension law* `custom_without_law_recomputes` forces
+every opaque `CustomNode` down the one-full-evaluation path regardless of its
+declared reads. `withLaw_correct` permits a cheaper custom path only when the
+author returns a result carrying equality to `Term.eval`; no subterm work,
+allocation, or reduction-cost bound is transported.
+
+**44t. Observer-selected Boolean → sound remote choreography branch** ⚠
+*source* a finite `ChoreoChoice.Program` built from read-free ordinary
+`Choreo` blocks · *target* equality between global denotation and every
+endpoint's accepted local run · *transport* `ChoreoChoice.projection_sound` ·
+*needs* the observer's selected label in the generated `Delivery` and each
+block's stored `Choreo.ReadFree` proof; remotes consume the communicated label
+rather than reevaluating the predicate on stale state · *without label
+delivery* `twoParty_remote_missing_label` returns `none`, and
+`twoParty_observer_rejects_wrong_label` rejects a label inconsistent with the
+observer's value. `fixture_observations_disagree` proves the repair is not
+silent local-read agreement. No authenticity, fairness, recursion, or eventual
+delivery follows.
+
+**44u. Explicit finite simple graph → exact singleton clash graph and width floor** ⚠
+*source* `ClashGraph.FiniteSimpleGraph V` with a complete duplicate-free vertex
+list, symmetry, and irreflexivity · *target* the clash relation of its
+independent-set invariant on singleton grow-only states · *transport*
+`ClashGraph.FiniteSimpleGraph.singleton_clashes_iff` is an iff, so it preserves
+edges and non-edges exactly · *needs* the supplied finite coverage and simple
+graph laws. The instantiated `c5_cycle_edges` and `c5_has_no_chords` form an
+induced five-cycle, while `c5_singletons_have_no_triangle` rules out a hidden
+three-clique; nevertheless `c5_forces_three_domains` proves every global seam
+needs at least three domains. Separately,
+`LeaveOneOutObstruction.forces_domains` needs a finite list of legal leaves,
+pairwise joins to one illegal full state, and transports only that supplied
+list's length — it does not discover an obstruction or enumerate an arbitrary
+carrier.
+
+**44v. Admitted finite operation patches → ancestral-confluence legality** ⚠
+*source* a guarded operation system, ancestral merge, and arbitrary explicit
+finite patches · *target* preservation of the invariant by every ancestral
+merge of admitted branch results · *transport*
+`CompositeDelta.legalUnderComposition_iff_ancestralConfluent` · *needs*
+`LegalUnderComposition`, the run-level law quantifying over both admitted
+patches. A stronger `CompositeDelta.Algebra` additionally supplies residual
+patches with diamond, merge-identification, and legality proofs, from which
+`Algebra.ancestralConfluent` follows · *without the composite law* the existing
+length-two counter satisfies the older stepwise premise but
+`counter_not_legalUnderComposition` and
+`counter_has_no_composite_algebra` reject the transport. The positive
+`cheapLockAlgebra_ancestralConfluent` uses a real one-instruction recovery;
+no patch is reconstructed from state endpoints.
+
+**44w. Finite query/context family → executable contextual quotient** ⚠
+*source* a `ContextCompiler.Spec` containing explicit state, merge-context, and
+homogeneous-query lists · *target* an executable signature class with a
+choice-free representative · *transport* `ContextCompiler.signature_eq_iff`
+makes signature equality exactly the specified multi-query contextual relation,
+`encode_decode_exact` returns a representative equivalent under that relation,
+and `sufficient_refines_signature` proves every sufficient caller key refines
+the compiler key · *needs* only the supplied finite lists for the restricted
+result, but a coverage proof is required by
+`signature_eq_iff_all_ctxEquiv_of_complete` before identifying it with
+carrier-wide contextual equivalence · *without complete contexts*
+`restricted_contexts_can_coarsen` merges two states the global quotient
+distinguishes. No globally canonical or bit-optimal encoding follows.
+
+**44x. Finite six-status reach → least honest status effect** ⚠
+*source* a finite reachable-state list and a status evaluator · *target* the
+least downward-closed `StatusEffects.Effect` supporting every observed shape ·
+*transport* `StatusEffects.infer_is_least`; `fromLegacy_matches` separately
+embeds the historical three-flag capability exactly on every status · *needs*
+the explicit finite reach, because inference claims nothing outside it. For
+semantic soundness, `statusOf_totalSound6` inhabits
+`TotalSoundEvaluator6`, whose clauses cover all six cells · *without the total
+contract* `closedForkAsOpen_old_sound` accepts a concrete evaluator that calls
+a settled fork open, while `closedForkAsOpen_not_total` rejects it. And without
+an explicit resolution constructor, `explicit_resolution_is_load_bearing`
+shows preserve-fork and select-one descriptors differ; no hidden Boolean
+resolution policy is transported.
+
+**44y. Continuous enabledness plus weak fairness → eventual action occurrence** ⚠
+*source* an infinite action-labelled trace satisfying `Temporal.WeakFair` and
+an action continuously enabled from some index · *target* eventual occurrence
+of that action · *transport*
+`Temporal.continuously_enabled_eventually_occurs`, with
+`StrongFair.weakFair` deriving the scheduler premise from strong fairness ·
+*needs* fairness as an explicit trace predicate; adjacency through a valid step
+relation supplies safety, not progress · *without fairness*
+`WorldAdapter.starvedPendingTrace_adjacent` proves the constant pending trace
+uses only valid reflexive deliveries, while
+`starvedPendingTrace_not_weakFair` refutes weak fairness for the genuine pending
+delivery. The concrete positive adapter `fair_bob_delivery_exits_pending`
+reaches a non-pending render after Bob's admitted delivery; no wall-clock bound
+or automatic fairness of every execution follows.
+
+**44z. Checked local edit or command script → well-formed woven document** ⚠
+*source* a `WovenEdit.Edit n root d`, or an untrusted command list accepted by
+the state-indexed checker from a `WellFormed n root d` source · *target*
+`WellFormed n root` of the resulting document · *transport*
+`WovenEdit.apply_preserves` for one typed edit and
+`runCommands_preserves` for a finite raw script · *needs* exactly the
+constructor/checker premises: fresh nodes, existing bookmark/update targets,
+horizon-bounded clocks, and separation between ordinary writes and the reserved
+tombstone value · *without them* `outsideHorizonUpdate_rejected`,
+`outsideHorizonTombstone_rejected`, `danglingReference_rejected`, and
+`disguisedTombstoneUpdate_rejected` return `none`. `demoCommands_wellFormed`
+is the nonempty accepted four-operation path. The transport covers neither
+physical deletion/GC nor text, pin, grant, horizon-advance, or cross-tree-hole
+edits.
 
 ---
 
@@ -1249,8 +1411,11 @@ retaining the single-premise refutation. Preoscript now has the projection,
 seam, mergeability, route-invariance, nested document-seam, keyed-cross,
 protocol, future-variance, first-order artifact, checked-bundle projection, and
 recursive-choreography transports, plus classification export, durable bytes,
-bounded host validation, and deterministic data-only Rust rendering, in rows
-44a–44p. What remains is different work:
+exact V1/V2 host validation, deterministic data-only Rust rendering, and the
+whole checked export manifest in rows 44a–44r. Rows 44s–44z add conservative
+incremental evaluation, communicated choice, finite clash-graph realization,
+composite residual patches, finite contextual compilation, six-status effects,
+temporal fairness, and checked woven edits. What remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed
 `Repair P Q`, multi-field derives and three-or-more-field invariants are

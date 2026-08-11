@@ -29,7 +29,7 @@ byte string authoritative.
 
 ## Boundaries
 
-  * ⟨TERMINAL for format v1⟩ Unary naturals favor a tiny proof surface over
+  * ⟨TERMINAL for format v2⟩ Unary naturals favor a tiny proof surface over
     density. A compact varint is a new format version, not a silent replacement.
   * ⟨TERMINAL⟩ The decoder returns first-order data only. No theorem here
     turns decoded artifacts back into proof-carrying sources.
@@ -419,14 +419,25 @@ def planWire : WireCodec PlanArtifactEncoding :=
     (fun value => ⟨value.1, value.2.1, value.2.2.1, value.2.2.2⟩)
     (by intro value; cases value; rfl)
 
+def budgetWire : WireCodec BudgetArtifactEncoding :=
+  (natWire.prod (natWire.prod (natWire.prod
+    (profileEntryWire.list.prod profileEntryWire.list)))).xmap
+    (fun value => (value.id, (value.sessionId,
+      (value.planId, (value.limits, value.realizedProfile)))))
+    (fun value => ⟨value.1, value.2.1, value.2.2.1,
+      value.2.2.2.1, value.2.2.2.2⟩)
+    (by intro value; cases value; rfl)
+
 def artifactWire : WireCodec ArtifactEncoding :=
   (declarationWire.prod (fieldWire.list.prod
     (invariantWire.list.prod (futureWire.list.prod
-      (sessionWire.list.prod planWire.list))))).xmap
+      (sessionWire.list.prod (planWire.list.prod budgetWire.list)))))).xmap
     (fun value => (value.declaration, (value.fields,
-      (value.invariants, (value.futures, (value.sessions, value.plans))))))
+      (value.invariants, (value.futures,
+        (value.sessions, (value.plans, value.budgets)))))))
     (fun value => ⟨value.1, value.2.1, value.2.2.1,
-      value.2.2.2.1, value.2.2.2.2.1, value.2.2.2.2.2⟩)
+      value.2.2.2.1, value.2.2.2.2.1, value.2.2.2.2.2.1,
+      value.2.2.2.2.2.2⟩)
     (by intro value; cases value; rfl)
 
 /-- The requested canonical durable codec for the neutral artifact projection. -/
@@ -447,11 +458,13 @@ theorem decodeArtifact_encode (value : ArtifactEncoding) :
 
 /-! ## §5. Versioned, domain-separated projection bytes -/
 
-/-- Format v1 in the preoscript-artifact domain. These bytes are semantic
+/-- Format v2 in the preoscript-artifact domain. Version 2 adds the witnessed
+five-currency budget list, so old v1 frames are refused rather than silently
+decoded under a changed product shape. These bytes are semantic
 separators, not host MIME metadata. -/
-def artifactFormat : Durable.FormatTag := ⟨1, 161⟩
+def artifactFormat : Durable.FormatTag := ⟨2, 161⟩
 
-def wrongVersion : Durable.FormatTag := ⟨2, artifactFormat.domain⟩
+def wrongVersion : Durable.FormatTag := ⟨1, artifactFormat.domain⟩
 def wrongDomain : Durable.FormatTag := ⟨artifactFormat.version, 162⟩
 
 /-- Canonical artifact payload bytes inside one durable envelope. -/
@@ -474,7 +487,7 @@ theorem decodeProjection_projectionBytes (value : ArtifactEncoding) :
     decodeProjection (projectionBytes value) = some (value, []) := by
   simpa using decodeProjection_projectionBytes_append value []
 
-/-- A v1 artifact cannot be decoded as v2. -/
+/-- A v2 artifact cannot be decoded as the superseded v1 format. -/
 theorem wrong_version_refused (value : ArtifactEncoding) (trailing : Bytes) :
     Durable.decodeValue artifactCodec wrongVersion
       (projectionBytes value ++ trailing) = none := by
@@ -506,8 +519,20 @@ theorem fullArtifact_is_nonempty :
     ∧ fullArtifact.invariants.length = 2
     ∧ fullArtifact.futures.length = 1
     ∧ fullArtifact.sessions.length = 1
-    ∧ fullArtifact.plans.length = 1 := by
-  exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+    ∧ fullArtifact.plans.length = 1
+    ∧ fullArtifact.budgets.length = 1 := by
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- The migrated product codec retains both exact five-currency vectors and
+following bytes; the budget IDs are not reconstructed from list position. -/
+def fullBudget : BudgetArtifactEncoding :=
+  Uwueave.Preo.Artifact.Examples.budget.toArtifact.canonicalEncoding
+
+set_option maxRecDepth 2000 in
+theorem budget_wire_roundtrip_with_trailing :
+    budgetWire.parse (budgetWire.encode fullBudget ++ [99]) =
+      some (fullBudget, [99]) :=
+  budgetWire.parse_encode_append fullBudget [99]
 
 /-- The full nonempty artifact projection round-trips without consuming bytes
 belonging to the next journal entry. -/
