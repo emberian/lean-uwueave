@@ -5,6 +5,63 @@
 `SegVerdict` tells them *where*; `Cost.lean` tells them *how often*. None of
 them tells them **what their options are**. This file does.
 
+## ⚑ STATUS — this file is the menu's DISPLAY VOCABULARY, not its authority
+
+⚑ **Superseded as a semantic authority by `Uwueave/RepairMenu.lean` (wave 16),
+on codex's verdict**: *"Retire `Exits` as an independent semantic authority. Keep
+its menu UX as a generated projection of typed repair schemas."* The reason is
+the shape of the defect and not the state of the proofs — this file defines an
+applicability proposition and a `Nat` price **independently of**
+`Repair.lean`'s typed transformations, so *"a future theorem will improve
+`Repair` while an old `Exits` row continues printing a scalar zero with a
+docstring warning"*. Precisely what changed:
+
+  * **`Exit.price` is retired as a price.** It is free data:
+    `MenuTotality.seam_applies_ignores_the_floor` is `Iff.rfl`, so no
+    floor-dependent statement follows from a row's availability — and the drift
+    is already here. §6.1's seam row prints `0` where the clash graph forces `1`
+    under **every** valid seam (`RepairMenu.ceiling_seam_row_disagrees`, on
+    `MenuTotality.ceiling_certificate_floor_is_forced`). A generated row cannot
+    print the low number, because its price is read off a carried clique
+    (`RepairMenu.seamRepair_price_is_forced`).
+  * **`Exit.Applies` is retired as a source of truth, not as a theorem.** Two of
+    the four worked tags are *re-derived* from the generated row's own typed
+    data — `RepairMenu.ceiling_seam_tag_applies` is that row's discharge
+    (`Applies` for a seam **is** `SegmentedIConfluent`), and
+    `RepairMenu.ceiling_arbitration_tag_applies` is its `admitsAll` witness read
+    at a merge. The other two are **not**: `balance_escrow_applies`'s
+    homomorphism and positive-share clauses, and `arbKeep_rolls_back`'s
+    discard-only clause, are content **no field of `Repair` carries**. Those two
+    witnesses stay this file's and are cited from there.
+  * **Every price and delta a menu shows is now a projection.**
+    `RepairMenu.menu_price_is_projection` and
+    `RepairMenu.menu_delta_is_projection`: each displayed price is the `price`
+    field of a `Repair` (or of an obligation that agrees with every repair it
+    discharges to), and each displayed five-axis delta is its `relation`. There
+    is no constructor through which an independent `Nat` enters a generated menu,
+    and the display tag moves neither
+    (`RepairMenu.tag_and_label_cannot_move_the_price`).
+  * **What this file keeps is everything it proved.** The eight names, §4's price
+    theorems, §6's clash witnesses — and, load-bearing, its **refutations**:
+    `pin_escrow_starves` and `duel_escrow_starves` are what let the generated
+    ceiling and duel menus print an escrow row *as impossible*, where the menus
+    below have no escrow row at all. An absent row and a refuted row are
+    different constructors there.
+
+⚠ **Inherited display debt, named and not repaired here.** Five `String`
+literals still price in "meetings", in five `def` bodies: `forkEntry`,
+`fullEntry`, `ceilingMenu`'s arbitration row, `balanceMenu`'s escrow row, and
+`duelMenu`'s arbitration row (wave 14's records lane found them at `:764`,
+`:775`, `:961`, `:1042`, `:1208`; this status block moved every one of those
+numbers, which is its own small argument for citing the `def` and not the line).
+They sit in `def` bodies, which this
+status pass may not touch, and nothing constrains them:
+`RepairMenu.consequence_is_free_data` proves two rows with the same exit and the
+same availability proof may carry contradictory sentences. The generated menu
+does not reproduce them — a generated row's delta is a five-axis
+`PromiseRelation`, each axis guarded by an obligation in `Repair`, and it has no
+sentence field to disagree with.
+
 ## The gap, as an external reviewer named it
 
 codex, reviewing this tree against LoRe (Haas, Mogk, Yanakieva, Bieniusa,
@@ -41,6 +98,12 @@ one buys coordination-freedom with something else:
 Each price is a **theorem**, named at the constructor and again at the exit's
 price. A number with no theorem would be a lie here: `Exit.price` is a `Nat`
 and the theorems in §4 are what make the `Nat` mean something.
+
+⚠ **Read that sentence with the STATUS block above.** §4 proves the *currencies*
+are real; it does not constrain the `Nat` a row writes down. A row's
+availability implies nothing whatsoever about its number
+(`MenuTotality.seam_applies_ignores_the_floor`), and §6.1's `0` is below the
+forced floor. The number is authored in `RepairMenu.lean` now, from a clique.
 
 ⚠ **The unit is a seam crossing, not a meeting.** This file used to price
 exits "in meetings", and that was wrong in print: `Cost.crossings` counts

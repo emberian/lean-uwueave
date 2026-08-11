@@ -342,6 +342,30 @@ else.
 gives `k−1` where `coordination_forced` gives `0`
 (`the_clique_floor_is_invisible_to_the_block_calculus`).
 
+**37b. A hand `Exits` row → a generated `RepairMenu` row** ⚠
+*transport* `RepairMenu.transport` / `RepairMenu.transport_preserves_the_hand_number`
+— the transport **is** the projection `Price.seamCrossings`: a hand row becomes a
+generated row when a typed repair backs it and the repair's crossing count is the
+hand row's `Nat`, and then the generated row shows all seven currencies while
+still recovering the one the hand menu printed.
+*needs* **a typed repair whose crossing count equals the hand number.**
+*without it* — two survivors, both exhibited:
+`RepairMenu.the_ceiling_seam_hand_price_has_no_forced_backing` (the ceiling's
+hand seam row prints `0`; the clique the same clash carries forces `1` under
+**every** valid seam, so no `SeamFloor`-priced row can display the hand number)
+and `RepairMenu.no_free_pin_arbitration` (the ceiling's hand arbitration row
+prints `0`; quantified over **every** repair onto the arbitrated ceiling promise,
+by anyone, the price is not `Price.free` and its `assumptions` are not empty —
+`premisesCharged` has no flag to clear).
+✅ *and the direction that now cannot fail*: `RepairMenu.menu_price_is_projection`
+and `menu_delta_is_projection` — every price and delta a generated menu shows is
+the `price`/`relation` field of a `Repair`, or of an obligation that agrees with
+every repair it discharges to. There is no constructor through which an
+independent `Nat` enters a menu, and the `Exit` display tag moves neither
+(`tag_and_label_cannot_move_the_price`). `Exit.price` and
+`MenuEntry.consequence` are retired as authorities and kept as vocabulary;
+`consequence_is_free_data` is why the sentence field had to go.
+
 ---
 
 ## IX. Structure and documents
