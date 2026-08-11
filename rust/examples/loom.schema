@@ -1,0 +1,30 @@
+# A shared loom document, field by field — the schema behind `Weave<T>`.
+#
+#   cargo run --bin uwueave-check -- examples/loom.schema
+#
+# Each `invariant` line is a question: "can a merge break this?". The answer
+# comes back with the machine-checked theorem that settles it, and — when the
+# answer is no — with a concrete pair of legal states whose merge is illegal.
+
+field nodes: causal-dag        # hash-linked; parents fixed at creation
+field moves: movelog           # reparenting, as a grow-only op log
+field prose: gset              # text elements, content-addressed
+field bookmarks: gset
+field pin: lww                 # the community pin
+field storage: escrow          # a storage budget, divided up front
+
+invariant nodes: acyclic       # the surprise: free, no cycle check, any scale
+invariant nodes: member        # a node you have seen never vanishes
+invariant moves: acyclic       # the op-log pattern, with its price named
+invariant prose: member        # nobody's writing is dropped by a merge
+invariant bookmarks: cross-field   # comes back UNCLASSIFIED — on purpose, see below
+invariant pin: unique          # "at most one pinned node"
+invariant storage: per-replica-quota   # spend freely inside your own slice
+invariant storage: balance     # ...and the global version, which is not free
+
+# The `bookmarks: cross-field` row above is the point of the last verdict
+# class. The Lean development DOES settle this shape — `Weave<T>` cites
+# `Spec.pointsAtExisting_iconfluent` for exactly it — but the catalog has no
+# (gset, cross-field) entry, so the tool answers UNCLASSIFIED rather than
+# reaching for the nearest plausible row. A lookup table that guesses is worse
+# than one that admits its gaps; delete this line if you want a clean report.
