@@ -48,6 +48,7 @@ import Uwueave.WorldFuture
 import Uwueave.MinimalSummary
 import Uwueave.Repair
 import Uwueave.MergeModel
+import Uwueave.ResultStatus
 import Uwueave.Choreo
 import Uwueave.Tactics
 import Uwueave.Audit

@@ -103,6 +103,7 @@ import Uwueave.WorldFuture
 import Uwueave.MinimalSummary
 import Uwueave.Repair
 import Uwueave.MergeModel
+import Uwueave.ResultStatus
 import Uwueave.Tactics
 
 open Lean Elab Command in
