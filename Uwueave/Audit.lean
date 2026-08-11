@@ -59,6 +59,7 @@ logical TCB, execution TCB, environment/model premises — each row classified a
 an irreducible premise or a transmutable obligation with a named next step.
 -/
 import Lean
+import Uwueave.Choreo
 import Uwueave.Weave
 import Uwueave.ORSet
 import Uwueave.Causality
@@ -132,5 +133,32 @@ elab "#audit_floor" : command => do
   if targets.length < 300 then
     throwError "audit vacuity tripwire: only {targets.length} constants in the Uwueave namespace — the walk is not seeing the tree"
   logInfo m!"#audit_floor: {targets.length} constants audited, all within the floor"
+
+open Lean Elab Command in
+/-- Fail the build if any module the ROOT (`Uwueave.lean`) imports is absent
+from this file's environment — i.e. if the gate's walk does not cover the
+library. `#audit_floor` can only see constants from modules it has imported, so
+a module in the root and not here is silently unaudited. The root cannot be
+imported (it imports this file), so coverage is *checked against the file on
+disk* rather than inherited. Found by `docs/COHERENCE.md`: `Choreo` sat in the
+root and outside the gate for a full wave, beneath four "total by construction"
+claims, and a hand-maintained import list reproduces that gap once per wave. -/
+elab "#gate_covers_root" : command => do
+  let env ← getEnv
+  let root ← IO.FS.readFile "Uwueave.lean"
+  let wanted := root.splitOn "\n" |>.filterMap fun l =>
+    if l.startsWith "import Uwueave" && l != "import Uwueave.Audit" then
+      some (l.drop "import ".length).toString
+    else none
+  let loaded := env.header.moduleNames.toList.map toString
+  let missing := wanted.filter fun m => !(loaded.contains m)
+  unless missing.isEmpty do
+    throwError "gate coverage hole: the root imports {missing} which this file does not \
+      reach, so #audit_floor cannot see their constants. Add the import(s) here."
+  if wanted.length < 20 then
+    throwError "gate-coverage tripwire: parsed only {wanted.length} root imports — the parse is broken"
+  logInfo m!"#gate_covers_root: {wanted.length} root modules, all reached by the gate"
+
+#gate_covers_root
 
 #audit_floor
