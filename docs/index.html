@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>uwueave — machine-checked CRDT verdicts for weaves and looms</title>
-<meta name="description" content="A small Lean 4 development that classifies weave/loom invariants by invariant confluence — proving which replicate with zero coordination and refuting the rest with concrete two-replica counterexamples — plus the Rust that follows the theorems. Companion to universal-weave.">
+<meta name="description" content="A Lean 4 development that classifies replicated-structure invariants by invariant confluence — proving which replicate with zero coordination, refuting the rest with concrete two-replica counterexamples, and pricing the escape routes — plus a Rust crate whose replay kernel is compiled from the Lean itself. Companion to universal-weave.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='10' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='22' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='24' r='5' fill='none' stroke='%231d7a46' stroke-width='2.5'/%3E%3Cpath d='M12 13 L15 19 M20 13 L17 19' stroke='%2344509e' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -22,6 +22,8 @@
     --clash-bg: #f8e8e5;
     --pattern: #8a5f10;
     --pattern-bg: #f6efdb;
+    --seam: #0f6b86;
+    --seam-bg: #e1f0f5;
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
   @media (prefers-color-scheme: dark) {
@@ -39,6 +41,8 @@
       --clash-bg: #3a1e1a;
       --pattern: #e3b75f;
       --pattern-bg: #322710;
+      --seam: #7cc4da;
+      --seam-bg: #102c35;
     }
   }
 
@@ -71,9 +75,27 @@
   h2 { font-size: 1.45rem; line-height: 1.3; margin: 0 0 1rem; letter-spacing: -0.01em; }
   h3 { font-size: 1.05rem; margin: 0 0 .35rem; }
   .kicker { font-size: .8rem; font-weight: 650; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 .4rem; }
-  .tagline { font-size: 1.18rem; line-height: 1.55; max-width: 62ch; }
+  .tagline { font-size: 1.18rem; line-height: 1.55; max-width: 66ch; }
   .tagline .q { font-style: italic; }
   .hero-note { color: var(--muted); font-size: .95rem; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(126px, 100%), 1fr));
+    gap: .7rem;
+    margin: 1.8rem 0 .4rem;
+    max-width: 100%;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: .7em;
+    padding: .75rem .85rem .85rem;
+  }
+  .stat .n { font-size: 1.9rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: .85rem; font-weight: 650; margin-top: .15rem; }
+  .stat .s { font-size: .78rem; color: var(--muted); line-height: 1.45; margin-top: .3rem; }
+  .stats-foot { font-size: .82rem; color: var(--muted); max-width: 78ch; }
 
   ol.three { padding-left: 1.4rem; }
   ol.three > li { margin: .8rem 0; }
@@ -113,6 +135,7 @@
   .badge.free    { color: var(--free);    background: var(--free-bg); }
   .badge.clash   { color: var(--clash);   background: var(--clash-bg); }
   .badge.pattern { color: var(--pattern); background: var(--pattern-bg); }
+  .badge.seam    { color: var(--seam);    background: var(--seam-bg); }
 
   .legend { display: flex; flex-wrap: wrap; gap: .9rem 1.6rem; margin: 1.2rem 0; font-size: .92rem; }
   .legend div { max-width: 30ch; }
@@ -150,6 +173,17 @@
   figure.panel svg { width: 100%; height: auto; display: block; color: var(--fg); }
   figure.panel figcaption { font-size: .88rem; color: var(--muted); margin-top: .7rem; line-height: 1.5; }
 
+  figure.flow {
+    margin: 1.4rem 0 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: .8em;
+    padding: 1rem 1.1rem 1.1rem;
+  }
+  figure.flow .scroller { overflow-x: auto; }
+  figure.flow svg { display: block; min-width: 680px; width: 100%; height: auto; color: var(--fg); }
+  figure.flow figcaption { font-size: .88rem; color: var(--muted); margin-top: .7rem; line-height: 1.5; max-width: 80ch; }
+
   .price {
     border-left: 3px solid var(--pattern);
     background: var(--pattern-bg);
@@ -160,8 +194,23 @@
   }
   .price p { margin: .3rem 0; }
 
+  .opens {
+    border-left: 3px solid var(--clash);
+    background: var(--clash-bg);
+    border-radius: 0 .6em .6em 0;
+    padding: .8rem 1.1rem;
+    margin: 1.4rem 0;
+    max-width: 72ch;
+  }
+  .opens p { margin: .3rem 0; }
+  .opens ul { margin: .4rem 0 .2rem; padding-left: 1.2rem; }
+  .opens li { margin: .35rem 0; }
+
   ul.claims { padding-left: 1.3rem; }
   ul.claims > li { margin: .7rem 0; max-width: 72ch; }
+
+  ul.thms { padding-left: 1.3rem; }
+  ul.thms > li { margin: .55rem 0; max-width: 72ch; }
 
   footer {
     border-top: 1px solid var(--border);
@@ -188,7 +237,9 @@
       <a href="#dichotomy">the dichotomy</a>
       <a href="#verdicts">verdicts</a>
       <a href="#pattern">the pattern</a>
+      <a href="#kernel">the kernel</a>
       <a href="#dsl">the DSL</a>
+      <a href="#check">uwueave-check</a>
       <a href="#claims">claims</a>
       <a href="https://github.com/emberian/lean-uwueave">GitHub</a>
     </nav>
@@ -199,17 +250,30 @@
 
   <section class="prose" id="top">
     <h1>Machine-checked answers to a question loom builders keep asking</h1>
-    <p class="tagline"><span class="q">&ldquo;Isn&rsquo;t the hard part of a DAG/tree CRDT just enforcing
-    the requirements of a DAG/tree?&rdquo;</span> &mdash; yes, and a small Lean&nbsp;4 development can
-    say exactly where that hardness lives, where it vanishes, and what the workarounds
-    provably cost.</p>
-    <p>uwueave is a companion to
-    <a href="https://github.com/transkatgirl/universal-weave">universal-weave</a>: it
-    classifies weave/loom invariants by whether they can be replicated with
-    <strong>zero coordination</strong>, refutes the ones that can&rsquo;t with concrete
-    two-replica counterexamples, and ships a Rust crate implementing the fragment the
-    theorems bless. <span class="hero-note">No mathlib &mdash; <code>lake build</code> finishes in
-    seconds on a laptop.</span></p>
+    <p class="tagline">uwueave classifies the invariants of replicated structures &mdash; sets,
+    counters, registers, sequences, maps, permission systems, automata, and the weave/loom
+    documents of <a href="https://github.com/transkatgirl/universal-weave">universal-weave</a> &mdash;
+    by whether they can survive merging with <strong>zero coordination</strong>: every safe one
+    gets a proof, every impossible one a concrete two-replica counterexample, and every
+    workaround a proved price. The companion Rust crate implements the blessed fragment, and
+    its trickiest decision &mdash; the move-replay kernel &mdash; is <em>compiled from the Lean
+    itself</em>, not re-implemented.</p>
+
+    <div class="stats">
+      <div class="stat"><div class="n">19</div><div class="l">Lean modules</div>
+        <div class="s">one judgement, <code>Confluence</code> to <code>Exec</code></div></div>
+      <div class="stat"><div class="n">113</div><div class="l">keystones audit-pinned</div>
+        <div class="s">every axiom footprint a build gate</div></div>
+      <div class="stat"><div class="n">32</div><div class="l">pinned axiom-free</div>
+        <div class="s">pure &lambda;-calculus; counted by grep, not prose</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
+        <div class="s">Lean core only; <code>lake build</code> in ~30&nbsp;s cold</div></div>
+      <div class="stat"><div class="n">1</div><div class="l">replay kernel</div>
+        <div class="s">authored in Lean, compiled into the Rust crate</div></div>
+    </div>
+    <p class="stats-foot">The counts are checkable, not decorative:
+    <code>grep -c "#guard_msgs" Uwueave/Audit.lean</code> and
+    <code>grep -c "does not depend" Uwueave/Audit.lean</code>.</p>
 
     <h2 style="margin-top:2.2rem">The three-sentence version</h2>
     <ol class="three">
@@ -398,8 +462,10 @@ theorem causal_dag_free (rank : Nat → Nat) :
       <div><span class="badge clash">escalates</span> Refuted with a concrete clashing
       pair. No library can save it; choose escalation, arbitration, or compensation.</div>
       <div><span class="badge pattern">pattern</span> Not free as direct state mutation,
-      but a proved rephrasing (op-log, escrow, segmentation) is &mdash; at a proved, named
+      but a proved rephrasing (op-log, escrow, derived view) is &mdash; at a proved, named
       price.</div>
+      <div><span class="badge seam">seam</span> Not free globally, free within the fibers
+      of a projection: coordinate only when the seam moves.</div>
     </div>
 
     <div class="cards">
@@ -480,6 +546,28 @@ theorem causal_dag_free (rank : Nat → Nat) :
       </article>
 
       <article class="card">
+        <h3>OR-Map <span class="sub">documents are maps; maps are the hard part</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>ormap_get_survives</code> &mdash;
+          add-wins at map level, correctly scoped and with the value included: a key alive
+          through a tag the other side has not tombstoned stays present <em>and readable</em>.
+          Key presence <em>is</em> the OR-Set (<code>present_iff_orset</code> is
+          <code>Iff.rfl</code>), so <code>ormap_present_not_iconfluent</code> is inherited by
+          projection, not re-proved.</li>
+          <li><span class="badge clash">escalates</span> <code>ormap_doomed_update</code>
+          &mdash; the map-specific anomaly, reachable even under causal delivery: a nested
+          write concurrent with its key&rsquo;s removal <em>survives the merge</em> but is masked
+          by the view &mdash; doomed, not dropped.</li>
+          <li><span class="badge clash">the fork</span> <code>ormap_policy_divergence</code>
+          &mdash; the centerpiece: on one merged state, the remove-wins view shows ⟨1,10⟩ and
+          refuses ⟨2,99⟩ while the resurrect view shows ⟨2,99⟩ and refuses ⟨1,10⟩. The merge
+          is policy-neutral; the choice lives in the view, and each policy is the other&rsquo;s
+          anomaly. <code>ormap_policies_agree_without_removes</code> confines the fork to
+          removal-touched keys.</li>
+        </ul>
+      </article>
+
+      <article class="card">
         <h3>MV-register <span class="sub">keep the fork, show the fork</span></h3>
         <ul class="vlist">
           <li><span class="badge pattern">pattern</span> The replicated state is a
@@ -490,6 +578,22 @@ theorem causal_dag_free (rank : Nat → Nat) :
           (<code>resolution_is_a_write</code>) &mdash; no special merge case to get wrong. For a
           loom this is the product, not a consolation prize: a weave <em>wants</em> forks
           visible.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Undo / redo <span class="sub">multi-user, on the MV-register</span></h3>
+        <ul class="vlist">
+          <li><span class="badge pattern">pattern</span> The Stewen&ndash;Kleppmann
+          (PaPoC&nbsp;2024) insight in miniature: <strong>an undo is an ordinary write</strong>
+          at a fresh clock, so no new operation ever reaches the merge. The view restores
+          exactly (<code>undo_restores</code>, <code>redo_restores</code> &mdash; stated as view
+          characterizations, so &ldquo;only&rdquo; is proved), and history is never rewritten
+          (<code>undo_preserves_history</code>).</li>
+          <li><span class="badge free">free</span> <code>undo_conflicts_visibly</code> /
+          <code>undo_does_not_silently_lose</code> &mdash; the multiplayer punchline: an undo
+          racing a concurrent edit is just two concurrent writes, so <em>both</em> surface
+          as an MV conflict. Nobody&rsquo;s edit dies silently.</li>
         </ul>
       </article>
 
@@ -508,6 +612,23 @@ theorem causal_dag_free (rank : Nat → Nat) :
       </article>
 
       <article class="card">
+        <h3>Delta shipping <span class="sub">the join cannot tell how the news arrived</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> The delta-CRDT receiver is one fold of
+          ⊔ (<code>joinAll</code>), and the merge laws make delivery histories
+          indistinguishable: order (<code>joinAll_perm</code>), duplication
+          (<code>joinAll_dup</code>, <code>joinAll_redeliver</code>), batching
+          (<code>joinAll_batch</code>, <code>joinAll_append_merge</code>). The composite,
+          <code>same_deltas_same_state</code>: same delta-set, any order, any duplication,
+          any batching &mdash; same replica. Twelve of the file&rsquo;s sixteen theorems are
+          pinned axiom-free.</li>
+          <li><span class="badge free">free</span> <code>addDelta_least</code> &mdash; the
+          G-Set add-delta is the <em>least</em> lattice element that delivers its element:
+          the minimal patch and the full state meet the same join.</li>
+        </ul>
+      </article>
+
+      <article class="card">
         <h3>Moves as an op-log <span class="sub">the Kleppmann move-op shape</span></h3>
         <ul class="vlist">
           <li><span class="badge pattern">pattern</span> <code>derived_view_sec</code>
@@ -517,20 +638,86 @@ theorem causal_dag_free (rank : Nat → Nat) :
           enforcement obligation: <code>miniInterp_acyclic</code>).</li>
           <li><span class="badge clash">the price</span> <code>view_not_stable</code>
           &mdash; an older remote op can retroactively un-apply a move you watched happen. A
-          theorem, not a bug report. Details below.</li>
+          theorem, not a bug report. Details below &mdash; and the kernel section takes this
+          pattern all the way to compiled code.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Anchored sequences <span class="sub">RGA-style text, anomaly included</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>wf_iconfluent</code> &mdash; anchored
+          insertion needs no coordination, and the visible text is a derived view
+          (<code>sequence_view_sec</code>): every present element appears
+          (<code>linearize_mem</code>), its anchor somewhere before it
+          (<code>linearize_anchor_precedes</code>). Exactly-once
+          (<code>linearize_count_one</code>) needs an id-uniqueness premise &mdash; and
+          <code>wf_unique_anchor_not_iconfluent</code> proves that premise is <em>not</em>
+          free; content-addressing discharges it cryptographically.</li>
+          <li><span class="badge clash">the anomaly</span> <code>interleaving_anomaly</code>
+          &mdash; two contiguous two-element runs merge to <code>[4, 3, 2, 1]</code>, strictly
+          alternated; <code>run_order_by_id</code> shows merged order is id arbitration, not
+          intention. No-interleaving is explicitly <em>not</em> claimed &mdash; that is what
+          real sequence CRDTs (Loro, Fugue) are for.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Replicated automata <span class="sub">state machines under sync</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>run_same_inputs</code> &mdash;
+          semilattice-action runs (the CALM / LVars class) converge as one-line instances
+          of the delta laws. And with no lattice at all, pairwise commutation already
+          suffices: <code>exec_perm</code> (pinned axiom-free) is the commuting-batch
+          replay theorem &mdash; the seed of the Mazurkiewicz/Zielonka connection, cited, not
+          claimed.</li>
+          <li><span class="badge clash">escalates</span> <code>determinism_not_iconfluent</code>
+          &mdash; the machine itself as replicated data: enabledness grows, determinism dies.
+          DFA determinism is a uniqueness ceiling on a grow-only transition table; the
+          priced exits are LWW-arbitrating the slot or accepting the NFA as the visible
+          conflict surface.</li>
+          <li><span class="badge seam">seam</span> <code>token_firings_segmented</code>
+          &mdash; escrowed token firing reads the segmented budget as a Petri net: firing =
+          local spend, free within an allocation
+          (<code>concurrent_firings_merge_legal</code>); moving tokens between pools is
+          the coordination seam (<code>token_reallocation_not_iconfluent</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Authority <span class="sub">local-first permissions, fail-closed</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>wf_iconfluent</code> &mdash;
+          delegation is coordination-free: attenuated grants can be issued offline, in a
+          partition, on a plane, and every merge is again a well-formed grant DAG. Authority
+          provably only narrows (<code>chain_scope_descends</code>,
+          <code>scope_le_root</code>, packaged as <code>authority_only_narrows</code>):
+          nobody manufactures scope, under any merge schedule.</li>
+          <li><span class="badge free">free</span> <code>authority_view_antitone</code> &mdash;
+          revocation is fail-closed: growing the revocation set never increases anyone&rsquo;s
+          derived authority; late revocations only <em>shrink</em> it
+          (<code>revocation_is_forever</code>). This is the security dual of
+          <code>view_not_stable</code> &mdash; the same lattice instability, pointed in the
+          safe direction.</li>
+          <li><span class="badge clash">escalates</span> <code>sole_admin_not_iconfluent</code>
+          and <code>duelling_revocations_not_iconfluent</code> &mdash; &ldquo;one admin&rdquo; is mutual
+          exclusion in authority clothes, and concurrent revocations annihilate both
+          duellists (<code>duelling_admins_annihilate</code>). Keeping a survivor costs
+          exactly the arbitration ERA introduces &mdash; cited, priced, not hidden.</li>
         </ul>
       </article>
 
       <article class="card">
         <h3>Segmented confluence <span class="sub">coordination, only at the seams</span></h3>
         <ul class="vlist">
-          <li><span class="badge pattern">pattern</span> One invariant, both verdicts:
+          <li><span class="badge seam">seam</span> One invariant, both verdicts:
           a budgeted quota state fails I-confluence outright
           (<code>budget_not_iconfluent</code> &mdash; two legal allocations merge over budget)
           yet is segmented-confluent over the allocation (<code>budget_segmented</code>).
           Spends never wait; re-allocation is the named coordination point. Plain
           I-confluence is exactly the one-segment case
-          (<code>iconfluent_iff_trivially_segmented</code>).</li>
+          (<code>iconfluent_iff_trivially_segmented</code>), and the DSL carries this
+          verdict first-class &mdash; <code>SegVerdict</code>, below.</li>
         </ul>
       </article>
 
@@ -565,8 +752,7 @@ theorem causal_dag_free (rank : Nat → Nat) :
     invariant. Convergence is inherited from the log; the invariant holds at every replica
     by construction of the interpreter. <code>derived_view_sec</code> proves all of this
     once, generically, for any log-shaped CRDT, any deterministic interpreter, any
-    enforced invariant &mdash; and it is one of the two theorems in the library that depend on
-    <em>zero</em> axioms.</p>
+    enforced invariant &mdash; and it is pinned to depend on <em>zero</em> axioms.</p>
 
     <div class="price">
       <p><strong>The honest price, also a theorem.</strong> The derived view is <em>not
@@ -588,15 +774,146 @@ theorem causal_dag_free (rank : Nat → Nat) :
     </div>
   </section>
 
+  <section id="kernel">
+    <p class="kicker">The implementation, without a twin</p>
+    <h2 class="prose">The Lean-compiled kernel</h2>
+    <div class="prose">
+      <p>The op-log pattern&rsquo;s delicate part is the replay: the total order, the cycle
+      rule, the skip. In most &ldquo;verified design&rdquo; projects that logic gets re-implemented
+      in the production language, and the proofs and the code start drifting the day the
+      re-implementation lands. Here it does not, because <strong>there is no second copy of
+      the rules</strong>: the replay decision procedure is authored in
+      <code>Uwueave/Exec.lean</code>, exported with <code>@[export uwueave_replay_kernel]</code>,
+      compiled to C by lake alongside every other module, and linked into the Rust crate
+      by <code>build.rs</code>. The Rust <code>movelog</code> module marshals bytes; it
+      contains no replay implementation to drift.</p>
+    </div>
+
+    <figure class="flow">
+      <div class="scroller">
+        <svg viewBox="0 0 880 190" role="img" aria-label="Pipeline: Uwueave/Exec.lean is compiled by lake to C files under .lake/build/ir, which build.rs compiles together with shim.c and links, with the Lean runtime, into the uwueave Rust crate.">
+          <defs>
+            <marker id="fl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <!-- stage labels above arrows -->
+          <text x="230" y="34" font-size="10.5" text-anchor="middle" fill="var(--muted)">lake build</text>
+          <text x="450" y="34" font-size="10.5" text-anchor="middle" fill="var(--muted)">cc, via build.rs</text>
+          <text x="686" y="34" font-size="10.5" text-anchor="middle" fill="var(--muted)">link</text>
+          <!-- box 1: the Lean -->
+          <rect x="8" y="44" width="200" height="100" rx="10" fill="var(--bg)" stroke="var(--free)"/>
+          <text x="20" y="68" font-size="12.5" font-weight="650" fill="currentColor">Uwueave/Exec.lean</text>
+          <text x="20" y="88" font-size="10" font-family="var(--mono)" fill="currentColor">@[export</text>
+          <text x="20" y="102" font-size="10" font-family="var(--mono)" fill="currentColor">  uwueave_replay_kernel]</text>
+          <text x="20" y="126" font-size="10.5" fill="var(--muted)">the semantics, authored in Lean</text>
+          <!-- arrow 1 -->
+          <line x1="212" y1="94" x2="246" y2="94" stroke="currentColor" stroke-width="1.6" marker-end="url(#fl-arrow)"/>
+          <!-- box 2: emitted C -->
+          <rect x="252" y="44" width="176" height="100" rx="10" fill="var(--bg)" stroke="var(--border)"/>
+          <text x="264" y="68" font-size="12.5" font-weight="650" fill="currentColor">emitted C</text>
+          <text x="264" y="88" font-size="10" font-family="var(--mono)" fill="currentColor">.lake/build/ir/</text>
+          <text x="264" y="102" font-size="10" font-family="var(--mono)" fill="currentColor">  Uwueave/*.c</text>
+          <text x="264" y="126" font-size="10.5" fill="var(--muted)">every module, re-emitted</text>
+          <text x="264" y="139" font-size="10.5" fill="var(--muted)">whenever the Lean changes</text>
+          <!-- arrow 2 -->
+          <line x1="432" y1="94" x2="466" y2="94" stroke="currentColor" stroke-width="1.6" marker-end="url(#fl-arrow)"/>
+          <!-- box 3: shim -->
+          <rect x="472" y="44" width="192" height="100" rx="10" fill="var(--bg)" stroke="var(--border)"/>
+          <text x="484" y="68" font-size="12.5" font-weight="650" fill="currentColor">shim.c — 49 lines</text>
+          <text x="484" y="88" font-size="10" font-family="var(--mono)" fill="currentColor">init · replay · free</text>
+          <text x="484" y="112" font-size="10.5" fill="var(--muted)">the entire C surface:</text>
+          <text x="484" y="125" font-size="10.5" fill="var(--muted)">three plain functions,</text>
+          <text x="484" y="138" font-size="10.5" fill="var(--muted)">nothing else crosses</text>
+          <!-- arrow 3 -->
+          <line x1="668" y1="94" x2="702" y2="94" stroke="currentColor" stroke-width="1.6" marker-end="url(#fl-arrow)"/>
+          <!-- box 4: crate -->
+          <rect x="708" y="44" width="164" height="100" rx="10" fill="var(--bg)" stroke="var(--accent)"/>
+          <text x="720" y="68" font-size="12.5" font-weight="650" fill="currentColor">uwueave crate</text>
+          <text x="720" y="90" font-size="10.5" fill="var(--muted)">movelog marshals bytes;</text>
+          <text x="720" y="103" font-size="10.5" fill="var(--muted)">no replay code in Rust</text>
+          <text x="720" y="126" font-size="10" font-family="var(--mono)" fill="currentColor">+ libleanshared</text>
+        </svg>
+      </div>
+      <figcaption><code>build.rs</code> runs <code>lake build</code>, compiles the emitted C
+      plus the shim with <code>cc</code>, and links the Lean runtime. A change to the Lean
+      sources re-emits the kernel on the next <code>cargo build</code> &mdash; the proofs and
+      the shipped decision procedure cannot diverge, because they are the same text.</figcaption>
+    </figure>
+
+    <div class="prose" style="margin-top:1.4rem">
+      <p>Inside the Lean, the kernel is factored so the byte layer needs no theorem at
+      all &mdash; <code>replay</code> is <em>literally</em> a composition, not a
+      re-implementation, so there is no fold-vs-bytes agreement left to prove. The
+      decision layer is the named function <code>absReplay</code>:</p>
+<pre><code>/-- The replay: literally decode → absReplay → encode. -/
+def replay (input : ByteArray) : ByteArray :=
+  encodeView (absReplay (decodeBase input) (decodeOps input))
+
+@[export uwueave_replay_kernel]
+def replayKernel (input : ByteArray) : ByteArray :=
+  replay input</code></pre>
+      <p>And <code>Uwueave/ExecRefine.lean</code> proves the facts about that layer that
+      are <em>not</em> free (axioms within Lean&rsquo;s own three; no <code>sorry</code>, no
+      <code>native_decide</code>, no <code>#guard</code>):</p>
+      <ul class="thms">
+        <li><strong><code>absReplay_acyclic</code></strong> &mdash; the general acyclicity
+        theorem: on a grounded base (some rank strictly descends along the structural first
+        parents &mdash; the shape content-addressing provides), replaying <em>any</em> op array
+        &mdash; order, duplication and content unconstrained, junk indices included &mdash; yields
+        an effective-parent relation with no cycle. <code>miniInterp_acyclic</code>,
+        generalized from the two-op miniature to the real kernel, for all inputs. With
+        <code>absReplay_terminates</code> and <code>absReplay_chain_nodup</code>: every
+        override chain reaches root without revisiting a node.
+<pre style="margin-top:.6rem"><code>theorem absReplay_acyclic (fp : Array Int) (ops : Array Op)
+    (r : Nat → Nat) (hg : GroundedBase r fp) :
+    ∀ i, ¬ Reaches fp (absReplay fp ops) i i</code></pre></li>
+        <li><strong><code>chainHits_decides</code></strong> &mdash; fuel adequacy: on the
+        terminating views the kernel maintains, the literal fuel <code>n + 1</code>
+        <em>decides</em> ancestor-chain membership &mdash; a from-scratch pigeonhole argument,
+        so exhaustion never masquerades as &ldquo;misses&rdquo; and the cycle-skip check means what
+        it says.</li>
+        <li><strong><code>decode_encode_id</code></strong> (with
+        <code>getWord_pushWord</code>, <code>size_encodeView</code>, <code>toI_ofI</code>)
+        &mdash; the output codec round-trips at the word level: word <code>i</code> of the
+        encoded view decodes back to entry <code>i</code>, and pushed words never disturb
+        earlier ones.</li>
+      </ul>
+    </div>
+
+    <div class="opens prose">
+      <p><strong>Still open, and said so in the kernel&rsquo;s own header</strong> &mdash; three
+      seams, none hidden:</p>
+      <ul>
+        <li><strong>The Prop-level <code>Move.lean</code> connection.</strong> That this
+        replay <em>is</em> the abstract derived view of the grow-only log is not yet
+        machine-checked &mdash; SEC for the real kernel is still inherited informally from the
+        log argument, not by theorem.</li>
+        <li><strong>The input-side codec.</strong> <code>decodeBase</code>/<code>decodeOps</code>
+        have no in-kernel encoder to round-trip against; the Rust request encoder is
+        unverified by construction. (Malformed input degrades to junk output, never to
+        unsoundness or a crash &mdash; the decoders are total.)</li>
+        <li><strong>The C backend.</strong> The kernel is executable Lean compiled by
+        Lean&rsquo;s verified-nothing C backend and trusted like any compiler output &mdash;
+        alongside the 49-line shim and the Rust glue.</li>
+      </ul>
+    </div>
+  </section>
+
   <section id="dsl" class="prose">
     <p class="kicker">Composition</p>
     <h2>A fluid, proof-carrying schema DSL</h2>
     <p>A real document is a record of fields, and the catalog is meant to be
     <em>composed</em>: a schema is an ordinary Lean type built with <code>×</code> and
-    <code>→</code>, and its classification is a <code>Verdict</code> that carries its own
-    evidence &mdash; <code>Verdict.free</code> holds an actual <code>IConfluent</code> proof;
-    <code>Verdict.clash</code> holds a two-replica counterexample that transports up through
-    every combinator. A loom document schema, assembled and classified:</p>
+    <code>→</code>, and its classification carries its own evidence. The DSL now has
+    <strong>three answers</strong>, not two: <code>Verdict.free</code> holds an actual
+    <code>IConfluent</code> proof; <code>Verdict.clash</code> holds a two-replica
+    counterexample that transports up through every combinator &mdash; through products
+    (<code>prodClashLeft</code>/<code>prodClashRight</code>) <em>and</em> through keyed maps
+    (<code>keyedClash</code>: one clashing key sinks the whole map, with a repro differing
+    from a legal map at exactly that key); and <code>SegVerdict</code> is the refined third
+    answer for when &ldquo;go to consensus&rdquo; is too blunt. A loom document schema, assembled
+    and classified:</p>
 <pre><code>/-- nodes : grow-only id set · meta : per-node LWW · bookmarks : escrowed quota -/
 abbrev LoomDoc := GSet Nat × ((Nat → LWW) × Escrow Bool)
 
@@ -633,15 +950,112 @@ def pinnedVerdict : Verdict pinnedInv :=
     (fun hmerge => by
       have := hmerge 0 1 (by decide) (by decide)
       omega)
-    (fun n => n == 0) (by decide)
+    (fun n => n == 0) (by decide)</code></pre>
+    <p>The third answer is the one a schema author actually wants when a clash alone would
+    send every write to consensus. A <code>SegVerdict</code> carries <em>both</em> halves of
+    the refined judgement: the global clash (so free-running is refuted, with a repro &mdash;
+    <code>escalatesGlobally</code>), and a seam &mdash; a projection <code>σ</code> with a
+    <code>SegmentedIConfluent</code> proof that same-seam merges preserve the invariant
+    <em>and stay in the fiber</em> (<code>freeWithinSeam</code>, <code>staysInSeam</code> &mdash;
+    the closure half is load-bearing: a sync can never re-allocate behind your back). The
+    worked instance packages <code>Segmented.lean</code>&rsquo;s punchline pair as one value:</p>
+<pre><code>def budgetSegVerdict : SegVerdict (BudgetInv 10) (Bool → Nat) where
+  σ := Prod.fst
+  seamFree := budget_segmented 10
+  x := ((fun b => if b then 10 else 0), (fun b => if b then 10 else 0))
+  y := ((fun b => if b then 0 else 10), (fun b => if b then 0 else 10))
+  hx := by refine ⟨⟨?_, ?_⟩, ?_⟩ &lt;;&gt; decide
+  hy := by refine ⟨⟨?_, ?_⟩, ?_⟩ &lt;;&gt; decide
+  hbad := fun hgood => by
+    have := hgood.2
+    revert this
+    show ¬ (Nat.max 10 0 + Nat.max 0 10 = 10)
+    decide</code></pre>
+    <p>All three verdict kinds, evaluated side by side &mdash; and each answer is backed by
+    the terms, not by the <code>Bool</code>:</p>
+<pre><code>example : (loomVerdict (fun _ => 64)).isFree = true  := rfl
+example : pinnedVerdict.isFree = false := rfl
+example : pinnedPerNodeVerdict.isFree = false := rfl   -- keyedClash: one key sinks the map
 
-example : (loomVerdict (fun _ => 64)).isFree = true  := rfl
-example : pinnedVerdict.isFree = false := rfl</code></pre>
-    <p>Both answers are backed by the terms, not by the <code>Bool</code>. When the DSL
-    hands you a clash, <code>Segmented.lean</code>&rsquo;s recipe applies: look for a projection
-    your application can hold fixed between explicit coordination events, and check
-    whether the invariant is segmented over it. The clash says coordination is needed
-    <em>somewhere</em>; the segmentation says it is needed <em>only there</em>.</p>
+example : ¬ IConfluent (BudgetInv 10) := budgetSegVerdict.escalatesGlobally
+
+example (a b : QuotaState) (hσ : a.1 = b.1)
+    (ha : BudgetInv 10 a) (hb : BudgetInv 10 b) : BudgetInv 10 (a ⊔ b) :=
+  budgetSegVerdict.freeWithinSeam hσ ha hb</code></pre>
+    <p>Reading: spends never coordinate; re-allocation is the <em>only</em> coordination
+    point. The clash says coordination is needed <em>somewhere</em>; the segmentation says
+    it is needed <em>only there</em>. And for a consumer that only understands the binary
+    judgement, every <code>SegVerdict</code> demotes honestly to its clash
+    (<code>toClash</code>).</p>
+  </section>
+
+  <section id="check" class="prose">
+    <p class="kicker">For the reader with a schema and no interest in proofs</p>
+    <h2>uwueave-check</h2>
+    <p>The repo ships a small command-line tool that answers the library&rsquo;s question for
+    <em>your</em> fields. Describe your app&rsquo;s shared state &mdash; shapes and the invariants
+    you care about &mdash; and every verdict comes back as a citation into a machine-checked
+    theorem: <code>FREE</code>, <code>ESCALATES</code> (with the two-replica repro retold and
+    the exits priced), <code>SEAM</code>, <code>PATTERN</code> &mdash; or <code>UNCLASSIFIED</code>,
+    honestly, where no theorem covers the pair. It never guesses.</p>
+<pre><code># loom.schema
+field notes: gset
+invariant notes: member
+field pins: gset
+invariant pins: unique</code></pre>
+    <p><code>cd rust &amp;&amp; cargo run --bin uwueave-check -- loom.schema</code>:</p>
+<pre><code>loom.schema — 2 field(s), 2 invariant(s)
+
+FIELD  SHAPE  INVARIANT  VERDICT    THEOREM(S)
+----------------------------------------------------------------------------------------
+notes  gset   member     FREE       gset_mem_iconfluent — Uwueave/Catalog.lean
+pins   gset   unique     ESCALATES  gset_atMostOne_not_iconfluent — Uwueave/Catalog.lean
+
+details
+=======
+
+notes · member — FREE
+  cites: gset_mem_iconfluent — Uwueave/Catalog.lean
+  note: anything a replica has observed survives every merge — the tier-1
+  workhorse behind presence, tombstones, bookmarks and acks.
+
+pins · unique — ESCALATES
+  cites: gset_atMostOne_not_iconfluent — Uwueave/Catalog.lean
+  the two-replica repro:
+    Replica A pins item 0; replica B pins item 1. Each replica holds exactly
+    one pin — perfectly legal. The merge is union, so it holds both pins, and
+    "at most one" is dead; no cleverer merge exists, because union is what a
+    grow-only set means.
+  ways out:
+    - LWW arbitration: hold the value in a single last-writer-wins register:
+      the join selects one write, so no invariant on that one register can
+      break — someone loses, silently, and that is the trade.
+      (lww_every_invariant_iconfluent — Uwueave/Catalog.lean)
+    - multi-value register: keep every non-superseded write and surface
+      concurrent writes as a visible conflict; resolving it is an ordinary
+      write at a dominating clock.
+      (conflict_surfaces — Uwueave/MVRegister.lean; resolution_is_a_write —
+      Uwueave/MVRegister.lean)
+    - op-log: replicate the operations (a grow-only set, trivially free) and
+      derive the structure by deterministic replay that skips
+      invariant-violating ops. The honest price, also a theorem
+      (view_not_stable): an older remote op can retroactively un-apply an edit
+      you watched happen.
+      (derived_view_sec — Uwueave/Move.lean; view_not_stable —
+      Uwueave/Move.lean)
+
+Every ESCALATES verdict is constructive: a failed invariant always yields a
+runnable two-replica repro (escalation_witness — Uwueave/Confluence.lean).
+
+------------------------------------------------------------------------------
+Verdicts are lookups into machine-checked theorems (see Uwueave/), not a
+checker running here. The counterexamples are real states you can replay in
+tests.</code></pre>
+    <p>Ten shapes (<code>gset</code>, <code>gcounter</code>, <code>pncounter</code>,
+    <code>lww</code>, <code>mvreg</code>, <code>orset</code>, <code>clset</code>,
+    <code>escrow</code>, <code>causal-dag</code>, <code>movelog</code>), eleven invariant
+    kinds, and a test that walks every citation and checks the named theorem exists in the
+    named file &mdash; so the tool&rsquo;s answers rot loudly, not quietly.</p>
   </section>
 
   <section id="claims" class="prose">
@@ -652,37 +1066,54 @@ example : pinnedVerdict.isFree = false := rfl</code></pre>
       <code>MergeState</code> instance&rsquo;s merge laws (commutative, associative, idempotent
       &mdash; proved, not assumed), every classification above, and every refutation as a
       concrete two-replica counterexample you can replay as a test.</li>
-      <li><strong>The Lean verifies the <em>design</em>; the Rust is an unverified
-      implementation of it.</strong> The companion crate (<code>rust/</code>, one dependency:
-      blake3) implements the blessed fragment &mdash; <code>causal::CausalWeave</code>, an
-      append-only content-addressed DAG whose <code>merge</code> is skip-if-present union
-      with <em>no cycle check</em>, the theorems being why that&rsquo;s sound; and
-      <code>movelog::MoveLog</code>, moves as a grow-only op set with cycle-skipping replay.
-      Its tests replay the Lean witness scenarios &mdash; good tests, and <em>zero formal
-      evidence</em>. No &ldquo;translation validation&rdquo; is claimed, because there is no formal
-      semantics of Rust to state it in.</li>
+      <li><strong>Bailis necessity is cited, not re-proved.</strong> Theorem 3.1 of the
+      paper &mdash; I-confluence is necessary <em>and</em> sufficient for a coordination-free
+      convergent implementation to exist &mdash; quantifies over systems and lives in the
+      paper, not in this Lean. So the library uses <code>IConfluent</code> directly and
+      cites the equivalence, rather than defining a synonym that would let <code>rw</code>
+      manufacture a false sense of necessity. What a <code>¬ IConfluent</code> result here
+      formally provides is the clash witness; the modal reading (&ldquo;no implementation
+      can&hellip;&rdquo;) is Bailis, cited.</li>
+      <li><strong>The Lean verifies the design &mdash; and authors the kernel&rsquo;s
+      semantics.</strong> The companion crate (<code>rust/</code>, one dependency: blake3)
+      implements the blessed fragment: <code>causal::CausalWeave</code>, an append-only
+      content-addressed DAG whose <code>merge</code> is skip-if-present union with <em>no
+      cycle check</em>, the theorems being why that&rsquo;s sound; and
+      <code>movelog::MoveLog</code>, whose replay is the compiled Lean kernel &mdash; no Rust
+      twin exists to drift. What remains unverified: the crate&rsquo;s storage/index/codec
+      glue, the C shim, Lean&rsquo;s C backend, and the kernel-to-<code>Move.lean</code>
+      refinement (named open work, above). The tests replay the Lean witness scenarios
+      through the real kernel &mdash; good tests, and <em>zero formal evidence</em>. No
+      &ldquo;translation validation&rdquo; is claimed, because there is no formal semantics of Rust
+      to state it in.</li>
       <li><strong>The content-addressing step is a premise, not a theorem.</strong>
       &ldquo;A reference cycle would require a hash cycle&rdquo; is collision resistance &mdash; a
       cryptographic assumption stated out loud. Rank is modeled as an explicit function;
-      nothing is proved about any hash function. Same seam on the implementation side:
-      same-id-different-bytes is refused as corruption (<code>IdCollision</code>), never
-      silently deduped, because the convergence proofs assume ids resolve identically.</li>
+      nothing is proved about any hash function. The same discipline recurs wherever ids
+      do load-bearing work: exactly-once linearization (<code>UniqueAnchor</code>) and
+      grant-chain narrowing (<code>UniqueGrant</code>) are stated as hypotheses the lattice
+      provably does <em>not</em> preserve, discharged cryptographically in a deployment. And
+      on the implementation side, same-id-different-bytes is refused as corruption
+      (<code>MergeError::IdCollision</code>), never silently deduped, because the
+      convergence proofs assume ids resolve identically.</li>
       <li><strong><span class="badge free">free</span> means the merge preserves the
       invariant.</strong> It does not mean an <em>operation</em> cannot violate it locally
       (op-validation is the application&rsquo;s job), and it does not price metadata growth
       (tombstones, op logs &mdash; engineering, not semantics).</li>
       <li><strong>The axiom ledger is a build gate, not a printout.</strong>
-      <code>Audit.lean</code> pins every keystone theorem&rsquo;s axiom footprint with
+      <code>Audit.lean</code> pins all 113 keystone theorems&rsquo; axiom footprints with
       <code>#guard_msgs</code>: a <code>sorry</code> (<code>sorryAx</code>) or
       <code>native_decide</code> (<code>Lean.ofReduceBool</code>) anywhere fails the build.
       The permitted floor is Lean&rsquo;s own three axioms &mdash; <code>propext</code>,
-      <code>Classical.choice</code>, <code>Quot.sound</code> &mdash; and two theorems are pinned
-      axiom-free entirely: <code>grounded_acyclic</code> and
-      <code>derived_view_sec</code>.</li>
+      <code>Classical.choice</code>, <code>Quot.sound</code> &mdash; and 32 keystones are pinned
+      to depend on <em>no axioms at all</em>, <code>grounded_acyclic</code>,
+      <code>derived_view_sec</code>, <code>same_deltas_same_state</code> and
+      <code>exec_perm</code> among them. Both counts are grep-checkable against the ledger
+      itself rather than trusted to prose.</li>
     </ul>
     <p>Check it yourself:</p>
-<pre><code>lake build          # the proofs; Lean core only, no mathlib, ~30s cold
-cd rust &amp;&amp; cargo test</code></pre>
+<pre><code>lake build              # the proofs; Lean core only, no mathlib, ~30s cold
+cd rust &amp;&amp; cargo test   # compiles the Lean kernel to C and links it (needs elan)</code></pre>
   </section>
 
 </main>
@@ -704,10 +1135,22 @@ cd rust &amp;&amp; cargo test</code></pre>
     Kleppmann, Mulligan, Gomes, Beresford — <em>A Highly-Available Move Operation for
     Replicated Trees</em>, TPDS&nbsp;2021, and <em>Verifying Strong Eventual Consistency in
     Distributed Systems</em>, OOPSLA&nbsp;2017 ·
-    Almeida, Shapiro — the blocklace, 2024 ·
-    Whittaker, Hellerstein — segmented I-confluence, VLDB&nbsp;2019.
-    PDFs of most of these live in the authors&rsquo; pockets; ask and we&rsquo;ll point you at
-    them.</p>
+    Almeida, Shoker, Baquero — <em>Delta State Replicated Data Types</em>, JPDC&nbsp;2018 ·
+    Kleppmann, Gomes, Mulligan, Beresford — <em>Interleaving anomalies in collaborative
+    text editors</em>, PaPoC&nbsp;2019 ·
+    Stewen, Kleppmann — <em>Undo and Redo Support for Replicated Registers</em>,
+    PaPoC&nbsp;2024 ·
+    Kleppmann, Beresford — the JSON CRDT, TPDS&nbsp;2017 ·
+    Whittaker, Hellerstein — segmented I-confluence, VLDB&nbsp;2019 ·
+    Hellerstein, Alvaro — <em>Keeping CALM</em>, CACM&nbsp;2020 ·
+    Mazurkiewicz&nbsp;1977 &amp; Zielonka&nbsp;1987 — trace theory, cited as the automata
+    section&rsquo;s horizon ·
+    O&rsquo;Neil — <em>The Escrow Transactional Method</em>, TODS&nbsp;1986 ·
+    Birgisson et al. — macaroons, NDSS&nbsp;2014 ·
+    Dougal — <em>ERA: Epoch-Resolved Arbitration</em>, PaPoC&nbsp;2026 ·
+    Almeida, Shapiro — the blocklace, 2024.
+    The full annotated bibliography &mdash; what each established, what we took, and what we
+    deliberately declined &mdash; lives at <code>docs/BIBLIOGRAPHY.md</code> in the repo.</p>
     <p>License: Unlicense OR MIT, same spirit as universal-weave.</p>
   </div>
 </footer>
