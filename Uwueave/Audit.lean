@@ -71,6 +71,7 @@ import Uwueave.GatedEra
 import Uwueave.Ancestral
 import Uwueave.RALin
 import Uwueave.SeamAlgebra
+import Uwueave.Gluing
 import Uwueave.Tactics
 
 open Lean Elab Command in
