@@ -325,8 +325,9 @@ theorem bobRoot_sole : SoleAdmin bobRoot := by
 /-- ⚠ **Sole-admin is NOT I-confluent — the duelling-admins clash, entry
 side.** Each partition is well-formed and sole-ruled; the merge holds two
 admins. Mutual exclusion over grow-only grants is
-`Catalog.or_breaks_iconfluence` / `gset_atMostOne_not_iconfluent` again, and
-by Bailis necessity no library feature fixes it: electing *the* admin
+`Catalog.or_breaks_iconfluence` / `gset_atMostOne_not_iconfluent` again; per
+Bailis et al.'s necessity theorem (cited, not re-proved here — what Lean shows
+is the clash) no library feature fixes it: electing *the* admin
 escalates to coordination, arbitration (ERA's epochs — Dougal, PaPoC 2026 —
 are exactly an arbitration policy for this), or compensation. The refutation
 pair is the scenario a group-management design must pick a policy for. -/

@@ -216,11 +216,9 @@ theorem and_iconfluent {S : Type u} [MergeState S] {I J : Invariant S}
     IConfluent (fun s => I s ∧ J s) :=
   fun x y hx hy => ⟨hI x y hx.1 hy.1, hJ x y hx.2 hy.2⟩
 
-/-- ⚠ **Disjunction does NOT lift, and this is the trap.** "The document is
-locked by Alice OR locked by Bob" is a disjunction of two perfectly I-confluent
-invariants, and it is not I-confluent. We prove the counterexample concretely in
-`Uwueave.Catalog.or_breaks_iconfluence` rather than stating a false lemma
-here. -/
-theorem or_lift_is_not_available : True := trivial
+/- ⚠ Disjunction does NOT lift, and this is the trap: "locked by Alice OR
+locked by Bob" is a disjunction of two perfectly I-confluent invariants and is
+not I-confluent. The concrete refutation is `Catalog.or_breaks_iconfluence`;
+no lemma is stated here because no true lemma of that shape exists. -/
 
 end Uwueave
