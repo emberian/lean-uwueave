@@ -55,6 +55,33 @@ Four results:
      and revoking the ISSUER instead kills Bob's move too, though his grant
      id sits in no revocation set (`demo_cascade_revoked` at the op layer).
 
+## Non-claims — the honest boundary
+
+  * **Signatures are a premise, not a theorem.** A grant here is a record in
+    a grow-only set; that only a legitimate issuer could have produced it is
+    unforgeability, discharged by a deployment's signature scheme and never
+    by anything in this file. `Authority.lean` states the same seam, and
+    `Sequence`/`Authority`'s collision-extractor lemmas are the pattern for
+    how such a premise is handed off rather than assumed away.
+  * **This gates the abstract op layer, not the shipping kernel.** The feed
+    modelled here is `Move.lean`'s; the executable path is
+    `Exec.absReplay` behind `uwueave_replay_kernel`. Gating there would mean:
+    a grant/revocation substrate in the request encoding, a permitted-filter
+    ahead of the sort, and a fourth status code (skipped-unauthorised —
+    exactly `EraKernel`'s ✗ mark) in the v2 response so a UI can *show* the
+    move that authority removed. That is an ordinary flag-day rebuild, listed
+    here rather than implied by adjacency.
+  * **Conflicting grant operations are not arbitrated.** Two admins issuing
+    contradictory grants is the duelling-admins problem; this file's merge is
+    fail-closed (both survive as records, the gate takes the intersection of
+    what stays active), which is a *policy*, not a resolution.
+    `Era.lean` implements the resolution — one deterministic survivor per
+    replica (`Era.duelling_admins_resolved`) — and composing that arbitration
+    with this gate is real work, unstarted.
+  * **Scope is a `Nat` ceiling on node ids.** Enough to make covering
+    decidable and the theorems honest; a real capability language wants a
+    lattice of scopes (the poset gap `Authority.lean` already names).
+
 ## The price, and why it points the safe direction
 
 An op that was in the gated feed can leave it when a revocation syncs in
