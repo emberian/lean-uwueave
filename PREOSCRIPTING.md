@@ -223,6 +223,15 @@ extensible `RuleSet` where every route returns a proof-carrying verdict, so
 search order may change performance or which explanation you get, but never
 soundness.
 
+⚠ That last sentence is no longer a design intention — it is
+**`Preo.run_answer_congr`**, and the surface is built on it
+(`Uwueave/Preo/Classification.lean`). Read what it does and does not say: the
+*answer* is invariant under any membership-preserving change of registry; the
+*explanation* is a list, and which one a report prints first is a separate
+policy. The proof is not bookkeeping — it reduces to `Preo.verdict_agree`, that
+a `free` and a `clash` for one invariant are contradictory **terms**, so the
+disagreement a first-match order was protecting against cannot be constructed.
+
 **Exits are morphisms between specifications** — source merge model and promise
 to target merge model and promise — not values in a per-field list.
 
@@ -348,8 +357,14 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | seam synthesis | `SeamColoring` | in flight |
 | summary synthesis | `MinimalSummary` | in flight |
 | classification → `Verdict` term | `Tactics.classifyFinite` | proved |
-| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built — one fragment** |
-| ⚠ seam verdicts in the surface | — | **inexpressible**: the fragment has one `Verdict` type, so `SegVerdict` (the library's most interesting answer) cannot be stated. Calling the escrow row a seam would be a lie, and the elaborator does not. |
+| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built — fragment 2** |
+| classification ACCUMULATES facets | `Preo/Classification` | **built**: `Classification` holds `global`/`seams`/`mergeability`/`obligations` as *lists*; rules add, never replace |
+| route-order invariance | `Preo.run_answer_congr` | **proved**: two registries with the same rules in any order certify the same answer. Bottoms out in `Preo.verdict_agree` (two verdicts for one invariant cannot disagree — the pair is uninhabitable), not in bookkeeping. `run_answer_of_perm` is the permutation corollary. |
+| ✅ seam verdicts in the surface | `Preo.budgetSeam`, `Preo.seamAlong`, `Segmented.budget_segmented` | **CLOSED** (was "inexpressible"). A globally clashing invariant now carries a `SegVerdict` facet *alongside* its clash — `Preo.seam_forces_clash` proves a seam is not a third alternative but forces the ESCALATES column. `Demo`'s `LoomDoc2.in_budget.seam` **is** `WeaveState.quotaVerdict`, by `rfl`. `seamAlong` lifts it to the whole declared document, using the emitted section (`<field>.plant`) that fragment 1 said the elaborator could not synthesize. |
+| ✅ cross-field invariants in the surface | `Spec.Verdict.cross`, `Spec.pointsAtExisting_iconfluent` | **CLOSED** (was refused by name). A two-field invariant is classified against the *product* state; `LoomDoc2.fk` **is** `Spec.refIntVerdict` by `rfl`. ⚠ narrower than `WeaveState.bookmarksVerdict`, which is the per-user keyed form — this surface has no `per`. Three or more fields is still refused: `Verdict.cross` is binary. |
+| ✅ `derive` + mergeability verdict | `JoinHom.Fourth`, `summaryFold_iff_joinHom`, `Preo.mergeability_comp` | **CLOSED**. `derive n : T = <expr>` emits the computation plus a `Fourth` facet with its `Fourth.Correct` proof. Registry: ∃-read, filtered view, high-water mark, set image (`fromResults`) and count (`needsEvidence`, via `no_count_merge_without_provenance`) — each *attempted by typechecking*, so an unknown shape is an obligation, never a guess. ⚠ the `needsEvidence` transport to document scale needs the projection **surjective**, not merely a hom; the elaborator emits `<field>.surj` for exactly that. |
+| **seam composition in the surface** | `SeamAlgebra.prodSeams` exists | **unbuilt**: the registry has one single-field seam rule, so `WeaveState.weaveDocSeamVerdict` (a document segmented over `(pins, allocation)` — *two* coordination features) is still not derivable. A missing rule, not a missing theorem. |
+| **`per` / keyed families in the surface** | `WeaveState.keyed_cross_iconfluent` | **unbuilt**: why the cross row above is the one-user shape. |
 | **declaration composition** | — | **unbuilt** |
 | **scheduling: crossings → meetings** | — | **unbuilt** |
 

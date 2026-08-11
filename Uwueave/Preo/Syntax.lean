@@ -19,38 +19,50 @@ one syntactic fact the classification carrier depends on, and it is the whole
 
 ## What lives here
 
-  * §1 the five field kinds and their carriers — every one an existing
-    `Catalog` type with a *proved* `MergeState`; no new CRDT is invented here;
-  * §2 `proj_iconfluent` — the one new theorem, and the only way a field-scoped
-    verdict reaches the declared state type;
+  * §1 `Slot` — one of the six field kinds; the other five are `Catalog` and
+    `Segmented` types verbatim (`Quota` lives in `Uwueave.Preo.Classification`,
+    next to the seam rule that reads it), and no new CRDT is invented anywhere;
+  * §2 `proj_iconfluent` — the confluence lift, and the way a field-scoped
+    verdict reaches the declared state type. Its seam and mergeability
+    counterparts (`seamAlong`, `mergeability_comp`) are in
+    `Uwueave.Preo.Classification` §6;
   * §3 `Obligation` — the honest non-answer, carrying no evidence field and no
     map into `Verdict`;
   * §4 `witnesses?` / `witnessBits` — reading a derived clash back out, so the
     acceptance test can compare the elaborator's counterexample against a
     hand-written one;
-  * §5 the report rows (an environment extension: display metadata only — the
-    FREE/ESCALATES column is re-read from the emitted terms at report time, so
-    the table cannot drift from the evidence);
+  * §5 the report rows (an environment extension: display metadata only — every
+    ANSWER column is reduced out of the row's `Preo.Classification` at report
+    time, so the table cannot drift from the evidence);
   * §6 the surface syntax itself.
 
-## The fragment, stated up front
+## The fragment, stated up front (FRAGMENT 2)
 
 `preo` covers exactly this and refuses everything else loudly:
 
 ```
 preo <Name> where
-  field <name> : <kind>                       -- kind ∈ GrowSet α · Slot α · Escrow ι · Counter · LWW
-  invariant <name> : <predicate>              -- must mention EXACTLY ONE field
+  field <name> : <kind>                       -- kind ∈ GrowSet α · Slot α · Escrow ι
+                                              --      · Quota ι · Counter · LWW
+  invariant <name> : <predicate>              -- ONE field, or TWO (a cross-field
+                                              -- invariant, over the product state)
   invariant <name> : <predicate> := <verdict> -- author-supplied evidence, kernel-checked
+  derive <name> : <type> = <expr>             -- ONE field; the fourth verdict
+  derive <name> : <type> = <expr> := <evidence>
 ```
 
-*Not* in the fragment, and each is a real feature of `PREOSCRIPTING.md` §7 that
-this pass does not build: `per`, `future`, `derive`, `session`, `budget`,
-`parallel`, seam verdicts (`SegVerdict` — so a `preo` declaration cannot yet
-say "free *within* an allocation", which is exactly what the quota field of
-`WeaveState.lean` needs), and cross-field invariants (`Spec.Verdict.cross`),
-which are refused rather than guessed at because no per-field lift produces one
-and `Catalog.lww_cross_field_not_iconfluent` is why.
+Fragment 2 closed three of fragment 1's refusals — **seam facets** (a globally
+clashing invariant now carries its `SegVerdict` alongside the clash rather than
+being inexpressible), **cross-field invariants** (two fields, classified against
+the joint merge), and **`derive` with the mergeability verdict**. What changed
+structurally is in `Uwueave.Preo.Classification`: a row accumulates *facets*
+instead of a winner, and the answer it certifies is proved independent of the
+route order (`Preo.run_answer_congr`).
+
+*Still* not in the fragment, and each is a real feature of `PREOSCRIPTING.md`
+§7: `per`, `future`, `session`, `budget`, `parallel`, invariants over three or
+more fields, derives reading more than one field, and declaration composition.
+Each is refused by name.
 -/
 import Uwueave.Tactics
 
@@ -62,9 +74,11 @@ universe u v
 
 /-! ## §1. Field kinds
 
-Five, all backed. Four are `Catalog` types verbatim; the fifth (`Slot`) is a
-grow-only set under the name of the shape it is *expected* to carry — see its
-docstring for what that does and does not buy. -/
+Six, all backed. Four are `Catalog` types verbatim (`GrowSet`, `Escrow`,
+`Counter`, `LWW`); `Quota` is `Segmented.QuotaState` and lives in
+`Uwueave.Preo.Classification` §1, beside the seam rule that is the whole reason
+it exists; and `Slot` — below — is a grow-only set under the name of the shape
+it is *expected* to carry, which is a label and not a shortcut. -/
 
 /-- **A slot: a grow-only set carrying a uniqueness ceiling.** The carrier is
 `Catalog.GSet` — the same type `GrowSet` gives — and the name records the
@@ -171,26 +185,46 @@ constant by reduction, every time it prints. That is deliberate — a stored
 answer is a second source of truth that can disagree with the term, and this
 repo has a memo-vs-term drift class it does not need another instance of. -/
 
+/-- What a report row is about. Fragment 2 adds two item kinds to fragment 1's
+two, and they are genuinely different questions — a `derive` row answers "ship
+the summary or replay the evidence?" and has no confluence verdict at all. -/
+inductive RowKind where
+  /-- A declared field: name, kind, carrier. -/
+  | field
+  /-- An invariant over exactly one field. -/
+  | invariant
+  /-- An invariant over exactly two fields, classified against the product
+  state (`Spec.Verdict.cross`). -/
+  | cross
+  /-- A computed value, classified by the fourth verdict (`JoinHom.Fourth`). -/
+  | derive
+  deriving Inhabited, DecidableEq, Repr
+
 /-- One printable line of a `preo` report. `evidence` names the constant the
-answer is read from; `.anonymous` never appears (an unclassified invariant
-gets an `Obligation` constant, which is also a constant). -/
+answers are read from — for an item row that is its **`Classification`**, and
+every answer column (`GLOBAL`, `SEAM`, `MERGEABILITY`) is reduced out of it at
+print time. Nothing here stores an answer. -/
 structure Row where
   /-- The `preo` declaration this row belongs to. -/
   decl : Lean.Name
-  /-- `true` for a field row, `false` for an invariant row. -/
-  isField : Bool
-  /-- The field's or invariant's surface name. -/
+  /-- Which of the four item kinds this row is. -/
+  kind : RowKind
+  /-- The field's, invariant's or derive's surface name. -/
   name : String
-  /-- Fields: the kind as written. Invariants: the field they read. -/
+  /-- Fields: the kind as written. Items: the field(s) they read. -/
   detail : String
-  /-- Fields: the carrier type. Invariants: the route that classified them. -/
+  /-- Fields: the carrier type. Items: every route that fired, in order. -/
   detail₂ : String
-  /-- The emitted constant: a `Verdict`, or an `Obligation`. -/
+  /-- The emitted constant the answers are read from: the row's
+  `Classification` (items) or its `merge_hom` (fields). -/
   evidence : Lean.Name
-  /-- Whether `evidence` is an `Obligation` rather than a `Verdict`. -/
+  /-- Whether the row reached no facet at all — an `Obligation` and nothing
+  else. -/
   isObligation : Bool
-  /-- What the row cites: a theorem name, or the discharge hint. -/
+  /-- What the row cites: theorem names, or the discharge hint. -/
   cite : String
+  /-- The seam facet's reading, or `""` when the row has no seam. -/
+  seamCite : String
   deriving Inhabited
 
 open Lean in
@@ -224,15 +258,40 @@ Three points of grammar worth stating, because each was a real failure first:
 syntax preoField := withPosition(&"field" ident " : " ident (ppSpace colGt term:max)?)
 
 /-- `invariant <name> : <predicate> [:= <verdict term>]` — one invariant, over
-exactly one field, optionally with its evidence supplied by the author. -/
+**one or two** fields, optionally with its evidence supplied by the author. A
+two-field invariant is classified against the product state as a
+`Spec.Verdict.cross`; fragment 1 refused that shape outright. -/
 syntax preoInv := withPosition(&"invariant" ident " : " colGt term (" := " colGt term)?)
 
+/-- `derive <name> : <type> = <expr> [:= <evidence>]` — a computed value over
+exactly one field, classified by the **fourth verdict**: may its summary be
+shipped and merged (`JoinHom.Fourth.fromResults`), or must a peer replay the
+source evidence (`needsEvidence`)?
+
+Two points of grammar, each paid for:
+
+  * the type sits at `term:51`, so the `=` that follows is the surface's own
+    separator rather than an `Eq` inside the type — `PREOSCRIPTING.md` §7
+    spells a derive with `=` and this keeps that spelling. A type that
+    genuinely needs an equation, or an arrow, must be parenthesised.
+  * the optional evidence is introduced by `:=` and **not** by a soft keyword.
+    `… evidence <term>` was the first draft and it is unreachable: the body is
+    an ordinary `term`, a non-reserved keyword is an ordinary identifier, and
+    `(if …) evidence sorry` parses as an application ("function expected") long
+    before the item parser sees it. `:=` cannot continue a term, so it is the
+    separator that works — and it matches `invariant`'s. -/
+syntax preoDerive :=
+  withPosition(&"derive" ident " : " colGt term:51 " = " colGt term
+    (" := " colGt term)?)
+
 /-- **A preoscript declaration.** Elaborates to a state type, its field
-accessors, a checked `MergeState`, one `Invariant` per row, and — per row — a
-`Spec.Verdict` term or an `Obligation`. See `Uwueave.Preo.Elab` for what is
-emitted and in what order; see this file's header for the fragment. -/
+accessors, a checked `MergeState`, one `Invariant` per invariant row, one
+computation per `derive` row, and — per item — a `Preo.Classification`
+accumulating every facet the rule registry certified. See `Uwueave.Preo.Elab`
+for what is emitted and in what order; see this file's header for the
+fragment. -/
 syntax (name := preoDecl) "preo " ident " where "
-  (ppLine colGe preoField)* (ppLine colGe preoInv)* : command
+  (ppLine colGe preoField)* (ppLine colGe preoInv)* (ppLine colGe preoDerive)* : command
 
 /-- Print the verdict table of a `preo` declaration: every field with its kind
 and carrier, every invariant with the field it reads, its verdict, the route
