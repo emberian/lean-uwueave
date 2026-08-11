@@ -260,12 +260,12 @@
     itself</em>, not re-implemented.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">19</div><div class="l">Lean modules</div>
+      <div class="stat"><div class="n">21</div><div class="l">Lean modules</div>
         <div class="s">one judgement, <code>Confluence</code> to <code>Exec</code></div></div>
-      <div class="stat"><div class="n">113</div><div class="l">keystones audit-pinned</div>
-        <div class="s">every axiom footprint a build gate</div></div>
-      <div class="stat"><div class="n">32</div><div class="l">pinned axiom-free</div>
-        <div class="s">pure &lambda;-calculus; counted by grep, not prose</div></div>
+      <div class="stat"><div class="n">1060</div><div class="l">constants audited, total</div>
+        <div class="s"><code>#audit_floor</code> walks the whole namespace &mdash; zero-lag, no list</div></div>
+      <div class="stat"><div class="n">65</div><div class="l">keystones in the ledger</div>
+        <div class="s">with generality &amp; reachability axes</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
         <div class="s">Lean core only; <code>lake build</code> in ~30&nbsp;s cold</div></div>
       <div class="stat"><div class="n">1</div><div class="l">replay kernel</div>
@@ -882,20 +882,19 @@ def replayKernel (input : ByteArray) : ByteArray :=
     </div>
 
     <div class="opens prose">
-      <p><strong>Still open, and said so in the kernel&rsquo;s own header</strong> &mdash; three
-      seams, none hidden:</p>
+      <p><strong>Still open, and said so in the kernel&rsquo;s own header</strong> &mdash; one
+      seam, the terminal one:</p>
       <ul>
-        <li><strong>The Prop-level <code>Move.lean</code> connection.</strong> That this
-        replay <em>is</em> the abstract derived view of the grow-only log is not yet
-        machine-checked &mdash; SEC for the real kernel is still inherited informally from the
-        log argument, not by theorem.</li>
-        <li><strong>The input-side codec.</strong> <code>decodeBase</code>/<code>decodeOps</code>
-        have no in-kernel encoder to round-trip against; the Rust request encoder is
-        unverified by construction. (Malformed input degrades to junk output, never to
-        unsoundness or a crash &mdash; the decoders are total.)</li>
         <li><strong>The C backend.</strong> The kernel is executable Lean compiled by
         Lean&rsquo;s verified-nothing C backend and trusted like any compiler output &mdash;
-        alongside the 49-line shim and the Rust glue.</li>
+        alongside the 49-line shim and the Rust glue. The other two seams closed in wave 5:
+        the Move connection is now the bridge theorems
+        (<code>miniReplay_eq_miniInterp</code>, <code>absReplay_matches_miniInterp</code>)
+        plus <code>kernel_derived_view_sec</code> &mdash; SEC&rsquo;s clauses proved for
+        <code>absReplay</code> itself via <code>absReplay_ext_mem</code> (the kernel is a
+        function of the op <em>set</em>) &mdash; and the input codec round-trips through the
+        proven canonical encoder (<code>replay_encodeRequest</code>), with a per-request
+        canonicality differential (labeled test evidence) covering the Rust marshaller.</li>
       </ul>
     </div>
   </section>
@@ -1100,13 +1099,14 @@ tests.</code></pre>
       invariant.</strong> It does not mean an <em>operation</em> cannot violate it locally
       (op-validation is the application&rsquo;s job), and it does not price metadata growth
       (tombstones, op logs &mdash; engineering, not semantics).</li>
-      <li><strong>The axiom ledger is a build gate, not a printout.</strong>
-      <code>Audit.lean</code> pins all 113 keystone theorems&rsquo; axiom footprints with
-      <code>#guard_msgs</code>: a <code>sorry</code> (<code>sorryAx</code>) or
-      <code>native_decide</code> (<code>Lean.ofReduceBool</code>) anywhere fails the build.
-      The permitted floor is Lean&rsquo;s own three axioms &mdash; <code>propext</code>,
-      <code>Classical.choice</code>, <code>Quot.sound</code> &mdash; and 32 keystones are pinned
-      to depend on <em>no axioms at all</em>, <code>grounded_acyclic</code>,
+      <li><strong>The audit is total, not curated.</strong>
+      <code>Audit.lean</code>&rsquo;s <code>#audit_floor</code> walks every constant in the
+      <code>Uwueave</code> namespace &mdash; 1060 at last count &mdash; and fails the build on any
+      axiom outside Lean&rsquo;s own floor (<code>propext</code>,
+      <code>Classical.choice</code>, <code>Quot.sound</code>): a <code>sorry</code>
+      (<code>sorryAx</code>) or <code>native_decide</code> (<code>Lean.ofReduceBool</code>)
+      anywhere goes red with zero lag and no list to maintain. Jewels like
+      <code>grounded_acyclic</code>,
       <code>derived_view_sec</code>, <code>same_deltas_same_state</code> and
       <code>exec_perm</code> among them. Both counts are grep-checkable against the ledger
       itself rather than trusted to prose.</li>
