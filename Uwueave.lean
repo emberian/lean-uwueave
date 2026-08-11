@@ -41,6 +41,7 @@ import Uwueave.JoinHom
 import Uwueave.Evidence
 import Uwueave.Wellformed
 import Uwueave.Exits
+import Uwueave.CoordEffect
 import Uwueave.Choreo
 import Uwueave.Tactics
 import Uwueave.Audit
