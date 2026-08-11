@@ -49,12 +49,23 @@ fn main() {
     cc.include(prefix.join("include"));
     cc.file(manifest.join("shim.c"));
     cc.file(ir.join("Uwueave.c"));
-    for entry in std::fs::read_dir(ir.join("Uwueave")).expect("ir dir") {
-        let p = entry.unwrap().path();
-        if p.extension().map(|e| e == "c").unwrap_or(false) {
-            cc.file(&p);
+    // RECURSIVE, and it must be. A Lean submodule (`Uwueave/Tactics/Core.lean`)
+    // emits to `ir/Uwueave/Tactics/Core.c`, one directory down; a flat
+    // `read_dir` drops it and the failure is a link error at the *importers* —
+    // `undefined symbol: initialize_uwueave_Uwueave_Tactics_Core` — which reads
+    // like a Lean problem and is not one. Found when `Uwueave/Tactics/Core.lean`
+    // became the tree's first submodule (2026-08-11).
+    fn add_emitted_c(dir: &std::path::Path, cc: &mut cc::Build) {
+        for entry in std::fs::read_dir(dir).expect("ir dir") {
+            let p = entry.unwrap().path();
+            if p.is_dir() {
+                add_emitted_c(&p, cc);
+            } else if p.extension().map(|e| e == "c").unwrap_or(false) {
+                cc.file(&p);
+            }
         }
     }
+    add_emitted_c(&ir.join("Uwueave"), &mut cc);
     // Lean-emitted C is not warning-clean under default cc flags; that's fine.
     cc.warnings(false);
     cc.opt_level(2);

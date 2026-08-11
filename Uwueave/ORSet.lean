@@ -43,6 +43,7 @@ through a completed remove. The causal-reachability twin of the dichotomy is
 `CausalReach.orset_reachability_depends_on_remove_shape`.
 -/
 import Uwueave.Catalog
+import Uwueave.Tactics.Core
 
 namespace Uwueave.ORSet
 
@@ -129,15 +130,16 @@ so the merged parity is one of the two replicas' parities, and both were odd.
 (The pointwise cousin of `selection_iconfluent`.) The flip side is the
 arbitration this bakes in: a *longer* remote history wins the element even
 when your local history is more recent in wall-clock terms — causal length,
-not time, is the tiebreak. -/
+not time, is the tiebreak.
+
+The proof is `classify`'s one-key selection route (`Tactics.Core` §5,
+`key_selection_iconfluent`), which is that "pointwise cousin" stated once
+instead of re-derived here — and this line is the demonstration that the
+`Tactics.Core` split works: until it existed, `Tactics.lean` imported this
+file, so this file could not name the tactic. -/
 theorem clset_present_iconfluent {α : Type} (a : α) :
     IConfluent (S := CLSet α) (fun s => CLPresent s a) := by
-  intro x y hx hy
-  show Nat.max (x a) (y a) % 2 = 1
-  rw [nat_max_def]
-  split
-  · exact hy
-  · exact hx
+  classify
 
 /-- Absence is I-confluent by the same selection argument — the CL-Set has no
 analogue of the OR-Set's both-sides-tombstone anomaly, because there is
