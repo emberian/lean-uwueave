@@ -26,6 +26,10 @@ theorem set:
     concurrent writes, so **both** surface as an MV conflict (the
     `conflict_surfaces` shape). The undo neither silently loses to nor silently
     destroys the concurrent edit.
+  * `undo_restores_general` — the ∀-general law the acts instantiate: in ANY
+    state, a write at a clock strictly dominating every present write's clock
+    becomes the *unique* view element. Acts 2–4 are its instances (the
+    examples after it certify each).
 
 ## Honest scope — what the paper has that this miniature does not
 
@@ -62,7 +66,7 @@ import Uwueave.MVRegister
 
 namespace Uwueave.Undo
 
-open Uwueave Uwueave.Catalog Uwueave.MVRegister
+open Uwueave Uwueave.Catalog Uwueave.Causality Uwueave.MVRegister
 
 /-! ### The cast -/
 
@@ -87,6 +91,10 @@ def r1 : Write := (w1.1, (4, 0))
 B has seen `w0` and `w1` but not the undo, so `wC`'s clock is incomparable
 with `u1`'s: neither dominates. -/
 def wC : Write := (8, (2, 1))
+
+/-- The race, in the shared kit's vocabulary: the undo's clock and B's clock
+are `Clock.Concurrent` — incomparable, neither dominating. -/
+example : Clock.Concurrent u1.2 wC.2 := by decide
 
 /-! ### The states, and what they hold -/
 
@@ -239,5 +247,58 @@ fork is a visible object for the application (or the human) to resolve. -/
 theorem undo_does_not_silently_lose : InView s01uC u1 ∧ InView s01uC wC :=
   ⟨(undo_conflicts_visibly u1).mpr (Or.inl rfl),
    (undo_conflicts_visibly wC).mpr (Or.inr rfl)⟩
+
+/-! ### The general restore law — one theorem behind acts 2–4 -/
+
+/-- **Dominate everything present, and you are the whole view.** For ANY
+state `s` and any value `v`, landing the write `(v, c)` at a clock `c` that
+strictly dominates every present write's clock leaves the new write the
+UNIQUE view element: `InView` iff equal to it. This is the ∀-general law the
+story instantiates three times — act 2 (`overwrite_supersedes`,
+`s := single w0`), act 3 (`undo_restores`, `s := s01`), act 4
+(`redo_restores`, `s := s01u`); the examples below certify each. Read at the
+undo: restoring wins by the ordinary rule every write wins by — a fresh clock
+above everything its issuer has seen — with no undo-specific merge case, in
+any state whatsoever. -/
+theorem undo_restores_general (s : MVReg) (v : Nat) (c : Nat × Nat)
+    (hdom : ∀ w, s w = true → Dom w.2 c) (w : Write) :
+    InView (s ⊔ single (v, c)) w ↔ w = (v, c) := by
+  have hnew : (s ⊔ single (v, c)) (v, c) = true := by
+    show (s (v, c) || ((v, c) == (v, c))) = true
+    simp
+  constructor
+  · intro ⟨hmem, hnodom⟩
+    have hor : s w = true ∨ w = (v, c) := by
+      simpa [gset_mem_merge, single] using hmem
+    rcases hor with hs | h
+    · exact absurd (hdom w hs) (hnodom (v, c) hnew)
+    · exact h
+  · intro h
+    subst h
+    refine ⟨hnew, ?_⟩
+    intro w' h'
+    have hor : s w' = true ∨ w' = (v, c) := by
+      simpa [gset_mem_merge, single] using h'
+    rcases hor with hs | h
+    · exact Clock.lt_asymm (hdom w' hs)
+    · subst h
+      exact Clock.lt_irrefl _
+
+/-- Act 2 is an instance: `w1` dominates everything in `single w0`. -/
+example (w : Write) : InView s01 w ↔ w = w1 :=
+  undo_restores_general (single w0) w1.1 w1.2
+    (fun w h => by
+      have hw : w = w0 := by cases w; simp_all [single, w0]
+      subst hw; decide) w
+
+/-- Act 3 is an instance: the undo's clock dominates everything in `s01`. -/
+example (w : Write) : InView s01u w ↔ w = u1 :=
+  undo_restores_general s01 u1.1 u1.2
+    (fun w h => by rcases mem_s01 h with rfl | rfl <;> decide) w
+
+/-- Act 4 is an instance: the redo's clock dominates everything in `s01u`. -/
+example (w : Write) : InView s01ur w ↔ w = r1 :=
+  undo_restores_general s01u r1.1 r1.2
+    (fun w h => by rcases mem_s01u h with rfl | rfl | rfl <;> decide) w
 
 end Uwueave.Undo

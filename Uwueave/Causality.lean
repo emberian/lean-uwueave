@@ -20,6 +20,14 @@ Two constructions a multiplayer weave needs around its merge:
     its way back to innocence. (Almeida–Shapiro's blocklace §5 in miniature;
     Kleppmann's BFT-CRDT paper reaches the same architecture.)
 
+Between them sits the **concrete clock kit** (§2): the two-replica clock
+`Nat × Nat` that `MVRegister` and `Undo` tag writes with, one shared
+definition of "dominates" (`Clock.lt` — exactly `MVRegister.Dom`'s content)
+and "concurrent" (`Clock.Concurrent`), decidable, with the small algebra
+everyone re-derives — and the bridge theorems (`Clock.le_iff_toVClock` and
+friends) certifying the kit against the abstract vector-clock order of §1
+under the evident encoding. One vocabulary, not three encodings.
+
 The dual is also stated: evidence requires *both* branches
 (`no_unilateral_evidence`) — an honest replica holding one block of a slot
 frames nobody.
@@ -70,7 +78,129 @@ theorem concurrent_merge_strict {ι : Type} {x y : VClock ι}
   · intro heq
     exact h.1 (heq ▸ le_merge_left x y)
 
-/-! ## §2. Fork evidence -/
+/-! ## §2. The concrete two-replica clock kit
+
+Downstream files (`MVRegister`, `Undo`) keep their vector clocks *concrete* —
+`Nat × Nat`, one count per replica — so every story is decidable. This section
+is the single vocabulary for that clock. It is not a parallel theory: the
+bridge theorems at the end show `Clock.le`/`Clock.lt`/`Clock.Concurrent` are
+*exactly* the §1 lattice order (and its strict/incomparable forms) under the
+evident encoding into `VClock Bool`, so the kit is certified against
+`vclock_leq_iff`'s world rather than sitting beside it. -/
+
+/-- The concrete two-replica clock: one event count per replica. -/
+abbrev Clock := Nat × Nat
+
+namespace Clock
+
+/-- Componentwise order: everything the write carrying `c` had seen, the write
+carrying `c'` has also seen. -/
+def le (c c' : Clock) : Prop := c.1 ≤ c'.1 ∧ c.2 ≤ c'.2
+
+/-- Strict domination: componentwise `≤` and not equal — `c'` has seen
+strictly more than `c`. This is exactly the content of `MVRegister.Dom`,
+which is an abbreviation for it. -/
+def lt (c c' : Clock) : Prop := c.1 ≤ c'.1 ∧ c.2 ≤ c'.2 ∧ c ≠ c'
+
+/-- Concurrent clocks: incomparable — neither has seen everything the other
+has. Symmetric (`concurrent_symm`); never relates a clock to itself, since
+concurrent clocks are distinct (`concurrent_ne`). -/
+def Concurrent (c c' : Clock) : Prop := ¬ le c c' ∧ ¬ le c' c
+
+instance (c c' : Clock) : Decidable (le c c') := by
+  unfold le; infer_instance
+
+instance (c c' : Clock) : Decidable (lt c c') := by
+  unfold lt; infer_instance
+
+instance (c c' : Clock) : Decidable (Concurrent c c') := by
+  unfold Concurrent; infer_instance
+
+/-- `lt` is `le` plus distinctness — the repackaging proofs reach for. -/
+theorem lt_iff_le_ne {c c' : Clock} : lt c c' ↔ (le c c' ∧ c ≠ c') :=
+  ⟨fun h => ⟨⟨h.1, h.2.1⟩, h.2.2⟩, fun h => ⟨h.1.1, h.1.2, h.2⟩⟩
+
+theorem le_refl (c : Clock) : le c c := ⟨Nat.le_refl _, Nat.le_refl _⟩
+
+theorem le_trans {c₁ c₂ c₃ : Clock} (h : le c₁ c₂) (h' : le c₂ c₃) :
+    le c₁ c₃ := ⟨Nat.le_trans h.1 h'.1, Nat.le_trans h.2 h'.2⟩
+
+theorem le_antisymm {c c' : Clock} (h : le c c') (h' : le c' c) : c = c' := by
+  have h1 : c.1 = c'.1 := Nat.le_antisymm h.1 h'.1
+  have h2 : c.2 = c'.2 := Nat.le_antisymm h.2 h'.2
+  cases c; cases c'; simp_all
+
+/-- No clock strictly dominates itself. -/
+theorem lt_irrefl (c : Clock) : ¬ lt c c := fun h => h.2.2 rfl
+
+/-- Two writes cannot each strictly dominate the other. -/
+theorem lt_asymm {c c' : Clock} (h : lt c c') : ¬ lt c' c := fun h' =>
+  h.2.2 (le_antisymm ⟨h.1, h.2.1⟩ ⟨h'.1, h'.2.1⟩)
+
+/-- Supersession chains: strict domination is transitive. -/
+theorem lt_trans {c₁ c₂ c₃ : Clock} (h : lt c₁ c₂) (h' : lt c₂ c₃) :
+    lt c₁ c₃ := by
+  refine ⟨Nat.le_trans h.1 h'.1, Nat.le_trans h.2.1 h'.2.1, fun heq => ?_⟩
+  subst heq
+  exact lt_asymm h h'
+
+/-- "Incomparable" has no direction. -/
+theorem concurrent_symm {c c' : Clock} (h : Concurrent c c') :
+    Concurrent c' c := ⟨h.2, h.1⟩
+
+/-- Concurrent clocks are distinct (`le` is reflexive). -/
+theorem concurrent_ne {c c' : Clock} (h : Concurrent c c') : c ≠ c' :=
+  fun heq => h.1 (heq ▸ le_refl c)
+
+/-! ### The bridge — the kit is §1's order, not a lookalike -/
+
+/-- The evident encoding of a concrete clock as a `Bool`-indexed vector
+clock: replica `true` holds the first count, replica `false` the second. -/
+def toVClock (c : Clock) : VClock Bool := fun b => cond b c.1 c.2
+
+/-- The encoding is injective — no two concrete clocks collapse. -/
+theorem toVClock_inj {c c' : Clock} (h : toVClock c = toVClock c') : c = c' := by
+  have h1 : c.1 = c'.1 := congrFun h true
+  have h2 : c.2 = c'.2 := congrFun h false
+  cases c; cases c'; simp_all
+
+/-- **The bridge for `le`.** The concrete componentwise order is exactly the
+lattice order `⊑` of the abstract vector-clock world under `toVClock` — by
+`vclock_leq_iff`, which equates `⊑` with the pointwise test the two
+components spell out. -/
+theorem le_iff_toVClock {c c' : Clock} :
+    le c c' ↔ toVClock c ⊑ toVClock c' := by
+  rw [vclock_leq_iff]
+  constructor
+  · intro h b
+    cases b
+    · exact h.2
+    · exact h.1
+  · intro h
+    exact ⟨h true, h false⟩
+
+/-- **The bridge for `lt`**: strict domination is the strict lattice order —
+`⊑` plus distinctness, carried across the injective encoding. -/
+theorem lt_iff_toVClock {c c' : Clock} :
+    lt c c' ↔ (toVClock c ⊑ toVClock c' ∧ toVClock c ≠ toVClock c') := by
+  rw [lt_iff_le_ne, le_iff_toVClock]
+  constructor
+  · exact fun h => ⟨h.1, fun heq => h.2 (toVClock_inj heq)⟩
+  · exact fun h => ⟨h.1, fun heq => h.2 (congrArg toVClock heq)⟩
+
+/-- **The bridge for `Concurrent`**: concrete concurrency is §1's
+`Concurrent` on the encoded clocks — "concurrent" means one thing. -/
+theorem concurrent_iff_toVClock {c c' : Clock} :
+    Concurrent c c' ↔
+      Uwueave.Causality.Concurrent (toVClock c) (toVClock c') :=
+  ⟨fun h => ⟨fun hle => h.1 (le_iff_toVClock.mpr hle),
+             fun hle => h.2 (le_iff_toVClock.mpr hle)⟩,
+   fun h => ⟨fun hle => h.1 (le_iff_toVClock.mp hle),
+             fun hle => h.2 (le_iff_toVClock.mp hle)⟩⟩
+
+end Clock
+
+/-! ## §3. Fork evidence -/
 
 /-- The observation set of a replica: (author, seq, block-id) triples it has
 seen. Grow-only; in a content-addressed weave the block-id is the hash, and
