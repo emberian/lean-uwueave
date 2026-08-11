@@ -26,6 +26,7 @@ import Uwueave.Era
 import Uwueave.EraKernel
 import Uwueave.Gated
 import Uwueave.Fugue
+import Uwueave.WeaveState
 import Uwueave.Segmented
 import Uwueave.Spec
 import Uwueave.Weave
