@@ -619,6 +619,98 @@ def absorbFree {S : Type u} {Seg : Type v} [MergeState S] {I J : Invariant S}
   hy := ⟨v.hy, hJy⟩
   hbad := fun h => v.hbad h.1
 
+/-- **Two seamed invariants on ONE carrier, conjoined** — the same-state
+counterpart of `prodSeams`, and the rule a *document* actually needs: a
+document has one carrier, and its two coordination features are two seamed
+conjuncts over that carrier, not two fields of a product.
+
+The seam is the pair of the two projections, and the reason this succeeds
+where refinement fails (`refinement_fails`: a finer seam is NOT automatically a
+seam) is that **each conjunct brings its own closure clause**: within a
+pair-fiber, `v.seamFree` preserves `I` and the first component, `w.seamFree`
+preserves `J` and the second. Refinement failed because the invariant was
+segmented over the coarse seam only and the finer fibers had no closure of
+their own; here nothing is asked of the finer seam that one of the two
+constituents does not already prove.
+
+The clash is field `v`'s, so `J` must hold at `v`'s pair — the same two
+side-conditions as `absorbFree`, for the same honest reason: a clash of `I` at
+states where `J` fails is not a clash of the conjunction. -/
+def andSeams {S : Type u} {Seg₁ : Type v} {Seg₂ : Type z} [MergeState S]
+    {I J : Invariant S}
+    (v : SegVerdict I Seg₁) (w : SegVerdict J Seg₂)
+    (hJx : J v.x) (hJy : J v.y) :
+    SegVerdict (fun s => I s ∧ J s) (Seg₁ × Seg₂) where
+  σ := fun s => (v.σ s, w.σ s)
+  seamFree := fun x y hσ hx hy =>
+    have h1 := v.seamFree x y (congrArg Prod.fst hσ) hx.1 hy.1
+    have h2 := w.seamFree x y (congrArg Prod.snd hσ) hx.2 hy.2
+    ⟨⟨h1.1, h2.1⟩, by
+      show (v.σ (x ⊔ y), w.σ (x ⊔ y)) = (v.σ x, w.σ x)
+      rw [h1.2, h2.2]⟩
+  x := v.x
+  y := v.y
+  hx := ⟨v.hx, hJx⟩
+  hy := ⟨v.hy, hJy⟩
+  hbad := fun h => v.hbad h.1
+
+/-- The same conjunction reporting `w`'s clash instead, with the
+side-conditions on `I` — the repro a schema author gets should name the
+feature they are asking about. -/
+def andSeamsRight {S : Type u} {Seg₁ : Type v} {Seg₂ : Type z} [MergeState S]
+    {I J : Invariant S}
+    (v : SegVerdict I Seg₁) (w : SegVerdict J Seg₂)
+    (hIx : I w.x) (hIy : I w.y) :
+    SegVerdict (fun s => I s ∧ J s) (Seg₁ × Seg₂) where
+  σ := fun s => (v.σ s, w.σ s)
+  seamFree := fun x y hσ hx hy =>
+    have h1 := v.seamFree x y (congrArg Prod.fst hσ) hx.1 hy.1
+    have h2 := w.seamFree x y (congrArg Prod.snd hσ) hx.2 hy.2
+    ⟨⟨h1.1, h2.1⟩, by
+      show (v.σ (x ⊔ y), w.σ (x ⊔ y)) = (v.σ x, w.σ x)
+      rw [h1.2, h2.2]⟩
+  x := w.x
+  y := w.y
+  hx := ⟨hIx, w.hx⟩
+  hy := ⟨hIy, w.hy⟩
+  hbad := fun h => w.hbad h.2
+
+/-- **A seam lifts along `Prod.fst`** — the field-scale verdict read at the
+document scale, with the other field held at any value (the lifted invariant
+does not mention it; legality of the witness matters only at conjunction time,
+where `andSeams` demands it). The mini form of `Preo.seamAlong` at the one
+projection every product state has; kept here so `SeamAlgebra` needs nothing
+above it.
+
+⚠ The seam-closure clause is where this could silently lie and does not: the
+lifted seam reads only the first component, and `merge` on a product is
+componentwise, so `v.seamFree` really does discharge both conjuncts — the
+merged pair's first component *is* the merged first components. -/
+def liftFst {A : Type u} {B : Type v} {SegA : Type w} [MergeState A]
+    [MergeState B] {IA : Invariant A}
+    (v : SegVerdict IA SegA) (b : B) :
+    SegVerdict (S := A × B) (fun p => IA p.1) SegA where
+  σ := fun p => v.σ p.1
+  seamFree := fun x y hσ hx hy => v.seamFree x.1 y.1 hσ hx hy
+  x := (v.x, b)
+  y := (v.y, b)
+  hx := v.hx
+  hy := v.hy
+  hbad := fun h => v.hbad h
+
+/-- **A seam lifts along `Prod.snd`** — likewise for the second field. -/
+def liftSnd {A : Type u} {B : Type v} {SegB : Type w} [MergeState A]
+    [MergeState B] {IB : Invariant B}
+    (w : SegVerdict IB SegB) (a : A) :
+    SegVerdict (S := A × B) (fun p => IB p.2) SegB where
+  σ := fun p => w.σ p.2
+  seamFree := fun x y hσ hx hy => w.seamFree x.2 y.2 hσ hx hy
+  x := (a, w.x)
+  y := (a, w.y)
+  hx := w.hx
+  hy := w.hy
+  hbad := fun h => w.hbad h
+
 /-- **Change the seam** — `seam_substitute` as a combinator: re-report an
 existing verdict against a different coordination point, given that the new one
 determines the old and is fiber-stable. The clash is carried unchanged (it
@@ -844,5 +936,55 @@ example (a b : TwoFieldDoc) (hσ : a.1.1 = b.1.1)
 example (a b : TwoFieldDoc) (hσ : (a.1.1, a.2.1) = (b.1.1, b.2.1))
     (ha : twoFieldInv a) (hb : twoFieldInv b) : twoFieldInv (a ⊔ b) :=
   (twoField_segmented a b hσ ha hb).1
+
+/-! ### §7½. The same-state route rediscovers the product route.
+
+`twoFieldSegVerdict` was assembled by `prodSeams`, which needs the two features
+to live on *distinct carriers* — it composes fields. A document's coordination
+features live on **one** carrier, so the rule an elaborator actually needs is
+`andSeams`: lift each field verdict to the document (`liftFst`/`liftSnd`),
+conjoin on the same state. This section checks the two routes meet: same
+invariant (definitionally), same seam (by `rfl`). The clash pairs differ — the
+product route holds field B at *its own clash value* where the lifted route
+holds it at a legal witness — and both are honest clashes of the conjunction,
+which is exactly why `SegVerdict` carries *a* repro and not *the* repro.
+
+This is the rule `Preo` fragment 2 named as its remaining gap
+("`weaveDocSeamVerdict` segments over two coordination features; the seam
+registry has one single-field rule — a missing rule, not a missing theorem").
+The rule now exists at the combinator layer; the registry wiring is the
+elaborator's follow-up. -/
+
+/-- The two-field document's seam verdict, rebuilt by the **same-state** route:
+each field verdict lifted, then conjoined. Elaborates at `twoFieldInv` because
+the conjunction of the lifted invariants *is* that invariant, definitionally. -/
+def twoFieldViaAnd : SegVerdict twoFieldInv (Nat × (Bool → Nat)) :=
+  (schemaSegVerdict.liftFst okQuota).andSeams
+    (budgetSegVerdict.liftSnd okSchema) okQuota_wf okQuota_wf
+
+/-- **The rediscovery**: the two routes produce the same seam — the same
+projection, the same fibers, the same coordination points — by `rfl`. -/
+theorem andSeams_recovers_prodSeams_seam :
+    twoFieldViaAnd.σ = twoFieldSegVerdict.σ := rfl
+
+/-- Both routes certify the same fiber-merges: the `freeWithinSeam` reading is
+interchangeable. (Stated as an example at a use-site shape rather than a
+function-equality, which is all a consumer ever reads.) -/
+example (a b : TwoFieldDoc) (hσ : twoFieldViaAnd.σ a = twoFieldViaAnd.σ b)
+    (ha : twoFieldInv a) (hb : twoFieldInv b) : twoFieldInv (a ⊔ b) :=
+  twoFieldSegVerdict.freeWithinSeam hσ ha hb
+
+/-- Both routes escalate globally — and the clash pairs genuinely differ
+(field B at `budgetSegVerdict.x` versus at `okQuota`), so this is two repros of
+one impossibility, not one repro twice. -/
+example : ¬ IConfluent twoFieldInv := twoFieldViaAnd.escalatesGlobally
+
+/-- The right-clash mirror also lands, reporting the budget's repro against the
+document — the repro a schema author asking about the quota should see. -/
+def twoFieldViaAndRight : SegVerdict twoFieldInv (Nat × (Bool → Nat)) :=
+  (schemaSegVerdict.liftFst okQuota).andSeamsRight
+    (budgetSegVerdict.liftSnd okSchema) okSchema_wf okSchema_wf
+
+example : ¬ IConfluent twoFieldInv := twoFieldViaAndRight.escalatesGlobally
 
 end Uwueave.SeamAlgebra
