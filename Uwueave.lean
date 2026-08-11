@@ -44,6 +44,7 @@ import Uwueave.Exits
 import Uwueave.CoordEffect
 import Uwueave.SeamColoring
 import Uwueave.Budget
+import Uwueave.WorldFuture
 import Uwueave.Choreo
 import Uwueave.Tactics
 import Uwueave.Audit

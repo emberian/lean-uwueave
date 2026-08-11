@@ -99,6 +99,7 @@ import Uwueave.Exits
 import Uwueave.CoordEffect
 import Uwueave.SeamColoring
 import Uwueave.Budget
+import Uwueave.WorldFuture
 import Uwueave.Tactics
 
 open Lean Elab Command in
