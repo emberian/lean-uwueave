@@ -39,6 +39,24 @@ The gate also carries a vacuity tripwire: if the namespace walk ever audits
 suspiciously few constants (an import breaks, a rename empties the filter),
 it fails rather than passing on nothing. A gate that cannot go red is not a
 gate.
+
+## What this gate does NOT prove — `docs/TRUST.md`
+
+`#audit_floor` establishes **logical hygiene, not semantic adequacy** (the
+distinction is codex's, from an external review of this repo). A green gate
+says every constant in the namespace was built from `propext`,
+`Classical.choice` and `Quot.sound` and nothing else. It says nothing about
+whether a theorem's statement corresponds to the protocol we meant; whether a
+model is missing an operation or a failure mode; whether the states a theorem
+quantifies over are reachable through the shipping API; whether the serialized
+bytes implement the abstract state that was proved about; or whether any
+docstring — including this one — accurately describes what it sits above. Those
+are read by humans and other models, not by the elaborator, and the gate is
+blind to all of them by construction. This file is also *not itself a theorem*:
+it is an unverified metaprogram auditing the tree from inside the tree.
+`docs/TRUST.md` carries the full accounting as three separate ledgers —
+logical TCB, execution TCB, environment/model premises — each row classified as
+an irreducible premise or a transmutable obligation with a named next step.
 -/
 import Lean
 import Uwueave.Weave
@@ -79,7 +97,9 @@ import Uwueave.Tactics
 open Lean Elab Command in
 /-- Fail the build unless every constant in the `Uwueave` namespace stays
 within the axiom floor `{propext, Classical.choice, Quot.sound}`. Offenders
-are named (first 20) in the error. -/
+are named (first 20) in the error. This is logical hygiene, not semantic
+adequacy: see the header and `docs/TRUST.md` for what a green gate does not
+say. -/
 elab "#audit_floor" : command => do
   let env ← getEnv
   let allowed : List Name := [``propext, ``Classical.choice, ``Quot.sound]
