@@ -70,7 +70,8 @@ below `n`, so a chain has length at most `n` and fuel `n` suffices
     it a well-formed merge really does duplicate (`dup_id_appears_twice`). A
     content-addressed deployment discharges it *cryptographically* — id =
     hash(content, anchor) makes one id carry two anchors only via a hash
-    collision — which is a premise about SHA-2, not a theorem here; the same
+    collision — which is a collision-resistance premise about whatever hash a
+    deployment uses (blake3, in this repo's crate), not a theorem here; the same
     discipline as the rank remark in `Acyclicity.lean`.)
   * `linearize_anchor_precedes` — an element's (non-root) anchor appears
     somewhere before it, stated as `[a, i].Sublist (linearize n s)` (general,

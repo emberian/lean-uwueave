@@ -22,11 +22,18 @@ fn main() {
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
-    if !lake_ok && !ir.join("Uwueave.c").exists() {
+    // FAIL CLOSED. A previous successful build leaves `Uwueave.c` on disk, so
+    // tolerating a failed `lake build` whenever that file exists would link
+    // STALE semantics — a green `cargo test` reachable from a red `lake build`,
+    // which is precisely the gate-that-cannot-go-red failure this project
+    // audits for elsewhere. (Found by the docs/TRUST.md pass, 2026-08-11.)
+    if !lake_ok {
         panic!(
-            "`lake build` failed and no emitted C is present. \
-             Install a Lean toolchain (https://elan.lean-lang.org) — this crate \
-             wraps Lean-compiled semantics and cannot build without it."
+            "`lake build` failed. This crate wraps Lean-compiled semantics: \
+             the decision layers are authored in Lean and emitted to C, so a \
+             failed Lean build means the C on disk is stale or absent and \
+             linking it would ship semantics nobody proved. Install a Lean \
+             toolchain (https://elan.lean-lang.org) and fix the Lean errors."
         );
     }
 

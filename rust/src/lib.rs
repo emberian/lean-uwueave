@@ -17,7 +17,7 @@
 //! * [`movelog`] — node moving as a grow-only operation log whose
 //!   timestamp-ordered, cycle-skipping replay is **authored in Lean**
 //!   (`Uwueave/Exec.lean`), compiled to C by lake, and called through a
-//!   three-function shim. This crate does not contain a replay
+//!   small C shim. This crate does not contain a replay
 //!   implementation.
 //!   `derived_view_sec` is the guarantee; `view_not_stable` is the priced,
 //!   documented anomaly (an older remote op can retroactively skip a move you
