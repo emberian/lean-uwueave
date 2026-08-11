@@ -13,6 +13,8 @@ import Uwueave.ORMap
 import Uwueave.Automata
 import Uwueave.Authority
 import Uwueave.ExecRefine
+import Uwueave.Ceiling
+import Uwueave.Seams
 import Uwueave.Segmented
 import Uwueave.Spec
 import Uwueave.Weave

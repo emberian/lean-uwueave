@@ -1,8 +1,12 @@
 # The map — every module, what it settles
 
 The theorem-by-file guide. Each row names its keystone theorems so the claims
-are checkable rather than vibes; every keystone's axiom footprint is pinned in
-`Uwueave/Audit.lean`, where a stray `sorry` or `native_decide` fails the build.
+are checkable rather than vibes. Trust is enforced wholesale, not per-name:
+`Uwueave/Audit.lean`'s `#audit_floor` walks every constant in the namespace
+and fails the build on any axiom outside Lean's floor — a stray `sorry` or
+`native_decide` anywhere in the tree goes red, zero-lag, no list to maintain.
+(The ledger's audit column below is a reading aid; coverage is total by
+construction.)
 
 Two axes qualify every keystone (the [ledger](#keystone-ledger) below carries
 them per theorem). **Generality** reads the actual statement: *∀-general*
@@ -41,7 +45,7 @@ records whether `Uwueave/Audit.lean` pins the theorem's axiom footprint
 | `Uwueave/Weave.lean` | A real weave library's feature list classified feature-by-feature — including the loom-specific theorem that a *shared* replicated active path is not a CRDT (`active_path_not_iconfluent`); make it per-user, which is better UX anyway. |
 | `Uwueave/Exec.lean` | The executable kernel: the move-replay decision procedure, authored in Lean, exported to C, and linked into the Rust crate — now factored so `replay` is *by definition* decode → `absReplay` → encode, leaving no bytes-vs-decision gap to prove. Remaining opens stated in its header: the Prop-level `Move.lean` connection, the input-side codec, C-backend trust. |
 | `Uwueave/ExecRefine.lean` | The kernel's theorems: **`absReplay_acyclic`** — for a grounded base and *arbitrary* op arrays (any order, duplicates, junk indices), the replayed view has no cycle; fuel adequacy (`chainHits_decides`, from-scratch pigeonhole); the output codec round-trip capped by `decode_encode_id`. `miniInterp_acyclic`, generalized from the two-op toy to the real kernel. |
-| `Uwueave/Audit.lean` | The trust ledger, enforced: every keystone theorem's axiom footprint is pinned with `#guard_msgs`. A `sorry` or `native_decide` sneaking in anywhere *fails the build*. 32 of 113 pinned keystones use no axioms at all (count enforced by grep, not prose). |
+| `Uwueave/Audit.lean` | The trust gate, total: `#audit_floor` audits **every** constant in the `Uwueave` namespace against the axiom floor `{propext, Classical.choice, Quot.sound}` — `sorry` (`sorryAx`) and `native_decide` (`ofReduceBool`) are build failures everywhere, with a vacuity tripwire so the gate itself cannot pass on an empty walk. Replaced 113 per-theorem pins on 2026-08-10; the file's header carries the honest accounting. |
 | `Uwueave/ORMap.lean` | The observed-remove map — documents are maps. Add-wins scoped (`ormap_get_survives`), the **doomed-update anomaly** as a theorem (a nested write concurrent with its key's removal survives the merge but is masked by the view), and the centerpiece: remove-wins and update-wins views provably *disagree on the same merged state* (`ormap_policy_divergence`) — the merge is policy-neutral; the choice is yours and visible. |
 | `Uwueave/Automata.lean` | Replicated automata sorted by the same verdicts: semilattice-action runs converge as instances of the delta laws (`run_same_inputs`); commuting inputs may be replayed in any order (`exec_perm`, axiom-free — the seed of the Mazurkiewicz/Zielonka connection, cited not claimed); DFA determinism is the uniqueness ceiling (concrete clash), with LWW-arbitration vs accept-the-NFA priced as exits; token firing under escrow reads the segmented theorems as Petri nets. |
 | `Uwueave/Authority.lean` | Local-first permissions: delegation chains as a grounded CRDT — issuing narrowed grants is coordination-free (`wf_iconfluent`), authority provably only narrows (`scope_le_root`), sole-admin escalates (the duelling-admins clash), and revocation's late arrivals only ever *shrink* authority (`authority_view_antitone`) — the derived view's instability points fail-closed, the security dual of `view_not_stable`. |
