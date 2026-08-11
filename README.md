@@ -1,140 +1,153 @@
 # lean-uwueave
 
-When two people edit the same thing at the same time on different devices,
-something has to happen when the edits meet. Usually what happens is decided
-by accident — whatever the code happened to do — and discovered by users.
-This repository is a careful map of that moment: which merges can be safe
-with **no coordination at all**, which can never be, and what your real
-options are when the answer is never. The map is machine-checked; the
-impossibilities come with tiny two-device stories you can watch fail; and the
-working code that ships alongside gets its trickiest decision straight from
-the proofs.
+**When two people change the same thing at the same time on different devices,
+something has to happen when their changes meet.** Usually what happens is
+decided by accident — whatever the code did — and discovered by users, as a
+number that was quietly wrong or an edit that silently vanished.
 
-## The whole idea, in one story
+This is a careful, machine-checked map of that moment. It says which promises
+your software can keep with **no coordination at all**, which can never be kept
+that way, and — when the answer is *never* — what your actual options are and
+what each one costs.
 
-Two phones, both offline.
+Every "no" comes with a small, concrete story of two devices you can watch fail.
+Every price comes with the theorem that justifies it. And the trickiest
+decisions ship as *compiled proofs*, not as code someone wrote twice.
 
-**A shared shopping list.** You add eggs; your partner adds bread. When the
-phones sync, the lists merge — everything both of you wrote, no conflict, no
-server, no waiting. This works *every* time, for *any* number of phones, and
-nothing about it is lucky: "the list only grows" is the kind of promise that
-survives merging.
+## The whole idea, in two phones
 
-**A shared bank balance of $100.** You spend $80; your partner spends $80.
-Each phone, alone, was being perfectly responsible. When they sync: $160
-spent, and no clever merge function can un-spend it. This isn't an
-engineering gap waiting for a better library — it is a *theorem* (Bailis et
-al., 2015) that no coordination-free system can keep that promise. The
-question was never "is my merge algorithm good enough"; it's "can *this
-particular promise* survive merging at all," and that question has a
-definite, checkable answer for each promise you care about.
+**A shared shopping list.** You add eggs; your partner adds bread. Offline. When
+the phones sync, you have both — no conflict, no server, no waiting. This works
+every time, for any number of phones, and it isn't luck: *"the list only grows"*
+is the kind of promise that survives meeting.
 
-Everything in this repo lives in the space between those two phones:
+**A shared $100 balance.** You spend $80; your partner spends $80. Each phone,
+alone, was being perfectly responsible. They sync: $160 spent, and no clever
+merge can un-spend it. This is not an engineering gap awaiting a better library
+— it's a **theorem** (Bailis et al., 2015) that no coordination-free system can
+keep that promise. You weren't bad at this. The universe said no.
 
-- **A catalog of promises, classified.** Grow-only sets, counters, "last
-  writer wins" registers, undo/redo, permission systems, DAGs and trees,
-  budgets. Each one either *provably safe* (with the proof) or *provably
-  impossible* (with the exact two-device story that breaks it — usually
-  three lines, pasteable into any test suite in any language).
-- **The escape routes, also proved.** When a promise can't survive merging,
-  you have real choices: split the budget ahead of time so each device spends
-  only its share (safe again, provably); keep *both* versions and show the
-  fork instead of silently picking a winner; or replay a log of operations
-  with a deterministic tiebreak — whose one honest cost (an old edit arriving
-  late can undo a newer one) is *also* a theorem here, so you can design for
-  it instead of being surprised by it.
-- **Some genuinely nice surprises.** Content-addressing — naming things by
-  the hash of their contents, the way git does — makes "no cycles in this
-  graph" *free*, with no cycle-checking code at all. Permission systems where
-  handing out narrower access works offline, on a plane, in a network
-  partition, and late-arriving revocations can only ever *reduce* someone's
-  access, never restore it. Sync protocols where sending small diffs is
-  provably the same as sending everything.
+Everything here lives between those two phones. And the useful part is that
+"the universe said no" is *not* the end of the conversation — it's the start of
+a priced menu:
 
-## Try it in two minutes
+- **Split it up front.** Give each device $50 of its own. Both stay within
+  their share, both merge freely, and you only talk when you re-divide.
+- **Let someone arbitrate.** A designated referee orders the events; everyone
+  agrees on the same winner. Costs trust, and some rollback.
+- **Keep both and show them.** Don't pick — surface the disagreement to the
+  person, who has context the algorithm doesn't.
+- **Change what you promised.** Sometimes "at most one" was never the real
+  requirement.
 
-The repo ships a small command-line tool for exactly the reader who has a
-schema in mind and no interest in proofs. Describe your app's shared state:
+Each of those is a theorem here, and — the part we're proudest of — some of
+them **provably don't apply** to your particular problem, so the menu you get is
+short and honest rather than a list of vague possibilities.
 
-```
-field notes: gset
-invariant notes: member
-field pins: gset
-invariant pins: unique
-```
+## What you can use without reading any proofs
 
-and `uwueave-check` answers with a verdict per promise:
+- **A command-line tool.** Describe your app's shared data in a few lines;
+  `uwueave-check` tells you which promises are free, which escalate, and which
+  are free *within a seam* — each with the theorem name, so you (or a friend, or
+  a model) can check the receipt.
+- **The counterexamples.** Every impossibility comes with real states — usually
+  three lines — that paste straight into your test suite in any language. A
+  refutation here is a gift: it's the bug your users would have found, delivered
+  early and politely.
+- **A Rust crate.** An append-only content-addressed document store,
+  collaborative text, node moving, membership and roles — where the delicate
+  decisions are compiled from the proofs rather than reimplemented.
 
-```
-notes  gset  member  FREE       gset_mem_iconfluent — Uwueave/Catalog.lean
-pins   gset  unique  ESCALATES  gset_atMostOne_not_iconfluent — Uwueave/Catalog.lean
-```
+## Some things we found that surprised us
 
-— including, for every ESCALATES, the two-device repro story and the priced
-escape routes. Every verdict is a citation into a machine-checked theorem,
-and every combination the theorems *don't* settle says so honestly instead
-of guessing.
+**Content-addressing gives you acyclicity for free.** Naming things by the hash
+of their contents-and-parents — the way git does — means every edge points at
+something older, so an append-only document *cannot* contain a cycle. No cycle
+check, at any scale.
 
-```sh
-cd rust && cargo run --bin uwueave-check -- your.schema
-```
+**Verified-correct and safe are different things.** A merge can be provably
+correct against its own specification and still bankrupt you, because the
+specification permitted it. We build both a counter that is verified *and*
+overdrawing, and one that is safe *because it silently loses your data*.
+Checking the data structure is not checking the application.
 
-## What "machine-checked" buys you here
+**Knowing the ancestor repairs one kind of conflict and never the other.** If
+some ordering of the two concurrent actions would have been legal, a three-way
+merge (git's model) can recover it — a released lock re-appearing, say. If *no*
+ordering is legal — both people really did spend the money — then no merge in
+existence helps, and you need one of the priced exits above.
 
-The mathematics is written in [Lean 4](https://lean-lang.org) — a proof
-assistant that will not accept a wrong proof — and it builds in about thirty
-seconds on a laptop, with no heavyweight dependencies. A build-failing audit
-gate pins every key theorem's trust base, so if anyone ever smuggles in an
-unproved claim, **the build breaks**. And the Rust library doesn't
-*re-implement* the delicate part (the replay tiebreak that keeps everyone's
-document identical): the decision procedure is compiled *from the Lean
-itself* and linked in. There is no second copy of the rules to drift out of
-sync, because there is no second copy.
+**Asking for exactly one answer is what costs.** Computing over data that's
+still arriving is free; *insisting* the result be a single value is provably a
+coordination requirement. So a UI that shows `47 + (2 peers pending)`, or shows
+both candidates, is not a degraded experience — it's the honest one, and the
+cheap one.
 
-We are equally careful about what is *not* claimed: the storage glue and
-codecs are ordinary tested code, cryptographic assumptions are stated as
-assumptions, and wherever our models stop short of a hard problem (rich text
-being the famous one), the file says so at the top. Honest boundaries beat
-impressive blurs.
+**A merged document is still a document.** Even when two people's changes break
+a rule — two "pinned" items where one is allowed — the result stays well-formed
+enough to render, with both sides visible. Conflicts become something you draw,
+not something you crash on.
 
-That extends to claims about the *field*. A theorem being machine-checked says
-nothing about whether someone published it first, and those are separate
-questions with separate evidence. On 2026-08-11 an outside reader showed that
-eight of our novelty claims were already answered in the literature — that
-nobody offered a certain combination of verdicts (LoRe did), that a certain
-junction was empty (it was occupied), that a proposed equivalence held (it is
-refuted in both directions). Every one is **retracted in the text where it was
-made**, indexed in `FORCODEX.md` §0.5, with the papers annotated in the
-bibliography. None of the theorems changed; the size of the claims around them
-did. If you find another, tell us — a retraction is a deliverable here, and
-the only embarrassing part is the interval before it lands.
+## Reading further
 
-## Going deeper
-
-- **[The map](docs/MAP.md)** — every module and what it settles, theorem
-  names included.
-- **[The website](https://emberian.github.io/lean-uwueave/)** — the
-  constructions presented properly, diagrams and all.
-- **[The bibliography](docs/BIBLIOGRAPHY.md)** — every paper behind this,
-  what each established, what we took, and what we deliberately declined.
-- **The proofs themselves** — `Uwueave/*.lean`, written to be read: each
-  module opens with a plain-language account of what it does and doesn't
-  show.
+- **[The map](docs/MAP.md)** — every module, what it settles, and a ledger of
+  keystone theorems tagged by how general each is and whether its counterexample
+  is actually reachable in practice.
+- **[The website](https://emberian.github.io/lean-uwueave/)** — the same material
+  with diagrams, for people who like diagrams.
+- **[Trust](docs/TRUST.md)** — three separate ledgers of what this rests on:
+  logic, execution, and environment. Including what our own build gate *cannot*
+  prove.
+- **[The bibliography](docs/BIBLIOGRAPHY.md)** — every paper behind this, what it
+  established, what we took, what we declined. Several entries exist to record
+  claims of *ours* that the literature refuted.
 
 ## Building
 
 ```sh
-lake build              # every proof + the audit gate (~30s cold, no mathlib)
-cd rust && cargo test   # compiles the Lean kernel to C and links it (needs elan)
+lake build              # every proof + the total axiom gate (Lean core only, no mathlib)
+cd rust && cargo test   # compiles the Lean decision layers to C and links them (needs elan)
 ```
 
-## Thanks
+## How to read our claims
 
-This library began as a gift into the [loom](https://github.com/socketteer/loom)
-/ [universal-weave](https://github.com/transkatgirl/universal-weave)
-ecosystem — branching-document tools whose builders ask exactly the right
-questions about merging — and grew from the
-[dregg](https://github.com/emberian/dregg) metatheory. Made by ember + Claude. The name
-is spelled lean-uwueave, and that was never a typo.
+We try to be kind by being exact.
+
+**"FREE"** means: merging provably preserves this promise, so coordination is
+never required *for that promise*. It does not mean an operation can't break it
+locally — validate your inputs — and it doesn't price metadata growth.
+
+**Refutations are concrete states**, not intuitions. **Premises stay premises**:
+where a guarantee needs a hash not to collide or a signature not to forge, that
+is stated as an assumption and never absorbed into a theorem.
+
+**Boundaries get decomposed, not just declared.** "That's outside our model" is
+a stopping condition dressed as honesty, so every boundary here is split into
+the part that is irreducibly an assumption and the part that is simply work
+nobody has done yet — with the next step named.
+
+And when we get something wrong, the correction lives where the claim lived.
+Several parts of this repository exist because outside reviewers took the work
+seriously enough to refute pieces of it; those retractions are in the documents,
+not buried in the history.
+
+## Papers, and thanks
+
+The full annotated bibliography is [here](docs/BIBLIOGRAPHY.md). The short list:
+Bailis et al. (the judgement this is built on), Shapiro et al. (CRDTs),
+Gomes–Kleppmann et al. (mechanized convergence), Kleppmann et al. (move
+operations, interleaving anomalies, undo/redo), Almeida–Shoker–Baquero (deltas),
+Whittaker–Hellerstein (segmented confluence), Hellerstein–Alvaro (CALM),
+Kuper–Newton (LVars), Omar et al. (typed holes), Ramesh et al. (Sal), the LoRe
+authors, and the Power–Koutris–Hellerstein free-termination line.
+
+Thanks to the weaver whose question started this, and to
+[universal-weave](https://github.com/transkatgirl/universal-weave) for being the
+kind of library worth building companions for. Made by ember + Claude, with the
+[dregg](https://github.com/emberian/dregg) metatheory in the background, and
+with review from two other AI systems who made it measurably better by telling
+us where we were wrong.
+
+The name is spelled lean-uwueave. That was never a typo.
 
 License: Unlicense OR MIT.
