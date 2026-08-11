@@ -35,5 +35,6 @@ import Uwueave.Spec
 import Uwueave.Weave
 import Uwueave.SeamAlgebra
 import Uwueave.Gluing
+import Uwueave.Holes
 import Uwueave.Tactics
 import Uwueave.Audit
