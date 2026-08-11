@@ -31,4 +31,5 @@ import Uwueave.GatedEra
 import Uwueave.Segmented
 import Uwueave.Spec
 import Uwueave.Weave
+import Uwueave.SeamAlgebra
 import Uwueave.Audit
