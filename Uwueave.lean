@@ -52,6 +52,7 @@ import Uwueave.ResultStatus
 import Uwueave.Recoverable
 import Uwueave.HonestRender
 import Uwueave.Histories
+import Uwueave.TextSummary
 import Uwueave.LiveBudget
 import Uwueave.EraCertificate
 import Uwueave.CliqueLive
