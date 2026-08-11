@@ -138,9 +138,11 @@ prize:
     worldCertSound` is one line and there is no theorem that a version index
     separates two worlds a `WorldFuture.WorldCert` cannot. What it buys is a
     **base to scope to**, which a bare world has no room for.
-  * ⟨UNDONE⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
-    `Histories`. The version type, the state type and the world's value type are
-    all `Type`.
+  * ⟨UNDONE⟩ **The history/world bridge remains `Type 0`.** The state-level
+    `BaseDecision` facts and the standalone `VersionCert` are now
+    universe-polymorphic. `ValidInHistory` and `BasedWorld` cannot follow yet:
+    imported `Histories.VersionDag` / `Histories.History` and
+    `WorldFuture.World` still require their carriers in `Type 0`.
   * ⟨UNDONE⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
     expressible at the state level in the lock, where it costs nothing, and
     inexpressible in the counter, where it decides the invariant — is two
@@ -154,6 +156,8 @@ import Uwueave.Histories
 import Uwueave.WorldFuture
 
 namespace Uwueave.HistoryBase
+
+universe u v
 
 open Uwueave Uwueave.Ancestral Uwueave.Necessity Uwueave.Histories
 
@@ -259,14 +263,16 @@ run `x ⟶ y` itself, because `x` is then a common ancestor of the pair.
 
 `Histories.dag_absence_does_not_license_unavailable` is the instance of this at
 `x = y`; here it is the general fact. -/
-theorem state_unavailable_refuted_by_a_run {S Op : Type} {impl : Impl S Op} {x y : S}
+theorem state_unavailable_refuted_by_a_run {S : Type u} {Op : Type v}
+    {impl : Impl S Op} {x y : S}
     (h : Reachable impl x y) :
     ¬ (MergeModel.BaseDecision.unavailable (S := S)).Valid impl x y :=
   fun hu => hu ⟨x, Reachable.refl _ _, h⟩
 
 /-- **…so it is never valid for two replicas holding the same state**, whatever
 the implementation and whatever the version graph says. -/
-theorem state_unavailable_never_at_equal_states {S Op : Type} (impl : Impl S Op) (s : S) :
+theorem state_unavailable_never_at_equal_states {S : Type u} {Op : Type v}
+    (impl : Impl S Op) (s : S) :
     ¬ (MergeModel.BaseDecision.unavailable (S := S)).Valid impl s s :=
   state_unavailable_refuted_by_a_run (Reachable.refl _ _)
 
@@ -274,7 +280,8 @@ theorem state_unavailable_never_at_equal_states {S Op : Type} (impl : Impl S Op)
 `BaseDecision.ambiguous` carries `b₁ ≠ b₂` *as states*, so two distinct maximal
 common **versions** with a common state are inexpressible — and §7 shows that is
 exactly the criss-cross's situation. -/
-theorem state_ambiguous_invalid_of_equal_bases {S Op : Type} {impl : Impl S Op}
+theorem state_ambiguous_invalid_of_equal_bases {S : Type u} {Op : Type v}
+    {impl : Impl S Op}
     {b₁ b₂ x y : S} (h : b₁ = b₂) :
     ¬ (MergeModel.BaseDecision.ambiguous b₁ b₂).Valid impl x y :=
   fun hv => hv.2.2 h
@@ -1092,7 +1099,7 @@ It is not a free pass: scoped to the history root the same certificate is unsoun
 again, because the root reaches the divergent version. -/
 
 /-- A certificate indexed by a history position. -/
-def VersionCert (V : Type) : Type := V → Prop
+def VersionCert (V : Type u) : Type u := V → Prop
 
 /-- **Sound, unscoped**: at every version it accepts, the rendered answer really
 is delivery-stable. -/

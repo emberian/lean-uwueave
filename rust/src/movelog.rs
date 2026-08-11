@@ -14,11 +14,11 @@
 //!
 //! What this Rust file actually does is deliberately dumb: it keeps the op
 //! set (a `BTreeSet` — union merge), maps content-address ids to dense
-//! indices, encodes the request bytes, and hands them to
-//! `Uwueave/Exec.lean`'s `uwueave_replay_kernel` (compiled to C by lake,
-//! linked by `build.rs`). The ordering rule and the cycle-skip decision — the
-//! parts that must be *right* — live in Lean, in one place, next to their
-//! abstract model.
+//! indices, assembles typed parent/op/grant records, and asks Lean's exported
+//! `encodeRequest` adapter to produce the canonical request bytes before
+//! handing them to `uwueave_replay_kernel` (compiled to C by lake, linked by
+//! `build.rs`). Request layout, byte order, replay order, and the cycle-skip
+//! decision all live in Lean, in one place, next to their abstract model.
 //!
 //! **Wire format v3** (see `Exec.lean`'s contract header): the request now
 //! carries an *authority substrate* — grants and revocations — and each op
@@ -35,6 +35,8 @@
 //! (id, parent, scope), `nr` revocation words. Response: `n` override words
 //! then `m` per-op status words in request order (0 = applied, 1 = skipped by
 //! the cycle rule, 2 = skipped as invalid, 3 = skipped as **unauthorised**).
+//! The request description is a decoder contract, not a Rust encoder: only
+//! `Uwueave.Exec.encodeRequest` constructs those bytes.
 //! [`MoveLog::replay`] keeps its classic view-only shape;
 //! [`MoveLog::replay_traced`] surfaces the trace, which is `view_not_stable`
 //! made observable — a UI can show *which* op an older remote edit
@@ -59,11 +61,6 @@ use crate::ffi;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-/// The format-v3 request magic: ASCII `UWEAVE` then the version. Must equal
-/// `Uwueave/Exec.lean`'s `magicV3`; a request that opens with anything else
-/// gets an empty response from the kernel.
-const MAGIC_V3: u64 = 0x5557_4541_5645_0003;
-
 /// A delegation grant — `Uwueave/Authority.lean`'s `(id, parent, scope)`
 /// triple. `parent == 0` means "issued by the root authority"; `0` is never a
 /// valid grant id (well-formedness forces `parent < id`), so it doubles as
@@ -78,14 +75,22 @@ pub struct Grant {
 impl Grant {
     /// A root-issued grant of the given scope.
     pub fn root(id: u64, scope: u64) -> Self {
-        Self { id, parent: 0, scope }
+        Self {
+            id,
+            parent: 0,
+            scope,
+        }
     }
 
     /// A root-issued grant covering every node index — attenuation waived,
     /// and the only scope whose meaning does not depend on the replica's
     /// weave (see the module header's ⚠).
     pub fn universal(id: u64) -> Self {
-        Self { id, parent: 0, scope: u64::MAX }
+        Self {
+            id,
+            parent: 0,
+            scope: u64::MAX,
+        }
     }
 
     /// Delegate under `parent`, narrowing to `scope`.
@@ -246,20 +251,19 @@ impl MoveLog {
         // Dense, deterministic indexing: BTreeMap iteration is sorted by id,
         // identical on every replica with the same weave.
         let ids: Vec<NodeId> = weave.nodes().map(|n| n.id()).collect();
-        let index: BTreeMap<NodeId, u64> =
-            ids.iter().enumerate().map(|(i, id)| (*id, i as u64)).collect();
+        let index: BTreeMap<NodeId, u64> = ids
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (*id, i as u64))
+            .collect();
         let n = ids.len();
 
-        let mut words: Vec<u64> = Vec::with_capacity(
-            5 + n + self.ops.len() * 5 + self.grants.len() * 3 + self.revocations.len(),
-        );
-        words.push(MAGIC_V3);
-        words.push(n as u64);
-        // Encode the resolvable ops in log order, remembering which log ops
-        // were sent: request slot j holds the j-th resolvable op, so `sent`
-        // maps slot j to its position in log order for trace attribution.
+        // Assemble the resolvable typed ops in log order, remembering which
+        // log ops were sent: request slot j holds the j-th resolvable op, so
+        // `sent` maps slot j to its position in log order for attribution.
+        // Lean, not this code, turns these values into FORMAT-v3 bytes.
         let mut sent: Vec<usize> = Vec::with_capacity(self.ops.len());
-        let mut ops_encoded: Vec<[u64; 5]> = Vec::with_capacity(self.ops.len());
+        let mut ops_encoded: Vec<ffi::ReplayOpInput> = Vec::with_capacity(self.ops.len());
         for (li, op) in self.ops.iter().enumerate() {
             let (child, dest) = match (
                 index.get(&op.child),
@@ -272,14 +276,20 @@ impl MoveLog {
                 _ => continue, // unseen node: omitted, reported below
             };
             sent.push(li);
-            ops_encoded.push([op.lamport, op.replica, child, dest as u64, op.cite]);
+            ops_encoded.push(ffi::ReplayOpInput {
+                lamport: op.lamport,
+                replica: op.replica,
+                child,
+                dest,
+                cite: op.cite,
+            });
         }
         let m = ops_encoded.len();
-        words.push(m as u64);
-        words.push(self.grants.len() as u64);
-        words.push(self.revocations.len() as u64);
+        let mut first_parent = Vec::with_capacity(n);
         for id in &ids {
-            let node = weave.get(id).expect("ids were just enumerated from this weave");
+            let node = weave
+                .get(id)
+                .expect("ids were just enumerated from this weave");
             let fp: i64 = match node.parents().first() {
                 None => -1,
                 Some(p) => {
@@ -308,31 +318,26 @@ impl MoveLog {
                     *index.get(p).expect("parents are present, hence indexed") as i64
                 }
             };
-            words.push(fp as u64);
+            first_parent.push(fp);
         }
-        for op in &ops_encoded {
-            words.extend_from_slice(op);
-        }
-        // The authority substrate, in BTreeSet order — a function of the set,
-        // so two replicas that merged the same grants send the same bytes.
-        for g in &self.grants {
-            words.extend_from_slice(&[g.id, g.parent, g.scope]);
-        }
-        for r in &self.revocations {
-            words.push(*r);
-        }
-        let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
+        // BTreeSet order is a function of each authority set, so equal merged
+        // substrates present the same typed values to Lean.
+        let grants: Vec<ffi::ReplayGrantInput> = self
+            .grants
+            .iter()
+            .map(|g| ffi::ReplayGrantInput {
+                id: g.id,
+                parent: g.parent,
+                scope: g.scope,
+            })
+            .collect();
+        let revocations: Vec<u64> = self.revocations.iter().copied().collect();
 
-        // Marshaller self-differential (debug builds): the Lean side proves
-        // decode ∘ encodeRequest = id, so asking the kernel "are these bytes
-        // canonical?" checks this encoder byte-for-byte against the *proven*
-        // canonical encoder — on every request, hence on every property-suite
-        // case. Test evidence, not proof (Rust has no formal semantics), but
-        // the strongest closure available for the one unverified codec step.
-        debug_assert!(
-            ffi::request_canonical(&bytes),
-            "request encoder disagrees with the proven canonical `Exec.encodeRequest`"
-        );
+        // This is the only request-construction call. `encode_replay_request`
+        // crosses a typed ABI; `Uwueave.Exec.encodeRequestKernel` then calls
+        // the proved canonical encoder. Rust contains no FORMAT-v3 magic,
+        // count, block-order, or endianness implementation.
+        let bytes = ffi::encode_replay_request(&first_parent, &ops_encoded, &grants, &revocations);
 
         let out = ffi::replay_kernel(&bytes);
 
@@ -367,13 +372,15 @@ impl MoveLog {
         // (log order): ops we never sent are reported, not dropped.
         let statuses: Vec<OpOutcome> = st_bytes
             .chunks_exact(8)
-            .map(|chunk| match i64::from_le_bytes(chunk.try_into().unwrap()) {
-                0 => OpOutcome::Applied,
-                1 => OpOutcome::SkippedCycle,
-                2 => OpOutcome::SkippedInvalid,
-                3 => OpOutcome::SkippedUnauthorised,
-                v => panic!("unknown status word {v} — kernel speaks a newer format"),
-            })
+            .map(
+                |chunk| match i64::from_le_bytes(chunk.try_into().unwrap()) {
+                    0 => OpOutcome::Applied,
+                    1 => OpOutcome::SkippedCycle,
+                    2 => OpOutcome::SkippedInvalid,
+                    3 => OpOutcome::SkippedUnauthorised,
+                    v => panic!("unknown status word {v} — kernel speaks a newer format"),
+                },
+            )
             .collect();
         let mut outcomes = Vec::with_capacity(self.ops.len());
         let mut sent_cursor = sent.iter().zip(statuses).peekable();
@@ -410,7 +417,45 @@ mod tests {
     }
 
     fn op(lamport: u64, replica: u64, child: NodeId, dest: Option<NodeId>) -> MoveOp {
-        MoveOp { lamport, replica, child, dest, cite: 1 }
+        MoveOp {
+            lamport,
+            replica,
+            child,
+            dest,
+            cite: 1,
+        }
+    }
+
+    #[test]
+    fn lean_encoder_produces_the_canonical_replay_request() {
+        let ops = [ffi::ReplayOpInput {
+            lamport: u64::MAX,
+            replica: 9,
+            child: 0,
+            dest: 1,
+            cite: 7,
+        }];
+        let grants = [ffi::ReplayGrantInput {
+            id: 7,
+            parent: 0,
+            scope: u64::MAX,
+        }];
+        let bytes = ffi::encode_replay_request(&[-1, -1], &ops, &grants, &[]);
+
+        assert!(
+            ffi::request_canonical(&bytes),
+            "the typed export must return `Exec.encodeRequest`'s canonical bytes"
+        );
+        let out = ffi::replay_kernel(&bytes);
+        let words: Vec<i64> = out
+            .chunks_exact(8)
+            .map(|chunk| i64::from_le_bytes(chunk.try_into().unwrap()))
+            .collect();
+        assert_eq!(
+            words,
+            vec![1, -2, 0],
+            "typed fields survive the ABI and reach replay"
+        );
     }
 
     /// Scenario mirror of `Uwueave.Move.view_not_stable` — o₁ (t=2) moves
@@ -461,7 +506,10 @@ mod tests {
         let view = log.replay(&w);
         let p0 = view.get(&n0).copied().flatten();
         let p1 = view.get(&n1).copied().flatten();
-        assert!(!(p0 == Some(n1) && p1 == Some(n0)), "no 2-cycle in the view");
+        assert!(
+            !(p0 == Some(n1) && p1 == Some(n0)),
+            "no 2-cycle in the view"
+        );
     }
 
     /// The v3 trace on the `view_not_stable` scenario: o₂ applied, o₁
@@ -477,9 +525,17 @@ mod tests {
         let traced = log.replay_traced(&w);
         assert_eq!(traced.view, log.replay(&w), "traced view = plain view");
         let outcome = |op: &MoveOp| {
-            traced.outcomes.iter().find(|(o, _)| o == op).map(|(_, s)| *s)
+            traced
+                .outcomes
+                .iter()
+                .find(|(o, _)| o == op)
+                .map(|(_, s)| *s)
         };
-        assert_eq!(outcome(&o1), Some(OpOutcome::SkippedCycle), "the skip is named");
+        assert_eq!(
+            outcome(&o1),
+            Some(OpOutcome::SkippedCycle),
+            "the skip is named"
+        );
         assert_eq!(outcome(&o2), Some(OpOutcome::Applied));
     }
 
@@ -500,7 +556,13 @@ mod tests {
     #[test]
     fn uncited_op_is_refused_and_named() {
         let (w, n0, n1, mut log) = two_nodes();
-        let stranger = MoveOp { lamport: 1, replica: 0, child: n0, dest: Some(n1), cite: 7 };
+        let stranger = MoveOp {
+            lamport: 1,
+            replica: 0,
+            child: n0,
+            dest: Some(n1),
+            cite: 7,
+        };
         log.record(stranger);
         let traced = log.replay_traced(&w);
         assert_eq!(traced.outcomes.len(), 1);
@@ -517,7 +579,11 @@ mod tests {
         let (w, n0, n1, mut log) = two_nodes();
         let o = op(1, 0, n0, Some(n1));
         log.record(o);
-        assert_eq!(log.replay(&w).get(&n0), Some(&Some(n1)), "authorised, applied");
+        assert_eq!(
+            log.replay(&w).get(&n0),
+            Some(&Some(n1)),
+            "authorised, applied"
+        );
 
         log.revoke(1);
         let traced = log.replay_traced(&w);
@@ -533,14 +599,28 @@ mod tests {
     fn revoking_the_issuer_cascades() {
         let (w, n0, n1, mut log) = two_nodes();
         log.issue(Grant::delegate(2, 1, u64::MAX));
-        let delegated = MoveOp { lamport: 1, replica: 0, child: n0, dest: Some(n1), cite: 2 };
+        let delegated = MoveOp {
+            lamport: 1,
+            replica: 0,
+            child: n0,
+            dest: Some(n1),
+            cite: 2,
+        };
         log.record(delegated);
-        assert_eq!(log.replay(&w).get(&n0), Some(&Some(n1)), "delegate may move");
+        assert_eq!(
+            log.replay(&w).get(&n0),
+            Some(&Some(n1)),
+            "delegate may move"
+        );
 
         log.revoke(1); // the issuer, not the delegate
         let traced = log.replay_traced(&w);
         assert_eq!(traced.outcomes[0].1, OpOutcome::SkippedUnauthorised);
-        assert_eq!(traced.view.get(&n0), None, "the whole subtree loses its moves");
+        assert_eq!(
+            traced.view.get(&n0),
+            None,
+            "the whole subtree loses its moves"
+        );
     }
 
     /// Attenuation bites: a grant of scope 1 covers node index 0 only, so a
@@ -556,14 +636,30 @@ mod tests {
 
         let mut log = MoveLog::new();
         log.issue(Grant::root(1, 1)); // covers index 0 only
-        let covered = MoveOp { lamport: 1, replica: 0, child: lo, dest: None, cite: 1 };
-        let uncovered = MoveOp { lamport: 2, replica: 0, child: hi, dest: None, cite: 1 };
+        let covered = MoveOp {
+            lamport: 1,
+            replica: 0,
+            child: lo,
+            dest: None,
+            cite: 1,
+        };
+        let uncovered = MoveOp {
+            lamport: 2,
+            replica: 0,
+            child: hi,
+            dest: None,
+            cite: 1,
+        };
         log.record(covered);
         log.record(uncovered);
 
         let traced = log.replay_traced(&w);
         let outcome = |op: &MoveOp| {
-            traced.outcomes.iter().find(|(o, _)| o == op).map(|(_, s)| *s)
+            traced
+                .outcomes
+                .iter()
+                .find(|(o, _)| o == op)
+                .map(|(_, s)| *s)
         };
         assert_eq!(outcome(&covered), Some(OpOutcome::Applied));
         assert_eq!(outcome(&uncovered), Some(OpOutcome::SkippedUnauthorised));
@@ -582,6 +678,10 @@ mod tests {
 
         assert_eq!(log.grants().count(), 1);
         assert_eq!(log.revocations().copied().collect::<Vec<_>>(), vec![1]);
-        assert_eq!(log.replay(&w).get(&n0), None, "the peer's revocation applies");
+        assert_eq!(
+            log.replay(&w).get(&n0),
+            None,
+            "the peer's revocation applies"
+        );
     }
 }

@@ -24,9 +24,10 @@ strictly fewer crossings than the identity seam on a workload where the identity
 seam charges one (`pin_synth_beats_full_coordination`). ⚠ The escrow half of
 that ⟨UNDONE⟩ — synthesising a quota partition — is untouched here and survives.
 
-`Exits.lean:101-105` — ⟨UNDONE⟩ **"The menu is not proved exhaustive."** §2 and
-§3 move this **for the seam row over a covering finite pool**, and the honest
-word is *moved*, not closed: availability of a seam row becomes **decidable**
+`Exits.lean:101-105` — ⟨UNDONE in `Exits`, TERMINAL here for the explicitly
+finite seam row⟩ **"The menu is not proved exhaustive."** §2 and §3 make the
+greedy row decidable; §7 closes the finite seam-search case. Availability of
+the greedy seam row becomes **decidable**
 (`decidableSeamApplies`, and `pin_seam_row_decided` discharges by `decide` what
 `Cost.seamFalse_segmented` spends thirty-five lines on), so a row that is
 available is now *found* rather than waited for; and `seam_row_dichotomy` says
@@ -34,12 +35,13 @@ the synthesiser either returns a certified row or reports a failure **located in
 the stability clause** — never in the colouring clause, which
 `greedySeamFor_properColoring` supplies unconditionally.
 
-⚠ What survives: a `none` from `seamRow?` says the *greedy* colouring is not
-fiber-stable, **not** that no seam exists — searching over colourings is
-`SeamColoring.lean`'s ⟨UNDONE⟩ "minimum colourings", inherited here untouched.
-Every other row of the eight is still un-exhausted. And on an infinite carrier
-the covering pool does not exist; §4 shows that is not slack in the proof but a
-real obstruction — `atMostOne_seam_row_refuted_at_every_finite_segment`.
+⚠ The legacy `seamRow?` theorem remains intentionally greedy: its `none` says
+only that one colouring is unstable. The §7 `minimumMenuSynthesis` is the exact
+replacement: it searches every colouring over explicit `V` and `C`, returning
+a least-width proof-carrying row or an exhaustive refusal for that space.
+Every other row of the eight is still un-exhausted. On an infinite carrier the
+covering pool does not exist; §4 shows that this is a real obstruction via
+`atMostOne_seam_row_refuted_at_every_finite_segment`.
 
 ⚠ Non-triviality is the *right* bar and `Exits.lean:93-97` sets it; what is met
 here is that bar on one clash, not a general theorem that synthesis always
@@ -96,10 +98,11 @@ forces `k` fibers, hence `k-1` crossings — is not here."* It is here.
 
   * ⟨UNDONE⟩ **Escrow synthesis.** `Exits.lean`'s ⟨UNDONE⟩ names two searches;
     only the seam one is answered here.
-  * ⟨UNDONE⟩ **Minimum colourings.** Inherited from `SeamColoring.lean` and not
-    repaired: `greedySeamFor` returns *a* proper colouring. §4 gives a lower
-    bound on the number of colours; nothing here proves an upper one is
-    attained, so "fewest coordination points" remains unproved.
+  * ⟨TERMINAL at an explicit finite carrier and palette⟩ **Minimum colourings.**
+    §7 consumes `SeamColoring.synthesizeMinimumSeam`: the found branch carries
+    `LeastSuch` minimality and the refusal branch rules out every seam using
+    the named palette. Arbitrary universe-polymorphic segment types remain
+    intentionally outside the enumerable search space.
   * ⟨scope⟩ **Totality is relative to a covering pool.** §3's dichotomy needs
     `hV : ∀ s : S, s ∈ V`. §4 shows this is not slack that a cleverer argument
     removes: on `atMostOne` no finite pool covers, and no finite seam exists.
@@ -236,9 +239,9 @@ row means a decided stability failure of the *greedy* colouring over the pool.
 ⚠ Read the `none` branch at its own scope. It says the greedy colouring is not
 fiber-stable; it does **not** say no seam exists — `greedySeamFor` is one
 colouring of many (`SeamColoring.pin_synthesized_reversed_is_seamFalse` is the
-other one on the four-state pool), and minimum/alternative colourings are that
-file's ⟨UNDONE⟩, inherited here. Full exhaustiveness for the row would need a
-search over colourings, and there is none. -/
+    other one on the four-state pool). This theorem records the legacy greedy
+    API; §7 supplies the exhaustive finite search rather than strengthening the
+    meaning of this `none` branch after the fact. -/
 theorem seam_row_dichotomy {S : Type} [DecidableEq S] [MergeState S]
     (I : Invariant S) [DecidablePred I] (V : List S) (hV : ∀ s : S, s ∈ V) :
     (∃ e : MenuEntry I, seamRow? I V hV = some e
@@ -907,5 +910,113 @@ theorem what_became_true :
    rfl, synth_pin_isSome, pin_synth_is_non_trivial,
    the_element_type_decides_the_seam_row.1, the_element_type_decides_the_seam_row.2⟩
 
-end Uwueave.MenuTotality
+/-! ## §7. Exact finite minimum synthesis reaches the menu
 
+The legacy §3 adapter intentionally preserves the greedy API it documents.
+This section is the exact adapter.  It accepts the explicit finite carrier and
+palette required by `SeamColoring.synthesizeMinimumSeam`; a found result becomes
+a `MenuEntry` only through the carried `SegmentedIConfluent` proof, while a
+refusal retains the theorem excluding every palette-valued seam.
+
+The width minimized here is the number of palette colours used.  It is not a
+crossing floor, so the generated `Exit.seam` honestly quotes `0`; §5's separate
+`CertifiedSeam` remains the API for nonzero workload floors. -/
+
+/-- Turn a certified finite minimum into an applicable menu row. -/
+def minimumSeamEntry {S Seg : Type} [MergeState S] [DecidableEq Seg]
+    {I : Invariant S} {V : List S} {C : List Seg}
+    (m : SeamColoring.MinimumSeam I V C) : MenuEntry I where
+  exit := .seam Seg m.seam 0
+  applies := m.segmented
+  consequence :=
+    "coordinate only where this exhaustively synthesised minimum colouring \
+     changes. The projection carries global SegmentedIConfluent validity and \
+     LeastSuch palette-width minimality over the explicit finite carrier and \
+     palette. The quoted crossing floor remains the universally honest 0"
+
+/-- A found menu row retains the minimum certificate from which its entry is
+derived. -/
+structure MinimumMenuRow {S Seg : Type} [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) (V : List S) (C : List Seg) where
+  minimum : SeamColoring.MinimumSeam I V C
+
+def MinimumMenuRow.entry {S Seg : Type} [MergeState S] [DecidableEq Seg]
+    {I : Invariant S} {V : List S} {C : List Seg}
+    (row : MinimumMenuRow I V C) : MenuEntry I :=
+  minimumSeamEntry row.minimum
+
+theorem MinimumMenuRow.leastSuch {S Seg : Type} [MergeState S] [DecidableEq Seg]
+    {I : Invariant S} {V : List S} {C : List Seg}
+    (row : MinimumMenuRow I V C) :
+    SeamColoring.LeastSuch (SeamColoring.FiniteWidth I V C)
+      (SeamColoring.usedColorCount V C row.minimum.seam) :=
+  row.minimum.leastSuch
+
+theorem MinimumMenuRow.entry_applies {S Seg : Type} [MergeState S]
+    [DecidableEq Seg] {I : Invariant S} {V : List S} {C : List Seg}
+    (row : MinimumMenuRow I V C) : row.entry.exit.Applies I :=
+  row.entry.applies
+
+/-- The menu-facing result keeps both proof-carrying branches. -/
+inductive MinimumMenuSynthesis {S Seg : Type} [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) (V : List S) (C : List Seg) : Type where
+  | found (row : MinimumMenuRow I V C)
+  | refused (exhaustive : ∀ σ : S → Seg, SeamColoring.UsesOnly V C σ →
+      ¬ SegmentedIConfluent σ I)
+
+/-- **Exact menu synthesis.** This is a map from the semantic synthesizer, not
+a second search and not a post-hoc unchecked menu constructor. -/
+def minimumMenuSynthesis {S Seg : Type} [DecidableEq S] [MergeState S]
+    [DecidableEq Seg] (I : Invariant S) [DecidablePred I]
+    (V : List S) (hV : ∀ s : S, s ∈ V) (C : List Seg) (fallback : Seg) :
+    MinimumMenuSynthesis I V C :=
+  match SeamColoring.synthesizeMinimumSeam I V hV C fallback with
+  | .found minimum => .found ⟨minimum⟩
+  | .refused exhaustive => .refused exhaustive
+
+/-- Both menu-facing branches retain their exact semantic certificate. -/
+theorem minimumMenuSynthesis_total {S Seg : Type} [DecidableEq S] [MergeState S]
+    [DecidableEq Seg] (I : Invariant S) [DecidablePred I]
+    (V : List S) (hV : ∀ s : S, s ∈ V) (C : List Seg) (fallback : Seg) :
+    (match minimumMenuSynthesis I V hV C fallback with
+      | .found row => SeamColoring.LeastSuch (SeamColoring.FiniteWidth I V C)
+          (SeamColoring.usedColorCount V C row.minimum.seam)
+      | .refused _ => ∀ σ, SeamColoring.UsesOnly V C σ →
+          ¬ SegmentedIConfluent σ I) := by
+  cases minimumMenuSynthesis I V hV C fallback with
+  | found row => exact row.leastSuch
+  | refused h => exact h
+
+/-! ### The uniqueness ceiling, now with its true finite optimum -/
+
+def pinMinimumMenuRow :
+    MinimumMenuRow Cost.pinInv SeamColoring.pinStates [false, true] :=
+  ⟨SeamColoring.pinMinimum⟩
+
+/-- A real `ExitMenu` whose discriminating row was produced from the exhaustive
+minimum certificate rather than a handwritten or greedy-only seam. -/
+def minimumCeilingMenu : ExitMenu Cost.pinInv where
+  x := Exits.pinT
+  y := Exits.pinF
+  hx := Exits.pinT_legal
+  hy := Exits.pinF_legal
+  hbad := Exits.pin_clash
+  workload := 2
+  discriminating := [pinMinimumMenuRow.entry]
+
+/-- **The exact optimum reaches the menu.** The row applies, uses exactly two
+colours, and two is `LeastSuch` among every valid Bool-palette seam over the
+covered four-state carrier. -/
+theorem pin_minimum_menu_is_exact :
+    pinMinimumMenuRow.entry.exit
+        = Exit.seam Bool SeamColoring.pinMinimum.seam 0
+      ∧ pinMinimumMenuRow.entry.exit.Applies Cost.pinInv
+      ∧ SeamColoring.usedColorCount SeamColoring.pinStates [false, true]
+          SeamColoring.pinMinimum.seam = 2
+      ∧ SeamColoring.LeastSuch
+          (SeamColoring.FiniteWidth Cost.pinInv SeamColoring.pinStates [false, true]) 2
+      ∧ minimumCeilingMenu.prices = [0, 0, 2] :=
+  ⟨rfl, pinMinimumMenuRow.entry_applies,
+   SeamColoring.pinMinimum_uses_two_colors, SeamColoring.pin_minimum_is_exact, rfl⟩
+
+end Uwueave.MenuTotality

@@ -71,12 +71,14 @@ was computed under — §4's whole content is that the two numbers differ.
     certificate issued against an over-permissive `P` is weaker than it looks, and
     against an under-permissive `P` it is unsound for the real deployment. This is
     `Bounds.lean`'s "occupancy is only as sound as `step`", inherited verbatim.
-  * ⟨UNDONE⟩ **`crossings` gaps.** §4's gap is in the number of coordination
-    domains. On the §3 workload the crossing counts of the live and global seams
-    coincide (`workload_crossings_coincide`), and §1's `coReachable_exec` explains
-    why no `crossings` *floor* can gap: the states a block calculus accuses are on
-    runs from a common base, hence co-reachable, hence live. Whether some carrier
-    makes the achievable `crossings` optimum gap is not settled here.
+  * ⟨TERMINAL⟩ **`crossings` can gap, but not on §3's two-branch clash.** The
+    counts there still coincide (`workload_crossings_coincide`), and §1's
+    `coReachable_exec` still explains why a block floor cannot accuse an
+    unreachable pair. `CliqueLive.atMostTwo_live_global_crossing_gap` now gives
+    the missing achievable separation on the sibling ceiling: one honest live
+    strategy pays `0`, every global seam pays at least `1`, and a global seam
+    paying exactly `1` is exhibited. The force comes from global fiber stability
+    closing three same-coloured legal generators into their illegal triple join.
   * ⟨UNDONE⟩ **Minimum live colourings.** As in `SeamColoring`, nothing synthesises
     *the* minimum. §4's optima are proved by exhibiting a seam and refuting the
     next width down on one concrete carrier, not by an algorithm.
@@ -234,6 +236,25 @@ theorem segmented_implies_liveSegmented {W : Type u} {Op : Type v} {S : Type w}
     {Seg : Type z} [MergeState S] {P : RunModel W Op S} {σ : S → Seg} {I : Invariant S}
     (h : SegmentedIConfluent σ I) : LiveSegmented P σ I :=
   fun _ x y _ hσ hx hy => h (P.observe x) (P.observe y) hσ hx hy
+
+/-- **Global fiber stability closes three same-coloured legal states.** First
+merge `x` with `y`; the global segmented judgement proves both legality and that
+the join stays in their fiber. It can therefore be merged with same-coloured
+`z`, proving the triple join legal and still in the original fiber.
+
+This is stronger than pairwise proper colouring: the intermediate join need not
+be a protocol world. `CliqueLive` uses exactly this global second application to
+force a crossing on a scenario whose three live generators do not pairwise
+clash. -/
+theorem segmented_same_fiber_triple {S : Type w} {Seg : Type z} [MergeState S]
+    {σ : S → Seg} {I : Invariant S} {x y z : S}
+    (hseg : SegmentedIConfluent σ I) (hxy : σ x = σ y) (hxz : σ x = σ z)
+    (hx : I x) (hy : I y) (hz : I z) :
+    I ((x ⊔ y) ⊔ z) ∧ σ ((x ⊔ y) ⊔ z) = σ x := by
+  obtain ⟨hIxy, hσxy⟩ := hseg x y hxy hx hy
+  have hσxyz : σ (x ⊔ y) = σ z := hσxy.trans hxz
+  obtain ⟨hIxyz, hσxyz'⟩ := hseg (x ⊔ y) z hσxyz hIxy hz
+  exact ⟨hIxyz, hσxyz'.trans hσxy⟩
 
 theorem iconfluent_implies_liveIConfluent {W : Type u} {Op : Type v} {S : Type w}
     [MergeState S] {P : RunModel W Op S} {I : Invariant S}

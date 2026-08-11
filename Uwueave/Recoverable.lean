@@ -56,6 +56,11 @@ equivalence, and `LegalSerialization` is the whole content.
     `ghost_no_faithful_merge` refutes it for *every* `AncestralMerge Nat` at
     once. Recoverability is not a convenience hypothesis, it is the precondition
     for effect-faithfulness to be a consistent demand on a function of states.
+    `CostedDeltaRecoveryOn` adds an explicit step alphabet, recovery program,
+    and work field tied to that program's length and execution. §4 transports
+    the certificate into the constructed merge: fast-forward costs zero, the
+    recovery branch is bounded by the larger of the two candidate recovery
+    costs, and every uniform recovery bound becomes a merge bound.
   * **§2 A legal serialization.** `LegalSerialization` is the ∀-quantified
     resurrection branch of `clash_dichotomy`, and `legalSerialization_or_escalation`
     connects them by theorem: for any effect-faithful merge, either it holds or
@@ -141,9 +146,15 @@ iff-shaped form of the dichotomy the two files together now have.
     good.** The chooser is a free parameter; different tie-breaks give different
     legal merges. `constant_merge_collapses` (Ancestral §1) already excludes the
     degenerate one, and that is all the pinning down there is.
-  * ⟨UNDONE⟩ **No cost model.** `recover` may be arbitrary work; the merge is
-    computable when the recovery, the equality and the invariant are, and the
-    lock exhibits that, but nothing bounds it.
+  * ⟨TERMINAL⟩ **Recovery work is now explicit, not inferred from correctness.**
+    `CostedDeltaRecoveryOn` certifies `recover` by a finite step program whose
+    length is its declared `work`; `constructedMergeWork_le_max` and
+    `constructedMergeWork_le_of_recovery_bound` transport recovery bounds to the
+    constructed merge. `cheapLockRecovery` costs one step, while
+    `lockRecovery_arbitrarily_expensive` pads the *same* semantic recovery with
+    arbitrarily many certified identity steps. These are abstract step counts,
+    not wall-clock time, allocation, or a multi-operation history cost. The
+    one-operation boundary above is unchanged.
 
 Literature: as `Ancestral.lean` (Kaki et al. OOPSLA 2019; Sal 2026 §2; Bailis et
 al. VLDB 2015). The chooser is Sal's `rc` conflict-resolution policy with the two
@@ -158,7 +169,7 @@ namespace Uwueave.Recoverable
 
 open Uwueave Uwueave.Catalog Uwueave.Necessity Uwueave.Ancestral
 
-universe u v
+universe u v w
 
 variable {S : Type u} {Op : Type v}
 
@@ -229,6 +240,56 @@ theorem deltaRecoveryOn_iff_deltaRecoverableOn (g : Guarded S Op) :
     Nonempty (DeltaRecoveryOn g) ↔ DeltaRecoverableOn g :=
   ⟨fun ⟨D⟩ => D.recoverableOn, fun h => ⟨recoveryOfRecoverableOn g h⟩⟩
 
+/-! ### §1.1 Costed guarded recovery — a program, not an ungrounded number -/
+
+/-- Execute a finite recovery program. Each instruction transforms the current
+state; the list order is execution order. -/
+def runRecoverySteps {Step : Type w} (applyStep : Step → S → S) :
+    S → List Step → S
+  | s, [] => s
+  | s, step :: steps => runRecoverySteps applyStep (applyStep step s) steps
+
+/-- Recovery execution respects program concatenation. -/
+theorem runRecoverySteps_append {Step : Type w} (applyStep : Step → S → S) :
+    ∀ (before : S) (p q : List Step),
+      runRecoverySteps applyStep before (p ++ q) =
+        runRecoverySteps applyStep (runRecoverySteps applyStep before p) q := by
+  intro before p
+  induction p generalizing before with
+  | nil => intro q; rfl
+  | cons step steps ih =>
+    intro q
+    exact ih (applyStep step before) q
+
+/-- **A proof-carrying work interface for guarded recovery.** It extends the
+existing correctness instrument without changing it. `program l delta` is the
+finite instruction sequence implementing the recovered effect for that branch;
+`program_correct` connects its execution to `recover`, and
+`work_eq_program_length` prevents the numeric cost from drifting away from the
+certificate.
+
+The program is attached to one recovered delta and implements the recovered
+effect on every input state. It does not claim to represent a branch history. -/
+structure CostedDeltaRecoveryOn (g : Guarded S Op) (Step : Type w)
+    extends DeltaRecoveryOn g where
+  /-- Semantics of one abstract recovery instruction. -/
+  applyStep : Step → S → S
+  /-- Certified program for the delta from `l` to the branch state. -/
+  program : S → S → List Step
+  /-- Declared abstract work for recovering that delta. -/
+  work : S → S → Nat
+  /-- Work is exactly program length, not a decorative annotation. -/
+  work_eq_program_length : ∀ l x, work l x = (program l x).length
+  /-- Executing the program computes the inherited recovery function. -/
+  program_correct : ∀ l x s,
+    runRecoverySteps applyStep s (program l x) = recover l x s
+
+/-- Forgetting costs and programs recovers the original correctness interface
+definitionally. -/
+def CostedDeltaRecoveryOn.erase {g : Guarded S Op} {Step : Type w}
+    (D : CostedDeltaRecoveryOn g Step) : DeltaRecoveryOn g :=
+  D.toDeltaRecoveryOn
+
 /-- **The recovery map — recoverability as an instrument rather than a
 property.** `recover l x` is the effect the merge replays for the branch that
 went from `l` to `x`, and `spec` is its only law: on a delta an operation really
@@ -295,6 +356,76 @@ has the same effect, so the delta determines it trivially. Recoverability is
 def spendRecovery (B : Nat) : DeltaRecovery (spendOps B) where
   recover := fun _ _ => fun s => s + 1
   spec := fun _ _ => rfl
+
+/-! #### A cheap recovery and the same recovery at arbitrary certified cost -/
+
+/-- Abstract instructions for the lock recovery. `idle` is explicit padding;
+`write q` performs the recovered constant effect. -/
+inductive LockRecoveryStep where
+  /-- One unit of work that preserves the current state. -/
+  | idle
+  /-- Replace the current lock state with the recovered branch state. -/
+  | write (value : Lock)
+  deriving DecidableEq, Repr
+
+/-- Semantics of the lock recovery instructions. -/
+def applyLockRecoveryStep : LockRecoveryStep → Lock → Lock
+  | .idle, s => s
+  | .write q, _ => q
+
+/-- A lock recovery program with `padding` certified identity instructions
+before its one real write. -/
+def paddedLockProgram : Nat → Lock → List LockRecoveryStep
+  | 0, q => [.write q]
+  | n + 1, q => .idle :: paddedLockProgram n q
+
+/-- Padding is counted: the program contains exactly `padding + 1` steps. -/
+theorem paddedLockProgram_length (padding : Nat) (q : Lock) :
+    (paddedLockProgram padding q).length = padding + 1 := by
+  induction padding with
+  | zero => rfl
+  | succ n ih => simp [paddedLockProgram, ih]
+
+/-- Padding is semantically inert and the final instruction computes the lock's
+recovery function. -/
+theorem paddedLockProgram_correct (padding : Nat) (q s : Lock) :
+    runRecoverySteps applyLockRecoveryStep s (paddedLockProgram padding q) = q := by
+  induction padding generalizing s with
+  | zero => rfl
+  | succ n ih => exact ih s
+
+/-- The lock's semantic recovery with an explicit, certified amount of padding.
+All values of `padding` erase to the same `lockRecovery.toOn`; only the program
+and its honest work certificate differ. -/
+def paddedLockRecovery (padding : Nat) :
+    CostedDeltaRecoveryOn lockOps LockRecoveryStep where
+  toDeltaRecoveryOn := lockRecovery.toOn
+  applyStep := applyLockRecoveryStep
+  program := fun _ q => paddedLockProgram padding q
+  work := fun _ _ => padding + 1
+  work_eq_program_length := fun _ q => (paddedLockProgram_length padding q).symm
+  program_correct := fun _ q s => paddedLockProgram_correct padding q s
+
+/-- A choice-free one-step recovery certificate for the lock. -/
+def cheapLockRecovery : CostedDeltaRecoveryOn lockOps LockRecoveryStep :=
+  paddedLockRecovery 0
+
+/-- The cheap certificate really costs one abstract instruction. -/
+theorem cheapLockRecovery_work (l x : Lock) : cheapLockRecovery.work l x = 1 := rfl
+
+/-- Every padded certificate has exactly the advertised cost. -/
+theorem paddedLockRecovery_work (padding : Nat) (l x : Lock) :
+    (paddedLockRecovery padding).work l x = padding + 1 := rfl
+
+/-- **The cost field is independent evidence, not a corollary of correctness.**
+For every requested lower bound there is a certificate erasing to the exact same
+semantic lock recovery whose explicit program costs at least that much. The
+extra work consists of certified identity steps, so correctness is unchanged. -/
+theorem lockRecovery_arbitrarily_expensive (n : Nat) :
+    ∃ D : CostedDeltaRecoveryOn lockOps LockRecoveryStep,
+      D.erase = lockRecovery.toOn ∧
+        n ≤ D.work ⟨false, false⟩ ⟨true, false⟩ := by
+  exact ⟨paddedLockRecovery n, rfl, by simp [paddedLockRecovery_work]⟩
 
 /-- Both exhibited structures are delta-recoverable, so the hypothesis of every
 theorem below is inhabited. -/
@@ -591,7 +722,7 @@ with the chooser and replay the second one's recovered effect on top of the
 first. Three laws come out: `comm`, `fastforward`, and `Serializing`. -/
 
 /-- The merge induced by a recovery and a raw ordering function. Stated with a
-bare `sel` (no laws) so §4.3 can ask what the laws are *for*. -/
+bare `sel` (no laws) so §4.4 can ask what the laws are *for*. -/
 def mergeOfSel [DecidableEq S] {g : Guarded S Op} (D : DeltaRecoveryOn g)
     (sel : S → S → S → S × S) (l x y : S) : S :=
   if x = l then y else if y = l then x else D.recover l (sel l x y).2 (sel l x y).1
@@ -630,6 +761,128 @@ def ancestralMergeOf [DecidableEq S] {g : Guarded S Op} (D : DeltaRecoveryOn g)
   comm := mergeOfChooser_comm D C
   fastforward := mergeOfChooser_fastforward D C
 
+/-! ### §4.1 Transporting recovery work into the constructed merge -/
+
+/-- The existing construction fed by the semantic projection of a costed
+recovery. Its merge function and correctness obligations are unchanged. -/
+def costedAncestralMergeOf [DecidableEq S] {g : Guarded S Op} {Step : Type w}
+    (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S) : AncestralMerge S :=
+  ancestralMergeOf D.erase C
+
+/-- The recovery program executed by the constructed merge. Fast-forwarding
+needs no recovery instructions; otherwise the chooser's second branch supplies
+the delta program replayed on its first branch. -/
+def constructedMergeProgram [DecidableEq S] {g : Guarded S Op} {Step : Type w}
+    (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S)
+    (l x y : S) : List Step :=
+  if x = l then []
+  else if y = l then []
+  else D.program l (C.sel l x y).2
+
+/-- Work of the constructed merge. It is zero in either fast-forward branch and
+the certified recovery work in the replay branch. -/
+def constructedMergeWork [DecidableEq S] {g : Guarded S Op} {Step : Type w}
+    (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S)
+    (l x y : S) : Nat :=
+  if x = l then 0
+  else if y = l then 0
+  else D.work l (C.sel l x y).2
+
+/-- Execute the costed construction directly from its program. This is the
+operational witness paired with `costedAncestralMergeOf`; it does not replace the
+existing pure merge. -/
+def executeConstructedMerge [DecidableEq S] {g : Guarded S Op} {Step : Type w}
+    (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S)
+    (l x y : S) : S :=
+  if x = l then y
+  else if y = l then x
+  else runRecoverySteps D.applyStep (C.sel l x y).1
+    (D.program l (C.sel l x y).2)
+
+/-- The transported program computes exactly the pre-existing constructed merge.
+Thus adding the work interface changes no recovery or merge correctness claim. -/
+theorem executeConstructedMerge_eq [DecidableEq S] {g : Guarded S Op}
+    {Step : Type w} (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S)
+    (l x y : S) :
+    executeConstructedMerge D C l x y = (costedAncestralMergeOf D C).merge3 l x y := by
+  show executeConstructedMerge D C l x y = mergeOfChooser D.erase C l x y
+  unfold executeConstructedMerge mergeOfChooser mergeOfSel
+  by_cases hx : x = l
+  · rw [if_pos hx, if_pos hx]
+  · by_cases hy : y = l
+    · rw [if_neg hx, if_pos hy, if_neg hx, if_pos hy]
+    · rw [if_neg hx, if_neg hy, if_neg hx, if_neg hy]
+      exact D.program_correct l (C.sel l x y).2 (C.sel l x y).1
+
+/-- The merge work is exactly the length of the transported program. -/
+theorem constructedMergeProgram_length [DecidableEq S] {g : Guarded S Op}
+    {Step : Type w} (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S)
+    (l x y : S) :
+    (constructedMergeProgram D C l x y).length = constructedMergeWork D C l x y := by
+  unfold constructedMergeProgram constructedMergeWork
+  by_cases hx : x = l
+  · rw [if_pos hx, if_pos hx]
+    rfl
+  · by_cases hy : y = l
+    · rw [if_neg hx, if_pos hy, if_neg hx, if_pos hy]
+      rfl
+    · rw [if_neg hx, if_neg hy, if_neg hx, if_neg hy]
+      exact (D.work_eq_program_length l (C.sel l x y).2).symm
+
+/-- Fast-forwarding an unmoved left replica performs no recovery work. -/
+theorem constructedMergeWork_fastforward_left [DecidableEq S]
+    {g : Guarded S Op} {Step : Type w} (D : CostedDeltaRecoveryOn g Step)
+    (C : SymmetricChooser S) (l y : S) :
+    constructedMergeWork D C l l y = 0 := by
+  simp [constructedMergeWork]
+
+/-- Fast-forwarding an unmoved right replica also performs no recovery work. -/
+theorem constructedMergeWork_fastforward_right [DecidableEq S]
+    {g : Guarded S Op} {Step : Type w} (D : CostedDeltaRecoveryOn g Step)
+    (C : SymmetricChooser S) (l x : S) :
+    constructedMergeWork D C l x l = 0 := by
+  by_cases hx : x = l <;> simp [constructedMergeWork, hx]
+
+/-- **Per-triple upper bound.** The chooser only reorders `x` and `y`, so the
+constructed merge performs at most the larger of their two certified recovery
+costs. Fast-forward branches are cheaper still. -/
+theorem constructedMergeWork_le_max [DecidableEq S] {g : Guarded S Op}
+    {Step : Type w} (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S)
+    (l x y : S) :
+    constructedMergeWork D C l x y ≤ Nat.max (D.work l x) (D.work l y) := by
+  unfold constructedMergeWork
+  by_cases hx : x = l
+  · rw [if_pos hx]
+    exact Nat.zero_le _
+  · by_cases hy : y = l
+    · rw [if_neg hx, if_pos hy]
+      exact Nat.zero_le _
+    · rw [if_neg hx, if_neg hy]
+      rcases C.choice l x y with h | h
+      · rw [h]
+        exact Nat.le_max_right _ _
+      · rw [h]
+        exact Nat.le_max_left _ _
+
+/-- A uniform recovery bound transports unchanged to every constructed merge
+triple. -/
+theorem constructedMergeWork_le_of_recovery_bound [DecidableEq S]
+    {g : Guarded S Op} {Step : Type w} (D : CostedDeltaRecoveryOn g Step)
+    (C : SymmetricChooser S) (B : Nat) (hB : ∀ l x, D.work l x ≤ B)
+    (l x y : S) : constructedMergeWork D C l x y ≤ B := by
+  exact Nat.le_trans (constructedMergeWork_le_max D C l x y)
+    (Nat.max_le.mpr ⟨hB l x, hB l y⟩)
+
+/-- The bound specialized to the file's honest resolution: one admitted
+operation per branch. It deliberately says nothing about recovering composite
+run deltas. -/
+theorem constructedMerge_single_step_work_le_max [DecidableEq S]
+    {g : Guarded S Op} {Step : Type w} (D : CostedDeltaRecoveryOn g Step)
+    (C : SymmetricChooser S) (l : S) (a b : Op) :
+    constructedMergeWork D C l (g.eff a l) (g.eff b l) ≤
+      Nat.max (D.work l (g.eff a l)) (D.work l (g.eff b l)) :=
+  constructedMergeWork_le_max D C l (g.eff a l) (g.eff b l)
+
 /-- **The constructed merge is effect-faithful.** For two admitted operations,
 each of the three branches is a serialization: an unmoved side makes the other
 side's state the serialization outright, and otherwise the guarded recovery
@@ -658,7 +911,14 @@ theorem ancestralMergeOf_serializing [DecidableEq S] {g : Guarded S Op}
         show D.recover l (g.eff a l) (g.eff b l) = g.eff a (g.eff b l)
         rw [D.spec l a hga]
 
-/-! ### §4.1 Invariant preservation needs the chooser to *choose legally*. -/
+/-- Cost instrumentation preserves the construction's existing
+effect-faithfulness theorem by semantic projection. -/
+theorem costedAncestralMergeOf_serializing [DecidableEq S] {g : Guarded S Op}
+    {Step : Type w} (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S) :
+    Serializing (costedAncestralMergeOf D C) g :=
+  ancestralMergeOf_serializing D.erase C
+
+/-! ### §4.2 Invariant preservation needs the chooser to *choose legally*. -/
 
 /-- **Ancestral confluence at one-operation resolution.** The merge of two
 concurrently-admitted operations, each legal at a legal ancestor, is legal. This
@@ -710,7 +970,16 @@ theorem ancestralMergeOf_stepConfluent [DecidableEq S] {g : Guarded S Op}
         rw [D.spec l a hga]
         exact h
 
-/-! ### §4.2 A discerning symmetric chooser exists — the tie-break supplies it.
+/-- Cost instrumentation likewise preserves the existing one-operation
+correctness theorem; no history-general claim is added. -/
+theorem costedAncestralMergeOf_stepConfluent [DecidableEq S]
+    {g : Guarded S Op} {Step : Type w} {I : Invariant S}
+    (D : CostedDeltaRecoveryOn g Step) (C : SymmetricChooser S)
+    (hdisc : Discerning D.erase C I) (hleg : LegalSerialization g I) :
+    StepConfluent (costedAncestralMergeOf D C) g I :=
+  ancestralMergeOf_stepConfluent D.erase C hdisc hleg
+
+/-! ### §4.3 A discerning symmetric chooser exists — the tie-break supplies it.
 
 The naive rule "take the left order when it is legal" is *not* symmetric: when
 both orders are legal it prefers whichever replica is asking. The fix is to
@@ -789,7 +1058,7 @@ theorem tieChooser_discerning (I : Invariant S) [DecidablePred I] {g : Guarded S
       · exact absurd h' hA
       · exact absurd h' hB
 
-/-! ### §4.3 ⚠ The chooser's symmetry is not a taste — `comm` forces it. -/
+/-! ### §4.4 ⚠ The chooser's symmetry is not a taste — `comm` forces it. -/
 
 /-- **A commutative merge has a symmetric chooser.** At any triple where both
 replicas moved and the two candidate serializations differ, the merge law
@@ -1053,6 +1322,36 @@ theorem lock_stepGenerated : StepGenerated lockOps AtMostOne := by
 def lockConstructedMerge : AncestralMerge Lock :=
   ancestralMergeOf lockRecovery.toOn (tieChooser AtMostOne lockRecovery.toOn lockTie)
 
+/-- The same constructed lock merge, now carrying the cheap one-step recovery
+certificate. Erasing its cost data gives `lockConstructedMerge` definitionally. -/
+def cheapCostedLockConstructedMerge : AncestralMerge Lock :=
+  costedAncestralMergeOf cheapLockRecovery
+    (tieChooser AtMostOne cheapLockRecovery.erase lockTie)
+
+/-- Cost instrumentation does not change the constructed lock merge. -/
+theorem cheapCostedLockConstructedMerge_eq :
+    cheapCostedLockConstructedMerge = lockConstructedMerge := rfl
+
+/-- Every triple of the cheaply instrumented lock merge costs at most one
+recovery instruction; either fast-forward costs zero or the one write runs. -/
+theorem cheapLockConstructedMerge_work_le_one (l x y : Lock) :
+    constructedMergeWork cheapLockRecovery
+      (tieChooser AtMostOne cheapLockRecovery.erase lockTie) l x y ≤ 1 := by
+  apply constructedMergeWork_le_of_recovery_bound cheapLockRecovery
+    (tieChooser AtMostOne cheapLockRecovery.erase lockTie) 1
+  intro l' x'
+  exact Nat.le_of_eq (cheapLockRecovery_work l' x')
+
+/-- On the genuine both-moved lock triple, padding reaches the constructed merge
+unchanged: `n` certified identity steps plus the write cost exactly `n + 1`.
+This is the merge-level witness that recovery correctness alone does not fix a
+cost. -/
+theorem paddedLockConstructedMerge_both_moved_work (n : Nat) :
+    constructedMergeWork (paddedLockRecovery n)
+      (tieChooser AtMostOne (paddedLockRecovery n).erase lockTie)
+      ⟨false, false⟩ ⟨true, false⟩ ⟨false, true⟩ = n + 1 := by
+  simp [constructedMergeWork, paddedLockRecovery_work]
+
 /-- ⚑ **The construction rediscovers `lockMerge`.** On legal replicas — which is
 every triple `AncestralConfluent` quantifies over — the merge built from
 `lockRecovery` and the `lockKey` tie-break **is** `Ancestral`'s hand-written
@@ -1180,7 +1479,7 @@ counterexample rather than a caveat*: multi-operation branches
 repair failing at length two, and `step_repair_does_not_lift` shows the missing
 ingredient is history coherence and not legality; sibling file), the general
 compositional form of guard-relative recovery beyond one operation (§1 and
-§5.1), and any claim about *which* legal merge is the right one (§4.2, a free
+§5.1), and any claim about *which* legal merge is the right one (§4.3, a free
 parameter). -/
 
 end Uwueave.Recoverable

@@ -89,27 +89,29 @@ fork-aware quantity, where `Bounds` §4 proved the per-stream one cannot.
     `CausalReach`'s, and `Bounds` §7 records that no cost result in this tree
     takes it as a hypothesis.
   * ⟨scope⟩ `[DecidableEq Seg]` on every seam, inherited from `Cost.crossings`.
-  * ⟨UNDONE⟩ **Whether a live-clash-free scenario always admits a zero-cost
-    GLOBAL seam.** §9 proves the constant seam is unavailable globally; it does
-    not settle whether some other global seam achieves zero. On the §9 instance
-    one does (`Cost.seamFalse_segmented`), which is why the question is open
-    rather than refuted.
+  * ⟨TERMINAL⟩ **A live-clash-free scenario need not admit a zero-cost global
+    seam.** `global_triple_obstruction_cost_positive` is the generic floor:
+    three legal scenario worlds with an illegal triple join force every global
+    seam to pay at least `1`. `CliqueLive.atMostTwo_live_global_crossing_gap`
+    instantiates it with the three-slot ceiling, alongside a live strategy at
+    `0` and a global seam at exactly `1`. The earlier §9 pin scenario remains a
+    useful weaker witness: its constant seam fails globally, but another global
+    seam happens to pay zero.
   * ⟨UNDONE⟩ **Minimum colourings.** `SeamColoring`'s greedy colourer synthesises
     *a* proper colouring, never the minimum one; nothing here computes an optimal
     live strategy, only bounds the optimum.
 
-## Overlap with the concurrently-authored siblings
+## Relation to the sibling judgements
 
-`Uwueave/LiveCost.lean` and `Uwueave/LiveSegmented.lean` are being written in the
-same wave and are deliberately **not imported** here. Expect overlap: a
-protocol-relative segmentation judgement (ours is `LiveStrategy`, definitionally
-`SeamColoring.SegmentedIConfluentOn` at the scenario's worlds) and a fork-aware
-cost (ours is `liveCost`, definitionally `SeamColoring.jointCost` over the branch
-paths). Both of ours are stated as *equalities to existing tree objects* so a
-later merge is a renaming, not a reconciliation.
+`LiveStrategy` remains definitionally `SeamColoring.SegmentedIConfluentOn` at a
+scenario's worlds, and `liveCost` remains `SeamColoring.jointCost` over its
+paths. This module now imports `LiveSegmented` for one genuinely global fact:
+`segmented_same_fiber_triple`, whose second merge can leave the live world pool.
+`LiveCost`'s abstract-path vocabulary remains independent.
 -/
 import Uwueave.Bounds
 import Uwueave.SeamColoring
+import Uwueave.LiveSegmented
 
 namespace Uwueave.ForkGrade
 
@@ -537,6 +539,37 @@ theorem worlds_root_colored {S : Type u} {Op : Type w} {Seg : Type v} [MergeStat
   rcases List.mem_cons.mp hx with hroot | hedge
   · rw [hroot]
   · exact jointCost_zero_colors τ.seam step sc.root sc.paths h0 x hedge
+
+/-- **A global three-way obstruction forces a scenario crossing.** Suppose three
+legal worlds occur in one scenario but their triple join is illegal. If a global
+segmented seam paid zero, `worlds_root_colored` would put all three in the root's
+fiber. Global fiber stability would then close the first pair and, crucially,
+close that intermediate join with the third world, proving the forbidden triple
+legal (`LiveSegmented.segmented_same_fiber_triple`). Therefore every global seam
+pays at least one crossing on the scenario.
+
+No pairwise clash hypothesis is used. The result is designed for precisely the
+case where the live clash graph is empty but global closure sees one merge level
+farther than the scenario's world pool. -/
+theorem global_triple_obstruction_cost_positive
+    {S : Type u} {Op : Type w} {Seg : Type v} [MergeState S] [DecidableEq Seg]
+    {I : Invariant S} {step : S → Op → S} {sc : Scenario S Op}
+    {σ : S → Seg} {x y z : S}
+    (hxw : x ∈ sc.worlds step) (hyw : y ∈ sc.worlds step)
+    (hzw : z ∈ sc.worlds step) (hx : I x) (hy : I y) (hz : I z)
+    (hbad : ¬ I ((x ⊔ y) ⊔ z)) (hseg : SegmentedIConfluent σ I) :
+    1 ≤ liveCost σ step sc := by
+  apply Nat.pos_of_ne_zero
+  intro h0
+  let τ : LiveStrategy I step sc Seg := LiveStrategy.ofSegmented hseg
+  change liveCost τ.seam step sc = 0 at h0
+  have hxr := worlds_root_colored τ h0 x hxw
+  have hyr := worlds_root_colored τ h0 y hyw
+  have hzr := worlds_root_colored τ h0 z hzw
+  have hxy : σ x = σ y := hxr.trans hyr.symm
+  have hxz : σ x = σ z := hxr.trans hzr.symm
+  exact hbad
+    (LiveSegmented.segmented_same_fiber_triple hseg hxy hxz hx hy hz).1
 
 /-- **Forward.** A live strategy that pays nothing refutes every live clash: two
 clashing worlds would both carry the root's colour, and properness forbids a
@@ -1014,11 +1047,12 @@ of `liveFree_iff_no_live_clash` is built from, over a scenario the modal verdict
 calls free. That is why `LiveStrategy` is pool-relative — a design forced by this
 witness, not a convenience.
 
-⟨UNDONE⟩ This does **not** show the global space fails to reach zero here: on
-this instance `Cost.seamFalse_segmented` is a global seam that also pays zero
-(`Cost.pinTrue_free_under_seamFalse`). Whether *some* global seam always achieves
-zero on a live-clash-free scenario is open, and is the reason the claim above is
-about the constant seam specifically. -/
+This pin instance does **not** separate the global optimum: the global seam
+`Cost.seamFalse_segmented` also pays zero
+(`Cost.pinTrue_free_under_seamFalse`). The formerly open general question is now
+refuted by `global_triple_obstruction_cost_positive`, instantiated concretely as
+`CliqueLive.atMostTwo_live_global_crossing_gap`; this theorem remains about the
+constant-seam dependency it was designed to isolate. -/
 theorem const_seam_live_but_not_global :
     (∃ τ : LiveStrategy pinInv pinStep pinSingleScenario Nat,
         liveCost τ.seam pinStep pinSingleScenario = 0)

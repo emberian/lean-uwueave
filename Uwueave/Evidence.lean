@@ -147,11 +147,14 @@ Two prices are paid in public, not deferred:
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's
 clothes.
 
-  * **`obligations` is a flat set of source names, not an antichain of
-    timestamps.** ⟨UNDONE⟩ Timely's frontier is an antichain in a partial order
-    and its advance retires a *range*; ours retires one source at a time and no
-    order on `Source` exists. Everything below is true as stated, and nothing
-    below can express "all timestamps below `t` are settled".
+  * **`obligations` here is a flat set of source names, not an antichain of
+    timestamps.** `Uwueave.Frontier` now supplies genuine timestamp antichains,
+    range retirement, the flat-model separation, and — under explicit world
+    well-formedness, completeness, and settlement hypotheses — stability of
+    `Evidence.values`. ⟨UNDONE for this old carrier and deployment⟩
+    `ResultEvidence` still stores no timestamp, progress messages are neither
+    generated nor authenticated, and the successor proves neither full `render`
+    stability nor that a runtime honestly advances its frontier.
   * **A certificate is trusted, not verified.** ⟨UNDONE⟩ Nothing here says a
     certificate was *earned*: `certify` adds one unconditionally, exactly as
     `Era.advance` announces a cut unconditionally, and the price is the same
@@ -163,7 +166,10 @@ clothes.
     ⟨UNDONE⟩ as deployment⟩ The retraction theorem shows why the restriction is
     needed; what is *not* built is any mechanism that establishes membership
     closure in a running system. A deployment that cannot close its source set
-    gets `provisional`, correctly, forever.
+    gets `provisional`, correctly, forever. `Uwueave.WorldFuture` is the next
+    model rung: it makes the issued pool, roster, frontier and epoch explicit and
+    proves quiescence is a sound world-indexed certificate. It still does not
+    manufacture closure or eventual delivery in a running system.
   * **`render` is noncomputable.** ⟨TERMINAL at this carrier⟩ "Is there exactly
     one candidate value" quantifies over an unbounded type, so `render` takes
     the decisions classically, exactly as `Holes.evalSet` does. `Classical.choice`

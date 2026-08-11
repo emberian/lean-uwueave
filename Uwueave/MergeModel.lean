@@ -115,10 +115,11 @@ clothes.
     causal metadata, and nothing here claims otherwise. §7's theorems say the
     three *models* differ, not that any invariant is unimplementable in any of
     them.
-  * ⟨UNDONE⟩ **`Type` only.** The class fixes `State`, `MergeContext`,
-    `MergeResult` and `Observation` in `Type 0`; every instance in the repo
-    lives there. Universe-polymorphising the class is mechanical and buys
-    nothing until a model needs it.
+  * ⟨UNDONE⟩ **The full universe chain is not closed.** This file's key, state,
+    context, result, and observation now inhabit independent universes, and all
+    generic instances below follow. Downstream `Histories.VersionDag` /
+    `Histories.History` and the evidence/world carriers remain in `Type 0`, so
+    the end-to-end history/certificate chain is still bounded there.
   * ⟨UNDONE⟩ **No verdict routes, no exits.** The field-kind sketch has three
     more slots (`classify` routes, exits with prices, obligation types). This
     file settles only the merge slot, which is the one codex refused.
@@ -146,6 +147,8 @@ import Uwueave.ExecRefine
 import Uwueave.Move
 
 namespace Uwueave
+
+universe uK uS uC uR uO u v
 
 /-! ## §1. The class
 
@@ -176,15 +179,15 @@ an ancestor for an MRDT, a structural base for an op-replay kernel — and
 is where a merge-base procedure's obligations live (§9).
 
 No laws. Laws are §3, supplied per instance. -/
-class MergeModel (K : Type) where
+class MergeModel (K : Type uK) where
   /-- The replicated state a replica holds. -/
-  State : Type
+  State : Type uS
   /-- What the merge needs besides the two replicas. -/
-  MergeContext : Type
+  MergeContext : Type uC
   /-- What the merge returns — a state, or a view, or a state plus evidence. -/
-  MergeResult : Type
+  MergeResult : Type uR
   /-- What an invariant is asked about. -/
-  Observation : Type
+  Observation : Type uO
   /-- The merge itself. -/
   merge : MergeContext → State → State → MergeResult
   /-- When this context is legitimate for these two replicas. -/
@@ -215,7 +218,7 @@ merge result reads legal.
 Read the three hypothesis groups: `validContext` is *structural* legitimacy
 (reachability, groundedness) and is independent of `I`; `contextObs` is where
 `I` is assumed of the context; the last two are the replicas. -/
-def IConfluentIn (K : Type) [m : MergeModel K] (I : m.Observation → Prop) : Prop :=
+def IConfluentIn (K : Type u) [m : MergeModel K] (I : m.Observation → Prop) : Prop :=
   ∀ (c : m.MergeContext) (x y : m.State),
     m.validContext c x y →
     (∀ o ∈ m.contextObs c, I o) →
@@ -238,7 +241,7 @@ carrying which side was which is not symmetric as a result. It is symmetric as
 an observation, which is the property anyone actually depends on.
 `MergeState.merge_comm` is the special case where result and observation
 coincide. -/
-def MergeCommutative (K : Type) [m : MergeModel K] : Prop :=
+def MergeCommutative (K : Type u) [m : MergeModel K] : Prop :=
   ∀ (c : m.MergeContext) (x y : m.State), m.validContext c x y →
     m.observeResult (m.merge c x y) = m.observeResult (m.merge c y x)
 
@@ -246,7 +249,7 @@ def MergeCommutative (K : Type) [m : MergeModel K] : Prop :=
 tells you nothing new. Satisfied by both op-replay models (a log unioned with
 itself is that log) and by the join; **refuted** for the MRDT counter (§7.2),
 which is exactly why it is not a class field. -/
-def MergeIdempotent (K : Type) [m : MergeModel K] : Prop :=
+def MergeIdempotent (K : Type u) [m : MergeModel K] : Prop :=
   ∀ (c : m.MergeContext) (x : m.State), m.validContext c x x →
     m.observeResult (m.merge c x x) = m.observeState c x
 
@@ -255,7 +258,7 @@ determine the merge. Trivially true whenever `observeState` is the identity —
 so for the join model and the ancestral model alike — and **false** for
 op-replay (§7.3), where two logs with the same view merge differently. This is
 the precise sense in which an op-log merge "is not a binary join on views". -/
-def ObservationalMerge (K : Type) [m : MergeModel K] : Prop :=
+def ObservationalMerge (K : Type u) [m : MergeModel K] : Prop :=
   ∀ (c : m.MergeContext) (x y x' y' : m.State),
     m.validContext c x y → m.validContext c x' y' →
     m.observeState c x = m.observeState c x' →
@@ -265,7 +268,7 @@ def ObservationalMerge (K : Type) [m : MergeModel K] : Prop :=
 /-- **A model whose result is a state again.** Op-replay is not one: its result
 is a view and there is no way back to the log. Associativity needs this to be
 *typable* at all — `merge c (merge c x y) z` does not typecheck otherwise. -/
-class Internal (K : Type) [m : MergeModel K] where
+class Internal (K : Type u) [m : MergeModel K] where
   /-- Read the result back as a state. -/
   ofResult : m.MergeResult → m.State
   /-- …and reading it as a state agrees with reading it as a result. -/
@@ -274,7 +277,7 @@ class Internal (K : Type) [m : MergeModel K] where
 
 /-- **Associativity** — the third semilattice law, statable only for an
 `Internal` model. The join model has it; nothing else here claims it. -/
-def MergeAssociative (K : Type) [m : MergeModel K] [i : Internal K] : Prop :=
+def MergeAssociative (K : Type u) [m : MergeModel K] [i : Internal K] : Prop :=
   ∀ (c : m.MergeContext) (x y z : m.State),
     m.observeResult (m.merge c (i.ofResult (m.merge c x y)) z)
       = m.observeResult (m.merge c x (i.ofResult (m.merge c y z)))
@@ -287,7 +290,7 @@ instance would have to pick a distinguished state out of thin air, and
 bottom. That is the whole difference: a three-way merge fast-forwards from
 **every** base, and §7.1 is the theorem that no join on a two-state carrier
 can. -/
-class Based (K : Type) [m : MergeModel K] where
+class Based (K : Type u) [m : MergeModel K] where
   /-- The base the context names. -/
   baseOf : m.MergeContext → m.State
 
@@ -295,7 +298,7 @@ class Based (K : Type) [m : MergeModel K] where
 that did. `Ancestral` §6 is the proof this is the load-bearing law — its two-way
 form is refutable for *every* join on a state space with cyclic reachability
 (`Ancestral.lock_no_update_preserving_join`). -/
-def MergeFastForward (K : Type) [m : MergeModel K] [b : Based K] : Prop :=
+def MergeFastForward (K : Type u) [m : MergeModel K] [b : Based K] : Prop :=
   ∀ (c : m.MergeContext) (y : m.State), m.validContext c (b.baseOf c) y →
     m.observeResult (m.merge c (b.baseOf c) y) = m.observeState c y
 
@@ -306,13 +309,13 @@ laws are the semilattice. This is `Confluence.MergeState` with nothing added and
 nothing taken away; §8 proves the judgement agrees on the nose. -/
 
 /-- Tag for the join-CRDT model over `S`. -/
-inductive JoinKey (S : Type) where
+inductive JoinKey (S : Type u) where
   /-- The only inhabitant; the tag carries `S` as a parameter. -/
   | mk
 
 /-- **The join model.** No context, result is a state, observation is the
 state. -/
-@[reducible] instance joinModel (S : Type) [MergeState S] : MergeModel (JoinKey S) where
+@[reducible] instance joinModel (S : Type u) [MergeState S] : MergeModel (JoinKey S) where
   State := S
   MergeContext := Unit
   MergeResult := S
@@ -324,27 +327,27 @@ state. -/
   contextObs _ := []
 
 /-- The join model's result is a state — the identity. -/
-@[reducible] instance joinInternal (S : Type) [MergeState S] : Internal (JoinKey S) where
+@[reducible] instance joinInternal (S : Type u) [MergeState S] : Internal (JoinKey S) where
   ofResult r := r
   observe_ofResult _ _ := rfl
 
 /-- The join is commutative — `MergeState.merge_comm`, at the observation
 level. -/
-theorem join_commutative (S : Type) [MergeState S] : MergeCommutative (JoinKey S) :=
+theorem join_commutative (S : Type u) [MergeState S] : MergeCommutative (JoinKey S) :=
   fun _ x y _ => merge_comm x y
 
 /-- The join is idempotent — `MergeState.merge_idem`. -/
-theorem join_idempotent (S : Type) [MergeState S] : MergeIdempotent (JoinKey S) :=
+theorem join_idempotent (S : Type u) [MergeState S] : MergeIdempotent (JoinKey S) :=
   fun _ x _ => merge_idem x
 
 /-- The join is associative — `MergeState.merge_assoc`. All three semilattice
 laws, supplied. -/
-theorem join_associative (S : Type) [MergeState S] : MergeAssociative (JoinKey S) :=
+theorem join_associative (S : Type u) [MergeState S] : MergeAssociative (JoinKey S) :=
   fun _ x y z => merge_assoc x y z
 
 /-- The join model's merge factors through observations, trivially: its
 observation *is* its state. -/
-theorem join_observational (S : Type) [MergeState S] : ObservationalMerge (JoinKey S) := by
+theorem join_observational (S : Type u) [MergeState S] : ObservationalMerge (JoinKey S) := by
   intro _ x y x' y' _ _ hx hy
   have hx' : x = x' := hx
   have hy' : y = y' := hy
@@ -363,7 +366,7 @@ refutes idempotence outright for the counter MRDT). -/
 are why `MergeCommutative` is stated at the observation level: `left` and
 `right` swap, and the merge is symmetric in what it *means*, not in what it
 returns. -/
-structure Reconciled (S : Type) where
+structure Reconciled (S : Type u) where
   /-- The reconciled state. -/
   state : S
   /-- The base it was reconciled against. -/
@@ -374,26 +377,28 @@ structure Reconciled (S : Type) where
   right : S
 
 /-- The three-way merge, packaged with its evidence. -/
-def ancestralMerge {S : Type} (M : AncestralMerge S) (l x y : S) : Reconciled S :=
+def ancestralMerge {S : Type u} (M : AncestralMerge S) (l x y : S) : Reconciled S :=
   ⟨M.merge3 l x y, l, x, y⟩
 
 /-- **The evidence is not decoration**: when it records that the left replica
 never left the base, the reconciled state *is* the right replica — the merge
 fast-forwarded. `AncestralMerge.fastforward`, read off the result. -/
-theorem ancestralMerge_fastforward {S : Type} (M : AncestralMerge S) (l y : S) :
+theorem ancestralMerge_fastforward {S : Type u} (M : AncestralMerge S) (l y : S) :
     (ancestralMerge M l l y).state = (ancestralMerge M l l y).right :=
   M.fastforward l y
 
 /-- Tag for the ancestral model determined by a three-way merge and the
 implementation whose runs define reachability. -/
-inductive AncestralKey {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) where
+inductive AncestralKey {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op) where
   /-- The only inhabitant; the tag carries `M` and `impl` as parameters. -/
   | mk
 
 /-- **The ancestral model.** The context is the ancestor; it is legitimate when
 both replicas are reachable from it; and it exposes itself as an observation,
 which is where `AncestralConfluent`'s `I l` hypothesis lives. -/
-@[reducible] instance ancestralModel {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) :
+@[reducible] instance ancestralModel {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op) :
     MergeModel (AncestralKey M impl) where
   State := S
   MergeContext := S
@@ -406,33 +411,38 @@ which is where `AncestralConfluent`'s `I l` hypothesis lives. -/
   contextObs l := [l]
 
 /-- The ancestral result is a state again — forget the evidence. -/
-@[reducible] instance ancestralInternal {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) :
+@[reducible] instance ancestralInternal {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op) :
     Internal (AncestralKey M impl) where
   ofResult r := r.state
   observe_ofResult _ _ := rfl
 
 /-- The ancestral context *is* a base — this is the family fast-forward is
 about. -/
-@[reducible] instance ancestralBased {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) :
+@[reducible] instance ancestralBased {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op) :
     Based (AncestralKey M impl) where
   baseOf l := l
 
 /-- Law one: `AncestralMerge.comm`. -/
-theorem ancestral_commutative {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) :
+theorem ancestral_commutative {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op) :
     MergeCommutative (AncestralKey M impl) :=
   fun l x y _ => M.comm l x y
 
 /-- Law two: `AncestralMerge.fastforward` — and note the hypothesis it needs is
 `validContext l l y`, i.e. `y` reachable from the base, which is what an
 ancestor *is*. -/
-theorem ancestral_fastForward {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) :
+theorem ancestral_fastForward {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op) :
     MergeFastForward (AncestralKey M impl) :=
   fun l y _ => M.fastforward l y
 
 /-- The ancestral merge *does* factor through observations — its replicas are
 its observations. This is what §7.3 separates op-replay from: the third model
 fails this, and the first two do not. -/
-theorem ancestral_observational {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) :
+theorem ancestral_observational {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op) :
     ObservationalMerge (AncestralKey M impl) := by
   intro l x y x' y' _ _ hx hy
   have hx' : x = x' := hx
@@ -454,7 +464,7 @@ Two instances, because the family has an abstract member and a deployed one. -/
 /-! ### §6.1 The abstract derived-view model -/
 
 /-- Tag for the derived-view model over a log CRDT `L` read by `interp`. -/
-inductive LogKey {L View : Type} [MergeState L] (interp : L → View) where
+inductive LogKey {L : Type u} {View : Type v} [MergeState L] (interp : L → View) where
   /-- The only inhabitant; the tag carries the interpreter as a parameter. -/
   | mk
 
@@ -462,7 +472,7 @@ inductive LogKey {L View : Type} [MergeState L] (interp : L → View) where
 two replicas are logs; the result is the view of the union. `validContext` is
 `True` — any log is a legitimate history, which is the pattern's whole appeal
 and the reason its confluence is free. -/
-@[reducible] instance logModel {L View : Type} [MergeState L] (interp : L → View) :
+@[reducible] instance logModel {L : Type u} {View : Type v} [MergeState L] (interp : L → View) :
     MergeModel (LogKey interp) where
   State := L
   MergeContext := L
@@ -475,17 +485,23 @@ and the reason its confluence is free. -/
   contextObs c := [interp c]
 
 /-- **Law one is `derived_view_sec` clause (1)**: deltas arriving in either
-order give the same view. Not a fresh proof — the same theorem, read as a law
-of this model. -/
-theorem log_commutative {L View : Type} [MergeState L] (interp : L → View) :
-    MergeCommutative (LogKey interp) :=
-  fun c x y _ => (Move.derived_view_sec interp (fun _ => True) (fun _ => trivial) c x y).1
+order give the same view. `Move.derived_view_sec` states this when log and view
+share a universe; the proof here is its three merge-law rewrites directly, so
+the model may place its view in an independent universe. -/
+theorem log_commutative {L : Type u} {View : Type v} [MergeState L] (interp : L → View) :
+    MergeCommutative (LogKey interp) := by
+  intro c x y _
+  change interp ((c ⊔ x) ⊔ y) = interp ((c ⊔ y) ⊔ x)
+  rw [merge_assoc, merge_comm x y, ← merge_assoc]
 
 /-- **Law two is `derived_view_sec` clause (2)**: a redelivered delta changes
-nothing. -/
-theorem log_idempotent {L View : Type} [MergeState L] (interp : L → View) :
-    MergeIdempotent (LogKey interp) :=
-  fun c x _ => (Move.derived_view_sec interp (fun _ => True) (fun _ => trivial) c x x).2.1
+nothing. As above, the direct merge-law proof avoids coupling the view's
+universe to the log's. -/
+theorem log_idempotent {L : Type u} {View : Type v} [MergeState L] (interp : L → View) :
+    MergeIdempotent (LogKey interp) := by
+  intro c x _
+  change interp ((c ⊔ x) ⊔ x) = interp (c ⊔ x)
+  rw [merge_assoc, merge_idem]
 
 /-- **…and clause (3) is confluence**: an invariant the interpreter enforces by
 construction survives every merge, with no hypothesis on the replicas at all.
@@ -495,7 +511,7 @@ The price is not paid here and is not hidden: `Move.view_not_stable` shows the
 view is **not stable** under log growth — an edit a user watched happen can be
 un-happened by an older op arriving — so what this model buys in confluence it
 spends in stability. -/
-theorem log_iconfluentIn {L View : Type} [MergeState L] (interp : L → View)
+theorem log_iconfluentIn {L : Type u} {View : Type v} [MergeState L] (interp : L → View)
     (I : View → Prop) (henf : ∀ log, I (interp log)) :
     IConfluentIn (LogKey interp) I :=
   fun _ _ _ _ _ _ _ => henf _
@@ -818,7 +834,7 @@ lemmas. -/
 /-- **`IConfluent` is the join-model instance.** The join model's context is
 `Unit`, its validity is `True`, and it exposes no context observations — so the
 generalized judgement is the original one with three trivial hypotheses. -/
-theorem iconfluentIn_join_iff (S : Type) [MergeState S] (I : Invariant S) :
+theorem iconfluentIn_join_iff (S : Type u) [MergeState S] (I : Invariant S) :
     IConfluentIn (JoinKey S) I ↔ IConfluent I :=
   ⟨fun h x y hx hy => h () x y trivial (by intro _ ho; cases ho) hx hy,
    fun h _ x y _ _ hx hy => h x y hx hy⟩
@@ -826,7 +842,7 @@ theorem iconfluentIn_join_iff (S : Type) [MergeState S] (I : Invariant S) :
 /-- **`Ancestral.AncestralConfluent` is the ancestral-model instance.** The
 context is the ancestor, `contextObs` supplies `I l`, and `validContext`
 supplies the two reachability hypotheses. Same predicate, same quantifiers. -/
-theorem iconfluentIn_ancestral_iff {S Op : Type} (M : AncestralMerge S)
+theorem iconfluentIn_ancestral_iff {S : Type u} {Op : Type v} (M : AncestralMerge S)
     (impl : Impl S Op) (I : Invariant S) :
     IConfluentIn (AncestralKey M impl) I ↔ AncestralConfluent M impl I :=
   ⟨fun h l x y hl hx hy hrx hry =>
@@ -884,7 +900,7 @@ flag. -/
 /-- **A merge-base procedure's honest output.** Not `Option S`: two maximal
 common bases is a different answer from none, and the merge behaves differently
 under it (`base_decision_is_observable`). -/
-inductive BaseDecision (S : Type) where
+inductive BaseDecision (S : Type u) where
   /-- A single base was selected. -/
   | selected (base : S)
   /-- Two distinct common bases were found and could not be ordered. -/
@@ -903,7 +919,7 @@ no lowest one exists: uwueave has no `LowestCommonBase`, and minidregg's
 `AmbiguousCommonBases.excludes_lowest` is that theorem, next door. Two distinct
 common bases is what a merge-base procedure can hand us here, and
 `ambiguous_inhabited` shows the situation is real. -/
-def BaseDecision.Valid {S Op : Type} (impl : Impl S Op) :
+def BaseDecision.Valid {S : Type u} {Op : Type v} (impl : Impl S Op) :
     BaseDecision S → S → S → Prop
   | .selected l, x, y => Reachable impl l x ∧ Reachable impl l y
   | .ambiguous b₁ b₂, x, y =>
@@ -915,14 +931,14 @@ def BaseDecision.Valid {S Op : Type} (impl : Impl S Op) :
 observations a judgement may assume legal, because they are states the system
 committed. `unavailable` supplies nothing, which is correct and is the reason
 the invariant must be kept by the *policy* in that case. -/
-def BaseDecision.bases {S : Type} : BaseDecision S → List S
+def BaseDecision.bases {S : Type u} : BaseDecision S → List S
   | .selected l => [l]
   | .ambiguous b₁ b₂ => [b₁, b₂]
   | .unavailable => []
 
 /-- A state decided under a base decision, with the decision kept as evidence:
 a reader can tell a fast-forward from a policy call made blind. -/
-structure Decided (S : Type) where
+structure Decided (S : Type u) where
   /-- The decided state. -/
   state : S
   /-- The decision it was computed under. -/
@@ -936,14 +952,14 @@ structure Decided (S : Type) where
 two, or with none, there is no fast-forward to be had — a replica that did not
 move is indistinguishable from one that did — so the conflict-resolution policy
 decides. -/
-def decidedMerge {S : Type} (M : AncestralMerge S) (resolve : S → S → S) :
+def decidedMerge {S : Type u} (M : AncestralMerge S) (resolve : S → S → S) :
     BaseDecision S → S → S → Decided S
   | .selected l, x, y => ⟨M.merge3 l x y, .selected l, x, y⟩
   | .ambiguous b₁ b₂, x, y => ⟨resolve x y, .ambiguous b₁ b₂, x, y⟩
   | .unavailable, x, y => ⟨resolve x y, .unavailable, x, y⟩
 
 /-- Tag for the base-decision model. -/
-inductive DecisionKey {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op)
+inductive DecisionKey {S : Type u} {Op : Type v} (M : AncestralMerge S) (impl : Impl S Op)
     (resolve : S → S → S) where
   /-- The only inhabitant; the tag carries the merge, the implementation and the
   fallback policy. -/
@@ -951,7 +967,8 @@ inductive DecisionKey {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op)
 
 /-- **The base-decision model.** `MergeContext = BaseDecision S` — a context
 that is *not* a state, and could not be one. -/
-@[reducible] instance decisionModel {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op)
+@[reducible] instance decisionModel {S : Type u} {Op : Type v}
+    (M : AncestralMerge S) (impl : Impl S Op)
     (resolve : S → S → S) : MergeModel (DecisionKey M impl resolve) where
   State := S
   MergeContext := BaseDecision S
@@ -987,10 +1004,11 @@ refutation of every common base. -/
 /-- The implementation that admits nothing: every operation aborts. Its
 reachability is equality, which is what makes two distinct replicas genuinely
 base-less. -/
-def noOps (S Op : Type) : Impl S Op := ⟨fun _ _ => none⟩
+def noOps (S : Type u) (Op : Type v) : Impl S Op := ⟨fun _ _ => none⟩
 
 /-- Under `noOps` nothing moves: reachable implies equal. -/
-theorem noOps_reachable {S Op : Type} {b x : S} (h : Reachable (noOps S Op) b x) :
+theorem noOps_reachable {S : Type u} {Op : Type v} {b x : S}
+    (h : Reachable (noOps S Op) b x) :
     b = x := by
   obtain ⟨ops, hr⟩ := h
   cases ops with

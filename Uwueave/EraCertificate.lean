@@ -124,14 +124,18 @@ id collision does the same with an honest arbiter).
   * ⟨TERMINAL⟩ **A key licenses reuse, not verification** — inherited verbatim
     from `CertificateScope`. `era_verifiedAt_is_sound` is the reuse form, and it
     needs one honest verification to have happened.
-  * ⚠ ⟨UNDONE⟩ **Finality rests on event-id unforgeability, and the miniature
-    drops it.** `Era.lean` says ids stand in for hashes and that no uniqueness
-    premise is needed — which is exactly right for `resolve_same_sets`, whose
-    determinism survives a collision. It is **not** right for finality:
+  * ⚠ **Finality rests on event-id authenticity, and the miniature drops it.**
+    `Era.lean` needs no uniqueness premise for `resolve_same_sets`; its
+    determinism survives a collision. Finality does not:
     `an_event_born_finalised_rewrites_the_view` builds a second event with id
     `5`, which `laterCuts` has announced, and it enters the finalised prefix and
-    reverses the duel. Closing this needs §2's recursive hash linking — the
-    named-dropped plumbing — not a further theorem about this carrier.
+    reverses the duel. The conditional model theorem has now landed in
+    `Uwueave.Byzantine.authentic_issuance_preserves_finality`, under `Settled`,
+    `AnnouncementsGrounded`, `IdAuthentic`, and `Issuance`; its exact
+    contrapositive is `finality_failure_refutes_id_authenticity`. ⟨UNDONE at the
+    deployment boundary⟩ Recursive hash/signature binding, fraud-proof
+    detection, and the bridge from accepted bytes to those predicates remain
+    unproved.
   * ⟨UNDONE⟩ **`HonestExtension` is a hypothesis, not a detection.** It is
     satisfiable (`honest_setup_to_later`) and refutable
     (`backdating_is_not_honest`) and nothing here decides which one a live
@@ -1075,4 +1079,3 @@ theorem the_era_certificate_row :
    the_cut_axis_breaks_the_seal⟩
 
 end Uwueave.EraCertificate
-

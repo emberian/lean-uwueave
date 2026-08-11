@@ -100,15 +100,17 @@ The op set is sufficient for free (`opset_sufficient`, i.e. `sufficient_id`).
 sufficient? For membership the quotient was one bit; for an exact count it was
 the whole carrier; for a threshold, five classes. For text, measured here:
 
-  * `ctxEquiv_of_agree_window` — states agreeing on every **addressable** op
-    (element and anchor both inside the id window) are contextually equivalent.
-    A context can add ops; it cannot enlarge the window.
+  * `ctxEquiv_iff_agree_window` — states are contextually equivalent exactly
+    when they agree on every **addressable** op (element and anchor both inside
+    the id window). The converse needs no well-formedness or unique-parent
+    premise: `saturatedExcept_observable` proves that even a maximally malformed
+    multi-parent context exposes any omitted addressable edge.
   * `collapse_out_of_window` — so the quotient is **not** discrete: an element
     beyond the window, or one anchored beyond it, is invisible forever.
-  * `addressable_op_observable` — and that is the *only* collapse this file can
-    find: for every op the well-formedness discipline admits, the state holding
-    it is separated from the state holding nothing, by the root when the anchor
-    is the root and by the context that delivers the anchor otherwise.
+  * `addressable_op_observable` — the earlier concrete separation remains: for
+    every op the well-formedness discipline admits, the state holding it is
+    separated from the state holding nothing, by the root when the anchor is the
+    root and by the context that delivers the anchor otherwise.
   * `no_op_is_globally_invisible` — every op is addressable at some bound, so
     the collapse is an artifact of a query that fixes `n`, which is
     `MinimalSummary`'s "one query at a time" boundary in concrete form.
@@ -159,12 +161,12 @@ works, with no hypothesis, because the class map is always a join homomorphism.
     (causal stability, Baquero–Almeida–Shoker's compaction condition) — is a
     restriction on the set of contexts, and nothing here provides or refutes
     one. Naming that as the missing hypothesis is the content of this bullet.
-  * **Discreteness is proved for one family of pairs.** ⟨UNDONE⟩
-    `addressable_op_observable` separates the empty state from a one-op state.
-    The full claim — any two states differing at an addressable op are separated
-    — is not proved, and the honest statement of §5 is "the collapse contains
-    the unaddressable ops and excludes every addressable one *from the empty
-    state*".
+  * **The addressable window is exact.** ⟨TERMINAL⟩
+    `ctxEquiv_iff_agree_window` proves the full claim: any two states differing
+    at an addressable pair are contextually distinguishable. The proof audits
+    the model's malformed corner rather than assuming it away — saturation
+    violates both `WF` and `UniqueAnchor`, yet omitting one edge changes the
+    traversal. Thus the quotient drops exactly pairs outside the fixed window.
   * **Fugue is entered through a wrapper.** ⟨UNDONE⟩ `Fugue.docOrder` is called
     for real, but `Fugue.OpSet` is a `List InsOp` merged by append — associative,
     not commutative, not idempotent, hence not a `MergeState` — so §6 uses
@@ -174,7 +176,7 @@ works, with no hypothesis, because the class map is always a join homomorphism.
     `rendered_order_requiresEvidence`, which knows nothing about any of that;
     the *witness computation* depends on the wrapper.
   * **Small carriers.** ⟨TERMINAL for the refutations⟩ Three glyphs, bound `5`
-    (RGA) and `4` (Fugue). The general results — `ctxEquiv_of_agree_window`,
+    (RGA) and `4` (Fugue). The general results — `ctxEquiv_iff_agree_window`,
     `addressable_op_observable`, `tombstoned_content_never_read`,
     `rendered_order_requiresEvidence`, `text_view_sec` — carry no carrier
     assumption.
@@ -598,11 +600,10 @@ The op set is sufficient for free (`opset_sufficient`). The question `MinimalSum
 makes askable is whether it is *wastefully* sufficient — whether the coarsest
 sufficient summary is strictly smaller. For the count it was not (the quotient is
 the carrier); for a threshold it was (five classes over eight states). For text,
-measured on this carrier: the collapse **contains the ops the id window cannot
-address** (`ctxEquiv_of_agree_window`, general) and **excludes every op the
-well-formedness discipline admits** (`addressable_op_observable`, general — for
-the pairs a state holding the op against a state holding nothing). Text keeps
-what it can name. -/
+the answer is exact: `ctxEquiv_iff_agree_window` says the quotient identifies
+precisely states that agree on every element/anchor pair inside the fixed id
+window. No `WF` or `UniqueAnchor` premise is required. Text keeps exactly what
+this query can name. -/
 
 private theorem flatMap_congr {α β : Type} {l : List α} {f g : α → List β}
     (h : ∀ x ∈ l, f x = g x) : l.flatMap f = l.flatMap g := by
@@ -654,6 +655,226 @@ theorem ctxEquiv_of_agree_window {n : Nat} {s s' : SeqState}
   ctxEquiv_of_contexts (fun z => linearize_congr_window (fun i a hi ha => by
     show (s (i, a) || z (i, a)) = (s' (i, a) || z (i, a))
     rw [h i a hi ha]))
+
+/-! The converse has to survive malformed states. A state may attach every id
+to every anchor, including itself; `WF` and `UniqueAnchor` both fail maximally.
+Such saturation is useful as a separating context: it masks every coordinate
+except the one under test. The lemmas below prove that deleting that one edge
+still strictly shortens the fuel-bounded traversal. Thus duplicate parents do
+not create an accidental contextual collapse. -/
+
+/-- The maximally saturated sequence state: every element/anchor pair is
+present. It is deliberately malformed and violates unique-parent discipline. -/
+def saturatedOps : SeqState := fun _ => true
+
+/-- The saturated state with exactly one element/anchor pair omitted. -/
+def saturatedExcept (i a : Nat) : SeqState := fun q => !(q == (i, a))
+
+private theorem sum_map_le_pointwise {α : Type} {l : List α} {f g : α → Nat}
+    (h : ∀ x ∈ l, f x ≤ g x) : (l.map f).sum ≤ (l.map g).sum := by
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+      simp only [List.map_cons, List.sum_cons]
+      have hx := h x List.mem_cons_self
+      have hxs := ih (fun y hy => h y (List.mem_cons_of_mem _ hy))
+      omega
+
+private theorem sum_map_filter_le_pointwise {α : Type} (l : List α)
+    (p : α → Bool) (f g : α → Nat) (h : ∀ x ∈ l, f x ≤ g x) :
+    ((l.filter p).map f).sum ≤ (l.map g).sum := by
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+      have hx := h x List.mem_cons_self
+      have hxs := ih (fun y hy => h y (List.mem_cons_of_mem _ hy))
+      cases hp : p x <;> simp [hp] <;> omega
+
+private theorem sum_map_filter_lt_of_omitted {α : Type} (l : List α)
+    (p : α → Bool) (f g : α → Nat) (i : α) (hi : i ∈ l)
+    (hpi : p i = false) (hle : ∀ x ∈ l, f x ≤ g x) (hpos : 0 < g i) :
+    ((l.filter p).map f).sum < (l.map g).sum := by
+  induction l with
+  | nil => simp at hi
+  | cons x xs ih =>
+      have hx := hle x List.mem_cons_self
+      have hxs : ∀ y ∈ xs, f y ≤ g y :=
+        fun y hy => hle y (List.mem_cons_of_mem _ hy)
+      by_cases hxi : x = i
+      · subst x
+        have htail := sum_map_filter_le_pointwise xs p f g hxs
+        simp [hpi]
+        omega
+      · have hit : i ∈ xs := (List.mem_cons.mp hi).resolve_left (Ne.symm hxi)
+        have htail := ih hit hxs
+        cases hp : p x <;> simp [hp] <;> omega
+
+private theorem sum_map_lt_of_mem {α : Type} (l : List α) (f g : α → Nat)
+    (i : α) (hi : i ∈ l) (hle : ∀ x ∈ l, f x ≤ g x)
+    (hlt : f i < g i) : (l.map f).sum < (l.map g).sum := by
+  induction l with
+  | nil => simp at hi
+  | cons x xs ih =>
+      have hx := hle x List.mem_cons_self
+      have hxs : ∀ y ∈ xs, f y ≤ g y :=
+        fun y hy => hle y (List.mem_cons_of_mem _ hy)
+      by_cases hxi : x = i
+      · subst x
+        have htail := sum_map_le_pointwise hxs
+        simp
+        omega
+      · have hit : i ∈ xs := (List.mem_cons.mp hi).resolve_left (Ne.symm hxi)
+        have htail := ih hit hxs
+        simp
+        omega
+
+private theorem saturatedExcept_aux_length_le (n i a : Nat) :
+    ∀ fuel b,
+      (linearizeAux n (saturatedExcept i a) fuel b).length ≤
+        (linearizeAux n saturatedOps fuel b).length := by
+  intro fuel
+  induction fuel with
+  | zero => intro b; simp [linearizeAux]
+  | succ fuel ih =>
+      intro b
+      simp only [linearizeAux, List.length_flatMap, List.length_cons]
+      have hs : children n saturatedOps b = (List.range n).reverse := by
+        simp [children, saturatedOps]
+      rw [hs]
+      simp only [children, saturatedExcept]
+      apply sum_map_filter_le_pointwise
+      intro c hc
+      simp only [List.mem_reverse, List.mem_range] at hc
+      have hrec := ih c
+      omega
+
+private theorem saturatedExcept_aux_target_lt {n i a fuel : Nat} (hi : i < n)
+    (hfuel : 0 < fuel) :
+    (linearizeAux n (saturatedExcept i a) fuel a).length <
+      (linearizeAux n saturatedOps fuel a).length := by
+  cases fuel with
+  | zero => omega
+  | succ fuel =>
+      simp only [linearizeAux, List.length_flatMap, List.length_cons]
+      have hs : children n saturatedOps a = (List.range n).reverse := by
+        simp [children, saturatedOps]
+      rw [hs]
+      simp only [children, saturatedExcept]
+      apply sum_map_filter_lt_of_omitted _ _ _ _ i
+      · simp [hi]
+      · simp
+      · intro c hc
+        simp only [List.mem_reverse, List.mem_range] at hc
+        have hrec := saturatedExcept_aux_length_le n i a fuel c
+        omega
+      · omega
+
+/-- **Even maximally malformed multi-parent states expose every addressable
+edge.** Removing one pair from the saturated state strictly changes
+`linearize n`. If the anchor is the root, its nonempty child chunk disappears
+there; otherwise the saturated root reaches the anchor directly, and the same
+strict loss occurs one level down. All other recursive chunks can only shrink. -/
+theorem saturatedExcept_observable {n i a : Nat} (hi : i < n) (ha : a < n) :
+    linearize n saturatedOps ≠ linearize n (saturatedExcept i a) := by
+  intro heq
+  have hlen := congrArg List.length heq
+  rcases Nat.eq_zero_or_pos a with rfl | ha0
+  · exact (Nat.ne_of_lt
+      (saturatedExcept_aux_target_lt hi (Nat.zero_lt_of_lt hi))) hlen.symm
+  · cases n with
+    | zero => omega
+    | succ fuel =>
+        have hfuel : 0 < fuel := by omega
+        simp only [linearize, linearizeAux, List.length_flatMap,
+          List.length_cons] at hlen
+        have hs : children (fuel + 1) saturatedOps 0 =
+            (List.range (fuel + 1)).reverse := by
+          simp [children, saturatedOps]
+        have hw : children (fuel + 1) (saturatedExcept i a) 0 =
+            (List.range (fuel + 1)).reverse := by
+          simp only [children, saturatedExcept]
+          apply List.filter_eq_self.mpr
+          intro c hc
+          simp only [List.mem_reverse, List.mem_range] at hc
+          cases hb : ((c, 0) == (i, a)) with
+          | false => rfl
+          | true =>
+              have hp := pair_beq hb
+              omega
+        rw [hs, hw] at hlen
+        have hstrict :
+            (((List.range (fuel + 1)).reverse.map fun c =>
+                (c :: linearizeAux (fuel + 1)
+                  (saturatedExcept i a) fuel c).length).sum) <
+              (((List.range (fuel + 1)).reverse.map fun c =>
+                (c :: linearizeAux (fuel + 1) saturatedOps fuel c).length).sum) := by
+          apply sum_map_lt_of_mem _ _ _ a
+          · simp [ha]
+          · intro c hc
+            have hrec := saturatedExcept_aux_length_le (fuel + 1) i a fuel c
+            simp only [List.length_cons]
+            omega
+          · simp only [List.length_cons]
+            have htarget :=
+              saturatedExcept_aux_target_lt (a := a) hi hfuel
+            omega
+        exact (Nat.ne_of_lt hstrict) hlen.symm
+
+private theorem join_saturatedExcept_eq_saturated (s : SeqState) (i a : Nat)
+    (h : s (i, a) = true) : s ⊔ saturatedExcept i a = saturatedOps := by
+  funext q
+  cases hb : (q == (i, a)) with
+  | false =>
+      change (s q || saturatedExcept i a q) = true
+      simp [saturatedExcept, hb]
+  | true =>
+      have hq : q = (i, a) := eq_of_beq hb
+      subst q
+      change (s (i, a) || saturatedExcept i a (i, a)) = true
+      simp [saturatedExcept, h]
+
+private theorem join_saturatedExcept_eq_self (s : SeqState) (i a : Nat)
+    (h : s (i, a) = false) : s ⊔ saturatedExcept i a = saturatedExcept i a := by
+  funext q
+  cases hb : (q == (i, a)) with
+  | false =>
+      change (s q || saturatedExcept i a q) = saturatedExcept i a q
+      simp [saturatedExcept, hb]
+  | true =>
+      have hq : q = (i, a) := eq_of_beq hb
+      subst q
+      change (s (i, a) || saturatedExcept i a (i, a)) =
+        saturatedExcept i a (i, a)
+      simp [saturatedExcept, h]
+
+/-- **The converse: contextual equivalence recovers every addressable pair.**
+No `WF` or `UniqueAnchor` hypothesis is needed. Saturating every other pair as
+the common context reduces a disagreement to `saturatedOps` against
+`saturatedExcept`; `saturatedExcept_observable` separates those states even
+though they are maximally malformed and multi-parent. -/
+theorem agree_window_of_ctxEquiv {n : Nat} {s s' : SeqState}
+    (hctx : CtxEquiv (linearize n) s s') :
+    ∀ i a, i < n → a < n → s (i, a) = s' (i, a) := by
+  intro i a hi ha
+  have hz := hctx.2 (saturatedExcept i a)
+  cases hs : s (i, a) <;> cases hs' : s' (i, a)
+  · rfl
+  · rw [join_saturatedExcept_eq_self s i a hs,
+      join_saturatedExcept_eq_saturated s' i a hs'] at hz
+    exact False.elim (saturatedExcept_observable hi ha hz.symm)
+  · rw [join_saturatedExcept_eq_saturated s i a hs,
+      join_saturatedExcept_eq_self s' i a hs'] at hz
+    exact False.elim (saturatedExcept_observable hi ha hz)
+  · rfl
+
+/-- **Exact contextual equivalence for the addressable window.** Two sequence
+states are contextually equivalent for `linearize n` exactly when they agree on
+every pair whose element and anchor are both below `n`. This holds for arbitrary
+states: well-formedness and unique-parent discipline are not hidden premises. -/
+theorem ctxEquiv_iff_agree_window {n : Nat} {s s' : SeqState} :
+    CtxEquiv (linearize n) s s' ↔
+      ∀ i a, i < n → a < n → s (i, a) = s' (i, a) :=
+  ⟨agree_window_of_ctxEquiv, ctxEquiv_of_agree_window⟩
 
 /-- One op, as a state. -/
 def single (i a : Nat) : SeqState := (ins i a).1
@@ -726,13 +947,10 @@ holding it is contextually distinguishable from the state holding nothing. When
 the anchor is the root the op is visible immediately; otherwise the context that
 delivers the anchor makes it visible.
 
-With `ctxEquiv_of_agree_window` this is the measurement §5 promised, at the
-resolution it is proved: the collapse contains the unaddressable ops, and no
-addressable op is collapsed **into the empty state**. (The full discreteness
-claim — any two states differing at an addressable op are separated — is not
-proved here; see the boundary.) Text keeps what it can
-ever name — unlike the threshold of `MinimalSummary` §6, and closer to the
-exact count of §5 there. -/
+This is the concrete one-op instance of `ctxEquiv_iff_agree_window`: the collapse
+contains the unaddressable ops, and no addressable difference is collapsed.
+Text keeps what it can ever name — unlike the threshold of `MinimalSummary` §6,
+and closer to the exact count of §5 there. -/
 theorem addressable_op_observable {n i a : Nat} (hin : i < n) (hai : a < i) :
     ¬ CtxEquiv (linearize n) emptyDoc (single i a) := by
   intro heq

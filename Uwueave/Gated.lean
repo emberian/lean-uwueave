@@ -85,15 +85,16 @@ citing grants delegated under them (`Authority.duelling_admins_annihilate`) —
 and arbitration's price is that it loses `gated_antitone`'s shrinkage
 (`GatedEra.ge_not_antitone`).
 
-  * **Signatures are a premise, not a theorem.** ⟨TERMINAL, at this layer⟩ A
-    grant here is a record in a grow-only set; that only a legitimate issuer
-    could have produced it is unforgeability, discharged by a deployment's
-    signature scheme and never by anything in this file — nor by the kernel,
-    which authenticates nothing and is not asked to. An op is data: anyone
-    may write any `cite` into the log, and the gate bounds what a cited grant
-    can DO, not who may cite it. `Authority.lean` states the same seam, and
-    `Sequence`/`Authority`'s collision-extractor lemmas are the pattern for
-    how such a premise is handed off rather than assumed away.
+  * **Signatures are a premise, not a theorem of this gate.**
+    `Uwueave.Authenticity.authenticity_violation_extracts_forgery` now supplies
+    the constructive handoff from an accepted, unissued signed record to a
+    concrete forgery witness. `Uwueave.Byzantine.unauthenticated_submission_can_pass_the_gate`
+    separately proves the exact attack here: a submitter not represented in
+    `GOp` can cite somebody else's live grant and pass the ordinary gate.
+    ⟨UNDONE at the shipping boundary⟩ No theorem connects accepted
+    `Authenticity.SignedRecord`s to this kernel's grant/op admission, and no
+    concrete EUF-CMA proof is present. The gate bounds what a cited grant can
+    DO, not who may cite it.
   * **The kernel searches grants by FIRST match; `permitted` quantifies over
     all of them.** ⟨TERMINAL under content addressing, else UNDONE⟩ On a
     substrate satisfying `UniqueGrant` the two coincide, and that is exactly
@@ -151,23 +152,23 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     complete under `WF` + `UniqueGrant`. The undecidability is a fact about
     the abstraction, not a hole under the implementation.
   * **Below the Lean, the execution TCB — and it is NOT terminal.**
-    ⟨UNDONE, in nine named pieces⟩ This item used to read "⟨TERMINAL for this
+    ⟨UNDONE, in eight named pieces⟩ This item used to read "⟨TERMINAL for this
     repo⟩ … the Rust marshaller's bytes and Lean's C backend", which is exactly
     the claim `docs/TRUST.md` exists to retract: an external reviewer (codex)
     read "the C backend TCB is terminal" and demolished it, and Ledger 2 is the
-    replacement — **ten rows, zero PREMISE, nine OBLIGATION, one absent
-    component**, each with a named next step. *Nothing in the execution stack
-    is terminal.* Lean's C code generator, the C compiler and linker, the Lean
-    runtime, `shim.c`, the ABI/FFI boundary, Rust `unsafe`, the marshaller, the
-    storage glue and the build wiring are nine distinct boundaries, not one:
+    replacement — **ten rows: eight OBLIGATION and two PAID controls**, each
+    with a named disposition. *Nothing open in the execution stack is
+    terminal.* Lean's C code generator, the C compiler and linker, the Lean
+    runtime, `shim.c`, the ABI/FFI boundary, Rust `unsafe`, storage/index glue
+    and durability are eight distinct open boundaries, not one:
     CakeML is the existence proof for a verified compiler of a functional
     source language (the codegen half), and CompCert covers exactly one row —
     the C compiler — because it *starts* at C and does not reach Lean's IR.
-    ⚠ And the marshaller's differential is weaker than "checked at runtime":
-    `Exec.requestCanonicalKernel` is invoked through a `debug_assert!`
-    (`rust/src/movelog.rs`), so it is **compiled out of release builds** —
-    `Exec.lean`'s own header says "asserted in debug builds", and it is test
-    evidence either way, since Rust has no formal semantics to prove against.
+    The former Rust byte marshaller is gone: typed lanes cross the FFI and
+    `Exec.encodeRequestKernel_eq` proves the Lean export delegates to the one
+    canonical `encodeRequest`. That wire-decision boundary and fail-closed
+    build freshness are the two paid controls; neither pays the ABI, shim,
+    runtime or code-generation rows.
     Read `docs/TRUST.md` Ledger 2, not this bullet, for the current shape;
     `Exec.lean`'s claim-discipline header is the Lean-side ledger.
 

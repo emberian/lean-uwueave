@@ -139,13 +139,18 @@ depends on it):
     `projection_sound` is correspondingly *not* head-duality but a pointwise state
     equality — strictly more informative for this fragment, and inapplicable to
     theirs.
-  * ⟨UNDONE⟩ **Recursion.** `Choreo` is finite: no `μ`/`var`, no loops. The prior
-    art's `GlobalType` has them (with its own `NoRec` fragment for the results that
-    need it). Everything below is a statement about finite choreographies.
-  * ⟨UNDONE⟩ **Deadlock-freedom in their sense.** Our only blocking construct is
-    `barrier`, and whether every roster replica reaches it is a *liveness* question
-    (`Uwueave.Liveness` owns that axis) which nothing here addresses. No progress or
-    deadlock-freedom theorem is claimed.
+  * ⟨UNDONE here; finite approximation landed⟩ **Recursion.** `Choreo` is finite:
+    no `μ`/`var`, no loops. `Uwueave.ChoreoRec` now adds guarded anonymous
+    recursion through fuel-bounded finite approximants; `approximate_embed` and
+    `projection_sound_approx` preserve this module's finite semantics and
+    projection theorem. It does not add an infinitary or coinductive semantics.
+  * ⟨UNDONE as temporal liveness⟩ **Deadlock-freedom in their sense.** Our only
+    blocking construct is `barrier`. `Uwueave.ChoreoRec` now proves the narrow
+    operational facts that one guarded barrier loop can take a step and one
+    mismatched barrier is deadlocked. Whether every roster replica eventually
+    reaches a barrier remains a *liveness* question (`Uwueave.Liveness` owns that
+    axis): no fairness, eventual-delivery, or temporal deadlock-freedom theorem is
+    claimed.
   * ⟨UNDONE⟩ **`ReadsAgree` at non-reader replicas.** Projecting a `read` sends no
     message — every replica evaluates the *same* predicate on *its own* copy — so
     agreement is a **hypothesis**, not a theorem. It is discharged for read-free

@@ -44,15 +44,19 @@ file is the frontier it named.
     result and one illegal one, for the same two versions.** This is exactly the
     failure D-0005 declines to rule out, made concrete.
 
-  * **A coherence condition that repairs it, satisfiable and refutable** (§7).
+  * **A coherence condition that repairs it, and the exact boundary** (§7).
     `MergeClosedFrom M impl ρ` — the merge of states reachable from the root is
     itself reachable from the root — plus `AncestralConfluentFrom` (confluence
     on the *root's* reachable set, not each base's) makes every node of every
     coherent history legal (`Coherent.sound`). The lock of `Ancestral` §5
     **satisfies** it (`lock_mergeClosed`), so its repeated criss-cross merges are
     certified; the counter **refutes** it (`counter_not_mergeClosed`) at exactly
-    the step where §5's history goes wrong. The condition is therefore doing the
-    work rather than decorating it.
+    the step where §5 leaves local-run reachability. The package is sufficient,
+    not necessary: `counter_historySafe_true_and_not_mergeClosed` refutes that
+    converse. `HistorySafeFrom` states the exact local obligation over extensions
+    admitted by coherent histories, and `historySafeFrom_iff` proves it necessary
+    and sufficient for every node of every such history to be legal. The ceiling
+    counter refutes that exact condition; the lock satisfies it.
 
 ## The one-line diagnosis, which is the real deliverable
 
@@ -151,7 +155,7 @@ replaced.
     not modeled; nothing here *checks* a DAG for acyclicity.
   * ⟨TERMINAL⟩ **Convergence is not proved anywhere in this file.**
     `Coherent.sound` concludes *invariant preservation* and *reachability*, and
-    says nothing about two replicas agreeing. §6 and §7.3 are the two witnesses
+    says nothing about two replicas agreeing. §6 and §7.4 are the two witnesses
     that they need not: `base_accident_decides_the_invariant` (results 5 vs 4)
     and `swap_never_converges` (an eternal two-cycle under a state-level base
     policy `MergeModel.BaseDecision.Valid` fully licenses).
@@ -163,10 +167,13 @@ replaced.
   * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
     theorems in §4 target `MergeModel.BaseDecision.Valid`, which is fixed at
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
-  * ⟨UNDONE⟩ **`MergeClosedFrom` is sufficient, not necessary.** §7 proves it
-    closes the hole and that it separates the two examples; it does not prove a
-    coherent history violating it must break. A necessity direction (the analogue
-    of `Necessity.reachable_clash_refutes_cfcs` for iterated merging) is open.
+  * ⟨TERMINAL⟩ **`MergeClosedFrom` is sufficient, not necessary.** §7.3 proves
+    both claims: `mergeClosed_implies_historySafeFrom` routes the old closure
+    package into exact history safety, while
+    `counter_historySafe_true_and_not_mergeClosed` gives a safe invariant whose
+    root-reachable set is not merge-closed. The exact replacement is
+    `HistorySafeFrom`, characterized by `historySafeFrom_iff`; the ceiling
+    counter refutes it and the lock satisfies it.
   * ⟨UNDONE⟩ **No delta/patch algebra.** D-0005's route (1) wants residual and
     commutation laws over the operation semantics. This file works with states
     and a merge, as `Ancestral` does; the negative it returns is about that
@@ -1254,7 +1261,7 @@ theorem lv_alice_common : CommonAncestor lvDag .m1 .m2 .alice :=
   ⟨Or.inr (.direct (by decide)), Or.inr (.direct (by decide))⟩
 
 /-- `bob` is a common ancestor of the two merges — the other maximal candidate,
-which §7.3 shows the merge does not distinguish. -/
+which §7.2 shows the merge does not distinguish. -/
 theorem lv_bob_common : CommonAncestor lvDag .m1 .m2 .bob :=
   ⟨Or.inr (.direct (by decide)), Or.inr (.direct (by decide))⟩
 
@@ -1384,7 +1391,168 @@ theorem lock_join_base_insensitive :
     lockAM.merge3 (lvState .alice) (lvState .m1) (lvState .m2)
       = lockAM.merge3 (lvState .bob) (lvState .m1) (lvState .m2) := by decide
 
-/-! ### §7.3 ⚠ Invariant safety is not convergence — an eternal two-cycle
+/-! ### §7.3 Exact history safety — an iff over admissible extensions
+
+`MergeClosedFrom` is sufficient but not necessary for invariant safety. It asks
+that every merge of root-reachable states remain *operation-reachable*; a merge
+may leave that set and still preserve the invariant. The exact condition must
+instead inspect the extensions a coherent history actually admits.
+
+`ExtensionSafe H I v` is the local obligation at one such extension: a root
+state is legal; a run-produced state is legal whenever its parent is; a merge
+result is legal whenever its recorded base and parents are. `HistorySafeFrom`
+quantifies that obligation over every coherent history rooted at `rho`.
+`historySafeFrom_iff` proves this local condition is necessary and sufficient
+for every node of every such history to be legal. The forward direction is the
+load-bearing one: rank induction turns extension safety into whole-history
+safety. The reverse direction extracts each local obligation and is exact, not
+an additional sufficient premise.
+-/
+
+/-- **Safety of one admissible history extension.** The origin determines the
+premises available at that step. Coherence supplies the corresponding parent
+edges, common-ancestor evidence and literal merge equation. -/
+def ExtensionSafe {V S Op : Type} (H : History V S Op)
+    (I : Invariant S) (v : V) : Prop :=
+  match H.origin v with
+  | .root => I (H.state v)
+  | .ran p => I (H.state p) → I (H.state v)
+  | .merged l x y =>
+      I (H.state l) → I (H.state x) → I (H.state y) → I (H.state v)
+
+/-- **Exact root-relative history-safety condition.** Every extension step in
+every coherent version history carrying root state `rho` preserves `I`. Unlike
+`MergeClosedFrom`, this quantifies only over merge contexts a history can
+actually record and asks only for legality, not local-run reachability. -/
+def HistorySafeFrom {S Op : Type} (M : AncestralMerge S)
+    (impl : Impl S Op) (I : Invariant S) (rho : S) : Prop :=
+  ∀ (V : Type) (H : History V S Op), H.state H.root = rho →
+    H.Coherent M impl → ∀ v, ExtensionSafe H I v
+
+/-- **HistorySafe iff every admissible history is safe.** This is the exact
+necessity-and-sufficiency result: local safety at every recorded extension is
+equivalent to global legality at every node of every coherent history from the
+root. No reachability closure premise appears in either direction. -/
+theorem historySafeFrom_iff {S Op : Type} {M : AncestralMerge S}
+    {impl : Impl S Op} {I : Invariant S} {rho : S} :
+    HistorySafeFrom M impl I rho ↔
+      ∀ (V : Type) (H : History V S Op), H.state H.root = rho →
+        H.Coherent M impl → ∀ v, I (H.state v) := by
+  constructor
+  · intro hs V H hroot hco
+    have hstep : ∀ v, ExtensionSafe H I v := hs V H hroot hco
+    have step : ∀ v : V,
+        (∀ w, H.dag.rank w < H.dag.rank v → I (H.state w)) →
+        I (H.state v) := by
+      intro v ih
+      have hnode := hco.nodes v
+      have hsv := hstep v
+      cases hor : H.origin v with
+      | root =>
+          simpa [ExtensionSafe, hor] using hsv
+      | ran p =>
+          simp only [OriginOK, hor] at hnode
+          simp only [ExtensionSafe, hor] at hsv
+          exact hsv (ih p (H.dag.rank_lt _ _ hnode.1))
+      | merged l x y =>
+          simp only [OriginOK, hor] at hnode
+          simp only [ExtensionSafe, hor] at hsv
+          obtain ⟨hpx, hpy, hca, _⟩ := hnode
+          exact hsv
+            (ih l (Nat.lt_of_le_of_lt hca.1.rank_le
+              (H.dag.rank_lt _ _ hpx)))
+            (ih x (H.dag.rank_lt _ _ hpx))
+            (ih y (H.dag.rank_lt _ _ hpy))
+    have key : ∀ (n : Nat) (v : V), H.dag.rank v ≤ n → I (H.state v) := by
+      intro n
+      induction n with
+      | zero => intro v hv; exact step v (fun w hw => absurd hw (by omega))
+      | succ n ih => intro v hv; exact step v (fun w hw => ih w (by omega))
+    intro v
+    exact key (H.dag.rank v) v (Nat.le_refl _)
+  · intro hs V H hroot hco v
+    have hall := hs V H hroot hco
+    cases hor : H.origin v <;> simp only [ExtensionSafe, hor]
+    · exact hall v
+    · intro _; exact hall v
+    · intro _ _ _; exact hall v
+
+/-- The old root-reachability closure package implies the exact condition.
+This places `Coherent.sound` as a reusable sufficient route into the iff, not
+as its necessity direction. -/
+theorem mergeClosed_implies_historySafeFrom {S Op : Type}
+    {M : AncestralMerge S} {impl : Impl S Op} {I : Invariant S} {rho : S}
+    (hloc : LocallySafe impl I)
+    (hAC : AncestralConfluentFrom M impl I rho)
+    (hMC : MergeClosedFrom M impl rho) (hroot : I rho) :
+    HistorySafeFrom M impl I rho := by
+  rw [historySafeFrom_iff]
+  intro V H hr hco v
+  have hacH : AncestralConfluentFrom M impl I (H.state H.root) := by
+    simpa [hr] using hAC
+  have hmcH : MergeClosedFrom M impl (H.state H.root) := by
+    simpa [hr] using hMC
+  have hrootH : I (H.state H.root) := by simpa [hr] using hroot
+  exact (hco.sound hloc hacH hmcH hrootH v).2
+
+/-- ⚠ **The counter refutes exact history safety.** Its coherent criss-cross
+history is rooted at `0`, yet the admissible `joinLeft` extension holds `5`
+under the ceiling `n ≤ 4`. -/
+theorem counter_not_historySafeFrom :
+    ¬ HistorySafeFrom counterAM (spendOps 2).impl (fun n => n ≤ 4) 0 := by
+  intro hs
+  have hall :=
+    historySafeFrom_iff.mp hs Ver ccHistory rfl ccHistory_coherent
+  exact repeated_merge_breaks_the_invariant.2.2.2 (hall .joinLeft)
+
+/-- **The base accident appears at exactly one extension obligation.** The same
+two merge parents are safe; choosing `left` as base produces illegal `5`, while
+choosing `right` produces legal `4`. Thus the exact condition sees the history's
+recorded base rather than quantifying over unrelated root-reachable triples. -/
+theorem base_accident_is_exact_step :
+    ¬ ExtensionSafe ccHistory (fun n => n ≤ 4) Ver.joinLeft ∧
+      ExtensionSafe ccHistory (fun n => n ≤ 4) Ver.joinRight := by
+  constructor <;> simp [ExtensionSafe, ccHistory, ccOrigin, ccState]
+
+/-- **The exact condition is satisfiable.** Every legal lock root satisfies
+history safety across arbitrary coherent repeated/criss-cross histories. Local
+runs preserve mutual exclusion and `lockMerge` preserves it for every legal
+pair of parents, independently of the recorded base. -/
+theorem lock_historySafeFrom (rho : Lock) (hrho : AtMostOne rho) :
+    HistorySafeFrom lockAM lockImpl AtMostOne rho := by
+  intro V H hroot hco v
+  have hnode := hco.nodes v
+  cases hor : H.origin v with
+  | root =>
+      have hv : v = H.root := hco.root_unique v hor
+      subst v
+      simpa [ExtensionSafe, hor, hroot] using hrho
+  | ran p =>
+      simp only [OriginOK, hor] at hnode
+      simp only [ExtensionSafe, hor]
+      intro hp
+      obtain ⟨ops, hops⟩ := hnode.2
+      exact hops.preserves lock_locally_safe hp
+  | merged l x y =>
+      simp only [OriginOK, hor] at hnode
+      simp only [ExtensionSafe, hor]
+      intro _ hx hy
+      rw [hnode.2.2.2]
+      exact lock_merge_atMostOne _ _ _ hx hy
+
+/-- ⚠ **`MergeClosedFrom` is not necessary for history safety.** On the same
+counter implementation, the always-true invariant is safe under every
+admissible history extension, while root operation-reachability is still not
+merge-closed (`0,1,2` merge to unreachable `3`). This is a direct refutation of
+the previously open necessity direction, not a failure to find its proof. -/
+theorem counter_historySafe_true_and_not_mergeClosed :
+    HistorySafeFrom counterAM (spendOps 2).impl (fun _ => True) 0 ∧
+      ¬ MergeClosedFrom counterAM (spendOps 2).impl 0 := by
+  refine ⟨?_, counter_not_mergeClosed⟩
+  intro V H hroot hco v
+  cases hor : H.origin v <;> simp [ExtensionSafe, hor]
+
+/-! ### §7.4 ⚠ Invariant safety is not convergence — an eternal two-cycle
 
 `MergeModel.BaseDecision.Valid` licenses a base whenever both replicas op-reach
 from it. Under `lockImpl` every state reaches every legal one, so for the pair
@@ -1446,10 +1614,11 @@ theorem lock_two_valid_bases :
     is ancestrally confluent and a coherent history over it has an illegal node.
   * **Criss-cross** — it *diverges*, and the divergence decides the invariant:
     two maximal common bases, no lowest one, results `5` and `4`, ceiling `4`.
-  * **A coherence condition** — `MergeClosedFrom` plus `AncestralConfluentFrom`
-    make every node of every coherent history legal. The counter satisfies the
-    confluence half and refutes the closure half, which locates the break
-    exactly; the lock satisfies both.
+  * **The exact safety boundary** — `HistorySafeFrom` is necessary and sufficient
+    for every node of every coherent history to be legal. `MergeClosedFrom` plus
+    `AncestralConfluentFrom` imply it but are not necessary. The ceiling counter
+    refutes exact safety at `joinLeft`, the alternate base passes at `joinRight`,
+    and every legal lock root satisfies it.
   * **…and it still is not convergence.** The lock satisfies the condition,
     every version of its history is legal, and two replicas under a fully valid
     base policy swap forever. -/

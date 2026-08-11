@@ -36,7 +36,7 @@ one syntactic fact the classification carrier depends on, and it is the whole
     time, so the table cannot drift from the evidence);
   * §6 the surface syntax itself.
 
-## The fragment, stated up front (FRAGMENT 2)
+## The fragment, stated up front
 
 `preo` covers exactly this and refuses everything else loudly:
 
@@ -48,8 +48,14 @@ preo <Name> where
   invariant <name> : <predicate>              -- ONE field, or TWO (a cross-field
                                               -- invariant, over the product state)
   invariant <name> : <predicate> := <verdict> -- author-supplied evidence, kernel-checked
+  future <name> on <WorldModel> := <FutureDecl>
   derive <name> : <type> = <expr>             -- ONE field; the fourth verdict
   derive <name> : <type> = <expr> := <evidence>
+  protocol <name> over <Strategy> := <Protocol.Term Strategy>
+  session <name> runs <protocol> at <strategy>
+  session <name> under <admissible> runs <protocol> at <strategy> := <membership proof>
+  session <name> under <admissible> composes <left> with <right>
+    at <strategy> := <membership proof>
 ```
 
 Fragment 2 closed three of fragment 1's refusals — **seam facets** (a globally
@@ -60,10 +66,18 @@ structurally is in `Uwueave.Preo.Classification`: a row accumulates *facets*
 instead of a winner, and the answer it certifies is proved independent of the
 route order (`Preo.run_answer_congr`).
 
-*Still* not in the fragment, and each is a real feature of `PREOSCRIPTING.md`
-§7: `per`, `future`, `session`, `budget`, `parallel`, invariants over three or
-more fields, derives reading more than one field, and declaration composition.
-Each is refused by name.
+The future form is explicitly indexed by a `Preo.Future.WorldModel`; it cannot
+silently fall back to a relation on materialized state. Protocol bodies are
+typed `Protocol.Term` values: the six-constructor semantic AST is deep, while
+the first surface deliberately keeps its body as an ordinary checked Lean term.
+Sessions call `Protocol.elaborate`, `elaborateProfilePlan`, or
+`elaborateComposedProfilePlan` once and expose their proof-carrying results.
+
+*Still* not in the fragment: a custom parser for protocol expressions, budget
+block syntax, invariants over three or more fields, derives reading more than
+one field, and general declaration composition. The typed Lean-term escape
+hatch reaches every current protocol constructor without duplicating its
+semantics in the parser.
 -/
 import Uwueave.Tactics
 
@@ -199,6 +213,12 @@ inductive RowKind where
   | cross
   /-- A computed value, classified by the fourth verdict (`JoinHom.Fourth`). -/
   | derive
+  /-- A named, explicitly world-model-indexed future declaration. -/
+  | future
+  /-- A typed `Protocol.Term`; its semantics remain in `Protocol.Term.denote`. -/
+  | protocol
+  /-- A proof-carrying protocol elaboration or global-strategy profile plan. -/
+  | session
   deriving Inhabited, DecidableEq, Repr
 
 /-- One printable line of a `preo` report. `evidence` names the constant the
@@ -289,6 +309,31 @@ syntax preoDerive :=
   withPosition(&"derive" ident " : " colGt term:51 " = " colGt term
     (" := " colGt term)?)
 
+/-- `future <name> on <WorldModel> := <FutureDecl>` — a stable surface name for
+a relation on the model's retained world carrier. The model is mandatory:
+future declarations cannot be inferred from, or collapsed onto, state alone. -/
+syntax preoFuture := withPosition(&"future" ident
+  ppSpace &"on" ppSpace colGt term " := " colGt term)
+
+/-- `protocol <name> over <Strategy> := <term>` — a typed opaque entry into the
+deep `Protocol.Term` AST. Keeping the body an ordinary Lean term makes all six
+semantic constructors available without maintaining a second, drifting parser. -/
+syntax preoProtocol := withPosition(&"protocol" ident
+  ppSpace &"over" ppSpace colGt term " := " colGt term)
+
+/-- A checked session elaboration. The plain form exposes
+`Protocol.Elaboration` and its `.plan`/`.upperBound`; the `under` form also
+selects one member of a named admissible strategy space; the `composes` form
+uses `elaborateComposedProfilePlan`, so both sides retain that same strategy. -/
+declare_syntax_cat preoSessionMode
+syntax (name := preoSessionRuns) "runs" ppSpace ident : preoSessionMode
+syntax (name := preoSessionProfile) "under" ppSpace ident ppSpace "runs"
+  ppSpace ident : preoSessionMode
+syntax (name := preoSessionComposed) "under" ppSpace ident ppSpace "composes"
+  ppSpace ident ppSpace "with" ppSpace ident : preoSessionMode
+syntax preoSession := withPosition(&"session" ident ppSpace preoSessionMode
+  ppSpace &"at" ppSpace colGt term (" := " colGt term)?)
+
 /-- **A preoscript declaration.** Elaborates to a state type, its field
 accessors, a checked `MergeState`, one `Invariant` per invariant row, one
 computation per `derive` row, and — per item — a `Preo.Classification`
@@ -296,7 +341,12 @@ accumulating every facet the rule registry certified. See `Uwueave.Preo.Elab`
 for what is emitted and in what order; see this file's header for the
 fragment. -/
 syntax (name := preoDecl) "preo " ident " where "
-  (ppLine colGe preoField)* (ppLine colGe preoInv)* (ppLine colGe preoDerive)* : command
+  (ppLine colGe preoField)*
+  (ppLine colGe preoInv)*
+  (ppLine colGe preoFuture)*
+  (ppLine colGe preoDerive)*
+  (ppLine colGe preoProtocol)*
+  (ppLine colGe preoSession)* : command
 
 /-- Print the verdict table of a `preo` declaration: every field with its kind
 and carrier, every invariant with the field it reads, its verdict, the route

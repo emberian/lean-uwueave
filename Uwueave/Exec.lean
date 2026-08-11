@@ -176,24 +176,22 @@ presentations, machine-checked. ⚠ Scope: the 2-node universe only — this is
 a bridge for the miniature, **not** a general refinement of `absReplay` to an
 abstract derived view.
 
-**Still open**, and not claimed — two items, and neither of them is terminal:
-(a) the Rust marshaller's byte-for-byte agreement with `encodeRequest` —
-differentially checked against the proven canonical encoder
-(`requestCanonicalKernel`), but through a `debug_assert!`
-(`rust/src/movelog.rs`), so the check is **compiled out of release builds**;
-it is test evidence either way, since Rust has no formal semantics to prove
-against. ⚠ `docs/TRUST.md` Ledger 2 names the better next step and it is not
-"strengthen the differential": *delete the marshaller* — `encodeRequest` is
-already Lean and already proved to round-trip through all four decoders, so
-exporting it removes the row instead of testing it harder. (b) Everything
+**Boundary status** — one former obligation closed, the remaining trust rows
+still open and not claimed:
+(a) The Rust request marshaller is now **gone**: `encodeRequestKernel` accepts
+typed scalar lanes across the FFI and calls the proved canonical
+`encodeRequest`, so Rust no longer chooses FORMAT v3's magic, counts, block
+order, endianness, or bytes. The typed Rust/C/Lean ABI adapter remains part of
+the shim/ABI trust rows; it is not a second wire encoder.
+(b) Everything
 downstream of the C backend, as above — which is **not one boundary**. This
 paragraph used to close "the list is now exactly the TCB, no undone proof
 work hiding in its clothes"; that is retracted. `docs/TRUST.md` Ledger 2
-decomposes (b) into **ten rows: zero PREMISE, nine OBLIGATION, one absent
-component**, every one with a named next step — Lean's C code generator, the
-C compiler and linker, the Lean runtime, `shim.c`, the ABI/FFI boundary,
-Rust `unsafe`, the marshaller, the storage glue, the build wiring, and
-persistence (absent, not trusted). CakeML is the existence proof for the
+decomposes the execution boundary into **ten rows: eight OBLIGATION and two
+PAID controls**. The open rows are Lean's C code generator, the C compiler and
+linker, the Lean runtime, `shim.c`, the ABI/FFI boundary, Rust `unsafe`, the
+storage/index glue, and durability. The paid rows are the Lean-owned canonical
+request encoder and Cargo/Lean build freshness. CakeML is the existence proof for the
 codegen half; CompCert covers exactly one row, the C compiler, and does not
 reach Lean's IR. The former open items — the
 Prop-level connection of `absReplay` to the derived-view abstraction, and
@@ -727,12 +725,61 @@ def requestWords (firstParent : Array Int) (ops : Array Op)
 `ExecRefine` proves `decodeBase`/`decodeOps` invert it exactly
 (`decodeBase_encodeRequest`, `decodeOps_encodeRequest`, packaged as
 `replay_encodeRequest`), which closes the input side of the wire contract at
-the Lean level. What remains outside any proof is only that the Rust
-marshaller produces these exact bytes — a finite, testable claim the
-property suite exercises end-to-end. -/
+the Lean level. Rust no longer produces a second spelling of these bytes: the
+typed FFI adapter below reconstructs the four input lanes and calls this
+encoder. The adapter, generated C, runtime and ABI remain separately accounted
+execution obligations. -/
 def encodeRequest (firstParent : Array Int) (ops : Array Op)
     (gs : Array Grant) (rs : Array Nat) : ByteArray :=
   (requestWords firstParent ops gs rs).foldl pushWord ByteArray.empty
+
+/-! ### Typed FFI entrance to the canonical encoder
+
+The Rust boundary passes values, not a second spelling of FORMAT v3.  The C
+shim boxes four lanes of host-ABI `uint64_t`s; this adapter reconstructs the
+typed inputs and delegates all request layout and byte-order decisions to
+`encodeRequest` above.  The op and grant lanes are exact-width records
+(quintuples and triples).  A trailing partial record is ignored here so the
+export remains total; the safe Rust wrapper makes such a lane unconstructible.
+-/
+
+/-- Reconstruct typed move operations from the FFI's five-word records. -/
+def opsOfTypedWords (words : Array UInt64) : Array Op :=
+  (Array.range (words.size / 5)).map fun j =>
+    let o := j * 5
+    { lamport := words.getD o 0
+      replica := words.getD (o + 1) 0
+      child   := (words.getD (o + 2) 0).toNat
+      dest    := toI (words.getD (o + 3) 0)
+      cite    := (words.getD (o + 4) 0).toNat }
+
+/-- Reconstruct typed grants from the FFI's three-word records. -/
+def grantsOfTypedWords (words : Array UInt64) : Array Grant :=
+  (Array.range (words.size / 3)).map fun j =>
+    let o := j * 3
+    { id     := (words.getD o 0).toNat
+      parent := (words.getD (o + 1) 0).toNat
+      scope  := (words.getD (o + 2) 0).toNat }
+
+/-- The C entry point for request construction.  Unlike
+`requestCanonicalKernel`, this does not check bytes produced elsewhere:
+FORMAT v3's canonical bytes are produced here, by `encodeRequest` itself.
+
+All four arguments are owned Lean arrays.  Signed base and destination words
+use their two's-complement `UInt64` bit pattern and are interpreted by `toI`.
+The C shim guarantees exact-width op/grant lanes. -/
+@[export uwueave_encode_request]
+def encodeRequestKernel (firstParentWords opFields grantFields revocationWords : Array UInt64) :
+    ByteArray :=
+  encodeRequest (firstParentWords.map toI) (opsOfTypedWords opFields)
+    (grantsOfTypedWords grantFields) (revocationWords.map UInt64.toNat)
+
+/-- The exported typed adapter is definitionally the proved canonical
+encoder applied to the values reconstructed at the FFI boundary. -/
+theorem encodeRequestKernel_eq (firstParentWords opFields grantFields revocationWords) :
+    encodeRequestKernel firstParentWords opFields grantFields revocationWords =
+      encodeRequest (firstParentWords.map toI) (opsOfTypedWords opFields)
+        (grantsOfTypedWords grantFields) (revocationWords.map UInt64.toNat) := rfl
 
 /-- Encode the override view, one little-endian word per entry. -/
 def encodeView (ov : Array Int) : ByteArray :=
@@ -771,12 +818,9 @@ def replayKernel (input : ByteArray) : ByteArray :=
 canonical `encodeRequest`, compare byte-for-byte. Returns one byte, `1` iff
 the input is canonical. Because `ExecRefine` proves decode ∘ `encodeRequest`
 is the identity, a `1` here means the caller's bytes are *exactly* the
-canonical encoding of what the kernel will decode from them — the Rust
-marshaller runs this (via `shim_uweave_request_canonical`) as a debug-build
-assert on every request it sends, so its agreement with `encodeRequest` is
-differentially checked against the proven encoder rather than merely
-exercised. (Still test evidence, not proof: Rust has no formal semantics to
-prove against.) -/
+canonical encoding of what the kernel will decode from them. The production
+Rust path now calls `encodeRequestKernel` instead; this export remains a
+compatibility audit endpoint and test oracle for older callers. -/
 @[export uwueave_request_canonical]
 def requestCanonicalKernel (input : ByteArray) : ByteArray :=
   if getWord input 0 == magicV3 then

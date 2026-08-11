@@ -60,6 +60,12 @@ what a checker must report, §7 collects the chain.
     clash (`atMostTwo_generators_do_not_clash`) and the optimum is nevertheless
     exactly 3 (`atMostTwo_least_width`), the whole number coming from a
     three-way obstruction read off the pairwise joins.
+  * `atMostTwo_live_global_crossing_gap` — the crossing separation the earlier
+    slot workload could not provide. Three one-op branches are pairwise legal,
+    so an honest constant live strategy pays `0`; every global seam pays at
+    least `1`, because zero would put all generators in one fiber and global
+    stability would derive legality of their illegal triple join. A global seam
+    paying exactly `1` proves the floor is attainable.
   * `the_two_floors_are_incomparable` — the clique floor and the block floor each
     report `0` on the workload where the other reports a positive number, so a
     checker must run both.
@@ -791,6 +797,104 @@ theorem atMostTwo_least_width :
     LiveSegmented.LeastSuch (LiveSegmented.GlobalWidth atMostTwo) 3 :=
   least_globalWidth_of_clique_and_seam atMostTwo_triangle_of_the_triple_clash rfl
     ⟨sigmaTwo, sigmaTwo_segmented⟩
+
+/-! ### §5.2 The achievable crossing gap — live `0`, global exactly `1`
+
+The three-way obstruction also closes the crossing question left open by
+`LiveSegmented` and `ForkGrade`. Run three one-operation branches from the empty
+state, one per slot. Every pair of scenario worlds merges legally under
+`atMostTwo`, so there is no live clash and the constant live seam is valid at
+cost zero. But a **global** seam at cost zero would paint all three branch
+endpoints with the root's colour. Global fiber stability then closes `sA` with
+`sB`, keeps their join in that fiber, and closes the result with `sC` — deriving
+legality of the forbidden triple claim.
+
+This is not merely a lower bound. `sigmaTwoOneCross` is globally segmented and
+charges exactly the C branch, so the global optimum is attained at one. -/
+
+/-- Three single-claim branches from the empty slot state. -/
+def atMostTwoScenario :
+    ForkGrade.Scenario LiveSegmented.Slots ClaimOp3 where
+  root := LiveSegmented.sO
+  paths := [[ClaimOp3.claimA], [ClaimOp3.claimB], [ClaimOp3.claimC]]
+
+/-- The scenario contains exactly the empty state and the three generators. -/
+theorem atMostTwoScenario_worlds :
+    atMostTwoScenario.worlds claim3Step =
+      [LiveSegmented.sO, LiveSegmented.sA, LiveSegmented.sB, LiveSegmented.sC] := rfl
+
+/-- **Satisfiability of the live side.** Every two scenario worlds merge to a
+state with at most two claims, so its live clash graph is empty. -/
+theorem atMostTwoScenario_no_live_clash :
+    ¬ ForkGrade.LiveClash atMostTwo claim3Step atMostTwoScenario := by
+  decide
+
+/-- The honest constant live strategy, over the same three colours available to
+the global witness below. Its validity is carried by the no-live-clash proof. -/
+def atMostTwoZeroStrategy :
+    ForkGrade.LiveStrategy atMostTwo claim3Step atMostTwoScenario (Fin 3) :=
+  ForkGrade.constLiveStrategy 0 atMostTwoScenario_no_live_clash
+
+/-- The live strategy pays zero on all three branches. -/
+theorem atMostTwoZeroStrategy_cost :
+    ForkGrade.liveCost atMostTwoZeroStrategy.seam claim3Step atMostTwoScenario = 0 :=
+  ForkGrade.constLiveStrategy_free 0 atMostTwoScenario_no_live_clash
+
+/-- A global seam that keeps the empty, A, B, and AB states together, separates
+C/AC, and gives BC the third colour. On the scenario it crosses only to C. -/
+def sigmaTwoOneCross (s : LiveSegmented.Slots) : Fin 3 :=
+  if s.c then if s.b && !s.a then 2 else 1 else 0
+
+/-- The one-crossing seam is genuinely globally segmented; the achievement is
+not obtained by weakening the certificate. -/
+theorem sigmaTwoOneCross_segmented : SegmentedIConfluent sigmaTwoOneCross atMostTwo := by
+  intro x y hσ hx hy
+  obtain ⟨xa, xb, xc⟩ := x
+  obtain ⟨ya, yb, yc⟩ := y
+  revert hσ hx hy
+  cases xa <;> cases xb <;> cases xc <;> cases ya <;> cases yb <;> cases yc <;> decide
+
+/-- The global witness attains the floor: only the C branch changes fiber. -/
+theorem sigmaTwoOneCross_cost :
+    ForkGrade.liveCost sigmaTwoOneCross claim3Step atMostTwoScenario = 1 := by
+  decide
+
+/-- **Every global seam crosses.** Zero cost would root-colour `sA`, `sB`, and
+`sC`; `ForkGrade.global_triple_obstruction_cost_positive` then uses global fiber
+stability twice to derive legality of their illegal triple join. -/
+theorem atMostTwo_every_global_seam_costs_one_or_more
+    {Seg : Type z} [DecidableEq Seg] (σ : LiveSegmented.Slots → Seg)
+    (hseg : SegmentedIConfluent σ atMostTwo) :
+    1 ≤ ForkGrade.liveCost σ claim3Step atMostTwoScenario := by
+  apply ForkGrade.global_triple_obstruction_cost_positive
+    (I := atMostTwo) (step := claim3Step) (sc := atMostTwoScenario) (σ := σ)
+    (x := LiveSegmented.sA) (y := LiveSegmented.sB) (z := LiveSegmented.sC)
+  · rw [atMostTwoScenario_worlds]
+    simp
+  · rw [atMostTwoScenario_worlds]
+    simp
+  · rw [atMostTwoScenario_worlds]
+    simp
+  · decide
+  · decide
+  · decide
+  · decide
+  · exact hseg
+
+/-- **The concrete live/global crossing separation.** On one scenario, in one
+crossing currency and even with the same three-element segment codomain, a live
+strategy achieves `0`; every globally valid seam costs at least `1`; and a
+globally valid seam achieves `1`. Thus the optima differ exactly, not merely by
+the absence of the constant seam. -/
+theorem atMostTwo_live_global_crossing_gap :
+    ForkGrade.liveCost atMostTwoZeroStrategy.seam claim3Step atMostTwoScenario = 0
+    ∧ (∀ σ : LiveSegmented.Slots → Fin 3,
+        SegmentedIConfluent σ atMostTwo →
+          1 ≤ ForkGrade.liveCost σ claim3Step atMostTwoScenario)
+    ∧ SegmentedIConfluent sigmaTwoOneCross atMostTwo
+    ∧ ForkGrade.liveCost sigmaTwoOneCross claim3Step atMostTwoScenario = 1 :=
+  ⟨atMostTwoZeroStrategy_cost, atMostTwo_every_global_seam_costs_one_or_more,
+   sigmaTwoOneCross_segmented, sigmaTwoOneCross_cost⟩
 
 /-! ## §6. Two incomparable floors — and therefore two things to report.
 

@@ -19,6 +19,8 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
+**Ledger total: 87 numbered transport rows.**
+
 ---
 
 ## How to read a row
@@ -57,6 +59,21 @@ written.
 *transport* `Bounds.reachableClash_of_clashBlock` (idle one replica) · **no
 converse** — an inflationary step admits concurrent clashes and no sequential
 ones, which is row 9's whole story.
+
+**4a. Outcome-valued coordination-freedom → its two exact components** ⚠
+*source* `Specification.CoordinationFree R P` · *target*
+`Specification.HistoryMonotone R P ∧ Specification.FiberDirected R P` ·
+*transport* `Specification.coordinationFree_iff_historyMonotone_and_fiberDirected`
+· *needs* **`Specification.Total P`**, only in the source-to-history-monotone
+direction; the converse and the fiber-directed projection need no totality ·
+*without it* `Specification.zeroAbsent_iconfluent` transports through
+`invariant_coordinationFree_iff` while
+`zeroAbsent_not_historyMonotone` refutes history monotonicity at the concrete
+extension `emptyNatSet ⊑ zeroNatSet`. Independently, total, refinement-closed,
+history-monotone `branchingBoolSpec` is not coordination-free
+(`branchingBoolSpec_not_coordinationFree`), so the fiber-directed conjunct is
+also load-bearing; `emptySpec_coordinationFree` /
+`emptySpec_not_nonvacuous` records the separate vacuity failure.
 
 ---
 
@@ -134,13 +151,23 @@ established* (`LiveBudget.claim_sound` proves each report's own claim, totally).
 reachability-complete for its own total-state model, so promoting there is free.
 
 **11. Global seam → live seam** ⚠ **the second hole**
-*transport* `LiveSegmented.segmented_implies_liveSegmented` (one line) ·
-*strictly* stronger source · *without the converse*
+*source* carrier-global `SegmentedIConfluent σ I` · *target*
+protocol-relative `LiveSegmented P σ I` · *transport*
+`LiveSegmented.segmented_implies_liveSegmented` (one line) · *needs* no extra
+hypothesis because the source quantifies over strictly more pairs · *without
+the converse*
 `LiveSegmented.witness_one_latticeOnly_clash` — a seam that is live-valid and
 globally refuted, refuted **exactly** at an unreachable pair. And it costs:
 `live_optimum_strictly_below_global_optimum` — live width **2**, global width
 **3**, both least, with `the_third_domain_is_charged_for_an_unreachable_pair` as
 the audit trail.
+⚠ *the exact crossing gap is now inhabited too*:
+`CliqueLive.atMostTwo_live_global_crossing_gap` gives one three-branch scenario
+where an honest live strategy costs **0**, every global seam into the same
+`Fin 3` costs at least **1**, and `sigmaTwoOneCross_segmented` attains **1**.
+Its concrete failure is `atMostTwo_generators_do_not_clash`: all generator
+pairs merge legally, but their triple join is illegal, so global fiber closure
+charges a crossing the live pairwise world graph cannot see.
 ⚠ *and*: `workload_crossings_coincide` + `clashBlocks_head_coReachable` prove
 **the crossings floors were never the hole** — the hole was the strategy space.
 
@@ -175,6 +202,19 @@ has size 3 while the two-operation protocol has live width 2, and
 be run. `the_third_op_restores_the_third_domain` supplies the missing operation
 and raises both the live clique and live optimum back to 3.
 
+**13b. Universal crossing floor + certified predictive seam → exact optimum** ⚠
+*source* the lower bound `Cost.unlinked_floor_is_two` plus a concrete seam ·
+*target* an attained exact crossing optimum for the unlinked two-field workload
+· *transport* `Cost.unlinked_optimum_is_two` · *needs*
+`Cost.unlinkedPredictive_segmented` and the executable, decidable segment
+carrier `Vector Bool 10 × Nat`; the legacy window records exactly values
+`11 … 20`, while the allocation component records the independently moving
+quota share · *without that predictive certificate* the canonical
+`(version, allocation)` seam pays **4** (`Cost.linked_halves_the_crossings`),
+although `Cost.unlinkedPredictive_cost` pays **2**. Thus a proved floor alone
+does not identify an achieving plan, and the obvious seam is a concrete
+non-optimum witness.
+
 ---
 
 ## IV. Merge models
@@ -194,6 +234,26 @@ serialization + a symmetric chooser · *without the last*
 not assumed · *boundary* `Recoverable.budget_boundary` — the counter satisfies
 **every** hypothesis and fails only `LegalSerialization`.
 
+**15a. Costed delta recovery → executable constructed merge with a work bound** ⚠
+*source* `Recoverable.CostedDeltaRecoveryOn g Step`, whose `program_correct`
+executes the inherited recovery and whose `work_eq_program_length` ties cost to
+the actual instruction list · *target* `costedAncestralMergeOf D C`, its
+executable `constructedMergeProgram`, and a bound on
+`constructedMergeWork` · *transport*
+`Recoverable.executeConstructedMerge_eq`,
+`constructedMergeProgram_length`, and `constructedMergeWork_le_max`; a uniform
+recovery bound crosses via `constructedMergeWork_le_of_recovery_bound`, while
+semantic correctness is retained by `costedAncestralMergeOf_serializing` and,
+under the invariant premises, `costedAncestralMergeOf_stepConfluent` · *needs*
+`[DecidableEq S]` and a `SymmetricChooser S`; the invariant target additionally
+needs `Discerning D.erase C I` and `LegalSerialization g I` · *without the
+program certificate* correctness supplies no cost at all:
+`Recoverable.lockRecovery_arbitrarily_expensive` pads the **same** semantic
+lock recovery to every requested lower bound, and
+`paddedLockConstructedMerge_both_moved_work` transports the padding unchanged
+to the concrete both-moved merge (`n + 1` work). Thus no cost-free reading can
+be inferred from delta-recovery correctness alone.
+
 **16. One fork-and-join → repeated history** ✗ **REFUTED**
 *without it* `Histories.repeated_merge_breaks_the_invariant` — a *coherent*
 history with a legal root and an illegal node. Diagnosed:
@@ -203,6 +263,22 @@ not the merge.**
 ⚠ *partial repair* `Histories.History.Coherent.sound` (sufficient, not proved
 necessary) and `HistoryBase.coherent_sound_of_runRealized` (needs **no** merge
 law, no closure, no confluence).
+
+**16a. Local extension safety → safety of every coherent history node** ✅
+*source* `Histories.HistorySafeFrom M impl I rho`, the origin-indexed
+`ExtensionSafe` obligation over every coherent history rooted at `rho` ·
+*target* legality of every node of every such history · *transport*
+`Histories.historySafeFrom_iff`, an exact iff · *needs* the recorded root
+equality and `H.Coherent M impl`; no reachability-closure or confluence premise
+appears in the iff. The older sufficient route is precisely
+`mergeClosed_implies_historySafeFrom` · *without exact extension safety*
+`Histories.counter_not_historySafeFrom` gives the concrete coherent
+criss-cross history whose `joinLeft` node is `5 > 4`, while
+`base_accident_is_exact_step` shows the alternate recorded base passes.
+`counter_historySafe_true_and_not_mergeClosed` is the complementary inhabited
+counterexample: `MergeClosedFrom` fails although exact history safety holds, so
+the old closure package is load-bearing only for that sufficient route, not for
+the target judgement itself.
 
 **17. State-level base validity → history-level** ⚠
 *transport* `HistoryBase.ValidInHistory` · *without it* three witnesses in both
@@ -359,6 +435,81 @@ forged already-announced id rewrites the prefix despite an honest arbiter. These
 are not failures of the delivery theorem: they name the honest-extension and
 event-id-unforgeability premises required to cross those other axes.
 
+**27b. Ordered frontier completeness → delivery-stable candidate values** ⚠
+*source* `Frontier.WorldComplete F stamp w` · *target*
+`Evidence.FreeTermination WorldFuture.DeliveryFuture` for the candidate-value
+observation · *transport* `Frontier.world_complete_values_stable` · *needs*
+`WorldFuture.Wf w`, the issued pool retained by the world, and the `hall`
+premise settling every issued event at its stamped point · *without complete
+delivery* `Frontier.advance_without_delivery_is_unsound` advances the concrete
+nonempty `loneIssued` frontier from timestamp zero to one while delivering
+nothing: completeness holds before and fails after. And without ordered
+positions, `flat_frontier_loses_position` gives identical flat source bits with
+opposite answers at timestamp zero; `flat_frontier_and_epoch_do_not_determine_world_future`
+keeps frontier bits, certificates, roster and epoch equal while the issued pools
+differ.
+
+**27c. EUF-style trace premise → authentic issuer** ⚠
+*source* `Authenticity.EUFStylePremise scheme keys revoked issued received` ·
+*target* `Authenticity.AuthenticIssuer scheme keys revoked issued received` ·
+*transport* `Authenticity.eufStyle_implies_authenticIssuer`, with the converse
+and constructive failure handoff in
+`authenticIssuer_iff_no_received_forgery` /
+`authenticity_violation_extracts_forgery` · *needs* the exact registered key,
+non-revocation, issuance transcript, and domain-separated `signingMessage`;
+the theorem transports a trace-relative security premise and does **not** prove
+cryptographic hardness · *without it* `Authenticity.attack_not_authentic` and
+`attack_extracts_forgery` exhibit an accepted grant that issuer 7 never issued;
+`toy_euf_style_refuted` proves the deliberately insecure scheme fails the
+premise on that nonempty trace.
+
+**27d. Fork evidence → attributable equivocation** ⚠
+*source* `Causality.ForkEvidence B p` · *target*
+`Byzantine.Equivocated issued p` · *transport*
+`Byzantine.fork_evidence_attributes_author` · *needs*
+`Byzantine.SignatureAuthentic B issued`, because a grow-only receive buffer
+proves only that two shaped records arrived · *without it*
+`Byzantine.forged_branch_can_frame_without_authentication` assembles concrete
+fork evidence for peer 17 while `honest_issuance_did_not_equivocate` proves that
+peer issued only the left branch. The orthogonal failure is inhabited too:
+`authenticity_and_delivery_are_independent` pairs authentic-but-withheld data
+with quiesced-but-forged data, so delivery cannot discharge this hypothesis.
+
+**27e. Context-aware delivery/extension → projected world future** ⚠
+*source* `WorldContext.DeliveryFuture origin versionOf c d` or
+`WorldContext.ExtensionFuture origin versionOf c d` · *target* the matching
+`WorldFuture` relation on `project c` and `project d` · *transport*
+`WorldContext.delivery_projects` / `extension_projects`, with the evidence-level
+projection `delivery_projects_evidence`; the exact converses are
+`delivery_lifts` and `extension_lifts` · *needs*, for a converse lift, the
+projected future plus `Frozen c d` or `Extends c d` and `Admits`: every newly
+materialized candidate must have an outstanding active covering grant, an
+origin in the downward-closed causal cut, and a version reachable from the
+known base · *without that context*
+`WorldContext.projected_delivery_does_not_lift_without_context` gives a real
+projected delivery rejected by the capability-poor context. The stronger
+separations `capability_changes_allowed_futures`,
+`known_base_changes_allowed_futures`, and `known_cut_changes_allowed_futures`
+hold the projected source and target worlds fixed while each hidden axis alone
+flips the context-delivery verdict; `same_world_axes_hide_context` records the
+equal state, pool, frontier, and epoch explicitly.
+
+**27f. Authenticated settled ERA issuance → unchanged final view** ⚠
+*source* `EraCertificate.Settled w`, `Byzantine.AnnouncementsGrounded w`,
+`Byzantine.IdAuthentic t.pool`, and `EraCertificate.Issuance w t` · *target*
+`EraCertificate.finalView t = EraCertificate.finalView w` · *transport*
+`Byzantine.authentic_issuance_preserves_finality` · *needs* both authenticity
+halves exactly where stated: every announced id is grounded in the old issued
+pool, and one id denotes only one payload throughout the new pool. Settlement
+then ensures every already-finalised issued event is present; issuance freezes
+cuts while extending pool and log · *without `IdAuthentic`*
+`Byzantine.forged_announced_id_breaks_era_finality` is a nonempty exact
+refutation: both worlds are quiesced, the old world is settled and grounded,
+and the transition is a valid issuance, yet a different payload born under
+announced id 5 changes Alice from reader to admin and changes `finalView`.
+`finality_failure_refutes_id_authenticity` packages the corresponding
+contrapositive under settlement, grounding, and issuance.
+
 ---
 
 ## VII. Rendering
@@ -490,6 +641,19 @@ independent `Nat` enters a menu, and the `Exit` display tag moves neither
 `MenuEntry.consequence` are retired as authorities and kept as vocabulary;
 `consequence_is_free_data` is why the sentence field had to go.
 
+**37c. Typed escrow repair → explicit reachability restriction** ⚠
+*source* `RepairMenu.balanceEscrow`, a typed repair from the shared-balance
+promise to the per-replica escrow promise · *target*
+`Repair.RestrictsReachability balanceEscrow` together with its distinct price
+currency · *transport* `RepairMenu.balanceEscrow_price_and_delta` · *needs* the
+actual escrow invariant/transform and the source-to-target promise relation;
+zero seam crossings are not evidence that admission was preserved · *without
+the separate currency* `Repair.crossings_cannot_see_the_difference` makes
+`restrictionPrice`, arbitration, forking and retained evidence all project to
+crossing count zero. The nonempty semantic witness is `Exits.balX`:
+`Exits.balX_legal` admits one device spending the whole budget in the source,
+while `RepairMenu.escrow_forbids_balX` proves the split target rejects it.
+
 ---
 
 ## IX. Structure and documents
@@ -574,6 +738,47 @@ source proves no general no-section counterexample, so none is asserted here.
 The worked `one_renderer_serves_both` is a consequence of the isomorphism, not
 of document shape alone.
 
+**40h. Canonical crash-prefix bytes → exact recovered journal** ⚠
+*source* `Durable.encodeJournal tag records ++ torn` · *target* the logical
+record list `records` · *transport* `Durable.recover_crashPrefix`, with prefix
+monotonicity in `recover_crashPrefix_monotone` · *needs* the complete prefix to
+be the canonical `encodeJournal` image and the suffix to carry an explicit
+`Durable.TornFrame tag next torn` witness. Real storage must separately supply
+`DeploymentAssumptions`; this module manufactures none · *without the torn
+suffix premise* `Durable.recover_append` is the concrete opposite case: a
+complete nonempty next frame recovers `records ++ [payload]`, not `records`.
+At the codec boundary, `decodeFor_encodeFrame_ne` also refuses every complete
+frame under a distinct version/domain tag, so the format identity is
+load-bearing rather than display metadata.
+
+**40i. Result evidence → typed evidence graph → flat evidence document** ⚠
+*source* `Evidence.ResultEvidence α` · *target* first
+`EvidenceGraph.Graph α`, then `DerivedDocument.EvidenceDoc α` · *transport*
+`EvidenceGraph.encodeEvidenceGraph_merge` / `encodeEvidenceGraph_joinHom` and
+the exact factorization `EvidenceGraph.flat_encodeEvidence_is_projection`;
+the forgetful map itself is certified by `forgetEvidenceGraph_joinHom` ·
+*needs* graph endpoint integrity, discharged for every encoded value by
+`encodeEvidenceGraph_wellFormed`; candidate-source support is the explicit
+noncomputable projection over arbitrary `α` · *without wellformedness*
+`EvidenceGraph.danglingAttribution_is_malformed` gives a present attribution
+edge with no candidate endpoint. The positive structure is nonempty:
+`forked_evidence_has_two_sourced_branches` and
+`forked_evidence_has_explicit_discharges` exhibit distinct candidate branches,
+source vertices, and certificate-to-obligation edges.
+
+**40j. Globally non-glueable one-shot guard → exact owner-fiber gluing** ⚠
+*source* `Gluing.AtMostOneFill` on the total `oneShotHole` · *target*
+`Gluing.GluesWithin oneShotHole oneShotOwner` paired with the global rejection
+`¬ Gluing.Glues oneShotHole` · *transport*
+`Gluing.oneShotHole_partially_glues`, whose positive certificate is
+`oneShotOwner_segmented` through `guardGluingSeam_iff_segmented` · *needs*
+same `oneShotOwner` fiber and two locally legal one-shot states; the owner is
+proof-level (`Classical.choose`) because a general `Nat → Bool` has no finite
+emptiness search · *without the seam* `Gluing.oneShotHole_never_glues` is the
+concrete global clash. Moreover `oneShot_seam_separates_singletons` and its
+`GluesWithin` corollary prove every valid seam must separate each distinct pair
+of singleton fills, so the coordination boundary cannot be collapsed.
+
 ---
 
 ## X. Verification conditions
@@ -592,6 +797,26 @@ merge (`rfl`-unchanged) stops being RA-linearizable.
 and `kernel_admits_only_authorised` (**hypothesis-free** safety direction) ·
 *without the premises* first-match search can only admit **less**, which is why
 safety needs nothing.
+
+**42a. Typed request lanes → canonical FORMAT v3 bytes** ⚠
+*source* four Lean-owned `Array UInt64` lanes for base parents, five-word move
+records, three-word grants, and revocations · *target* the single canonical
+`ByteArray` produced by `Exec.encodeRequest` · *transport*
+`Exec.encodeRequestKernel_eq`: the exported entry point reconstructs typed
+`Op`/`Grant` values and definitionally delegates all magic, counts, block
+order, signed-word interpretation, and little-endian encoding to Lean · *needs*
+the residual typed ABI/shim contract: owned arrays must cross Rust/C/Lean with
+their words intact, and the shim must supply exact-width op quintuples and
+grant triples. This theorem removes a second wire encoder; it does not verify
+the C generator, runtime, shim, FFI, or host construction of those lanes ·
+*without that typed entrance* malformed bytes remain only a refusal boundary,
+not a typed semantic source. Concretely, the executable
+`Exec.requestCanonicalKernel` returns the one-byte refusal code `0` for a
+wrong-magic request (including `ByteArray.empty`), while `Exec.replay` returns
+an empty response; and the total `opsOfTypedWords` / `grantsOfTypedWords`
+definitions ignore a trailing partial record, making the shim's exact-width
+promise load-bearing. No theorem here upgrades arbitrary bytes into a typed
+request.
 
 **43. Growing revocations → shrinking applied set** ✗ **REFUTED**
 *without it* `Exec.applied_set_not_antitone` — revoking a grant can **add** an
@@ -683,6 +908,95 @@ generic componentwise shortcut, and an unsupported keyed predicate remains an
 `Obligation`. Automatic keyed clash seams additionally need a concrete key and
 legal default family; the surface does not invent them.
 
+**44h. Protocol AST → checked scheduling plan under one strategy** ⚠
+*source* `Protocol.Term Strategy` plus one selected admissible strategy ·
+*target* `Scheduling.SessionProfile`, `Schedule`, `Plan`, and witnessed
+`UpperBound` data · *transport* `Protocol.elaborate`,
+`elaborateProfilePlan`, and the audit theorem
+`elaborated_composition_uses_one_strategy`; `Annotation.axes_retained` proves
+all seven demand axes survive elaboration · *needs* a single global `strategy`
+and its membership proof in `CoordEffect.Admissible`; parallel or sequential
+subterms do not choose independent optima · *without the full scheduling
+artifact* `Protocol.no_ast_crossing_count_determines_least_meetings` gives two
+inhabited ASTs with equal crossing counts and distinct exact meeting counts,
+while `ast_one_crossing_can_need_two_rounds` shows one crossing can require two
+incompatible rounds. Thus elaboration transports annotations and proofs, not a
+scalar conversion.
+
+**44i. Broad future certificate → contained-future certificate** ⚠
+*source* `CertificateScope.KeyCertSound key answer broad.future C` · *target*
+soundness for `narrow.future` · *transport*
+`Preo.Future.certificate_sound_restrict`, with artifact-level forms
+`CheckedStability.restrict` and `CheckedCertificate.restrict` · *needs*
+`Preo.Future.FutureDecl.IncludedIn narrow broad`; the concrete declaration is
+`delivery_le_extension`, so soundness is contravariant from extension to
+delivery · *without inclusion in that direction*
+`Preo.Future.quiescedRenderStability` exists but
+`delivery_artifact_does_not_promote_to_extension`, and
+`quiescedWorldCertificate` is sound for delivery while
+`quiescence_certificate_not_sound_for_extension`. Separately,
+`same_state_different_worlds_block_certificate_reuse` is the nonempty
+world-indexing counterexample: equal materialized state does not license a
+state-only checked certificate because the issued pools differ.
+
+**44j. Checked semantic declaration → canonical first-order artifact** ⚠
+*source* private checked terms such as `Preo.Artifact.CheckedInvariant I` and
+`CheckedPlan checkedSession plan` · *target* the public first-order
+`Preo.Artifact.ArtifactEncoding` with a structural roundtrip · *transport*
+the `Checked*.toArtifact` projections and
+`Preo.Artifact.ArtifactEncoding.decode_canonicalEncoding` · *needs* the checked
+constructors to originate semantic meaning: an invariant source carries an
+actual `Spec.Verdict` and witness codec, and a plan source carries an actual
+`Scheduling.Plan`. The wire roundtrip itself needs no semantic hypothesis and
+is deliberately **not** a verifier · *without the checked source* the reverse
+transport is false by construction: public `ArtifactEncoding.decode` returns
+only an `Artifact`, never a `Spec.Verdict` or `Scheduling.Plan`. The concrete
+nonempty boundary is `Preo.Artifact.Examples.bundle`; it contains every list, a
+real plan, and both verdict tags, while `Examples.atMostOneBoolVerdict` is the
+actual two-witness clash that an arbitrarily authored wire `.free` tag cannot
+replace.
+
+**44k. Proof-indexed declaration bundle → one artifact and canonical wire image** ⚠
+*source* `Preo.Export.DeclarationBundle State`, populated only through its
+checked field, verdict, future-certificate, and protocol-elaboration builders ·
+*target* one `Preo.Artifact.Artifact` paired with its canonical
+`ArtifactEncoding` in `DeclarationBundle.Projection` · *transport*
+`DeclarationBundle.project`, with exact roundtrip
+`DeclarationBundle.Projection.decode_encoding`; the nonempty whole-language
+instance is pinned by `Examples.whole_artifact_is_hand_composition`,
+`whole_encoding_is_hand_composition`, and `whole_export_roundtrips` · *needs*
+the private proof-indexed bundle/projection constructors and the checked inputs
+at each builder call: actual verdict, exact-world future certificate, and one
+protocol elaboration whose plan remains indexed by its session. Stable IDs and
+the witness codec remain explicit; only after these types constrain the build
+are proofs erased · *without that checked source* an arbitrary wire verdict is
+only first-order data: `Preo.Export.arbitrary_free_tag_decodes_only_as_data`
+roundtrips the concrete host-authored `arbitraryFreeWire` tagged `.free`, while
+`decoded_verdicts_are_only_wire_data` exposes a codomain with no invariant
+index. It therefore cannot reverse the projection into a `Spec.Verdict`.
+`Examples.every_export_surface_is_nonempty` and
+`protocol_export_is_nontrivial` ensure the positive artifact contains all five
+row classes and a real two-action protocol plan.
+
+**44l. Finite choreography → guarded recursive embedding and sound approximants** ⚠
+*source* a finite `Choreo R S`, or an accepted `ChoreoRec.RecChoreo R S` at a
+chosen fuel · *target* an ordinary finite choreography together with its global
+denotation and endpoint projection · *transport* `ChoreoRec.approximate_embed`
+is exact at every fuel, `embed_wellGuarded` admits every finite source, and
+`denoteApprox_embed` / `projectApprox_embed` preserve its meanings;
+`projection_sound_approx` then reuses the finite projection theorem · *needs*
+`[DecidableEq R]` for the semantic layer and exactly
+`Choreo.ReadsAgree roster (approximate fuel term) initial` for projection
+soundness. `WellGuarded` is the recursive-language admission boundary, not an
+extra premise smuggled into `projection_sound_approx`; bounded approximation
+does not manufacture branch agreement · *without guardedness*
+`ChoreoRec.unguardedLoop_is_rejected` rejects the concrete immediate
+self-reference `.mu .var`. And guarded syntax alone is no liveness theorem:
+`mismatched_barrier_is_deadlocked` gives a nonempty two-replica runtime where
+one endpoint waits and the other has terminated;
+`unguarded_and_deadlocked_refutations` packages both failures, while
+`guardedBarrierLoop_progresses` is only the positive one-step, fuel-one case.
+
 ---
 
 ## The meta-row
@@ -720,14 +1034,17 @@ The standing ambition, stated so it can be measured:
 > runnable witness proving that no such unconditional transport exists.**
 
 Rows currently ✗ with no complete repair: 5 *(superseded by 6–7)*,
-16 *(partial)*, 18 *(repaired under record determination by 18a)*, 22b
+16 *(exactly characterized by 16a; the older closure route is only
+sufficient)*, 18 *(repaired under record determination by 18a)*, 22b
 *(causal-stability contexts unmodelled)*, 27, and 40 *(repaired at the
 grounded judgement)*. Row 26 is repaired under `Closed ∧ RosterKnown` while
 retaining the single-premise refutation. Preoscript now has the projection,
-seam, mergeability, route-invariance, nested document-seam, and keyed-cross
-transports in rows 44a–44g. What remains is different work: declarations still
-carry no operation vocabulary from which to derive reachability, no rule
-produces a typed `Repair P Q`, multi-field derives and three-or-more-field
-invariants are refused, and the exact hand `WeaveCore` grouping/legal seed is
-not expressible by a flat declaration even though the general seam algebra now
-reconstructs its verdict.
+seam, mergeability, route-invariance, nested document-seam, keyed-cross,
+protocol, future-variance, first-order artifact, checked-bundle projection, and
+recursive-choreography transports in rows 44a–44l. What remains is different
+work: declarations still carry no operation vocabulary from which to derive
+reachability, no rule produces a typed
+`Repair P Q`, multi-field derives and three-or-more-field invariants are
+refused, and the exact hand `WeaveCore` grouping/legal seed is not expressible
+by a flat declaration even though the general seam algebra now reconstructs
+its verdict.

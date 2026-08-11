@@ -150,6 +150,8 @@ exists** — a `sorry`-backed `Verdict` prints exactly like a real one.
   * a declaration with no fields.
 -/
 import Uwueave.Preo.Classification
+import Uwueave.Preo.Future
+import Uwueave.Protocol
 import Uwueave.SeamAlgebra
 
 namespace Uwueave.Preo
@@ -411,7 +413,8 @@ private structure InvariantResult where
 @[command_elab preoDecl]
 def elabPreoDecl : CommandElab := fun stx => do
   let `(command| preo $declId:ident where
-      $fs:preoField* $invs:preoInv* $ders:preoDerive*) := stx
+      $fs:preoField* $invs:preoInv* $futures:preoFuture*
+      $ders:preoDerive* $protocols:preoProtocol* $sessions:preoSession*) := stx
     | throwError "preo: malformed declaration"
   let declName := declId.getId
   let ns ← getCurrNamespace
@@ -875,7 +878,28 @@ def elabPreoDecl : CommandElab := fun stx => do
         omitted from this conjunction, never silently assumed. -/
         def $documentSeamId := $currentSeam))
       floorCheck declId "document seam verdict" (fullDecl ++ `documentSeam)
-  -- §3.5 Derives — the fourth verdict.
+  -- §3.5 Named futures. The surface must say which `WorldModel` indexes the
+  -- declaration. Elaboration only checks the supplied `FutureDecl` at that
+  -- model; it never reconstructs a world relation from materialized state.
+  for future in futures do
+    let `(preoFuture| future $nm on $model := $body) := future
+      | throwErrorAt future "preo: malformed future declaration"
+    let modelId := mkIdent (declName ++ (nm.getId ++ `WorldModel))
+    let futureId := mkIdent (declName ++ nm.getId)
+    elabCommand (← `(command|
+      /-- The explicit retained-world model indexing this named future. -/
+      abbrev $modelId : Uwueave.Preo.Future.WorldModel := $model))
+    elabCommand (← `(command|
+      /-- A checked named relation on the retained world carrier. -/
+      def $futureId : Uwueave.Preo.Future.FutureDecl $modelId := $body))
+    floorCheck nm "future declaration" (ns ++ futureId.getId)
+    rows := rows.push {
+      decl := fullDecl, kind := .future, name := nm.getId.toString
+      detail := pp model, detail₂ := pp body
+      evidence := ns ++ futureId.getId, isObligation := false
+      cite := "Preo.Future.FutureDecl at the explicit WorldModel (kernel-checked)"
+      seamCite := "" }
+  -- §3.6 Derives — the fourth verdict.
   for der in ders do
     let `(preoDerive| derive $nm : $ty = $body $[:= $ev]?) := der
       | throwErrorAt der "preo: malformed derive"
@@ -999,9 +1023,123 @@ def elabPreoDecl : CommandElab := fun stx => do
           | none => "UNRESOLVED — see the row's `.obligation`"
         seamCite := "" }
     rows := rows.push row
+  -- §3.7 Typed protocol terms. The body is the deliberate opaque Lean escape
+  -- hatch into `Protocol.Term`: the semantic recursion remains in one API.
+  for protocol in protocols do
+    let `(preoProtocol| protocol $nm over $strategyTy := $body) := protocol
+      | throwErrorAt protocol "preo: malformed protocol declaration"
+    let protocolId := mkIdent (declName ++ nm.getId)
+    elabCommand (← `(command|
+      /-- A typed protocol AST. Its denotation and profile are supplied only by
+      `Protocol.Term.denote` and `.profile`. -/
+      def $protocolId : Uwueave.Protocol.Term $strategyTy := $body))
+    floorCheck nm "protocol declaration" (ns ++ protocolId.getId)
+    rows := rows.push {
+      decl := fullDecl, kind := .protocol, name := nm.getId.toString
+      detail := pp strategyTy, detail₂ := pp body
+      evidence := ns ++ protocolId.getId, isObligation := false
+      cite := "Protocol.Term (typed AST; semantics stay in Term.denote/profile)"
+      seamCite := "" }
+  -- §3.8 Sessions. Each emitted artifact is one named call to the modular
+  -- protocol elaborator; projections reuse it and never recompute a count.
+  for session in sessions do
+    let `(preoSession| session $nm $mode:preoSessionMode at $strategy $[:= $h]?) := session
+      | throwErrorAt session "preo: malformed session declaration"
+    let keywords : Array Name := #[`runs, `under, `composes, `with]
+    let payload : Array Ident := mode.raw.getArgs.filterMap fun arg =>
+      if arg.isIdent && !keywords.contains arg.getId.eraseMacroScopes then
+        some ⟨arg⟩
+      else none
+    let sessionId := mkIdent (declName ++ nm.getId)
+    if mode.raw.getKind == ``preoSessionRuns then
+      if h.isSome || payload.size != 1 then
+        throwErrorAt session "preo: `session … runs …` takes no membership proof"
+      let protocol := payload[0]!
+      let protocolId := mkIdent (declName ++ protocol.getId)
+      let planId := mkIdent (declName ++ (nm.getId ++ `Plan))
+      let upperId := mkIdent (declName ++ (nm.getId ++ `UpperBound))
+      elabCommand (← `(command|
+        /-- Proof-carrying protocol elaboration at the selected strategy. -/
+        def $sessionId := Uwueave.Protocol.elaborate $protocolId $strategy))
+      elabCommand (← `(command|
+        /-- The checked schedule projected from this elaboration. -/
+        def $planId := Uwueave.Protocol.Elaboration.plan $sessionId))
+      elabCommand (← `(command|
+        /-- The witnessed identity-schedule upper bound; not a verdict bit and
+        not a claim that crossings equal meetings. -/
+        def $upperId := Uwueave.Protocol.Elaboration.upperBound $sessionId))
+      floorCheck nm "session elaboration" (ns ++ sessionId.getId)
+      floorCheck nm "session plan" (ns ++ planId.getId)
+      floorCheck nm "session upper bound" (ns ++ upperId.getId)
+      rows := rows.push {
+        decl := fullDecl, kind := .session, name := nm.getId.toString
+        detail := protocol.getId.toString, detail₂ := "Protocol.elaborate"
+        evidence := ns ++ sessionId.getId, isObligation := false
+        cite := "Protocol.Elaboration with checked .plan and .upperBound"
+        seamCite := "" }
+    else if mode.raw.getKind == ``preoSessionProfile then
+      let some h := h
+        | throwErrorAt session "preo: a profiled session needs its strategy-membership proof"
+      if payload.size != 2 then throwErrorAt session "preo: malformed profiled session"
+      let admissible := payload[0]!
+      let protocol := payload[1]!
+      let protocolId := mkIdent (declName ++ protocol.getId)
+      let planId := mkIdent (declName ++ (nm.getId ++ `Plan))
+      let upperId := mkIdent (declName ++ (nm.getId ++ `UpperBound))
+      let profileId := mkIdent (declName ++ (nm.getId ++ `ProfilePlan))
+      elabCommand (← `(command|
+        def $sessionId := Uwueave.Protocol.elaborate $protocolId $strategy))
+      elabCommand (← `(command|
+        def $planId := Uwueave.Protocol.Elaboration.plan $sessionId))
+      elabCommand (← `(command|
+        def $upperId := Uwueave.Protocol.Elaboration.upperBound $sessionId))
+      elabCommand (← `(command|
+        /-- The named admissible-space plan; strategy selection happens once
+        for the entire protocol profile. -/
+        def $profileId :=
+          Uwueave.Protocol.elaborateProfilePlan $admissible $protocolId
+            $strategy $h))
+      floorCheck nm "session elaboration" (ns ++ sessionId.getId)
+      floorCheck nm "session plan" (ns ++ planId.getId)
+      floorCheck nm "session upper bound" (ns ++ upperId.getId)
+      floorCheck nm "session profile plan" (ns ++ profileId.getId)
+      rows := rows.push {
+        decl := fullDecl, kind := .session, name := nm.getId.toString
+        detail := protocol.getId.toString
+        detail₂ := "Protocol.elaborate + elaborateProfilePlan"
+        evidence := ns ++ sessionId.getId, isObligation := false
+        cite := s!"one strategy selected from `{admissible.getId}` (proof checked)"
+        seamCite := "" }
+    else if mode.raw.getKind == ``preoSessionComposed then
+      let some h := h
+        | throwErrorAt session "preo: a composed session needs its strategy-membership proof"
+      if payload.size != 3 then throwErrorAt session "preo: malformed composed session"
+      let admissible := payload[0]!
+      let left := payload[1]!
+      let right := payload[2]!
+      let leftId := mkIdent (declName ++ left.getId)
+      let rightId := mkIdent (declName ++ right.getId)
+      elabCommand (← `(command|
+        /-- A composed profile plan built only after choosing the one admissible
+        strategy shared by both protocol terms. -/
+        def $sessionId :=
+          Uwueave.Protocol.elaborateComposedProfilePlan $admissible
+            $leftId $rightId $strategy $h))
+      floorCheck nm "composed session profile plan" (ns ++ sessionId.getId)
+      rows := rows.push {
+        decl := fullDecl, kind := .session, name := nm.getId.toString
+        detail := left.getId.toString ++ " × " ++ right.getId.toString
+        detail₂ := "Protocol.elaborateComposedProfilePlan"
+        evidence := ns ++ sessionId.getId, isObligation := false
+        cite := s!"pointwise composition under one strategy from `{admissible.getId}`"
+        seamCite := "" }
+    else
+      throwErrorAt session "preo: unknown session form"
   modifyEnv fun env => rows.foldl (fun e r => preoExt.addEntry e r) env
   logInfo m!"preo {declName}: {n} field(s), {invs.size} invariant(s), \
-    {ders.size} derive(s) — `#preo_report {declName}` for the table"
+    {futures.size} future(s), {ders.size} derive(s), {protocols.size} protocol(s), \
+    {sessions.size} session(s) — \
+    `#preo_report {declName}` for the table"
 
 /-! ## §4. The report -/
 
@@ -1057,13 +1195,35 @@ def elabPreoReport : CommandElab := fun stx => do
         out := out ++
           s!"  {pad r.name 20}  {pad r.detail 10}  {pad m 14}  {r.detail₂}\n"
         out := out ++ s!"      ↳ {r.cite}\n"
-  out := out ++ "\n  Every column above is REDUCED out of the row's `.classification`\n"
-  out := out ++ "  constant at print time — `Classification.answer` and `.mergeAnswer`,\n"
-  out := out ++ "  whose order-independence is `Preo.run_answer_congr`. Nothing is stored.\n"
-  out := out ++ "  FREE rows are also stated at document scale as `<invariant>.onState`;\n"
-  out := out ++ "  SEAM rows as `<invariant>.seamOnState` (`Preo.seamAlong` — the clash is\n"
-  out := out ++ "  transported by PLANTING the field replicas in a document, which is what\n"
-  out := out ++ "  fragment 1 said it could not synthesize).\n"
+  if rows.any (fun r => r.kind == .future) then
+    out := out ++ "\n  FUTURE                WORLD MODEL           DECLARATION\n"
+    for r in rows do
+      if r.kind == .future then
+        out := out ++ s!"  {pad r.name 20}  {pad r.detail 20}  {r.detail₂}\n"
+        out := out ++ s!"      ↳ {r.cite}\n"
+  if rows.any (fun r => r.kind == .protocol) then
+    out := out ++ "\n  PROTOCOL              STRATEGY              TYPED TERM\n"
+    for r in rows do
+      if r.kind == .protocol then
+        out := out ++ s!"  {pad r.name 20}  {pad r.detail 20}  {r.detail₂}\n"
+        out := out ++ s!"      ↳ {r.cite}\n"
+  if rows.any (fun r => r.kind == .session) then
+    out := out ++ "\n  SESSION               PROTOCOL(S)           ELABORATION\n"
+    for r in rows do
+      if r.kind == .session then
+        out := out ++ s!"  {pad r.name 20}  {pad r.detail 20}  {r.detail₂}\n"
+        out := out ++ s!"      ↳ {r.cite}\n"
+  if rows.any (fun r => r.kind == .invariant || r.kind == .cross || r.kind == .derive) then
+    out := out ++ "\n  Every VERDICT column above is REDUCED out of the row's `.classification`\n"
+    out := out ++ "  constant at print time — `Classification.answer` and `.mergeAnswer`,\n"
+    out := out ++ "  whose order-independence is `Preo.run_answer_congr`. No verdict is stored.\n"
+    out := out ++ "  FREE rows are also stated at document scale as `<invariant>.onState`;\n"
+    out := out ++ "  SEAM rows as `<invariant>.seamOnState` (`Preo.seamAlong` — the clash is\n"
+    out := out ++ "  transported by PLANTING the field replicas in a document, which is what\n"
+    out := out ++ "  fragment 1 said it could not synthesize).\n"
+  if rows.any (fun r => r.kind == .future || r.kind == .protocol || r.kind == .session) then
+    out := out ++ "\n  FUTURE/PROTOCOL/SESSION rows have no verdict column: they name typed\n"
+    out := out ++ "  semantic artifacts, and their cited constructors carry the proofs.\n"
   logInfo out
 
 end Uwueave.Preo

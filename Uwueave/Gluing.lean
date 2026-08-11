@@ -58,10 +58,10 @@ is vacuous, and with three witnesses beside it, one of which shows the iff is **
 * §8 **The seam** — `GluesWithin h σ` and `guardGluingSeam_iff_segmented`: a guard segmented over `σ`
   gives a **partially glueable hole**, one that does not glue globally yet glues inside every fiber.
   The original study, whose kernel had one all-or-nothing verdict per turn, never conceived of this.
-* §9 **One-shot vs gluing** — shown *orthogonal*, and sharper than orthogonal: the at-most-one-fill
-  discipline is a uniqueness invariant, which is on the far side of the confluence wall
-  (`Catalog.gset_atMostOne_not_iconfluent`), while a hole that glues places no bound at all on fill
-  multiplicity.
+* §9 **One-shot vs gluing** — globally orthogonal but exactly segmentable. The at-most-one-fill
+  discipline is on the far side of the confluence wall (`Catalog.gset_atMostOne_not_iconfluent`),
+  yet `oneShotOwner` makes it glue inside each owner fiber, and every valid seam must separate
+  distinct singleton fills.
 * §10 **Non-claims**, labelled ⟨TERMINAL⟩ / ⟨UNDONE⟩.
 
 Literature: Bailis et al. VLDB'15 (I-confluence); Whittaker–Hellerstein VLDB'19 (segmentation);
@@ -696,6 +696,136 @@ theorem oneShotHole_never_glues : ¬ Glues oneShotHole := fun hg =>
   gset_atMostOne_not_iconfluent
     ((guardGluing_iff_iconfluent oneShotHole oneShotHole_spanning).mp hg)
 
+/-- **The exact owner of a one-shot state.** `none` denotes an empty fill set; otherwise choice
+selects an installed fill. This definition is intentionally proof-level and noncomputable because a
+general predicate `Nat → Bool` cannot be exhaustively searched. On `AtMostOneFill` states the chosen
+member is unique, so the lemmas below make the projection exact rather than choice-dependent. -/
+noncomputable def oneShotOwner (s : GSet Nat) : Option Nat := by
+  classical
+  exact if h : ∃ n, s n = true then some (Classical.choose h) else none
+
+theorem oneShotOwner_eq_none_iff (s : GSet Nat) :
+    oneShotOwner s = none ↔ ¬ ∃ n, s n = true := by
+  classical
+  unfold oneShotOwner
+  by_cases h : ∃ n, s n = true <;> simp [h]
+
+theorem oneShotOwner_some_mem {s : GSet Nat} {n : Nat}
+    (howner : oneShotOwner s = some n) : s n = true := by
+  classical
+  unfold oneShotOwner at howner
+  split at howner
+  · rename_i h
+    have hmem : s (Classical.choose h) = true := Classical.choose_spec h
+    have heq : Classical.choose h = n := Option.some.inj howner
+    simpa [heq] using hmem
+  · simp at howner
+
+theorem oneShotOwner_eq_some_of_mem {s : GSet Nat} {n : Nat}
+    (hs : AtMostOneFill s) (hn : s n = true) : oneShotOwner s = some n := by
+  classical
+  unfold oneShotOwner
+  have h : ∃ k, s k = true := ⟨n, hn⟩
+  simp only [dif_pos h, Option.some.injEq]
+  exact hs _ _ (Classical.choose_spec h) hn
+
+/-- A named singleton fill, used to state the unavoidable lower bound on every valid one-shot
+seam. -/
+def singletonFill (owner : Nat) : GSet Nat := fun n => n == owner
+
+theorem singletonFill_atMostOne (owner : Nat) : AtMostOneFill (singletonFill owner) := by
+  intro m n hm hn
+  simp [singletonFill] at hm hn
+  exact hm.trans hn.symm
+
+theorem oneShotOwner_singleton (owner : Nat) :
+    oneShotOwner (singletonFill owner) = some owner :=
+  oneShotOwner_eq_some_of_mem (singletonFill_atMostOne owner) (by simp [singletonFill])
+
+/-- Same owner plus locally valid one-shot states implies their union is still one-shot. The cross
+cases are the substance: exactness of `oneShotOwner` forces a member from the left and a member from
+the right to be the same fill. -/
+theorem oneShot_merge_atMostOne_of_same_owner {x y : GSet Nat}
+    (howner : oneShotOwner x = oneShotOwner y)
+    (hx : AtMostOneFill x) (hy : AtMostOneFill y) : AtMostOneFill (x ⊔ y) := by
+  intro m n hm hn
+  have hm' : (x m || y m) = true := hm
+  have hn' : (x n || y n) = true := hn
+  rcases (Bool.or_eq_true _ _).mp hm' with hxm | hym
+  · rcases (Bool.or_eq_true _ _).mp hn' with hxn | hyn
+    · exact hx m n hxm hxn
+    · exact Option.some.inj (calc
+        some m = oneShotOwner x := (oneShotOwner_eq_some_of_mem hx hxm).symm
+        _ = oneShotOwner y := howner
+        _ = some n := oneShotOwner_eq_some_of_mem hy hyn)
+  · rcases (Bool.or_eq_true _ _).mp hn' with hxn | hyn
+    · exact Option.some.inj (calc
+        some m = oneShotOwner y := (oneShotOwner_eq_some_of_mem hy hym).symm
+        _ = oneShotOwner x := howner.symm
+        _ = some n := oneShotOwner_eq_some_of_mem hx hxn)
+    · exact hy m n hym hyn
+
+/-- **Exact one-shot segmentation.** Inside an owner fiber, two legal replicas contain either the
+same unique fill or no fill at all. Their union remains legal and remains in that owner fiber. -/
+theorem oneShotOwner_segmented : SegmentedIConfluent oneShotOwner AtMostOneFill := by
+  intro x y howner hx hy
+  have hmerge : AtMostOneFill (x ⊔ y) :=
+    oneShot_merge_atMostOne_of_same_owner howner hx hy
+  refine ⟨hmerge, ?_⟩
+  by_cases hnonempty : ∃ n, x n = true
+  · obtain ⟨n, hn⟩ := hnonempty
+    have hxOwner : oneShotOwner x = some n := oneShotOwner_eq_some_of_mem hx hn
+    have hmerged : (x ⊔ y) n = true := by
+      show (x n || y n) = true
+      simp [hn]
+    calc
+      oneShotOwner (x ⊔ y) = some n := oneShotOwner_eq_some_of_mem hmerge hmerged
+      _ = oneShotOwner x := hxOwner.symm
+  · have hxOwner : oneShotOwner x = none := (oneShotOwner_eq_none_iff x).2 hnonempty
+    have hyOwner : oneShotOwner y = none := howner.symm.trans hxOwner
+    have hyEmpty : ¬ ∃ n, y n = true := (oneShotOwner_eq_none_iff y).1 hyOwner
+    rw [hxOwner]
+    apply (oneShotOwner_eq_none_iff (x ⊔ y)).2
+    rintro ⟨n, hn⟩
+    have hn' : (x n || y n) = true := hn
+    rcases (Bool.or_eq_true _ _).mp hn' with hxn | hyn
+    · exact hnonempty ⟨n, hxn⟩
+    · exact hyEmpty ⟨n, hyn⟩
+
+/-- **Both verdicts, now for one-shot itself.** It fails global gluing but glues exactly within
+owner fibers; changing the unique owner is the coordination boundary. -/
+theorem oneShotHole_partially_glues :
+    ¬ Glues oneShotHole ∧ GluesWithin oneShotHole oneShotOwner :=
+  ⟨oneShotHole_never_glues,
+   (guardGluingSeam_iff_segmented oneShotHole oneShotOwner oneShotHole_spanning).2
+     oneShotOwner_segmented⟩
+
+/-- Every segmented one-shot seam must distinguish distinct singleton fills. Otherwise its safety
+clause would certify their two-element union as `AtMostOneFill`. -/
+theorem oneShot_seam_separates_singletons {Seg : Type v} (σ : GSet Nat → Seg)
+    (hseg : SegmentedIConfluent σ AtMostOneFill) {m n : Nat} (hne : m ≠ n) :
+    σ (singletonFill m) ≠ σ (singletonFill n) := by
+  intro hsame
+  have hmerge :=
+    (hseg (singletonFill m) (singletonFill n) hsame
+      (singletonFill_atMostOne m) (singletonFill_atMostOne n)).1
+  have hm : (singletonFill m ⊔ singletonFill n) m = true := by
+    show (singletonFill m m || singletonFill n m) = true
+    simp [singletonFill]
+  have hn : (singletonFill m ⊔ singletonFill n) n = true := by
+    show (singletonFill m n || singletonFill n n) = true
+    simp [singletonFill]
+  apply hne
+  exact hmerge m n hm hn
+
+/-- The same lower bound phrased for the hole API: every seam under which the one-shot hole really
+glues separates each pair of distinct singleton fills. -/
+theorem every_oneShot_gluing_seam_separates_singletons {Seg : Type v}
+    (σ : GSet Nat → Seg) (hwithin : GluesWithin oneShotHole σ)
+    {m n : Nat} (hne : m ≠ n) : σ (singletonFill m) ≠ σ (singletonFill n) :=
+  oneShot_seam_separates_singletons σ
+    ((guardGluingSeam_iff_segmented oneShotHole σ oneShotHole_spanning).1 hwithin) hne
+
 /-- **A local double fill is an instance of a glue** (take `x = y`): two distinct fills at *one*
 replica land at `s ⊔ (d₁ ⊔ d₂)`, and for a glueable hole the guard admits it. So gluing offers no
 protection whatsoever against double filling at a site — it *licenses* it. -/
@@ -756,6 +886,10 @@ theorem oneshot_orthogonal_to_gluing :
   iff false without it. That is a theorem about the model, not a gap.
 * *`Divergent` is classical.* `comparable_or_divergent` is `Classical.em`, as is
   `escalation_witness`. `Classical.choice` is Lean's, not an added axiom.
+* *The one-shot owner projection is proof-level.* `oneShotOwner` uses `Classical.choose` because an
+  arbitrary `Nat → Bool` has no terminating emptiness search. Its behavior on legal states is exact
+  (`oneShotOwner_eq_some_of_mem`), but deployment code should carry the owner explicitly or use a
+  finite searchable representation rather than extract this noncomputable definition.
 
 **⟨UNDONE⟩ — real work, not done here.**
 
@@ -763,9 +897,6 @@ theorem oneshot_orthogonal_to_gluing :
   document are two `GuardedHole` values with no shared index. The keyed family `K → GuardedHole S`
   with per-key verdicts — the hole-level analogue of `Confluence.pi_iconfluent` and
   `Spec.Verdict.keyedClash` — is straightforward and absent.
-* *Escrowed one-shot.* §9 shows the one-shot guard never glues globally. Whether it is *segmented*
-  one-shot — at most one fill per fiber, coordinating only at seam changes — is exactly the question
-  `GluesWithin` was built to ask, and it is not asked here.
 * *Byzantine / dual-H¹.* The study links non-gluing to a sheaf obstruction. Nothing here computes
   cohomology. `Divergent` plus `clash_divergent` is 1-cocycle-shaped data and no more; calling it an
   H¹ result would be a renaming of the kind §5 exists to rule out.

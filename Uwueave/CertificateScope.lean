@@ -144,9 +144,11 @@ and the answer is split, both halves proved:
     worlds `WorldFuture.lean` built. No theorem here characterises which
     world-pairs a given key glues, and there is no decision procedure for
     sufficiency.
-  * ⟨UNDONE⟩ **`Type 0` only**, inherited from `HistoryBase` and
-    `MergeModel`. `MinimalSummary` is universe-polymorphic; §7's bridges are
-    instantiated at `Type`.
+  * ⟨UNDONE⟩ **The evidence/world boundary remains `Type 0`.** Residuals,
+    sufficient keys, their quotient, and the `MinimalSummary` bridges are now
+    universe-polymorphic. The theorems phrased through
+    `Evidence.FreeTermination`, `Holes.Partial`, or `WorldFuture.World` remain
+    at `Type 0` because those imported carriers still require it.
 
 Literature: the residual is Nerode's right congruence with futures in place of
 word suffixes, exactly as `MinimalSummary`'s relation is with merge contexts —
@@ -160,6 +162,8 @@ import Uwueave.MinimalSummary
 
 namespace Uwueave.CertificateScope
 
+universe u v w x
+
 open Uwueave Uwueave.Catalog Uwueave.Histories
 
 /-! ## §1. The residual — what an evaluator may still say.
@@ -172,37 +176,42 @@ Termination paper's Def. 3 — **is** a statement about the residual. -/
 
 /-- **The residual result set.** The answers the evaluator `e` may still give
 from `w`, along the future relation `F`. -/
-def Residual {W R : Type} (e : W → R) (F : Evidence.Future W) (w : W) : R → Prop :=
+def Residual {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop)
+    (w : W) : R → Prop :=
   fun r => ∃ t, F w t ∧ e t = r
 
 /-- The present answer is in the residual whenever the present is a future of
 itself. ⚠ This is a hypothesis, not a fact: `WorldFuture.DeliveryFuture` is
 reflexive only at **wellformed** worlds. -/
-theorem residual_self {W R : Type} (e : W → R) (F : Evidence.Future W) {w : W}
+theorem residual_self {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop) {w : W}
     (h : F w w) : Residual e F w (e w) := ⟨w, h, rfl⟩
 
 /-- **Equality of residuals**, pointwise, so that no `propext` is needed to
 state it. `residualEq_iff_eq` gives codex's set-equality form. -/
-def ResidualEq {W R : Type} (e : W → R) (F : Evidence.Future W) (w v : W) : Prop :=
+def ResidualEq {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop)
+    (w v : W) : Prop :=
   ∀ r, Residual e F w r ↔ Residual e F v r
 
-theorem residualEq_refl {W R : Type} (e : W → R) (F : Evidence.Future W) (w : W) :
+theorem residualEq_refl {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop) (w : W) :
     ResidualEq e F w w := fun _ => Iff.rfl
 
-theorem residualEq_symm {W R : Type} {e : W → R} {F : Evidence.Future W} {w v : W}
+theorem residualEq_symm {W : Type u} {R : Type v} {e : W → R} {F : W → W → Prop} {w v : W}
     (h : ResidualEq e F w v) : ResidualEq e F v w := fun r => (h r).symm
 
-theorem residualEq_trans {W R : Type} {e : W → R} {F : Evidence.Future W} {w v u : W}
+theorem residualEq_trans {W : Type u} {R : Type v} {e : W → R} {F : W → W → Prop}
+    {w v u : W}
     (h₁ : ResidualEq e F w v) (h₂ : ResidualEq e F v u) : ResidualEq e F w u :=
   fun r => (h₁ r).trans (h₂ r)
 
 /-- Residual equality is an equivalence relation — the setoid §3 quotients by. -/
-theorem residualEq_equivalence {W R : Type} (e : W → R) (F : Evidence.Future W) :
+theorem residualEq_equivalence {W : Type u} {R : Type v} (e : W → R)
+    (F : W → W → Prop) :
     Equivalence (ResidualEq e F) :=
   ⟨residualEq_refl e F, residualEq_symm, residualEq_trans⟩
 
 /-- The pointwise form and codex's set form agree — one `funext`/`propext`. -/
-theorem residualEq_iff_eq {W R : Type} (e : W → R) (F : Evidence.Future W) (w v : W) :
+theorem residualEq_iff_eq {W : Type u} {R : Type v} (e : W → R)
+    (F : W → W → Prop) (w v : W) :
     ResidualEq e F w v ↔ Residual e F w = Residual e F v := by
   constructor
   · intro h
@@ -226,7 +235,7 @@ theorem freeTermination_iff_residual {W R : Type} (F : Evidence.Future W)
 
 /-- The residual as a `Holes.Partial` — classical, for `Holes.truth`'s reason,
 and used only for the bridge below. -/
-noncomputable def residualSet {W R : Type} (e : W → R) (F : Evidence.Future W)
+noncomputable def residualSet {W : Type u} {R : Type} (e : W → R) (F : W → W → Prop)
     (w : W) : Holes.Partial R :=
   fun r => Holes.truth (Residual e F w r)
 
@@ -269,34 +278,38 @@ force the same stability verdict. -/
 
 /-- **A future-sufficient key.** Codex's definition: worlds with equal keys have
 equal residuals for `e` along `F`. -/
-def SufficientKey {W K R : Type} (κ : W → K) (e : W → R) (F : Evidence.Future W) :
+def SufficientKey {W : Type u} {K : Type v} {R : Type w}
+    (κ : W → K) (e : W → R) (F : W → W → Prop) :
     Prop :=
   ∀ w v, κ w = κ v → ResidualEq e F w v
 
 /-- **A key sufficient on a domain.** The scope form: the key only has to
 separate worlds *within* `D`. §6 shows a history base is exactly this — a base
 names a set of versions, and the key is asked to be sufficient only there. -/
-def SufficientKeyOn {W K R : Type} (D : W → Prop) (κ : W → K) (e : W → R)
-    (F : Evidence.Future W) : Prop :=
+def SufficientKeyOn {W : Type u} {K : Type v} {R : Type w}
+    (D : W → Prop) (κ : W → K) (e : W → R) (F : W → W → Prop) : Prop :=
   ∀ w v, D w → D v → κ w = κ v → ResidualEq e F w v
 
-theorem sufficientKeyOn_of_sufficientKey {W K R : Type} {D : W → Prop} {κ : W → K}
-    {e : W → R} {F : Evidence.Future W} (h : SufficientKey κ e F) :
+theorem sufficientKeyOn_of_sufficientKey {W : Type u} {K : Type v} {R : Type w}
+    {D : W → Prop} {κ : W → K} {e : W → R} {F : W → W → Prop}
+    (h : SufficientKey κ e F) :
     SufficientKeyOn D κ e F :=
   fun w v _ _ hk => h w v hk
 
 /-- An injective key is sufficient for every evaluator and every future — it has
 glued nothing. -/
-theorem sufficientKey_of_injective {W K R : Type} (κ : W → K) (e : W → R)
-    (F : Evidence.Future W) (hinj : ∀ w v, κ w = κ v → w = v) :
+theorem sufficientKey_of_injective {W : Type u} {K : Type v} {R : Type w}
+    (κ : W → K) (e : W → R) (F : W → W → Prop)
+    (hinj : ∀ w v, κ w = κ v → w = v) :
     SufficientKey κ e F := by
   intro w v hk
   rw [hinj w v hk]
   exact residualEq_refl e F v
 
 /-- A key at least as fine as a sufficient one is sufficient. -/
-theorem sufficientKey_of_refines {W K K' R : Type} {κ : W → K} {κ' : W → K'}
-    {e : W → R} {F : Evidence.Future W} (h : SufficientKey κ e F)
+theorem sufficientKey_of_refines {W : Type u} {K : Type v} {K' : Type w} {R : Type x}
+    {κ : W → K} {κ' : W → K'} {e : W → R} {F : W → W → Prop}
+    (h : SufficientKey κ e F)
     (hfine : ∀ w v, κ' w = κ' v → κ w = κ v) : SufficientKey κ' e F :=
   fun w v hk => h w v (hfine w v hk)
 
@@ -306,8 +319,9 @@ sufficient for *every* evaluator and *every* future relation has glued no two
 worlds at all. So sufficiency is always a claim about a particular evaluator —
 `epoch_sufficient_on_wellformed` beside `epoch_not_sufficient` is the same fact
 with two evaluators at one key. -/
-theorem sufficient_for_every_evaluator_iff_injective {W K : Type} (κ : W → K) :
-    (∀ (R : Type) (e : W → R) (F : Evidence.Future W), SufficientKey κ e F)
+theorem sufficient_for_every_evaluator_iff_injective {W : Type u} {K : Type v}
+    (κ : W → K) :
+    (∀ (R : Type) (e : W → R) (F : W → W → Prop), SufficientKey κ e F)
       ↔ ∀ w v, κ w = κ v → w = v := by
   constructor
   · intro h w v hk
@@ -324,56 +338,61 @@ The construction codex names: quotient the worlds by equality of residuals. The
 universal property holds, and §7 says plainly what it is worth. -/
 
 /-- The setoid of residual equality. -/
-def resSetoid {W R : Type} (e : W → R) (F : Evidence.Future W) : Setoid W :=
+def resSetoid {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop) : Setoid W :=
   ⟨ResidualEq e F, residualEq_equivalence e F⟩
 
 /-- **The coarsest sufficient key's codomain**: worlds modulo "the same answers
 may still be given". -/
-def ResQuot {W R : Type} (e : W → R) (F : Evidence.Future W) : Type :=
+def ResQuot {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop) : Type u :=
   Quotient (resSetoid e F)
 
 /-- The class map — the key this file proposes filing certificates under. -/
-def resKey {W R : Type} (e : W → R) (F : Evidence.Future W) (w : W) : ResQuot e F :=
+def resKey {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop)
+    (w : W) : ResQuot e F :=
   Quotient.mk (resSetoid e F) w
 
-theorem resKey_eq_iff {W R : Type} (e : W → R) (F : Evidence.Future W) (w v : W) :
+theorem resKey_eq_iff {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop)
+    (w v : W) :
     resKey e F w = resKey e F v ↔ ResidualEq e F w v :=
   ⟨fun h => Quotient.exact h, fun h => Quotient.sound h⟩
 
 /-- **The class map is a sufficient key** — `Quotient.exact`. -/
-theorem resKey_sufficient {W R : Type} (e : W → R) (F : Evidence.Future W) :
+theorem resKey_sufficient {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop) :
     SufficientKey (resKey e F) e F :=
   fun _ _ h => Quotient.exact h
 
 /-- **Every sufficient key refines the quotient**: no sufficient key glues two
 classes the quotient keeps apart. -/
-theorem sufficient_refines_resKey {W K R : Type} {κ : W → K} {e : W → R}
-    {F : Evidence.Future W} (h : SufficientKey κ e F) (w v : W) (hk : κ w = κ v) :
+theorem sufficient_refines_resKey {W : Type u} {K : Type v} {R : Type w}
+    {κ : W → K} {e : W → R} {F : W → W → Prop}
+    (h : SufficientKey κ e F) (w v : W) (hk : κ w = κ v) :
     resKey e F w = resKey e F v :=
   Quotient.sound (h w v hk)
 
 /-- The quotient's decoder: the residual itself descends to the classes. -/
-def resResidual {W R : Type} (e : W → R) (F : Evidence.Future W) :
+def resResidual {W : Type u} {R : Type v} (e : W → R) (F : W → W → Prop) :
     ResQuot e F → (R → Prop) :=
   Quotient.lift (s := resSetoid e F) (Residual e F)
     (fun a b h => (residualEq_iff_eq e F a b).mp h)
 
-@[simp] theorem resResidual_resKey {W R : Type} (e : W → R) (F : Evidence.Future W)
+@[simp] theorem resResidual_resKey {W : Type u} {R : Type v}
+    (e : W → R) (F : W → W → Prop)
     (w : W) : resResidual e F (resKey e F w) = Residual e F w := rfl
 
 open Classical in
 /-- The map that factors the quotient through a sufficient key: read the class
 off any world carrying the given key. Classical, and not an algorithm —
 `MinimalSummary.ctxFactor`'s caveat verbatim. -/
-noncomputable def resFactor {W K R : Type} [Inhabited W] (κ : W → K) (e : W → R)
-    (F : Evidence.Future W) (k : K) : ResQuot e F :=
+noncomputable def resFactor {W : Type u} {K : Type v} {R : Type w} [Inhabited W]
+    (κ : W → K) (e : W → R) (F : W → W → Prop) (k : K) : ResQuot e F :=
   if h : ∃ w : W, κ w = k then resKey e F h.choose else resKey e F default
 
 /-- **The factorisation.** For a sufficient key, the quotient map *is*
 `resFactor κ e F ∘ κ`. With `sufficient_refines_resKey` this is the universal
 property in full. -/
-theorem resFactor_spec {W K R : Type} [Inhabited W] {κ : W → K} {e : W → R}
-    {F : Evidence.Future W} (h : SufficientKey κ e F) (w : W) :
+theorem resFactor_spec {W : Type u} {K : Type v} {R : Type w} [Inhabited W]
+    {κ : W → K} {e : W → R} {F : W → W → Prop}
+    (h : SufficientKey κ e F) (w : W) :
     resFactor κ e F (κ w) = resKey e F w := by
   have hex : ∃ w' : W, κ w' = κ w := ⟨w, rfl⟩
   unfold resFactor
@@ -386,9 +405,10 @@ the partition order. ⚠ Two clauses, where `MinimalSummary.ctxQuot_coarsest_
 sufficient` has three — the missing one is `JoinHom`, and §7's
 `residual_is_not_a_join_congruence` shows it is missing because it is **false**
 here, not because it was not attempted. -/
-theorem resQuot_coarsest_sufficient {W R : Type} (e : W → R) (F : Evidence.Future W) :
+theorem resQuot_coarsest_sufficient {W : Type u} {R : Type v}
+    (e : W → R) (F : W → W → Prop) :
     SufficientKey (resKey e F) e F
-      ∧ ∀ (K : Type) (κ : W → K), SufficientKey κ e F →
+      ∧ ∀ (K : Type w) (κ : W → K), SufficientKey κ e F →
           ∀ w v : W, κ w = κ v → resKey e F w = resKey e F v :=
   ⟨resKey_sufficient e F, fun _ _ h w v hk => sufficient_refines_resKey h w v hk⟩
 
@@ -401,21 +421,21 @@ prohibited, and the prohibition rides `WorldFuture.lean`'s refutation. -/
 /-- **Sound**, for a key-indexed certificate: at every world whose key it
 accepts, the evaluator really is free-terminating. The quantifier over worlds is
 the reuse. -/
-def KeyCertSound {W K R : Type} (κ : W → K) (e : W → R) (F : Evidence.Future W)
+def KeyCertSound {W R : Type} {K : Type u} (κ : W → K) (e : W → R) (F : W → W → Prop)
     (C : K → Prop) : Prop :=
   ∀ w, C (κ w) → Evidence.FreeTermination F e w
 
 /-- The same, scoped to a domain — the shape a base scope takes (§6). -/
-def KeyCertSoundOn {W K R : Type} (D : W → Prop) (κ : W → K) (e : W → R)
-    (F : Evidence.Future W) (C : K → Prop) : Prop :=
+def KeyCertSoundOn {W R : Type} {K : Type u} (D : W → Prop) (κ : W → K) (e : W → R)
+    (F : W → W → Prop) (C : K → Prop) : Prop :=
   ∀ w, D w → C (κ w) → Evidence.FreeTermination F e w
 
 /-- **THE LICENCE.** A verification transports along a sufficient key: if `w` is
 free-terminating and `v` carries the same key, `v` is free-terminating too. The
 side condition `F v v` is load-bearing — see
 `the_reflexivity_side_condition_is_load_bearing`. -/
-theorem key_licenses_reuse {W K R : Type} {κ : W → K} {e : W → R}
-    {F : Evidence.Future W} (hsuf : SufficientKey κ e F) {w v : W}
+theorem key_licenses_reuse {W R : Type} {K : Type u} {κ : W → K} {e : W → R}
+    {F : W → W → Prop} (hsuf : SufficientKey κ e F) {w v : W}
     (hkey : κ w = κ v) (hv : F v v) (hw : Evidence.FreeTermination F e w) :
     Evidence.FreeTermination F e v := by
   have hres := hsuf w v hkey
@@ -428,8 +448,9 @@ theorem key_licenses_reuse {W K R : Type} {κ : W → K} {e : W → R}
   exact heu.symm.trans (hw u hu)
 
 /-- The licence, scoped. -/
-theorem key_licenses_reuse_on {W K R : Type} {D : W → Prop} {κ : W → K} {e : W → R}
-    {F : Evidence.Future W} (hsuf : SufficientKeyOn D κ e F) {w v : W}
+theorem key_licenses_reuse_on {W R : Type} {K : Type u}
+    {D : W → Prop} {κ : W → K} {e : W → R} {F : W → W → Prop}
+    (hsuf : SufficientKeyOn D κ e F) {w v : W}
     (hw : D w) (hv : D v) (hkey : κ w = κ v) (hrefl : F v v)
     (hstable : Evidence.FreeTermination F e w) : Evidence.FreeTermination F e v := by
   have hres := hsuf w v hw hv hkey
@@ -444,16 +465,16 @@ theorem key_licenses_reuse_on {W K R : Type} {D : W → Prop} {κ : W → K} {e 
 /-- **The certificate a replica actually files**: "I checked it here", filed
 under its key. This is the object `WorldFuture.certificate_reuse_is_unsound` is
 about, with the index left open. -/
-def verifiedAt {W K R : Type} (D : W → Prop) (κ : W → K) (e : W → R)
-    (F : Evidence.Future W) : K → Prop :=
+def verifiedAt {W R : Type} {K : Type u} (D : W → Prop) (κ : W → K) (e : W → R)
+    (F : W → W → Prop) : K → Prop :=
   fun k => ∃ w, D w ∧ κ w = k ∧ Evidence.FreeTermination F e w
 
 /-- **THE LICENCE, IN THE FORM A DEPLOYMENT USES.** Under a sufficient key, the
 "I checked it here" certificate is sound — anyone whose key matches may use it,
 and no further check is needed. This is the positive half of codex's "only then
 may an exactness certificate be reused by key equality". -/
-theorem verifiedAt_sound_of_sufficientKeyOn {W K R : Type} {D : W → Prop}
-    {κ : W → K} {e : W → R} {F : Evidence.Future W}
+theorem verifiedAt_sound_of_sufficientKeyOn {W R : Type} {K : Type u} {D : W → Prop}
+    {κ : W → K} {e : W → R} {F : W → W → Prop}
     (hsuf : SufficientKeyOn D κ e F) (hrefl : ∀ w, D w → F w w) :
     KeyCertSoundOn D κ e F (verifiedAt D κ e F) := by
   intro v hDv hC
@@ -465,8 +486,8 @@ sound certificate indexed by that key must refuse the key — including the one 
 replica verified correctly. Not "is weaker": is prohibited from ever saying yes.
 This is `WorldFuture.no_sound_state_cert_accepts_openW` with the index left
 open, and the next theorem recovers that statement from this one. -/
-theorem no_sound_key_cert_accepts {W K R : Type} (κ : W → K) (e : W → R)
-    (F : Evidence.Future W) {w v : W} (hkey : κ w = κ v)
+theorem no_sound_key_cert_accepts {W R : Type} {K : Type u} (κ : W → K) (e : W → R)
+    (F : W → W → Prop) {w v : W} (hkey : κ w = κ v)
     (hbad : ¬ Evidence.FreeTermination F e v) (C : K → Prop)
     (hC : KeyCertSound κ e F C) : ¬ C (κ w) := by
   intro h
@@ -659,21 +680,21 @@ theorem residual_separates_quiesced_delivered :
   exact absurd hq (Evidence.view_ne_of_tag (by simp [Evidence.viewTag]))
 
 /-- Any key that glues the witness pair is insufficient for the rendered view. -/
-theorem not_sufficient_of_glues_witness_pair {K : Type}
+theorem not_sufficient_of_glues_witness_pair {K : Type u}
     (κ : WorldFuture.World Holes.Val → K)
     (h : κ WorldFuture.wQuiesced = κ WorldFuture.wPending) :
     ¬ SufficientKey κ WorldFuture.renderW WorldFuture.DeliveryFuture :=
   fun hs => residual_separates_quiesced_pending (hs _ _ h)
 
 /-- Any key that glues `wPending` to `wDelivered` is insufficient. -/
-theorem not_sufficient_of_glues_pending_delivered {K : Type}
+theorem not_sufficient_of_glues_pending_delivered {K : Type u}
     (κ : WorldFuture.World Holes.Val → K)
     (h : κ WorldFuture.wPending = κ WorldFuture.wDelivered) :
     ¬ SufficientKey κ WorldFuture.renderW WorldFuture.DeliveryFuture :=
   fun hs => residual_separates_pending_delivered (hs _ _ h)
 
 /-- Any key that glues the two quiesced worlds is insufficient. -/
-theorem not_sufficient_of_glues_quiesced_delivered {K : Type}
+theorem not_sufficient_of_glues_quiesced_delivered {K : Type u}
     (κ : WorldFuture.World Holes.Val → K)
     (h : κ WorldFuture.wQuiesced = κ WorldFuture.wDelivered) :
     ¬ SufficientKey κ WorldFuture.renderW WorldFuture.DeliveryFuture :=
@@ -738,7 +759,8 @@ def deliveryKey {α : Type} (w : WorldFuture.World α) :
 other world's context. The pool and the epoch of the rebuilt world are the
 target's, and its observation is the source future's — which is all the
 evaluator reads. -/
-theorem deliveryKey_residual_sub {α R : Type} (q : Evidence.ResultEvidence α → R)
+theorem deliveryKey_residual_sub {α : Type} {R : Type u}
+    (q : Evidence.ResultEvidence α → R)
     {w v : WorldFuture.World α} (hobs : WorldFuture.observe w = WorldFuture.observe v)
     (hpool : WorldFuture.pool w = WorldFuture.pool v) (r : R) :
     Residual (fun u => q (WorldFuture.observe u)) WorldFuture.DeliveryFuture w r →
@@ -752,7 +774,8 @@ theorem deliveryKey_residual_sub {α R : Type} (q : Evidence.ResultEvidence α �
 **every** evaluator that reads only the materialized state, which includes
 `WorldFuture.renderW`. Two worlds agreeing on both may still differ (in their
 epoch), and no such difference is visible to any answer delivery can produce. -/
-theorem deliveryKey_sufficient {α R : Type} (q : Evidence.ResultEvidence α → R) :
+theorem deliveryKey_sufficient {α : Type} {R : Type u}
+    (q : Evidence.ResultEvidence α → R) :
     SufficientKey (deliveryKey (α := α)) (fun w => q (WorldFuture.observe w))
       WorldFuture.DeliveryFuture := by
   intro w v hk r
@@ -835,7 +858,7 @@ def reachedWorlds {α V : Type} (B : HistoryBase.BasedWorld α V) (b : V) :
 scope.** The general theorem: pin the certificate to the key of one honestly
 verified world, and every version in scope that carries that key inherits the
 licence. `HistoryBase.stateKeyed_sound_at_its_base` is the instance below. -/
-theorem basedCertSound_of_sufficientKeyOn {α V K : Type}
+theorem basedCertSound_of_sufficientKeyOn {α V : Type} {K : Type u}
     (B : HistoryBase.BasedWorld α V) (b : V) (κ : WorldFuture.World α → K)
     (hsuf : SufficientKeyOn (reachedWorlds B b) κ (WorldFuture.renderW (α := α))
       WorldFuture.DeliveryFuture)
@@ -935,16 +958,17 @@ force equal observations. Both this file's notion and `MinimalSummary`'s are
 instances, and the universal property — "the observation is its own coarsest
 sufficient key" — is the identity function at this generality. That is exactly
 how much the universal property is worth. -/
-def SufficientFor {W O K : Type} (κ : W → K) (obs : W → O) : Prop :=
+def SufficientFor {W : Type u} {O : Type v} {K : Type w}
+    (κ : W → K) (obs : W → O) : Prop :=
   ∀ w v, κ w = κ v → obs w = obs v
 
 /-- The observation is sufficient for itself. -/
-theorem sufficientFor_self {W O : Type} (obs : W → O) : SufficientFor obs obs :=
+theorem sufficientFor_self {W : Type u} {O : Type v} (obs : W → O) : SufficientFor obs obs :=
   fun _ _ h => h
 
 /-- **This file's notion is `SufficientFor` at the residual.** -/
-theorem sufficientKey_iff_sufficientFor {W K R : Type} (κ : W → K) (e : W → R)
-    (F : Evidence.Future W) :
+theorem sufficientKey_iff_sufficientFor {W : Type u} {K : Type v} {R : Type w}
+    (κ : W → K) (e : W → R) (F : W → W → Prop) :
     SufficientKey κ e F ↔ SufficientFor κ (Residual e F) := by
   constructor
   · intro h w v hk
@@ -954,16 +978,17 @@ theorem sufficientKey_iff_sufficientFor {W K R : Type} (κ : W → K) (e : W →
 
 /-- The merge-context future: `t` is a future of `x` when some peer's state
 merged into `x`. -/
-def MergeFuture {S : Type} [MergeState S] : Evidence.Future S :=
+def MergeFuture {S : Type u} [MergeState S] : S → S → Prop :=
   fun x t => ∃ z : S, t = x ⊔ z
 
 /-- `MinimalSummary`'s observation: the context-**indexed** answer function. -/
-def ctxObs {S R : Type} [MergeState S] (f : S → R) (x : S) : S → R :=
+def ctxObs {S : Type u} {R : Type v} [MergeState S] (f : S → R) (x : S) : S → R :=
   fun z => f (x ⊔ z)
 
 /-- **`MinimalSummary.Sufficient` is `SufficientFor` at the indexed
 observation** — the same shape, `ctxEquiv_iff_contexts` plus `funext`. -/
-theorem sufficient_iff_sufficientFor {S T R : Type} [MergeState S] (g : S → T)
+theorem sufficient_iff_sufficientFor {S : Type u} {T : Type v} {R : Type w}
+    [MergeState S] (g : S → T)
     (f : S → R) : Sufficient g f ↔ SufficientFor g (ctxObs f) := by
   constructor
   · intro h x y hg
@@ -975,7 +1000,8 @@ theorem sufficient_iff_sufficientFor {S T R : Type} [MergeState S] (g : S → T)
 /-- ⚠ **…and a residual is only the IMAGE of that observation.** The context is
 forgotten; only the set of answers survives. Everything that separates the two
 constructions is this one collapse. -/
-theorem residual_mergeFuture_image {S R : Type} [MergeState S] (f : S → R) (x : S)
+theorem residual_mergeFuture_image {S : Type u} {R : Type v}
+    [MergeState S] (f : S → R) (x : S)
     (r : R) : Residual f MergeFuture x r ↔ ∃ z, ctxObs f x z = r := by
   constructor
   · rintro ⟨t, ⟨z, rfl⟩, hr⟩
@@ -986,7 +1012,8 @@ theorem residual_mergeFuture_image {S R : Type} [MergeState S] (f : S → R) (x 
 /-- Contextual equivalence implies residual equality — the image of equal
 functions is equal. So every `MinimalSummary`-sufficient summary is a
 future-sufficient key at the merge index. -/
-theorem residualEq_of_ctxEquiv {S R : Type} [MergeState S] {f : S → R} {x y : S}
+theorem residualEq_of_ctxEquiv {S : Type u} {R : Type v}
+    [MergeState S] {f : S → R} {x y : S}
     (h : CtxEquiv f x y) : ResidualEq f MergeFuture x y := by
   intro r
   constructor
@@ -997,7 +1024,8 @@ theorem residualEq_of_ctxEquiv {S R : Type} [MergeState S] {f : S → R} {x y : 
 
 /-- **A sufficient summary is a sufficient key** — the containment, in one
 direction only. -/
-theorem sufficientKey_of_sufficient {S T R : Type} [MergeState S] {g : S → T}
+theorem sufficientKey_of_sufficient {S : Type u} {T : Type v} {R : Type w}
+    [MergeState S] {g : S → T}
     {f : S → R} (h : Sufficient g f) : SufficientKey g f MergeFuture :=
   fun x y hg => residualEq_of_ctxEquiv (h x y hg)
 

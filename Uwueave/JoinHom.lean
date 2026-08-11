@@ -102,8 +102,12 @@ filtered views answer `fromResults`; counting answers `needsEvidence`.
   * **The provenance theorem is about one summary shape.**
     `count_summary_must_distinguish` shows a join-homomorphic summary computing
     the count must separate `sawA` from `sawB`; it does not characterise the
-    *least* such summary. "How much provenance is enough" is a real question
-    with no theorem here.
+    *least* such summary. `Uwueave.MinimalSummary` now answers the adjacent
+    semantic question: contextual equivalence constructs the coarsest
+    future-sufficient partition for a declared query, with exact membership,
+    count, and threshold examples. It does not prove a minimum-bit encoding,
+    reachable-context minimum, or cheap implementation, so those cost questions
+    remain outside this file.
 
 Literature: the join-homomorphism/monotone distinction is standard lattice
 theory; its CRDT-facing form is Shapiro et al.'s requirement that a *derived*

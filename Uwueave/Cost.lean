@@ -72,7 +72,10 @@ one real workload.
     op that costs) and `pinStep_inflationary` (the op that cannot).
   * **§6** the budget instance: floor 3, achieved 3. **Tight.**
   * **§7** `SeamAlgebra.linked_segmented`'s saving as a crossing count — and a
-    correction to the naive reading of it (below).
+    correction to the naive reading of it (below). The canonical unlinked seam
+    costs 4, but `unlinkedPredictive_segmented` tracks only the allocation and
+    the finite window of records the next schema forbids, costs 2, and meets the
+    universal floor exactly.
   * **§8** amortization, as far as it goes: batching a block into one op takes
     both the floor and the achieved count from 3 to 1
     (`batched_cost_is_one`), because the intermediate allocations stop being
@@ -82,17 +85,17 @@ one real workload.
 
 ## ⚠ Two findings that correct things this repo already believed
 
-**(i) The link does not lower the floor.** `SeamAlgebra` §7's punchline is that
-linking the schema version to the allocation collapses two coordination points
-into one. Counted: the same behaviour costs **4** crossings on the unlinked
-document under its canonical pair seam and **2** on the linked document under
-the version seam (`linked_halves_the_crossings`). But the *forced floor* is
-**2 for both** (`unlinked_floor_is_two`, `linked_floor_is_two`). So the link's
-saving is real but it is a saving against the *obvious* seam: it makes the
-obvious seam optimal, rather than making the document cheaper than it was.
-⟨UNDONE⟩ whether 4 is optimal for the unlinked document — a seam reading
-"does anyone hold a soon-to-be-illegal record" plausibly reaches 2 there, and
-we did not prove it valid.
+**(i) The link does not lower the optimum.** `SeamAlgebra` §7's punchline is
+that linking the schema version to the allocation collapses two coordination
+points into one. Counted: the same behaviour costs **4** crossings on the
+unlinked document under its canonical pair seam and **2** on the linked
+document under the version seam (`linked_halves_the_crossings`). But 4 is not
+optimal: `unlinkedPredictiveSeam` reads the allocation share plus exactly the
+old-schema record window that the next schema forbids, is proved valid, and
+costs **2**. The universal floors are **2 for both**, and both are achieved
+(`unlinked_optimum_is_two`, `linked_floor_is_two`). Linking therefore compresses
+the seam representation and the operation vocabulary; it does not lower this
+behaviour's optimum crossing count.
 
 **(ii) `crossings` is per-stream, and seams are chosen globally — so it
 undercounts a concurrent workload.** §9 exhibits it: on the uniqueness ceiling
@@ -120,10 +123,14 @@ validity, and we state it as scope:
   * ⟨UNDONE⟩ **No liveness, no delivery, no time.** `crossings` counts events,
     never wall-clock; `Liveness.lean`/`Delta.lean` own that axis and are not
     composed with this one.
-  * ⟨UNDONE⟩ **`crossings = 0` on a run is weaker than `SegmentFree`.** The
-    interleaving theorem (§4) needs the op-level property, which quantifies
-    over all legal states; a single run's zero count does not imply it. The
-    bridge runs one way only (`crossings_eq_zero_of_segmentFree`).
+  * ⟨TERMINAL⟩ **`crossings = 0` on a run is strictly weaker than
+    `SegmentFree`.** The interleaving theorem (§4) needs the op-level property,
+    which quantifies over all legal states; a single run's zero count does not
+    imply it. `pinTrue_zero_run_but_not_segmentFree` is the concrete
+    counterexample: pinning `true` from empty costs zero under the `false` seam,
+    but the same op applied to the legal false-pinned state violates `pinInv`.
+    The bridge therefore runs one way only
+    (`crossings_eq_zero_of_segmentFree`).
   * ⟨scope⟩ **`[DecidableEq Seg]`.** `crossings` branches on whether `σ`
     changed, so seams are quantified over *with decidable equality*. Every
     "for every seam" statement below carries that binder. It is not vacuous
@@ -684,6 +691,116 @@ theorem twoFieldShare_segmented :
   show ((x ⊔ y).1.1, (x ⊔ y).2.1 true) = (x.1.1, x.2.1 true)
   rw [e1, e2]
 
+/-! ### The predictive seam: coordinate on incompatible data, not every bump
+
+The canonical schema seam remembers the whole version. That is conservative:
+an empty store may advance through a tightening flag day without becoming
+incompatible with any peer. For `tightBound`, the only records that distinguish
+the old schema from every later schema are `11` through `20`. They form a
+finite, decidable window, so the predictive seam below remains an executable
+`Cost.crossings` seam rather than hiding a proposition behind classical
+decidable equality. -/
+
+/-- The finite record window accepted by schema version 0 and forbidden by
+every nonzero version under `tightBound`: values `11, …, 20`. -/
+def legacyWindow (s : SchemaState) : Vector Bool 10 :=
+  Vector.ofFn fun i => s.2 (i.1 + 11)
+
+/-- If two legal stores have the same legacy window and the second store is on
+a nonzero version, every record in the first store is also valid at the
+nonzero version. Records at most 10 are immediately safe; a record above 10 is
+at most 20 by legality, hence names a window position and transfers across the
+window equality to the nonzero store, whose legality refutes it. -/
+private theorem record_le_ten_of_legacyWindow_eq_new
+    {x y : SchemaState} (hwin : legacyWindow x = legacyWindow y)
+    (hx : SchemaWF tightBound x) (hy : SchemaWF tightBound y)
+    (hyNew : y.1 ≠ 0) {n : Nat} (hn : x.2 n = true) : n ≤ 10 := by
+  by_cases hxNew : x.1 ≠ 0
+  · simpa [tightBound, hxNew] using hx n hn
+  · have hxZero : x.1 = 0 := by omega
+    have hnTwenty : n ≤ 20 := by
+      simpa [tightBound, hxZero] using hx n hn
+    by_cases hnTen : n ≤ 10
+    · exact hnTen
+    · let i : Fin 10 := ⟨n - 11, by omega⟩
+      have hi : i.1 + 11 = n := by
+        dsimp [i]
+        omega
+      have hxy := congrArg (fun w : Vector Bool 10 => w[i.1]) hwin
+      simp [legacyWindow] at hxy
+      have hyn : y.2 n = true := by
+        rw [hi] at hxy
+        rw [← hxy]
+        exact hn
+      have := hy n hyn
+      simpa [tightBound, hyNew] using this
+
+/-- **The predictive schema seam is valid.** Equal legacy windows are closed
+under union. If both versions are old, their legal records remain below 20. If
+the merged version is nonzero, a record contributed by an old replica is below
+10 because the equal-window nonzero replica cannot legally carry any of
+`11, …, 20`. Thus a harmless version bump need not itself move the seam. -/
+theorem legacyWindow_segmented :
+    SegmentedIConfluent legacyWindow (SchemaWF tightBound) := by
+  intro x y hwin hx hy
+  refine ⟨?_, ?_⟩
+  · intro n hn
+    have hn' : (x.2 n || y.2 n) = true := hn
+    change n ≤ tightBound (Nat.max x.1 y.1)
+    by_cases hmergedOld : Nat.max x.1 y.1 = 0
+    · have hxOld : x.1 = 0 := by
+        apply Nat.eq_zero_of_le_zero
+        exact Nat.le_trans (Nat.le_max_left _ _) (Nat.le_of_eq hmergedOld)
+      have hyOld : y.1 = 0 := by
+        apply Nat.eq_zero_of_le_zero
+        exact Nat.le_trans (Nat.le_max_right _ _) (Nat.le_of_eq hmergedOld)
+      rw [hmergedOld]
+      simp only [tightBound, ite_true]
+      rcases (Bool.or_eq_true _ _).mp hn' with hxn | hyn
+      · simpa [tightBound, hxOld] using hx n hxn
+      · simpa [tightBound, hyOld] using hy n hyn
+    · have hbound : tightBound (Nat.max x.1 y.1) = 10 := by
+        simp [tightBound, hmergedOld]
+      rw [hbound]
+      rcases (Bool.or_eq_true _ _).mp hn' with hxn | hyn
+      · by_cases hxNew : x.1 ≠ 0
+        · simpa [tightBound, hxNew] using hx n hxn
+        · have hxOld : x.1 = 0 := by omega
+          have hyNew : y.1 ≠ 0 := by
+            intro hyOld
+            apply hmergedOld
+            simp [hxOld, hyOld]
+          exact record_le_ten_of_legacyWindow_eq_new hwin hx hy hyNew hxn
+      · by_cases hyNew : y.1 ≠ 0
+        · simpa [tightBound, hyNew] using hy n hyn
+        · have hyOld : y.1 = 0 := by omega
+          have hxNew : x.1 ≠ 0 := by
+            intro hxOld
+            apply hmergedOld
+            simp [hxOld, hyOld]
+          exact record_le_ten_of_legacyWindow_eq_new hwin.symm hy hx hxNew hyn
+  · apply Vector.ext
+    intro i hi
+    have hij := congrArg (fun w : Vector Bool 10 => w[i]) hwin
+    simp [legacyWindow] at hij
+    simp only [legacyWindow, Vector.getElem_ofFn]
+    change (x.2 (i + 11) || y.2 (i + 11)) = x.2 (i + 11)
+    rw [← hij, Bool.or_self]
+
+/-- The exact seam the unlinked workload needs: the schema's predictive legacy
+window paired with the quota allocation share. It forgets harmless version
+changes while retaining precisely the independently-moving facts whose clashes
+must be separated. -/
+def unlinkedPredictiveSeam : TwoFieldDoc → Vector Bool 10 × Nat :=
+  fun p => (legacyWindow p.1, p.2.1 true)
+
+/-- The predictive seam segments the unlinked document by the ordinary product
+law: predictive schema compatibility on the left, allocation compatibility on
+the right. -/
+theorem unlinkedPredictive_segmented :
+    SegmentedIConfluent unlinkedPredictiveSeam twoFieldInv :=
+  product_segmented legacyWindow_segmented (share_segmented 10)
+
 /-- **The version alone segments the linked document** — `linked_segmented` at
 this instance, with `linkAlloc` as the link. Re-allocation is not a coordination
 point of its own; it is something the version change does. -/
@@ -700,6 +817,14 @@ theorem linked_halves_the_crossings :
         unlinkedW = 4
       ∧ crossings (fun p : TwoFieldDoc => p.1.1) flagDayStep docStart linkedW = 2 :=
   ⟨by decide, by decide⟩
+
+/-- The predictive seam ignores both harmless version bumps on the empty store
+and charges exactly the two independent quota re-allocations. Unlike the
+canonical pair seam's cost of four, this count is achieved by the certified
+`unlinkedPredictive_segmented` seam. -/
+theorem unlinkedPredictive_cost :
+    crossings unlinkedPredictiveSeam docStep docStart unlinkedW = 2 := by
+  decide
 
 /-- The unlinked workload, blocked at its two re-allocations: a version bump on
 an empty store merges harmlessly, so it is the budget events that clash. -/
@@ -757,6 +882,20 @@ theorem unlinked_floor_is_two :
   rw [unlinkedBlocks_flatten] at h
   exact h
 
+/-- **The unlinked optimum is exactly two.** The first conjunct is universal in
+the segment carrier and seam: every valid seam pays at least two. The second is
+achievement, not another lower bound: the finite predictive seam is valid
+(`unlinkedPredictive_segmented`) and its crossing count evaluates to two.
+
+This pair is the model's honest expression of an exact optimum without
+pretending the universe-polymorphic seam space is an enumerable collection. -/
+theorem unlinked_optimum_is_two :
+    (∀ {Seg : Type v} [DecidableEq Seg] (σ : TwoFieldDoc → Seg),
+        SegmentedIConfluent σ twoFieldInv →
+        2 ≤ crossings σ docStep docStart unlinkedW)
+      ∧ crossings unlinkedPredictiveSeam docStep docStart unlinkedW = 2 :=
+  ⟨unlinked_floor_is_two, unlinkedPredictive_cost⟩
+
 /-- **The linked document's floor is two, and it pays two.** Under every valid
 seam the linked workload costs at least two, and the version seam of
 `linkedWF_segmented` costs exactly two. The linked document is optimal for this
@@ -773,18 +912,14 @@ theorem linked_floor_is_two :
     exact h
   · decide
 
-/-! ⚠ **What §7 actually shows.** Both documents have a floor of two. The link
-does not make the behaviour cheaper; it makes the *obvious* seam optimal. The
-unlinked document's four crossings are a fact about reading `(version,
-allocation)` as the seam — the reading `SeamAlgebra.no_schema_only_seam` and
-`no_quota_only_seam` push you toward — and not a fact about the document.
-
-⟨UNDONE⟩ Whether four is optimal for the unlinked document. A seam reading
-"does the store hold a record the next version will forbid" separates the
-schema clash without separating our workload's versions, and would plausibly
-reach two; it is not `DecidableEq`-shaped as written, and we did not prove it a
-valid seam. Until someone does, "unlinked costs four" means "costs four under
-this seam", and the honest comparison is floor-to-floor: two and two. -/
+/-! ⚠ **What §7 actually shows.** Both documents have an exact optimum of two.
+The unlinked document's four crossings are a fact about reading `(version,
+allocation)` as the seam — the conservative reading
+`SeamAlgebra.no_schema_only_seam` and `no_quota_only_seam` push you toward — and
+not a fact about the document. `unlinkedPredictiveSeam` makes the suggested
+"record the next version will forbid" projection finite and decidable: its
+`Vector Bool 10` component is exactly records 11 through 20. It is valid and
+pays two, so the canonical four is conclusively non-optimal. -/
 
 /-! ## §8. Amortization, as far as it honestly goes
 
@@ -946,6 +1081,28 @@ theorem seamTrue_segmented :
 /-- Pinning `true` from nothing is free under the `false`-seam. -/
 theorem pinTrue_free_under_seamFalse :
     crossings (fun s : PinSet => s false) pinStep emptyPin [true] = 0 := by decide
+
+/-- **Zero on one run does not imply the op is segment-free.** Pinning `true`
+from the empty state never changes the observation "is `false` pinned?", so
+the explicit run costs zero. But the same op is not free from every legal state:
+start with `false` pinned and pinning `true` produces the illegal two-pin state.
+
+This is the strictness witness the module boundary previously stated only in
+prose. The failure is in invariant preservation, before seam preservation even
+needs to be considered. -/
+theorem pinTrue_zero_run_but_not_segmentFree :
+    crossings (fun s : PinSet => s false) pinStep emptyPin [true] = 0
+      ∧ ¬ SegmentFree (fun s : PinSet => s false) pinInv pinStep true := by
+  refine ⟨pinTrue_free_under_seamFalse, ?_⟩
+  intro hfree
+  let falsePinned : PinSet := pinStep emptyPin false
+  have hlegal : pinInv falsePinned := by
+    intro m n hm hn
+    cases m <;> cases n <;> simp [falsePinned, pinStep, emptyPin] at hm hn ⊢
+  have hboth := (hfree falsePinned hlegal).1
+  have htrue : pinStep falsePinned true true = true := by decide
+  have hfalse : pinStep falsePinned true false = true := by decide
+  exact absurd (hboth true false htrue hfalse) (by decide)
 
 /-- Pinning `false` from nothing is free under the `true`-seam. -/
 theorem pinFalse_free_under_seamTrue :

@@ -15,7 +15,7 @@ and his reason, which is the reason this file exists rather than a doc note:
 `Exits.lean` defines, **independently of `Repair.lean`**, an applicability
 proposition (`Exit.Applies`) and a `Nat` price (`Exit.price`) for eight named
 exits. `Repair.lean` defines a typed transformation `Repair P Q` between
-promises, with a seven-field `Price` record and a five-axis `PromiseRelation`,
+promises, with an eight-field `Price` record and a five-axis `PromiseRelation`,
 each axis guarded by an obligation. The two agree today. Nothing makes them
 agree tomorrow: `Exit.price` is a `Nat` a menu author writes down, and §6 of
 this file exhibits the drift already present — the ceiling's hand seam row
@@ -78,13 +78,15 @@ prose. Three findings fall out of the comparison, and each is a theorem here:
      (`ceiling_seam_row_disagrees`). `Exits.ceiling_seam_floor_is_zero`'s third
      conjunct already flagged the undercount in prose; here the row cannot print
      the low number at all, because its price comes from a `SeamFloor`.
-  2. **Escrow and arbitration print the same `0` and differ on delivery.**
+  2. **Escrow and arbitration have the same crossing projection, not the same
+     price, and differ on delivery.**
      `balanceEscrow` delivers the original promise (`balanceEscrow_delivers`);
      `pinArbitrate` and `duelArbitrate` provably do **not**
      (`pinArbitrate_does_not_deliver`, `duelArbitrate_does_not_deliver`) —
      an arbiter that rewrites the state makes its output legal by construction,
-     so the output's legality certifies nothing about the input. One `Nat` per
-     row cannot hold that difference; `PromiseRelation.entailsOriginal` does.
+     so the output's legality certifies nothing about the input. The escrow now
+     charges `Price.restrictsReachability`; one `Nat` per row cannot hold either
+     distinction, while the typed price and `PromiseRelation` do.
   3. **The duel's two discriminating rows are ONE repair.** `arbitration` and
      `rollback` are the same map read twice (`Exits.rollback_is_an_arbitration`),
      and here they are literally the same `Repair` value under two tags
@@ -124,12 +126,11 @@ identity seam and refutes it at `Exits.balTotal`.
     under every valid seam, residual or no residual — but a `RepairObligation`
     built by hand with an empty residual is exactly the hole `Exit.seam`'s floor
     is, moved. It is stated, not hidden.
-  * ⚠ ⟨UNDONE⟩ **`Price` has no field for the currency escrow spends.** Seven
-    fields, and "a state that was legal stops being reachable" is none of them,
-    so `balanceEscrow.price = Price.free` (`escrow_prices_free_and_is_not`) and
-    the whole cost sits in `relation.admitsOriginal = false`. That is a real
-    finding about `Repair.lean`'s record, surfaced rather than patched: this file
-    does not edit `Repair.lean`.
+  * **Escrow's reachability restriction is now charged.**
+    `Price.restrictsReachability` is a separate Bool currency, not a crossing or
+    meeting count. `balanceEscrow_price_and_delta` couples that price projection
+    to the exact `PromiseRelation.strengthened` delta and a concrete source-legal
+    state the escrowed promise forbids.
   * ⟨UNDONE⟩ **Nothing here searches.** `MenuTotality.synth` searches for a seam
     over a covering pool; the escrow partition is still handed in, and the
     conditional constructor is what a menu prints when the search does not exist.
@@ -373,6 +374,12 @@ said. -/
 def RepairCandidate.crossings {P : Promise} (c : RepairCandidate P) : Option Nat :=
   c.price.map Price.seamCrossings
 
+/-- Whether a row charges an admission/reachability restriction. This remains
+a separate projection from crossings: neither currency converts to the other. -/
+def RepairCandidate.reachabilityRestriction {P : Promise}
+    (c : RepairCandidate P) : Option Bool :=
+  c.price.map Price.restrictsReachability
+
 /-- **⚑ THE THEOREM THAT RETIRES `Exits`, price half.** Every price any row
 displays is the `price` field of a `Repair`, or of an obligation that agrees with
 the price of every repair its residual buys. The proof is a case analysis over
@@ -542,6 +549,11 @@ def Menu.rows {P : Promise} (m : Menu P) : List (RepairCandidate P) :=
 `impossible` row shows `none`, which is the information a `0` destroyed. -/
 def Menu.crossings {P : Promise} (m : Menu P) : List (Option Nat) :=
   m.rows.map RepairCandidate.crossings
+
+/-- The reachability-restriction currency for every row, kept separate from
+`Menu.crossings`. -/
+def Menu.reachabilityRestrictions {P : Promise} (m : Menu P) : List (Option Bool) :=
+  m.rows.map RepairCandidate.reachabilityRestriction
 
 /-- **There is always a row, and both guaranteed rows carry repairs.** The
 list-level argument is bookkeeping; the content is that `forkRepair` and
@@ -898,7 +910,7 @@ theorem ceiling_seam_row_disagrees :
   omega
 
 /-- **The ceiling's arbitration row agrees on crossings and nowhere else.** The
-hand row's `0` is the generated row's `seamCrossings`, and the other six
+hand row's `0` is the generated row's `seamCrossings`, and the other seven
 currencies are where the price actually is: one announcement, one epoch of
 rollback exposure, one charged premise — so the price is not `Price.free` and
 the two zeros `Exits.lean`'s ⟨scope⟩ note distinguishes in prose are now
@@ -964,19 +976,17 @@ theorem escrowed_entails_balance (f : Exits.Balance) (h : ∀ i, f i ≤ 5) :
   omega
 
 /-- **The escrow repair.** `Catalog.escrow_local_bound_iconfluent` is the
-discharge — genuine global freedom — the original guarantee survives, and the
-price is … `Price.free`.
+discharge — genuine global freedom — and the original guarantee survives.
 
-⚠ **That is a finding, not a bargain.** What an escrow spends is *reachability*:
-some legal state stops being representable (`Exits.escrow_forbids_a_clash_replica`,
-and here `escrow_forbids_balX` names the state). `Repair.Price` has seven fields
-and none of them is that currency, so the entire cost of this repair sits in
-`relation.admitsOriginal = false` — which is why a price record alone is not a
-safety property (`Repair.Price.free`'s own ⚠). -/
+What escrow spends is *reachability*: some source-legal state stops being
+representable (`escrow_forbids_balX` names it). The price therefore charges
+`restrictionPrice`, whose `restrictsReachability` flag is true, while the exact
+promise delta is `PromiseRelation.strengthened`. No seam crossing or meeting is
+manufactured for this restriction. -/
 def balanceEscrow : Repair balancePromise escrowedBalancePromise where
   transform := fun f => f
   relation := PromiseRelation.strengthened
-  price := Price.free
+  price := Uwueave.Repair.restrictionPrice
   discharge := .free (Catalog.escrow_local_bound_iconfluent (fun _ => 5))
   entails := fun _ f h => escrowed_entails_balance f h
   admitsAll := fun h => absurd h (by decide)
@@ -997,14 +1007,20 @@ theorem escrow_forbids_balX : ¬ escrowedBalancePromise.inv Exits.balX := by
   intro h
   exact absurd (h true) (by decide)
 
-/-- ⚠ **The escrow prices free in all seven currencies, and is not free.** The
-cost is in the delta: `admitsOriginal` is clear, and `escrow_forbids_balX` is the
-witness. A menu that prints one `Nat` per row prints `0` here — which is what
-`Exits.balanceMenu` does. -/
-theorem escrow_prices_free_and_is_not :
-    balanceEscrow.price = Price.free
-    ∧ balanceEscrow.relation.admitsOriginal = false
-    ∧ balanceEscrow.relation.entailsOriginal = true := by decide
+/-- **The escrow's price and promise delta, together.** It charges the distinct
+reachability-restriction currency, is therefore not free, reports exactly the
+`strengthened` relation, and carries the concrete source-legal state excluded by
+the target. A scalar crossing projection remains `0`, but it is no longer the
+whole advertised price. -/
+theorem balanceEscrow_price_and_delta :
+    balanceEscrow.price = Uwueave.Repair.restrictionPrice
+    ∧ balanceEscrow.price.restrictsReachability = true
+    ∧ balanceEscrow.price ≠ Price.free
+    ∧ balanceEscrow.price.seamCrossings = 0
+    ∧ balanceEscrow.relation = PromiseRelation.strengthened
+    ∧ balanceEscrow.RestrictsReachability := by
+  refine ⟨rfl, rfl, by decide, rfl, rfl, ?_⟩
+  exact ⟨Exits.balX, Exits.balX_legal, escrow_forbids_balX⟩
 
 /-- ⚠ **The escrow tag's availability is `Exits.balance_escrow_applies`, KEPT —
 not re-derived.** Its other two clauses — that `obs` is a join-homomorphism, and
@@ -1105,13 +1121,20 @@ def balanceMenu (Seg : Type) (σ : Exits.Balance → Seg) : Menu balancePromise 
       balanceSeamRow Seg σ ]
 
 /-- The generated balance menu beside the hand menu. The escrow row **agrees**
-on crossings (`0 = 0`) and disagrees on everything a `Nat` cannot hold; the seam
-row is new — `Exits.balanceMenu` has none, because the obvious projection was
-refuted and nothing was printed in its place. -/
+on crossings (`0 = 0`) while its separate reachability-restriction projection
+is `true`; the seam row is new — `Exits.balanceMenu` has none, because the
+obvious projection was refuted and nothing was printed in its place. -/
 theorem balance_menu_crossings (Seg : Type) (σ : Exits.Balance → Seg) :
     (balanceMenu Seg σ).crossings = [some 0, some 1, some 0, some 2]
     ∧ Exits.balanceMenu.prices = [0, 0, 2] :=
   ⟨rfl, rfl⟩
+
+/-- The typed menu preserves the currency the hand `Nat` menu cannot show:
+only the escrow row restricts reachability. -/
+theorem balance_menu_reachability_restrictions
+    (Seg : Type) (σ : Exits.Balance → Seg) :
+    (balanceMenu Seg σ).reachabilityRestrictions =
+      [some true, some false, some false, some false] := rfl
 
 /-! ### §6.3 The duelling admins — two hand rows, one repair -/
 
@@ -1294,7 +1317,7 @@ def transport {P : Promise} (e : MenuEntry P.inv) (Q : Promise) (r : Repair P Q)
     (_h : r.price.seamCrossings = e.exit.price) : RepairCandidate P :=
   .available e.exit "transported from Exits" Q r
 
-/-- The transported row shows the repair's price — all seven fields. -/
+/-- The transported row shows the repair's price — all eight fields. -/
 theorem transport_shows_the_repairs_price {P : Promise} (e : MenuEntry P.inv)
     (Q : Promise) (r : Repair P Q) (h : r.price.seamCrossings = e.exit.price) :
     (transport e Q r h).price = some r.price := rfl
@@ -1423,12 +1446,15 @@ theorem what_became_true :
     ∧ ceilingMenu.crossings = [some 1, some 0, none, some 0, some 2]
     ∧ (∀ (Seg : Type) (σ : Exits.Balance → Seg),
         (balanceMenu Seg σ).crossings = [some 0, some 1, some 0, some 2])
+    ∧ (∀ (Seg : Type) (σ : Exits.Balance → Seg),
+        (balanceMenu Seg σ).reachabilityRestrictions =
+          [some true, some false, some false, some false])
     ∧ duelMenu.crossings = [some 0, some 0, none, some 0, some 2]
     ∧ ceilingSeamRow.shape = Shape.available
     ∧ atMostOneSeamRow.shape = Shape.impossible
     ∧ (∀ r : Repair ceilingPromise arbitratedCeilingPromise, r.price ≠ Price.free) :=
   ⟨fun c p h => menu_price_is_projection c p h,
-   rfl, fun _ _ => rfl, rfl, ceilingSeamRow_is_available, rfl,
+   rfl, fun _ _ => rfl, fun _ _ => rfl, rfl, ceilingSeamRow_is_available, rfl,
    fun r => (no_free_pin_arbitration r).1⟩
 
 end Uwueave.RepairMenu

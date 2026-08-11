@@ -86,13 +86,17 @@ which is what the impossibility said the escape route would have to look like.
 
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
 
-  * **The evidence document has no internal edge structure.** ⟨UNDONE⟩ §1's
-    document is a node *set*: the sense in which a forked result is "branching"
-    is `forked_result_is_a_branching_document` — two candidate nodes attributed
-    to two distinct sources, a fan of siblings — not a deep parent-linked DAG. A
-    weave's parent relation, and with it any `Acyclicity`-style structural
-    guarantee *inside* one derived document, is not built. §4's DAG is the
-    dependency graph *between* derivations, which is a different graph.
+  * **The evidence document here has no internal edge structure.** §1's document
+    is a node *set*: the sense in which a forked result is "branching" is
+    `forked_result_is_a_branching_document` — two candidate nodes attributed to
+    two distinct sources, a fan of siblings — not a deep parent-linked DAG.
+    `Uwueave.EvidenceGraph` now supplies typed candidate/source/obligation/
+    certificate vertices, rank-descending internal edges, endpoint well-formedness,
+    and `flat_encodeEvidence_is_projection` back to this carrier. ⟨UNDONE at the
+    deployment boundary⟩ Those graph identities are still logical ids, not
+    cryptographic or content-addressed identities; no hash/signature binding is
+    manufactured by the typed graph. §4's DAG remains the dependency graph
+    *between* derivations, which is a different graph.
   * **Claim 1 is faithful because every component of `ResultEvidence` is
     grow-only.** ⟨TERMINAL for this carrier⟩ `encodeEvidence` is a relabelling
     along `EvNode α ≃ (α × Source) ⊕ Source ⊕ Source`, and the merge equation is

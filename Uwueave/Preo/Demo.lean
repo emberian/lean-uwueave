@@ -2,7 +2,7 @@
 # Uwueave.Preo.Demo — the acceptance test: does the elaborator rediscover what
 `WeaveState.lean` proved by hand?
 
-**Five declarations.** `LoomDoc` (§1–§3) retains fragment 1's six fields and
+**Six declarations.** `LoomDoc` (§1–§3) retains fragment 1's six fields and
 six invariants as a regression, while the formerly unresolved `Slot Nat` row
 now reaches the conservative pins self seam. `LoomDoc2` (§3½) is fragment 2:
 the three surface forms fragment 1 refused, each checked against the hand proof
@@ -13,6 +13,8 @@ fields become one derived verdict over their pair of allocation seams.
 fields and absorbs six legal coordination-free rows.
 `KeyedDoc` (§3⅝) closes the keyed cross-field gap and rediscovers the hand
 bookmarks verdict as a value.
+`SemanticSurface` (§4) exercises retained-world futures and proof-carrying
+protocol sessions without manufacturing a new semantic judgement.
 
 ## The fragment-2 result, stated before you read the file
 
@@ -764,7 +766,140 @@ def weaveDocViaAlgebra :
 witnesses, and every non-proof field coincide with the hand artifact. -/
 example : weaveDocViaAlgebra = WeaveState.weaveDocSeamVerdict := rfl
 
-/-! ## §4. The keywords are not stolen
+/-! ## §4. Named futures and proof-carrying protocol sessions
+
+This is a thin surface over the semantic modules. A future names its complete
+`Future.WorldModel`; a protocol body is a typed `Protocol.Term`; and a session
+is the result of one call to the proof-carrying Protocol API. Nothing below
+stores a FREE bit, a meeting count, or a state-only certificate. -/
+
+/-- The one-element strategy space used by the checked profile-plan examples.
+Its nonemptiness is structural (`head`), not an elaborator assumption. -/
+def unitStrategies : CoordEffect.Admissible Unit where
+  head := ()
+  rest := []
+
+preo SemanticSurface where
+  field marker : Counter
+
+  future Delivered on (Future.evidenceWorldModel Holes.Val) :=
+    Future.Delivery Holes.Val
+  future Working on (Future.evidenceWorldModel Holes.Val) :=
+    Future.Extension Holes.Val
+  future EraDelivered on Future.eraWorldModel := Future.EraDelivery
+  future EraIssuing on Future.eraWorldModel := Future.EraIssuance
+  future EraAnnouncing on Future.eraWorldModel := Future.EraAnnouncement
+
+  protocol Coalescing over Unit := Protocol.coalescingProtocol
+  protocol Ambient over Unit := Protocol.ambientProtocol
+  protocol TwoRound over Unit := Protocol.twoRoundProtocol
+
+  session Coalesced runs Coalescing at ()
+  session Profiled under unitStrategies runs Coalescing at () := by
+    simp [unitStrategies, CoordEffect.Admissible.toList]
+  session Combined under unitStrategies composes Coalescing with Ambient at () := by
+    simp [unitStrategies, CoordEffect.Admissible.toList]
+
+#preo_report SemanticSurface
+
+/-! ### 4.1 Future declarations retain worlds and variance -/
+
+/-- Whole-value acceptance: the surface future is exactly the semantic
+delivery declaration, including its name, scope and world relation. -/
+example : SemanticSurface.Delivered = Future.Delivery Holes.Val := rfl
+
+/-- The model itself is explicit and definitionally the requested evidence
+world, rather than an inferred relation on materialized state. -/
+example : SemanticSurface.Delivered.WorldModel =
+    Future.evidenceWorldModel Holes.Val := rfl
+
+example : SemanticSurface.Working = Future.Extension Holes.Val := rfl
+example : SemanticSurface.EraDelivered = Future.EraDelivery := rfl
+example : SemanticSurface.EraIssuing = Future.EraIssuance := rfl
+example : SemanticSurface.EraAnnouncing = Future.EraAnnouncement := rfl
+
+/-- Inclusion runs from delivery to extension. -/
+example : SemanticSurface.Delivered.IncludedIn SemanticSurface.Working :=
+  Future.delivery_le_extension Holes.Val
+
+/-- Consequently an extension-stability artifact restricts to delivery. -/
+example {R : Type} {answer : WorldFuture.World Holes.Val → R}
+    {index : Future.WorldIndex (Future.evidenceWorldModel Holes.Val)}
+    (a : Future.CheckedStability SemanticSurface.Working answer index) :
+    Future.CheckedStability SemanticSurface.Delivered answer index :=
+  a.restrict (Future.delivery_le_extension Holes.Val)
+
+/-- ⚠ The converse is genuinely false at the concrete quiesced world. -/
+example : ¬ Future.CheckedStability SemanticSurface.Working
+    WorldFuture.renderW Future.quiescedIndex :=
+  Future.delivery_artifact_does_not_promote_to_extension
+
+/-- ⚠ Same materialized state, different retained worlds: a checked world
+certificate exists, but no state-indexed certificate may be reused there. -/
+example :
+    Future.quiescedIndex.state = Future.pendingIndex.state
+      ∧ Evidence.FreeTermination SemanticSurface.Delivered.future
+          WorldFuture.renderW Future.quiescedIndex.world
+      ∧ ¬ Evidence.FreeTermination SemanticSurface.Delivered.future
+          WorldFuture.renderW Future.pendingIndex.world
+      ∧ (¬ ∃ C : Evidence.ResultEvidence Holes.Val → Prop,
+          Future.CheckedCertificate SemanticSurface.Delivered WorldFuture.renderW
+            WorldFuture.observe C Future.quiescedIndex) :=
+  Future.same_state_different_worlds_block_certificate_reuse
+
+/-! ### 4.2 Protocol/session elaboration is one semantic API call -/
+
+example : SemanticSurface.Coalescing = Protocol.coalescingProtocol := rfl
+example : SemanticSurface.Ambient = Protocol.ambientProtocol := rfl
+example : SemanticSurface.TwoRound = Protocol.twoRoundProtocol := rfl
+
+/-- Whole-value acceptance for the checked elaboration bundle. -/
+example : SemanticSurface.Coalesced =
+    Protocol.elaborate Protocol.coalescingProtocol () := rfl
+
+example : SemanticSurface.Coalesced.session = Scheduling.coalescingSession := rfl
+
+/-- The plan and upper bound are projections of that one elaboration record. -/
+example : SemanticSurface.Coalesced.Plan = SemanticSurface.Coalesced.plan := rfl
+example : SemanticSurface.Coalesced.UpperBound =
+    SemanticSurface.Coalesced.upperBound := rfl
+
+/-- Profile elaboration also remains the existing semantic value. -/
+example : SemanticSurface.Profiled.ProfilePlan =
+    Protocol.elaborateProfilePlan unitStrategies Protocol.coalescingProtocol ()
+      (by simp [unitStrategies, CoordEffect.Admissible.toList]) := rfl
+
+/-- Composition is pointwise under one selected strategy, not two independent
+per-branch choices. The surface value is the modular composed elaboration. -/
+example : SemanticSurface.Combined =
+    Protocol.elaborateComposedProfilePlan unitStrategies
+      Protocol.coalescingProtocol Protocol.ambientProtocol ()
+      (by simp [unitStrategies, CoordEffect.Admissible.toList]) := rfl
+
+example :
+    let plan := SemanticSurface.Combined
+    plan.left.strategy = () ∧ plan.right.strategy = () := by
+  exact Protocol.elaborated_composition_uses_one_strategy unitStrategies
+    Protocol.coalescingProtocol Protocol.ambientProtocol ()
+    (by simp [unitStrategies, CoordEffect.Admissible.toList])
+
+/-- ⚠ Crossings are still not meetings after reaching the surface: two
+crossings coalesce into one exact meeting. -/
+example :
+    (SemanticSurface.Coalescing.denote ()).crossings = 2
+      ∧ Scheduling.LeastMeetings (SemanticSurface.Coalescing.denote ()) 1
+      ∧ 1 < (SemanticSurface.Coalescing.denote ()).crossings :=
+  Protocol.ast_crossings_can_exceed_meetings
+
+/-- …and one crossing can require two incompatible rounds. No report cell or
+session constructor replaces these witnessed scheduling theorems by a scalar. -/
+example :
+    (SemanticSurface.TwoRound.denote ()).crossings = 1
+      ∧ Scheduling.LeastMeetings (SemanticSurface.TwoRound.denote ()) 2
+      ∧ (SemanticSurface.TwoRound.denote ()).crossings < 2 :=
+  Protocol.ast_one_crossing_can_need_two_rounds
+
+/-! ## §5. The keywords are not stolen
 
 `field` and `invariant` are non-reserved keywords (`&"field"`). If they had
 been ordinary tokens, importing this module would have broken every downstream
@@ -777,44 +912,5 @@ def field : Nat := 1
 /-- An ordinary definition named `invariant`. -/
 def invariant : Nat := 2
 example : field + invariant = 3 := rfl
-
-/-! ## §5. The floor, until the root carries this module
-
-`Uwueave.Audit`'s `#audit_floor` walks the whole `Uwueave` namespace, but it
-can only see modules it imports, and it does not import `Uwueave.Preo.*` yet
-(the root and the audit file belong to a different lane). Until they do, this
-is that gate scoped to `Uwueave.Preo` — including the constants the elaborator
-*generated* above, which is the half a reader would most want checked.
-
-⚠ **Delete this section** the moment `Uwueave.Preo.Demo` appears in
-`Uwueave.lean` and in `Audit.lean`'s import list; two gates for one property is
-how one of them rots. -/
-
-open Lean Elab Command in
-/-- `#audit_floor` (`Uwueave.Audit`) restricted to `Uwueave.Preo`. Same floor,
-same vacuity tripwire, same reason: `sorry` compiles to `sorryAx` and
-`native_decide` to `Lean.ofReduceBool`, and a `Verdict` built from either
-prints like any other. -/
-elab "#preo_floor" : command => do
-  let env ← getEnv
-  let allowed : List Name := [``propext, ``Classical.choice, ``Quot.sound]
-  let targets := env.constants.toList.filterMap fun (n, _) =>
-    if (`Uwueave.Preo).isPrefixOf n then some n else none
-  let mut blamed : Array String := #[]
-  for n in targets do
-    for ax in ← collectAxioms n do
-      unless allowed.contains ax do
-        if blamed.size < 20 then blamed := blamed.push s!"{n} ← {ax}"
-  unless blamed.isEmpty do
-    throwError "preo floor violated — first offenders: {blamed.toList}"
-  if targets.length < 40 then
-    throwError "preo floor vacuity tripwire: only {targets.length} constants under \
-      `Uwueave.Preo` — the walk is not seeing the module"
-  logInfo m!"-- (retired at wire-up: the tree-wide #audit_floor now covers Uwueave.Preo)
-#preo_floor: {targets.length} constants under `Uwueave.Preo`, all within the floor"
-
--- (retired at wire-up: the tree-wide #audit_floor now covers Uwueave.Preo)
--- retired at wire-up: the tree-wide #audit_floor now covers Uwueave.Preo
--- #preo_floor
 
 end Uwueave.Preo.Demo

@@ -123,7 +123,10 @@ proof-carrying obligations compose pointwise under one shared strategy, a
 schedule witnesses coverage, and five currencies remain separate. Its exact
 2-crossings→1-meeting, 0→1, and 1→2 examples prove there is no scalar
 conversion in either direction. What remains unbuilt is the surface protocol
-AST and its explicit elaboration to those demands—not the scheduling judgement.
+budget block and schedule search—not the protocol AST, its proof-carrying
+elaboration, or the scheduling judgement. `Protocol.Term` now carries the
+bounded operation/sequence/parallel/choice/repeat/sync language, and the Preo
+surface accepts typed terms in that AST.
 
 ### 4.4 Prices are records, not numbers
 
@@ -260,24 +263,33 @@ preo Swarm where
   invariant one_writer : ∀ f, |{a | holds a = f}| ≤ 1
   invariant in_budget  : ∀ a, spent a ≤ alloc a
 
-  future Delivered = deliver-only
-  future Working   = deliver + agents may still act
+  future Delivered on (Future.evidenceWorldModel Holes.Val) :=
+    Future.Delivery Holes.Val
+  future Working on (Future.evidenceWorldModel Holes.Val) :=
+    Future.Extension Holes.Val
 
   derive anyone_found : Bool = ∃ (a,c) ∈ findings, c = target
   derive open_files   : Nat  = |files \ range holds|
 
-  session Wave under plan TeamEra
-    budget { userPrompts ≤ 1 · peerBarriers ≤ 1 · arbiterCuts ≤ 1 }
-    parallel { bounded N claim_file · at_most 1 reallocate }
+  protocol WaveProtocol over TeamStrategy := waveProtocol
+  session Wave under TeamEra runs WaveProtocol at chosenStrategy := chosen_is_admissible
 ```
 
-Note what the session carries that our first sketch did not: a **plan**, a
-**multi-currency budget**, and an actual **protocol shape**. An `allows` list
+Note what the session result carries that our first sketch did not: a checked
+**schedule/plan**, a **multi-currency cost profile**, and an actual **protocol
+shape**. The current surface does **not** yet accept a budget block; it exposes
+the witnessed upper bound against which one can be checked. An `allows` list
 naming an operation vocabulary is not a workload — if `reallocate` may repeat
 without bound, no finite worst-case bound follows from membership in a list.
-The `field … per … : …` spelling is live; the future and session forms in this
-example remain the next surface fragments and are intentionally not accepted by
-the current parser.
+The field, invariant, future, derive, protocol and session forms shown here are
+live. A future must name its full
+`Preo.Future.WorldModel`, so no declaration can be inferred from materialized
+state alone. A protocol body is currently a typed Lean term of
+`Protocol.Term TeamStrategy`; this is the deliberate opaque escape hatch into
+the six-constructor deep AST, not a second parser that might drift from its
+semantics. The session calls `Protocol.elaborate`/`elaborateProfilePlan` once
+and exposes their checked schedule and upper bound. The pretty budget block
+from the earlier sketch remains unbuilt.
 
 ### 7.1 Deep only where analysis requires it
 
@@ -353,27 +365,33 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | FREE / ESCALATES / SEAM verdicts | `Confluence`, `Catalog`, `Ceiling`, `Segmented` | proved |
 | clash repro | `escalation_witness` | proved |
 | priced exit menu | `Exits` | proved |
-| typed repairs + promise deltas | `Repair` | in flight |
+| typed repairs + promise deltas | `Repair`, `RepairMenu` | **proved**: generated repairs retain exact promise relations and an eight-axis price, including reachability restriction rather than falsely pricing escrow as free |
 | mergeable-vs-replay verdict | `JoinHom.summaryFold_iff_joinHom` | proved |
 | epistemic result carrier | `Evidence`, `Holes` | proved |
-| future-indexed exactness | `Evidence`, `WorldFuture` | proved / in flight |
+| future-indexed exactness | `Evidence`, `WorldFuture`, `Preo/Future` | **proved and surfaced**: declarations retain the world model/index; checked stability and certificates project proofs, and only extension→delivery restriction exists |
 | coordination floor | `Cost.coordination_forced` | proved |
-| cost profiles + composition | `CoordEffect` | in flight |
-| budget trichotomy | `Budget` | in flight |
-| merge models | `MergeModel` | in flight |
-| seam synthesis | `SeamColoring` | in flight |
-| summary synthesis | `MinimalSummary` | in flight |
+| cost profiles + composition | `CoordEffect`, `Scheduling` | **proved**: pointwise composition precedes one global strategy choice; schedules retain five currencies |
+| budget trichotomy | `Budget` | **proved**; explicit finite plan spaces additionally compute an exact witnessed minimum without claiming to enumerate arbitrary seams |
+| merge models | `MergeModel` | **proved** for join, ancestral and op-replay models, now universe-polymorphic at the generic model layer |
+| seam synthesis | `SeamColoring`, `MenuTotality` | **proved for explicit finite carriers/palettes**, including exhaustive refusal and a least-width certificate; infinite search remains outside the result |
+| summary synthesis | `MinimalSummary`, `TextSummary` | **proved semantically** through contextual quotients; the fixed text window now has an exact iff, while executable quotient construction for arbitrary evaluators remains open |
+| arbitrary refined outcomes | `Specification` | **proved semantically**: under totality, coordination-freedom is exactly history monotonicity plus fiber directedness, and `IConfluent` is the singleton-outcome instance |
 | classification → `Verdict` term | `Tactics.classifyFinite` | proved |
-| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built — fragment 2** |
+| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built**: fields/invariants/derives plus keyed fields, named world futures, typed protocols and proof-carrying sessions |
 | classification ACCUMULATES facets | `Preo/Classification` | **built**: `Classification` holds `global`/`seams`/`mergeability`/`obligations` as *lists*; rules add, never replace |
 | route-order invariance | `Preo.run_answer_congr` | **proved**: two registries with the same rules in any order certify the same answer. Bottoms out in `Preo.verdict_agree` (two verdicts for one invariant cannot disagree — the pair is uninhabitable), not in bookkeeping. `run_answer_of_perm` is the permutation corollary. |
 | ✅ seam verdicts in the surface | `Preo.budgetSeam`, `Preo.seamAlong`, `Segmented.budget_segmented` | **CLOSED** (was "inexpressible"). A globally clashing invariant now carries a `SegVerdict` facet *alongside* its clash — `Preo.seam_forces_clash` proves a seam is not a third alternative but forces the ESCALATES column. `Demo`'s `LoomDoc2.in_budget.seam` **is** `WeaveState.quotaVerdict`, by `rfl`. `seamAlong` lifts it to the whole declared document, using the emitted section (`<field>.plant`) that fragment 1 said the elaborator could not synthesize. |
-| ✅ cross-field invariants in the surface | `Spec.Verdict.cross`, `Spec.pointsAtExisting_iconfluent` | **CLOSED** (was refused by name). A two-field invariant is classified against the *product* state; `LoomDoc2.fk` **is** `Spec.refIntVerdict` by `rfl`. ⚠ narrower than `WeaveState.bookmarksVerdict`, which is the per-user keyed form — this surface has no `per`. Three or more fields is still refused: `Verdict.cross` is binary. |
+| ✅ cross-field invariants in the surface | `Spec.Verdict.cross`, `Spec.pointsAtExisting_iconfluent` | **CLOSED** (was refused by name). A two-field invariant is classified against the *product* state; `LoomDoc2.fk` **is** `Spec.refIntVerdict` by `rfl`. The keyed form is also live: `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Three or more fields is still refused: `Verdict.cross` is binary. |
 | ✅ `derive` + mergeability verdict | `JoinHom.Fourth`, `summaryFold_iff_joinHom`, `Preo.mergeability_comp` | **CLOSED**. `derive n : T = <expr>` emits the computation plus a `Fourth` facet with its `Fourth.Correct` proof. Registry: ∃-read, filtered view, high-water mark, set image (`fromResults`) and count (`needsEvidence`, via `no_count_merge_without_provenance`) — each *attempted by typechecking*, so an unknown shape is an obligation, never a guess. ⚠ the `needsEvidence` transport to document scale needs the projection **surjective**, not merely a hom; the elaborator emits `<field>.surj` for exactly that. |
 | ✅ **seam composition in the surface** | `SegVerdict.selfSeam`, `liftFst`/`liftSnd`, `andSeams`, `absorbFree`, `prependFree` | **CLOSED at the general surface/combinator layer.** `TwinQuota.documentSeam` is the existing product seam by `rfl`; `NestedSurface` finds two seam rows through eight right-nested fields and absorbs six checked FREE rows; the general algebra reconstructs `WeaveState.weaveDocSeamVerdict` as the same value. The exact hand carrier is still not one surface declaration because flat fields cannot name grouped `WeaveCore`, and FREE verdicts cannot manufacture its legal planting witness `core₀`. |
 | ✅ **`per` / keyed families in the surface** | `Confluence.keyed_cross_iconfluent`, pointwise `MergeState` | **CLOSED for field carriers and keyed referential integrity.** `field bookmarks per Bool : GrowSet Nat` emits `Bool → GSet Nat`; `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Unsupported keyed relations remain obligations, and automatic keyed clash seams still require a concrete key/default witness. |
-| **declaration composition** | — | **unbuilt** |
-| ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan` | **built below the surface**: typed origins, metadata-rich demands, separate currencies, witnessed bounds, shared-strategy composition, and exact non-function refutations. **Unbuilt:** protocol/session syntax and a theorem-backed elaboration from bounded sequence/parallel/sync into demands. |
+| ✅ **named world futures in the surface** | `Preo.Future.FutureDecl`, `WorldIndex`, `CheckedStability`, `CheckedCertificate` | **CLOSED.** `future N on M := D` checks `D : FutureDecl M`; evidence and ERA declarations are whole-value `rfl` acceptances. The same-state/different-world certificate refusal and one-way delivery⊆extension variance remain theorem-visible in `Demo`. |
+| ✅ **protocol/session surface** | `Protocol.Term`, `Protocol.Elaboration`, `elaborateProfilePlan`, `elaborateComposedProfilePlan` | **CLOSED with a typed opaque protocol body.** Sessions expose checked plans/upper bounds and composed profiles select one global strategy. Reports name semantic artifacts and deliberately contain no invented verdict bit or meeting scalar. A dedicated pretty parser and budget blocks remain optional future UI. |
+| ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export` | **BUILT.** Private proof-indexed builders project verdict witnesses, world futures/certificates and protocol sessions/plans into one canonical first-order artifact with a proved decoder left inverse. Stable IDs/codecs are explicit; decoded wire tags have no path back to semantic proof constructors. |
+| **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
+| ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `Protocol.Term` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed bounds, bounded protocol semantics, shared-strategy composition, and exact crossing/meeting non-function refutations. **Unbuilt:** schedule synthesis and the pretty multi-currency budget block. |
+| recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |
+| durable artifacts | `Durable` | **proved logical codec/journal rung** with canonical roundtrip and torn-tail recovery; no filesystem, flush or crash-atomicity guarantee is claimed |
 
 ## 11. What would make us abandon this
 

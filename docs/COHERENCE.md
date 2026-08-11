@@ -1,11 +1,12 @@
 # COHERENCE — does the assembled thing tell one story?
 
-*An audit of the whole tree, read cold. Fifty-eight Lean modules, ~1,700
+*The original audit of the whole tree, read cold. Fifty-eight Lean modules, ~1,700
 theorems, ~2,750 declarations, a Rust crate, five documents and a website —
 built in one night by roughly forty lanes that each verified their own file and
 none of which read the others. Every claim below is cited to `file:line` and was
-checked at source. Nothing here is fixed; fixes are the orchestrator's to
-schedule.*
+checked at source. The original snapshot is retained below because its evidence
+still explains the repairs; the current-wave reconciliation immediately below
+supersedes its counts and status labels.*
 
 *Read 2026-08-11, spanning `f6f35fe` → `e0937ef`. **The tree moved during the
 audit** — wave 13b landed four modules mid-read, and §A.1 is sharper because of
@@ -13,7 +14,214 @@ it. Counts move; the mechanisms are what to check.*
 
 ---
 
-## Executive summary
+## Current-wave reconciliation — 2026-08-11
+
+This is the delta audit after the execution encoder, durability, authenticity,
+Byzantine, recursive-choreography, structured-evidence, frontier, outcome-spec,
+protocol, world-context, and preoscript artifact work landed in the working
+tree. The twelve new modules, their root/gate wiring, and their MAP and
+TRANSPORTS entries are one checkpoint: a clean checkout cannot receive only
+one side of that assembly.
+
+### Current headline
+
+The mathematics added this wave is disciplined about hypotheses. The assembly
+was repaired during this audit and is now complete in the live working tree.
+
+| Surface | Live evidence | Current verdict |
+|---|---|---|
+| Root → gate | `#gate_covers_root` at `Uwueave/Audit.lean:175-191` checks every direct root import is in the gate environment; `Choreo` is in both (`Uwueave.lean:71`, `Uwueave/Audit.lean:62`). | **The original A.1 defect is closed.** |
+| Disk → root → gate | There are **91** Lean module files under `Uwueave/`; both the `Uwueave.lean` and `Uwueave/Audit.lean` transitive closures reach **91/91**. `lake env lean Uwueave.lean` passed after the imports landed. | **The current-wave assembly defect is closed.** |
+| Checkpoint → disk | This wave adds twelve Lean modules and the matching root, audit, MAP and TRANSPORTS changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
+| MAP → disk → gate | The module table has **91 rows for 91 files**, its coverage prose says 91 (`docs/MAP.md:11-28`), and all of those modules are now inside the root and audit closures. The keystone ledger says **349 rows** (`:168`). | **The former 34-row exposure is closed in the live tree.** The table remains a reading aid, not a per-name trust gate. |
+| TRANSPORTS | The ledger has **87/87** rows, including exact `WorldContext` projection/lift, recursive-choreography approximation, authenticated ERA finality (`docs/TRANSPORTS.md:497`), and the Lean-owned request encoder (`:801`). | **The current-wave crossings are paid and their failure boundaries are recorded.** |
+| Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest` (`Uwueave/Exec.lean:763-781`); Rust supplies typed records (`rust/src/ffi.rs:31-50,82-113`) and no longer owns FORMAT-v3 bytes. | The wire-encoder decision is closed; ABI, shim, runtime, codegen and host storage remain open. |
+
+The twelve modules added by this checkpoint are:
+
+`Authenticity` · `Byzantine` · `ChoreoRec` · `Durable` · `EvidenceGraph` ·
+`Frontier` · `Preo.Artifact` · `Preo.Export` · `Preo.Future` · `Protocol` ·
+`Specification` · `WorldContext`.
+
+During the audit, nine modules with 34 MAP keystone rows were outside the
+root/gate closure:
+
+| Module | Ledger rows outside the gate |
+|---|---:|
+| `DerivedDocument` | 6 |
+| `Specification` | 3 |
+| `Frontier` | 3 |
+| `Authenticity` | 3 |
+| `Byzantine` | 4 |
+| `Durable` | 3 |
+| `EvidenceGraph` | 4 |
+| `ChoreoRec` | 4 |
+| `WorldContext` | 4 |
+
+`Preo.Artifact` and `Preo.Export` also had module and TRANSPORTS rows outside
+the root, while `Protocol` and `Preo.Future` account for the other two
+then-untracked modules. Root imports at `Uwueave.lean:73-84` and matching audit
+imports at `Uwueave/Audit.lean:128-139` now put every one of the 91 modules in
+both closures. The table is retained as exact evidence of what the wiring
+repair closed; it is no longer a live exposure.
+
+### Closed findings from the original audit
+
+These are genuinely closed in source, not merely marked closed here:
+
+- **A.1, root module outside the gate:** `Choreo` is imported by both root and
+  gate, and `#gate_covers_root` makes that particular mismatch refutable.
+- **Current-wave disk modules outside root/gate:** the twelve new modules are
+  imported at `Uwueave.lean:73-84` and `Uwueave/Audit.lean:128-139`; both
+  transitive closures now cover 91/91 modules, and the aggregate Lean check
+  passes.
+- **B.2, untracked retraction index:** `FORCODEX.md` and `CODEXHELP.md` are now
+  tracked; `.gitignore:4-10` records why they must remain so.
+- **B.5, ORMap reachability contradiction:** `Uwueave/ORMap.lean:53-56` now says
+  the clash **is** jointly causally reachable, agreeing with its §3 and
+  `CausalReach.ormap_clash_joint`.
+- **B.6, LoRe retraction:** `Uwueave/Holes.lean:92-99,278-292,607-610` now carries
+  the correction where the novelty claim lived.
+- **C.1–C.3, MAP breadth and the two namespace misfilings:** the module table is
+  now complete at 91/91, and `kernel_gate_agrees_gatedOps` / `applied_set_not_antitone`
+  are filed under `Gated` / `ExecRefine`. The table briefly outran the root
+  during this wave; that wiring gap is now closed too.
+- **D.1, successor pointers:** the predecessor headers now point to the landed
+  repair, future, frontier, evidence-graph, authenticity, recursive-choreography,
+  protocol and summary rungs while retaining their deployment qualifiers.
+- **E.5, crossings called meetings:** `Exits.lean:104-115` retracts the unit,
+  and `Scheduling` supplies the separate coeffect/schedule model. The one legacy
+  theorem name is explicitly retained for compatibility.
+- **Execution request marshalling:** Rust’s handwritten request encoder is gone.
+  `Exec.encodeRequestKernel_eq` is the typed-adapter equality, while
+  `decodeBase_encodeRequest`, `decodeOps_encodeRequest`,
+  `decodeGrants_encodeRequest`, `decodeRevs_encodeRequest`, and
+  `replay_encodeRequest` close the canonical request codec. This closes one
+  decision boundary, not the execution TCB.
+
+### Source-header successor reconciliation
+
+The new modules narrow or close the model-level item shown. Their predecessor
+headers now say so, without declaring the deployment half closed.
+
+| Predecessor claim | Landed successor | Honest reconciliation |
+|---|---|---|
+| `Choreo.lean:142-148` formerly left recursion and deadlock progress wholly UNDONE. | `ChoreoRec.lean:4-14`, `projection_sound_approx`, `guardedBarrierLoop_progresses`, `mismatched_barrier_is_deadlocked`. | Recursion through finite approximants and **one-step local** progress landed. Fairness, eventual delivery and temporal deadlock-freedom remain. |
+| `DerivedDocument.lean:89-95` formerly said internal evidence edges were not built. | `EvidenceGraph.lean:4-23`, `wellFormed_iconfluent`, `flat_encodeEvidence_is_projection`. | Typed nodes/edges and endpoint integrity landed and refine the flat document. Cryptographic/content-addressed identity did not. |
+| `Evidence.lean:150-154` and `WorldFuture.lean:165-170` formerly stopped at a flat frontier. | `Frontier.lean:4-33`, `world_complete_values_stable`. | A genuine antichain model and a narrow values-stability bridge landed. Authenticated progress, timestamp storage in `ResultEvidence`, render stability and revelation of the issued pool did not. |
+| `WorldFuture.lean:156-164` formerly had no capabilities or known merge bases. | `WorldContext.lean:4-30`, `delivery_projects`, `delivery_lifts`, and the three independent hidden-axis witnesses. | The context model now carries active grants, a causal cut and version base/head. Authentication and automatic origin/version attribution remain explicitly UNDONE (`WorldContext.lean:42-51`). |
+| `Gated.lean:88-96` formerly pointed only to collision extractors as a future signature pattern. | `Authenticity.authenticity_violation_extracts_forgery`; `Byzantine.unauthenticated_submission_can_pass_the_gate`. | The constructive signature handoff and the exact gate attack landed. No theorem connects accepted `SignedRecord`s to shipping gate admission, and no concrete EUF-CMA proof exists. |
+| `EraCertificate.lean:127-139` formerly left event-id finality entirely to plumbing. | `Byzantine.authentic_issuance_preserves_finality` and `finality_failure_refutes_id_authenticity`. | The conditional carrier theorem **has** landed under `Settled`, grounded announcements, `IdAuthentic`, and `Issuance`. Hash/signature binding, fraud-proof detection and announcement authentication remain deployment work. |
+| `Scheduling.lean:76-77` formerly said there was no surface syntax. | `Protocol.lean:1-24` supplies a deep semantic AST and checked elaboration; Preo accepts typed protocol terms and checked session forms. | Narrowed, not closed: the surface quotes typed terms; a custom nested protocol parser and a user budget block remain absent. |
+
+The older `Evidence` → `WorldFuture` and `JoinHom` → `MinimalSummary` omissions
+are now repaired as well. A successor documenting its predecessor is not enough;
+the reader usually enters through the predecessor.
+
+### Hypothesis audit of the new modules
+
+No new theorem/docstring scope overclaim was found in the headline results.
+The load-bearing hypotheses are stated where they matter:
+
+- `Specification.coordinationFree_iff_historyMonotone_and_fiberDirected`
+  requires `Total P` (`Specification.lean:183-194`), and the converse is kept
+  separate without it.
+- `ChoreoRec.projection_sound_approx` retains exactly `Choreo.ReadsAgree`
+  (`ChoreoRec.lean:184-192`); the header explicitly denies fairness and eventual
+  delivery.
+- `Frontier.world_complete_values_stable` requires `WorldFuture.Wf`, frontier
+  completeness, and settlement of every issued event (`Frontier.lean:506-522`),
+  and concludes stability of `Evidence.values`, not `render`.
+- `Byzantine.authentic_issuance_preserves_finality` requires `Settled`,
+  `AnnouncementsGrounded`, `IdAuthentic`, and `Issuance`
+  (`Byzantine.lean:277-303`). `authenticity_and_delivery_are_independent`
+  explicitly prevents this safety result from being read as liveness.
+- `Durable.recover_crashPrefix` consumes an explicit `TornFrame`; its header and
+  `DeploymentAssumptions` manufacture no filesystem-prefix, append, rename,
+  flush or power-loss guarantee.
+- `WorldContext.delivery_lifts` requires the projected delivery, `Frozen`, and
+  `Admits` (`WorldContext.lean:235-248`); projection is unconditional and lifting
+  is not.
+- `Preo.Export` states an API-shape boundary, not an impossibility theorem:
+  decoded verdict tags are first-order data and no wire-to-proof constructor is
+  exposed (`Preo/Export.lean:269-293`).
+
+### Judgement and interface collisions after the wave
+
+One former headline must be retired: the current tree no longer has “exactly
+one judgement.” It still has exactly one central **lattice** judgement,
+`Confluence.IConfluent`, but it now deliberately has adjacent judgements:
+
+- `Necessity.IsCFCS` is about reachable executions of an implementation.
+- `Specification.CoordinationFree` is algebraic common refinement of arbitrary
+  outcome fibers. Its docstring explicitly denies implementation existence and
+  reachability (`Specification.lean:135-145`), and
+  `invariant_coordinationFree_iff` ties its singleton-outcome instance back to
+  `IConfluent`. TRANSPORTS row 4a records the totality boundary. This is a
+  disclosed layering, not an accidental synonym.
+- `Evidence.DeliveryFuture`, `WorldFuture.DeliveryFuture`, and
+  `WorldContext.DeliveryFuture` reuse one short name at three layers, but the
+  projection/lift theorems make the relation explicit. This is the good form of
+  duplication.
+
+Two seams are not yet tied:
+
+1. `Authenticity.AuthenticIssuer` (`Authenticity.lean:255-269`) speaks about
+   accepted signed records; `Byzantine.SignatureAuthentic`
+   (`Byzantine.lean:86-103`) speaks about admitted `(author, sequence, id)`
+   triples. `Byzantine` does not import `Authenticity`, and no theorem transports
+   one predicate to the other. “Signature authentic” therefore has two model
+   meanings with no codec/admission bridge.
+2. `Preo.Artifact.FirstOrderCodec` (`Preo/Artifact.lean:74-80`) encodes to
+   `List Nat` and proves only `decode_encode`; `Durable.CanonicalCodec`
+   (`Durable.lean:60-70`) encodes to `List UInt8` and additionally proves
+   accepted-byte canonicality through `encode_decode`. Neither imports the
+   other. The first-order artifact is therefore not yet a durable canonical
+   payload, despite both surfaces using “canonical” language around their
+   enclosing encodings.
+
+### Execution-boundary reconciliation after the Lean encoder change
+
+The implementation, source headers, MAP and `docs/TRUST.md` now agree:
+
+- `Exec.lean`, `Gated.lean`, and MAP record ten rows: eight open execution
+  obligations and two paid controls.
+- The Rust byte marshaller is gone; production obtains canonical FORMAT-v3
+  bytes from `Exec.encodeRequestKernel` over typed lanes.
+- `rust/shim.c` records that SeqKernel and EraKernel are root-reachable and
+  retains explicit idempotent initialization as an FFI robustness measure.
+
+The FFI surface is still closed by name, but the old count is obsolete. There
+are now **five** Lean exports: request encoding, replay, canonical compatibility
+check, sequence, and ERA. All five have C callers; the canonical checker is a
+test/audit endpoint, while the new encoder is on the production request path.
+The typed ABI, record flattening, Lean object ownership, C allocation, runtime
+initialization and C/code generation remain trusted engineering. “Lean owns the
+wire encoder” must not be shortened to “the FFI is proved.”
+
+### Current prioritized action list for root
+
+**P1 — connect the remaining model rungs**
+
+1. Connect `Authenticity.AuthenticIssuer` to
+   `Byzantine.SignatureAuthentic` through an explicit record/triple codec and
+   admission theorem, then connect that result to the gate. Until then the
+   constructive extractor does not authenticate a shipping operation.
+2. Choose one artifact-codec layering: either make `Preo.Artifact.FirstOrderCodec`
+   refine `Durable.CanonicalCodec`, or state and prove the adapter. Do not grow a
+   second durability format around `List Nat` by accident.
+3. Wire `Preo.Export` into the actual language/elaborator path, or label it as a
+   manually assembled checked builder. Its example is nonempty and honest, but
+   `Preo.Demo`/`Preo.Elab` do not import it. The root now builds it; that does
+   not by itself make the path user-facing.
+
+---
+
+## Original audit — executive summary (historical snapshot)
+
+Everything from this heading onward is the retained original reading. Its
+citations explain why the repairs were made; its counts, defect totals and
+prioritized list are superseded by the current-wave reconciliation above.
 
 **Mostly coherent — and the exceptions cluster in exactly the places the repo is
 proudest of.**

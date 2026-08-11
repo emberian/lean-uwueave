@@ -73,8 +73,13 @@ numbers.
     demand per crossing** interpretation; pure coalescing alone is not enough.
   * ⟨UNDONE⟩ Participants are declared, not proved online; there is no
     liveness, deadlock-freedom, message loss, elapsed time, or schedule search.
-  * ⟨UNDONE⟩ No surface syntax and no transport from `Budget.ForcedFloor`
-    to a meeting floor. The examples prove that such a transport is false.
+  * **The syntax debt is narrowed.** `Uwueave.Protocol` now supplies the deep
+    semantic AST and proof-carrying scheduling elaboration; the Preo surface now
+    has checked `protocol` and `session` forms, with protocol bodies supplied as
+    typed `Protocol.Term`s. ⟨UNDONE⟩ There is still no custom user protocol
+    parser or user-authored budget block, and no transport from
+    `Budget.ForcedFloor` to a meeting floor. The examples prove that such a
+    transport is false.
 -/
 import Uwueave.CoordEffect
 

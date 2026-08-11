@@ -153,21 +153,21 @@ clothes.
     inherits none of it. The separation in §3 is about what a future *may* be,
     which is exactly the question codex asked; when it will *occur* is not
     asked and not answered.
-  * **Two of codex's six components are dropped, and named.** ⟨UNDONE⟩
-    *Outstanding capabilities* — `Authority.lean` and `Gated.lean` own the
-    authority machinery and wiring it in would drag their `GroupView` into this
-    carrier; a world here has a roster and no capability set, so "may this
-    source speak *about this key*" is inexpressible. *Known merge bases* — a
-    merge base is a fact about a **history DAG**, and this file has no history:
-    `CausalReach.Cut` (downward-closed membership over a `FinHistory`) is the
-    shape it would take, and `Ancestral.lean` the LCA machinery it would use.
-    Both are absent; neither is faked with a placeholder field.
-  * **The frontier is still a flat set of sources.** ⟨UNDONE⟩ Inherited
-    verbatim from `Evidence.lean`: Timely's frontier is an antichain of
-    timestamps whose advance retires a *range*, ours is a `GSet Source` and no
-    order on `Source` exists. `roster` is the accepted membership that bounds
-    it, which is the piece `Evidence.lean` did not have — but a roster is not
-    an antichain either.
+  * **This carrier drops two of codex's six components; the successor restores
+    them.** `Uwueave.WorldContext` adds outstanding active grants, a
+    downward-closed `CausalReach.Cut`, and a known version base/head in a real
+    history, with projection and conditional lift theorems back to this world.
+    ⟨UNDONE at the remaining boundary⟩ The context is supplied rather than
+    authenticated, and `origin`/`versionOf` attribution is still external;
+    `ResultEvidence` carries neither id automatically.
+  * **The frontier here is still a flat set of sources.**
+    `Uwueave.Frontier` now supplies the Timely-style antichain whose advance
+    retires a timestamp range and a narrow theorem transporting complete,
+    settled worlds to stability of `Evidence.values`. ⟨UNDONE for this carrier
+    and deployment⟩ `World.frontier` remains a `GSet Source`, timestamps are not
+    stored in `ResultEvidence`, progress is not authenticated or generated, and
+    full `render` stability is not claimed. `roster` bounds accepted membership,
+    but a roster is not an antichain.
   * **A seal is still trusted, not verified.** ⟨UNDONE⟩ `epoch` and `sealed`
     are a producer's announcement, exactly as `Era.advance` announces a cut
     unconditionally. What is *new* here and not in `Evidence.lean` is that the

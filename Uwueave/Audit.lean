@@ -125,6 +125,18 @@ import Uwueave.Bounds
 import Uwueave.MenuTotality
 import Uwueave.Preo.Demo
 import Uwueave.Scheduling
+import Uwueave.Protocol
+import Uwueave.ChoreoRec
+import Uwueave.Specification
+import Uwueave.Frontier
+import Uwueave.WorldContext
+import Uwueave.Authenticity
+import Uwueave.Byzantine
+import Uwueave.Durable
+import Uwueave.EvidenceGraph
+import Uwueave.Preo.Future
+import Uwueave.Preo.Artifact
+import Uwueave.Preo.Export
 import Uwueave.Tactics
 
 open Lean Elab Command in

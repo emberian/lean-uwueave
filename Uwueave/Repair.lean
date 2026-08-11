@@ -40,7 +40,7 @@ file subsumes the other's job: a menu is what a report shows a schema author, a
 
   * **§1 `Premise`** — the trust assumptions this tree actually contains, as an
     enumeration, so an assumption can be *charged* rather than mentioned.
-  * **§2 `Price`** — seven fields, each justified by a named theorem (§3), with a
+  * **§2 `Price`** — eight fields, each tied to a semantic distinction, with a
     commutative monoid structure so chains accumulate.
   * **§4 `PromiseRelation`** — five independent Bool axes, composing by `&&`. The
     five names codex listed (equivalent · strengthened · weakened ·
@@ -166,14 +166,16 @@ inductive Premise where
 
 /-! ## §2. Price — a record, because the currencies do not convert
 
-Seven fields. Each is justified by a named theorem in §3, and a field with no
-theorem behind it is not here: there is deliberately **no** `meetings` field,
+Eight fields. Seven are justified by the named theorems in §3; the eighth,
+`restrictsReachability`, is the currency a quota partition spends and is
+witnessed precisely by `Repair.RestrictsReachability` at the typed escrow in
+`RepairMenu`. There is deliberately **no** `meetings` field,
 because `Cost.lean` counts seam crossings and says in its own header that it
 models no attendance, coalescing, barriers or elapsed time (`CODEXHELP.md` §0.1
 erratum 3 is us getting that wrong in print). `seamCrossings` is the honest name
 for the only quantity with a floor theorem. -/
 
-/-- **The price of a repair, in seven currencies that do not convert.**
+/-- **The price of a repair, in eight currencies that do not convert.**
 
 There is no `total : Price → Nat`, and that absence is the point: any collapse to
 a scalar re-creates the defect this file was written to fix
@@ -210,6 +212,13 @@ structure Price where
   surface after merge) and its ∀-general form
   `MVRegister.conflict_surfaces_general`. -/
   pluralRead : Bool
+  /-- The deployment restricts which source-legal states remain admissible or
+  reachable after the repair. This is not a seam crossing, meeting, or trust
+  premise: escrow spends locally allocated rights by ruling out states that
+  the unpartitioned promise allowed. `Repair.RestrictsReachability` gives the
+  semantic witness shape; `RepairMenu.balanceEscrow_price_and_delta`
+  exhibits it for the first typed escrow. -/
+  restrictsReachability : Bool
   /-- Premises the repaired promise leans on that the original did not.
   Justified by `Seams.pinned_everywhere_iconfluent`: an invariant that is
   *globally free* precisely because it assumes global knowledge. Without this
@@ -231,7 +240,7 @@ guard that reads it is §9. -/
 def free : Price :=
   { seamCrossings := 0, arbiterCuts := 0, rollbackWindow := 0,
     resolutionWrites := 0, retainsEvidence := false, pluralRead := false,
-    assumptions := [] }
+    restrictsReachability := false, assumptions := [] }
 
 /-- Chained repairs pay both bills: counts add, flags disjoin, premises
 accumulate. ⟨UNDONE⟩ this is a *declared* accumulation and is not claimed
@@ -243,6 +252,7 @@ def add (p q : Price) : Price :=
     resolutionWrites := p.resolutionWrites + q.resolutionWrites,
     retainsEvidence := p.retainsEvidence || q.retainsEvidence,
     pluralRead := p.pluralRead || q.pluralRead,
+    restrictsReachability := p.restrictsReachability || q.restrictsReachability,
     assumptions := p.assumptions ++ q.assumptions }
 
 @[simp] theorem free_add (p : Price) : add free p = p := by
@@ -258,7 +268,7 @@ theorem add_assoc (p q r : Price) : add (add p q) r = add p (add q r) := by
 
 end Price
 
-/-! ## §3. The seven fields and the seven theorems
+/-! ## §3. The price currencies and their theorem witnesses
 
 Each `example` below is a machine-checked citation: the price field named in its
 docstring is justified by exactly this term. A number without a theorem is a lie
@@ -344,7 +354,7 @@ example (arb : Nat → Nat) :
     IConfluent (S := Seams.EpochState) (fun s => ∀ e a, s.2 e a = true → a = arb e) :=
   Seams.pinned_everywhere_iconfluent arb
 
-/-! ### §3.8 The four prices, and why a scalar cannot hold them
+/-! ### §3.8 Five prices, and why a scalar cannot hold them
 
 ⚠ **One number in this section is measured; the rest are declared.** `seamPrice`'s
 `3` is `Cost.budget_cost_is_three` — a floor holding for every seam in every
@@ -381,20 +391,35 @@ def forkPrice : Price :=
 one price with no number to declare: §3.5 makes it a forced Bool. -/
 def evidencePrice : Price := { Price.free with retainsEvidence := true }
 
+/-- Restricting admission/reachability: no crossings or meetings are invented;
+the price records that some source-legal state is no longer available. The
+typed escrow in `RepairMenu` supplies the semantic witness. -/
+def restrictionPrice : Price :=
+  { Price.free with restrictsReachability := true }
+
 /-- ⚠ **codex's objection (a), as a theorem.** Read through the crossing count
-alone — the single `Nat` our first draft carried — arbitration, forking and
-retaining evidence are **indistinguishable and free**. They are none of those
-things: the three prices are pairwise distinct, and each is distinct from the
-seam's. A scalar price is not a compression of this record; it is a deletion of
-six of its seven fields. -/
+alone — the single `Nat` our first draft carried — arbitration, forking,
+retaining evidence, and restricting reachability are **indistinguishable and
+free**. They are none of those things: the prices differ in kind, and each is
+distinct from the seam's. A scalar price is not a compression of this record;
+it deletes seven of its eight fields. -/
 theorem crossings_cannot_see_the_difference :
     arbitrationPrice.seamCrossings = 0
     ∧ forkPrice.seamCrossings = 0
     ∧ evidencePrice.seamCrossings = 0
+    ∧ restrictionPrice.seamCrossings = 0
+    ∧ restrictionPrice.restrictsReachability = true
+    ∧ restrictionPrice ≠ Price.free
     ∧ arbitrationPrice ≠ forkPrice
     ∧ forkPrice ≠ evidencePrice
     ∧ arbitrationPrice ≠ evidencePrice
-    ∧ seamPrice ≠ arbitrationPrice := by decide
+    ∧ restrictionPrice ≠ arbitrationPrice
+    ∧ restrictionPrice ≠ forkPrice
+    ∧ restrictionPrice ≠ evidencePrice
+    ∧ seamPrice ≠ arbitrationPrice
+    ∧ seamPrice ≠ forkPrice
+    ∧ seamPrice ≠ evidencePrice
+    ∧ seamPrice ≠ restrictionPrice := by decide
 
 /-! ## §4. `PromiseRelation` — what the repair did to the promise
 
@@ -603,7 +628,7 @@ structure Repair (P Q : Promise) : Type 1 where
   transform : P.State → Q.State
   /-- What the repair did to the promise, on five axes. -/
   relation : PromiseRelation
-  /-- What it costs, in seven currencies. -/
+  /-- What it costs, in eight currencies. -/
   price : Price
   /-- What it bought. -/
   discharge : Discharge Q
@@ -631,6 +656,13 @@ still satisfies what was originally promised. `entails` proves this when the fla
 is set; §9 exhibits a repair where the flag is clear and the claim is FALSE. -/
 def DeliversOriginal (r : Repair P Q) : Prop :=
   ∀ s, Q.inv (r.transform s) → P.inv s
+
+/-- **The precise reachability/admission delta.** Some state admitted by the
+source invariant is rejected after transformation by the target invariant.
+This proposition is stronger than clearing `relation.admitsOriginal`: a clear
+flag makes no claim, while this carries the actual counterexample. -/
+def RestrictsReachability (r : Repair P Q) : Prop :=
+  ∃ s, P.inv s ∧ ¬ Q.inv (r.transform s)
 
 /-- The flag is sound: a repair claiming `entailsOriginal` delivers the
 original. -/
@@ -797,7 +829,7 @@ theorem seamRepair_delivers : seamRepair.DeliversOriginal :=
 ⚠ **This is the one people get wrong.** Arbitration is routinely priced at "0
 meetings" because no replica waits for another: the boundary is announced
 unilaterally and replicas never block (`Seams.lean` correction 3). Zero crossings
-is *true*. It is also six-sevenths of the price missing.
+is *true*. It is also seven-eighths of the price missing.
 
 What it actually spends: a trusted announcer and the assumption that the verdict
 is known (`Premise.trustedAnnouncer`, `Premise.verdictKnownEverywhere` — charged
@@ -1154,6 +1186,7 @@ theorem arbitrateThenNothing_price :
     arbitrateThenNothing.price
       = { seamCrossings := 0, arbiterCuts := 1, rollbackWindow := 1,
           resolutionWrites := 0, retainsEvidence := false, pluralRead := false,
+          restrictsReachability := false,
           assumptions := [Premise.trustedAnnouncer, Premise.verdictKnownEverywhere] } := by
   decide
 

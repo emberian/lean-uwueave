@@ -72,10 +72,13 @@ the verdict is indexed by.
     session's true cost is not bounded by it. This is not repairable inside this
     file's measure; it is the measure's domain of validity.
   * ⟨UNDONE⟩ **`unavoidableFloor` is not a function.** The floor is a supremum
-    over clash decompositions, and nothing here computes it. `ForcedFloor wl n`
-    says "`n` is *a* forced floor", witnessed by a decomposition; `rejected`
-    carries that witness. Reading a `ForcedFloor` as "the" floor is exactly the
-    error `lower_bound_does_not_license_acceptance` punishes.
+    over clash decompositions, and nothing here computes that global supremum.
+    `ForcedFloor wl n` says "`n` is *a* forced floor", witnessed by a
+    decomposition; `rejected` carries that witness. §2.1 now computes a
+    different and deliberately bounded quantity: the exact achieved minimum of
+    an explicit finite list of witnessed plans. Its refusal quantifies only over
+    that list. Reading either a `ForcedFloor` or a finite-menu minimum as "the"
+    unrestricted floor is exactly the scope error the types prevent.
   * ⟨UNDONE⟩ **Composition is sequential only.** `accepted_andThen` composes two
     accepted stretches *of one stream under one seam*, from `crossings_append`.
     Two **concurrent** accepted sessions under one budget need the profile
@@ -189,6 +192,97 @@ theorem Plan.gossipFree.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
     (hσ : P.σ a = P.σ b) (ha : wl.I a) (hb : wl.I b) :
     wl.I (a ⊔ b) ∧ P.σ (a ⊔ b) = P.σ a :=
   P.valid a b hσ ha hb
+
+/-! ### §2.1. Exact optimization over an explicit finite plan space
+
+The space of all `Plan`s is not enumerable: a plan chooses an arbitrary seam
+codomain in an arbitrary universe. A checker can nevertheless optimize an
+explicit finite menu of plans it actually knows. The boundary is carried in
+the type below: no theorem silently promotes membership in the supplied list
+to membership in the universe-polymorphic plan space. -/
+
+/-- A nonempty, explicit finite menu of witnessed plans for one workload.
+Plans may use different seam carriers, as long as those carriers inhabit the
+same universe; the existential `Seg` field of `Plan` keeps the list homogeneous. -/
+structure FinitePlanSpace.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    (wl : Workload S Op) where
+  plans : List (Plan.{u', v', w'} wl)
+  nonempty : plans ≠ []
+
+namespace FinitePlanSpace
+
+/-- The least-cost plan in the supplied list, computed by `List.minOn`. -/
+def minimumPlan.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl) :
+    Plan.{u', v', w'} wl :=
+  A.plans.minOn Plan.cost A.nonempty
+
+/-- The executable exact minimum of this finite menu. -/
+def minimumCost.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl) : Nat :=
+  A.minimumPlan.cost
+
+/-- Achievement: the computed minimizer is one of the plans the caller
+supplied. -/
+theorem minimumPlan_mem.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl) :
+    A.minimumPlan ∈ A.plans :=
+  List.minOn_mem
+
+/-- Soundness inside the stated boundary: the computed cost is below every
+member of the supplied finite menu. No claim is made about an unlisted seam. -/
+theorem minimumCost_le_of_mem.{u', v', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl)
+    (P : Plan.{u', v', w'} wl) (hP : P ∈ A.plans) :
+    A.minimumCost ≤ P.cost :=
+  List.apply_minOn_le_of_mem hP
+
+/-- The exact minimum is witnessed, not merely a numeric lower bound. -/
+theorem minimum_achieved.{u', v', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl) :
+    ∃ P : Plan.{u', v', w'} wl,
+      P ∈ A.plans ∧ P.cost = A.minimumCost :=
+  ⟨A.minimumPlan, A.minimumPlan_mem, rfl⟩
+
+/-- If the finite minimum overruns a budget, every listed plan overruns it. -/
+theorem no_member_fits_of_lt_minimum.{u', v', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl)
+    (budget : Nat) (h : budget < A.minimumCost) :
+    ∀ P : Plan.{u', v', w'} wl, P ∈ A.plans → budget < P.cost := by
+  intro P hP
+  exact Nat.lt_of_lt_of_le h (A.minimumCost_le_of_mem P hP)
+
+/-- Evidence-bearing output of the finite checker. A refusal exhausts the
+listed menu only; it is intentionally distinct from the global
+`BudgetVerdict.rejected`. -/
+inductive CheckResult.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl) (budget : Nat) where
+  | accepted (plan : Plan.{u', v', w'} wl) (member : plan ∈ A.plans)
+      (upper : plan.cost ≤ budget)
+  | refused (over : ∀ plan : Plan.{u', v', w'} wl,
+      plan ∈ A.plans → budget < plan.cost)
+
+/-- Observable branch of the finite checker, used to evaluate examples without
+discarding the evidence carried by `CheckResult` itself. -/
+def CheckResult.isAccepted.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {A : FinitePlanSpace.{u', v', w'} wl} {budget : Nat} :
+    CheckResult A budget → Bool
+  | .accepted .. => true
+  | .refused .. => false
+
+/-- **The executable finite checker.** Either return the computed minimizing
+plan with membership and budget evidence, or return a refusal quantified over
+exactly the supplied list. The right branch is deliberately not a
+`BudgetVerdict.rejected`: that constructor refuses every possible seam and
+requires a global `ForcedFloor`; this branch only exhausts `A.plans`. -/
+def check.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} (A : FinitePlanSpace.{u', v', w'} wl) (budget : Nat) :
+    CheckResult A budget := by
+  by_cases h : A.minimumCost ≤ budget
+  · exact .accepted A.minimumPlan A.minimumPlan_mem h
+  · exact .refused (A.no_member_fits_of_lt_minimum budget (by omega))
+
+end FinitePlanSpace
 
 /-! ## §3. Forced floors — the only thing a lower bound can be -/
 
@@ -432,6 +526,50 @@ conjunct. -/
 theorem unlinkedPairPlan_cost : unlinkedPairPlan.cost = 4 :=
   linked_halves_the_crossings.1
 
+/-- The predictive `(legacy-record window, allocation share)` seam as a plan
+for the unlinked document. Unlike the canonical pair seam, it does not charge a
+version bump when the store contains no record the next version forbids. -/
+def unlinkedPredictivePlan : Plan unlinkedWorkload where
+  Seg := Vector Bool 10 × Nat
+  segDecEq := inferInstance
+  σ := unlinkedPredictiveSeam
+  valid := unlinkedPredictive_segmented
+
+/-- Its achieved cost meets the universal floor at two. -/
+theorem unlinkedPredictivePlan_cost : unlinkedPredictivePlan.cost = 2 :=
+  unlinkedPredictive_cost
+
+/-- A genuinely heterogeneous finite menu: the conservative `(version, share)`
+plan and the predictive `(legacy window, share)` plan have different seam
+carriers and costs, but are both witnessed plans for the same workload. -/
+def unlinkedFinitePlanSpace : FinitePlanSpace unlinkedWorkload where
+  plans := [unlinkedPairPlan, unlinkedPredictivePlan]
+  nonempty := by simp
+
+/-- The executable finite optimizer selects cost two from the menu containing
+costs four and two. -/
+theorem unlinkedFinitePlanSpace_minimum :
+    unlinkedFinitePlanSpace.minimumCost = 2 := by
+  decide
+
+/-- The checker itself evaluates both ways on the same nontrivial menu: budget
+two returns its evidence-bearing acceptance branch; budget one returns its
+finite-menu refusal branch. -/
+theorem unlinkedFinitePlanSpace_check_evaluates :
+    (unlinkedFinitePlanSpace.check 2).isAccepted = true
+      ∧ (unlinkedFinitePlanSpace.check 1).isAccepted = false := by
+  decide
+
+/-- At budget one, the finite checker has an exhaustive refusal for its menu.
+The stronger global refusal is separately available from
+`unlinked_forced_two`; the distinction is explicit rather than conflated. -/
+theorem unlinkedFinitePlanSpace_refuses_one :
+    ∀ P : Plan unlinkedWorkload,
+      P ∈ unlinkedFinitePlanSpace.plans → 1 < P.cost := by
+  apply unlinkedFinitePlanSpace.no_member_fits_of_lt_minimum 1
+  rw [unlinkedFinitePlanSpace_minimum]
+  decide
+
 /-! ### The forced floors -/
 
 /-- **The sharp floor of the budget workload: three.** `Cost.budget_clashBlocks`
@@ -449,11 +587,27 @@ theorem budget_forced_one : ForcedFloor budgetWorkload 1 :=
                by refine ⟨⟨?_, ?_⟩, ?_⟩ <;> decide,
                fun h => absurd h.2 (by decide), trivial⟩, rfl, rfl⟩
 
-/-- **The unlinked document's floor: two** — `Cost.unlinked_clashBlocks`, the two
-re-allocations. (`Cost.lean` §7 records as ⟨UNDONE⟩ whether it is the true
-floor; §8 below is what that open question costs a checker.) -/
+/-- **The unlinked document's exact floor: two** — `Cost.unlinked_clashBlocks`,
+the two re-allocations. `Cost.unlinked_optimum_is_two` pairs this universal
+lower bound with `unlinkedPredictivePlan`'s achieved count of two. -/
 theorem unlinked_forced_two : ForcedFloor unlinkedWorkload 2 :=
   ⟨unlinkedBlocks, unlinked_clashBlocks, unlinkedBlocks_flatten, rfl⟩
+
+/-- **The bounded computation agrees with the global theorem.** The first
+conjunct is the finite calculation. The second is the existing universal floor
+over every `Plan`, including plans not listed in the finite space. The third is
+achievement inside the finite list. Thus `2` is not merely list-relative on
+this example, while `FinitePlanSpace.minimumCost` itself remains honestly
+list-relative in general. -/
+theorem unlinkedFinitePlanSpace_agrees_with_exact_optimum.{v'} :
+    unlinkedFinitePlanSpace.minimumCost = 2
+      ∧ (∀ P : Plan.{0, v', 0} unlinkedWorkload, 2 ≤ P.cost)
+      ∧ ∃ P : Plan unlinkedWorkload,
+          P ∈ unlinkedFinitePlanSpace.plans ∧ P.cost = 2 := by
+  refine ⟨unlinkedFinitePlanSpace_minimum,
+    fun P => unlinked_forced_two.le_cost P, ?_⟩
+  exact ⟨unlinkedPredictivePlan, by simp [unlinkedFinitePlanSpace],
+    unlinkedPredictivePlan_cost⟩
 
 /-! ## §7. ⚠ `floor ≤ budget` DOES NOT LICENSE ACCEPTANCE — the refutation
 
@@ -478,8 +632,8 @@ universe, at cost ≥ 3.
 A lower bound is one member of a family of lower bounds; a checker holds one
 member; and no member licenses acceptance, because acceptance is a claim about
 achievability and a floor is a claim about the specification. `unresolved` is
-therefore an occupied verdict rather than a placeholder — §8 occupies it on a
-case where the gap is not even closable with what this repo knows. -/
+therefore a necessary verdict shape even though §8's former concrete obligation
+is now closed by a newly exhibited plan. -/
 theorem lower_bound_does_not_license_acceptance : ¬ LowerBoundLicensesAcceptance.{v} := by
   intro h
   rcases h budgetWorkload 1 1 budget_forced_one (Nat.le_refl 1) with ⟨P, hP⟩
@@ -504,7 +658,7 @@ theorem reblocking_escapes_the_floor.{v'} :
       ∧ ∀ P : Plan.{0, v', 0} budgetWorkload, ¬ (P.cost ≤ 2) :=
   ⟨rfl, batchSharePlan_cost, rejected_sound budget_forced_three (by decide)⟩
 
-/-! ## §8. Three verdicts on related inputs — the checker discriminates -/
+/-! ## §8. Three verdicts, and exact synthesis closing an obligation -/
 
 /-- **REJECTED.** The budget workload at budget 2: three re-divisions are forced
 and two is not enough. By `rejected_sound` this is not "we found no plan" — it
@@ -527,50 +681,31 @@ def budgetAcceptedAtThree : BudgetVerdict budgetWorkload 3 :=
 /-- **Why `unresolved` cannot be occupied by *this* workload at any budget.**
 The budget workload's floor and its achievement meet at 3 (`Cost.lean` §6's
 tightness), so every budget is decided: under 3 no plan fits in any universe,
-at 3 or above a witnessed plan is in hand. A gap between floor and achievement
-is what `unresolved` needs, and the unlinked document below is where this repo
-actually has one. -/
+at 3 or above a witnessed plan is in hand. -/
 theorem budgetWorkload_is_decided.{v'} (b : Nat) :
     (b < 3 → ∀ P : Plan.{0, v', 0} budgetWorkload, ¬ (P.cost ≤ b))
       ∧ (3 ≤ b → budgetSharePlan.cost ≤ b) :=
   ⟨fun hb => rejected_sound budget_forced_three hb,
    fun hb => by rw [budgetSharePlan_cost]; exact hb⟩
 
-/-- **UNRESOLVED.** The unlinked document at budget 3. The floor we hold is 2
-(`unlinked_forced_two`), which *fits* — so no rejection follows. The best plan
-we hold is the canonical `(version, share)` pair seam, whose achieved count is 4
-— so no acceptance follows either.
+/-- **ACCEPTED.** The formerly unresolved unlinked document at budget 3, now
+closed by the predictive plan. Acceptance is constructed from the plan and its
+evaluated cost, not inferred from the floor. -/
+def unlinkedAcceptedAtThree : BudgetVerdict unlinkedWorkload 3 :=
+  .accepted unlinkedPredictivePlan (by rw [unlinkedPredictivePlan_cost]; decide)
 
-The obligation is exactly `Cost.lean` §7's own ⟨UNDONE⟩: a seam reading "does
-the store hold a record the next version will forbid" plausibly reaches 2 on
-this document, and nobody has proved it a valid seam. Exhibit it (cost ≤ 3) and
-this becomes `accepted`; exhibit a three-block clash decomposition of
-`unlinkedW` and it becomes `rejected`. `bracket` says the first must land in
-`[2, 3]`. -/
-def unlinkedObligationAtThree : SynthesisObligation unlinkedWorkload 3 where
-  knownFloor := 2
-  floorForced := unlinked_forced_two
-  floorFits := by decide
-  best := unlinkedPairPlan
-  bestOverBudget := by rw [unlinkedPairPlan_cost]; decide
+/-- The exact budget is accepted too: the predictive plan meets the floor. -/
+def unlinkedAcceptedAtTwo : BudgetVerdict unlinkedWorkload 2 :=
+  .accepted unlinkedPredictivePlan (Nat.le_of_eq unlinkedPredictivePlan_cost)
 
-/-- The unresolved verdict itself. -/
-def unlinkedUnresolvedAtThree : BudgetVerdict unlinkedWorkload 3 :=
-  .unresolved unlinkedObligationAtThree
-
-/-- **`unresolved` is genuinely occupied here**, and the statement says in what
-sense: on the evidence this repo holds, neither decisive verdict is
-constructible — and any plan that would close the gap has an achieved cost in
-`[2, 3]`, for every seam universe. The obligation names its own search
-interval. -/
-theorem unlinked_at_three_is_open.{v'} :
-    ¬ (3 < unlinkedObligationAtThree.knownFloor)
-      ∧ ¬ (unlinkedPairPlan.cost ≤ 3)
-      ∧ ∀ P : Plan.{0, v', 0} unlinkedWorkload, P.cost ≤ 3 → 2 ≤ P.cost ∧ P.cost ≤ 3 := by
-  refine ⟨by decide, ?_, ?_⟩
-  · rw [unlinkedPairPlan_cost]; decide
-  · intro P h
-    exact ⟨unlinked_forced_two.le_cost P, h⟩
+/-- **The unlinked workload is decided at every budget.** Below two the
+universal forced floor rejects every plan, in every seam universe. At two and
+above the predictive plan is an explicit upper-bound witness. -/
+theorem unlinkedWorkload_is_decided.{v'} (b : Nat) :
+    (b < 2 → ∀ P : Plan.{0, v', 0} unlinkedWorkload, ¬ (P.cost ≤ b))
+      ∧ (2 ≤ b → unlinkedPredictivePlan.cost ≤ b) :=
+  ⟨fun hb => rejected_sound unlinked_forced_two hb,
+   fun hb => by rw [unlinkedPredictivePlan_cost]; exact hb⟩
 
 /-- **ACCEPTED, on the batched workload at budget 1** — the fourth reading, and
 the one that makes §7's re-blocking warning concrete: the same net behaviour
@@ -589,7 +724,8 @@ example : BudgetInv 10 (run (reallocStep 10) budgetStart budgetW) :=
 to a numeral in the kernel — which is what "achieved" has to mean for an upper
 bound to be evidence. (The floors do not reduce: they are theorems over every
 seam in every universe. That is the asymmetry, visible in the proof style.) -/
-example : (budgetSharePlan.cost, batchSharePlan.cost, unlinkedPairPlan.cost) = (3, 1, 4) := by
+example : (budgetSharePlan.cost, batchSharePlan.cost,
+    unlinkedPairPlan.cost, unlinkedPredictivePlan.cost) = (3, 1, 4, 2) := by
   decide
 
 /-! ## §9. Sequential composition — as far as this file honestly reaches

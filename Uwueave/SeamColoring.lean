@@ -67,6 +67,9 @@ seam in this library actually discharges.
   * §6 the composition payoff: `clash_edge_forces_crossing`, from which
     `Cost.no_seam_frees_both` is a corollary whose hand-written proof collapses
     to `decide` on a single edge.
+  * §7 exact finite synthesis: enumerate an explicit carrier/palette search
+    space, return a certified least-width seam, or prove that the entire named
+    search space contains no seam.
 
 ## Non-claims
 
@@ -78,12 +81,12 @@ seam in this library actually discharges.
     here reasons about a reachable *fragment* of an infinite carrier as such;
     `SegmentedIConfluentOn` states what a non-covering pool does buy, which is
     strictly less.
-  * ⟨UNDONE⟩ **Minimum colourings.** `greedySeamFor` synthesises *a* proper
-    colouring, never *the* minimum one. Minimum graph colouring is NP-hard in
-    general and greedy is order-dependent — on the §5 example the reversed
-    enumeration yields the *other* hand-written seam
-    (`pin_synthesized_reversed_is_seamFalse`). "Fewest coordination points" is
-    therefore not proved by anything in this file.
+  * ⟨TERMINAL at an explicit finite search space⟩ **Minimum colourings.**
+    `greedySeamFor` still synthesises only *a* proper colouring and remains
+    order-dependent. §7 separately enumerates every colouring of a supplied
+    finite covering carrier by a supplied finite palette and returns a genuine
+    minimum, or an exhaustive refusal theorem for exactly that space. It does
+    not pretend to enumerate an arbitrary universe-polymorphic seam type.
   * ⟨UNDONE⟩ **Clique lower bounds.** §6 proves the two-stream floor from a
     single edge. The graph-theoretic generalisation — a `k`-clique in the clash
     graph forces `k` fibers, hence `k-1` crossings — is not here.
@@ -454,10 +457,9 @@ theorem lt_colorBound : ∀ (used : List Nat), ∀ c ∈ used, c < colorBound us
 /-- **The least colour not already used by a coloured neighbour.** This is what
 makes the colourer greedy rather than merely correct: a state takes the lowest
 colour none of its coloured neighbours holds, rather than a fresh one each time,
-so colours — and therefore fibers — are reused. (⟨UNDONE⟩ "greedy" is not
-"minimum"; see the file header. Only `freshColor_not_mem`, the avoidance
-property, is proved and used below — minimality is what makes the output good,
-not what makes it correct.) -/
+so colours — and therefore fibers — are reused. "Greedy" is not "minimum";
+§7 obtains the latter by exhaustive finite search. Only `freshColor_not_mem`,
+the avoidance property, is used here. -/
 def freshColor (used : List Nat) : Nat := leastFreeFrom used 0 (colorBound used)
 
 theorem freshColor_not_mem (used : List Nat) : freshColor used ∉ used :=
@@ -890,5 +892,364 @@ least two colours, and the two streams end on the two sides of it. -/
 theorem pin_synthesized_pays_the_floor :
     1 ≤ jointCost (greedySeamFor pinInv pinStates) pinStep emptyPin [[true], [false]] :=
   jointCost_floor_of_clash pin_synthesized_segmented pin_stream_endpoints_clash
+
+/-! ## §7. Exact finite minimum synthesis
+
+Greedy colouring is intentionally left greedy.  Exact minimisation is a
+different algorithm with a different scope: callers provide a finite list `V`
+covering the carrier and a finite palette `C`.  `allColorings` enumerates the
+resulting function space, `minimumColoring?` minimizes the number of palette
+entries actually used, and `synthesizeMinimumSeam?` packages the winner with
+global seam validity and a `LeastSuch`-style theorem.
+
+There is no `Fintype` fiction here.  The lists are data, carrier coverage is a
+hypothesis, and the refusal theorem quantifies only over seams whose colours lie
+in the supplied palette.  An infinite carrier or an unlisted colour is outside
+the result by construction. -/
+
+/-- A colouring uses only the caller's explicit palette on the explicit
+carrier pool. -/
+def UsesOnly {S : Type u} {Seg : Type v} (V : List S) (C : List Seg)
+    (σ : S → Seg) : Prop :=
+  ∀ s ∈ V, σ s ∈ C
+
+/-- The number of distinct palette colours used by a colouring on `V`.
+`eraseDups` makes the metric insensitive to a caller listing a colour twice. -/
+def usedColorCount {S : Type u} {Seg : Type v} [DecidableEq Seg]
+    (V : List S) (C : List Seg) (σ : S → Seg) : Nat :=
+  (C.eraseDups.filter fun c => V.any (fun s => decide (σ s = c))).length
+
+/-- The finite validity check: proper clash colouring plus fiber stability.
+Coverage turns this pair into `SegmentedIConfluent` by
+`segmented_iff_properColoring`. -/
+def FiniteValid {S : Type u} {Seg : Type v} [MergeState S]
+    (V : List S) (σ : S → Seg) (I : Invariant S) : Prop :=
+  ProperColoring V σ I ∧ SeamStableOnPool V I σ
+
+instance instDecidableFiniteValid {S : Type u} {Seg : Type v} [MergeState S]
+    (V : List S) (σ : S → Seg) (I : Invariant S)
+    [DecidablePred I] [DecidableEq Seg] : Decidable (FiniteValid V σ I) := by
+  unfold FiniteValid
+  infer_instance
+
+/-- Extend every colouring of the tail by every colour available for the head.
+`fallback` totalizes functions away from `V`; a coverage proof later shows that
+this branch is observationally irrelevant. -/
+def allColorings {S : Type u} {Seg : Type v} [DecidableEq S]
+    (C : List Seg) (fallback : Seg) : List S → List (S → Seg)
+  | [] => [fun _ => fallback]
+  | v :: rest =>
+      C.flatMap fun c =>
+        (allColorings C fallback rest).map fun σ s => if s = v then c else σ s
+
+/-- Every enumerated function uses only palette colours on the vertices it was
+constructed for. -/
+theorem allColorings_usesOnly {S : Type u} {Seg : Type v} [DecidableEq S]
+    (C : List Seg) (fallback : Seg) :
+    ∀ (V : List S) {σ : S → Seg}, σ ∈ allColorings C fallback V → UsesOnly V C σ := by
+  intro V
+  induction V with
+  | nil =>
+      intro σ _ s hs
+      cases hs
+  | cons v rest ih =>
+      intro σ hσ s hs
+      simp only [allColorings, List.mem_flatMap, List.mem_map] at hσ
+      obtain ⟨c, hc, τ, hτ, rfl⟩ := hσ
+      by_cases hsv : s = v
+      · subst s
+        simpa using hc
+      · have hrest : s ∈ rest := by
+          rcases List.mem_cons.mp hs with h | h
+          · exact absurd h hsv
+          · exact h
+        simpa [hsv] using ih hτ s hrest
+
+/-- Pointwise completeness on the listed carrier: every palette-valued
+colouring is represented by an enumerated function agreeing on `V`. -/
+theorem allColorings_completeOn {S : Type u} {Seg : Type v} [DecidableEq S]
+    (C : List Seg) (fallback : Seg) :
+    ∀ (V : List S) (σ : S → Seg), UsesOnly V C σ →
+      ∃ τ ∈ allColorings C fallback V, ∀ s ∈ V, τ s = σ s := by
+  intro V
+  induction V with
+  | nil =>
+      intro σ _
+      exact ⟨fun _ => fallback, by simp [allColorings], fun _ hs => nomatch hs⟩
+  | cons v rest ih =>
+      intro σ huses
+      have hv : σ v ∈ C := huses v List.mem_cons_self
+      have htail : UsesOnly rest C σ :=
+        fun s hs => huses s (List.mem_cons_of_mem v hs)
+      obtain ⟨τ, hτ, hagree⟩ := ih σ htail
+      let ext : S → Seg := fun s => if s = v then σ v else τ s
+      refine ⟨ext, ?_, ?_⟩
+      · simp only [allColorings, List.mem_flatMap]
+        exact ⟨σ v, hv, List.mem_map.mpr ⟨τ, hτ, rfl⟩⟩
+      · intro s hs
+        by_cases hsv : s = v
+        · subst s
+          simp [ext]
+        · have hsrest : s ∈ rest := by
+            rcases List.mem_cons.mp hs with h | h
+            · exact absurd h hsv
+            · exact h
+          simp [ext, hsv, hagree s hsrest]
+
+/-- Global completeness is exactly where finite-carrier coverage is spent. -/
+theorem allColorings_complete {S : Type u} {Seg : Type v} [DecidableEq S]
+    (C : List Seg) (fallback : Seg) {V : List S} (hV : ∀ s : S, s ∈ V)
+    (σ : S → Seg) (huses : UsesOnly V C σ) :
+    σ ∈ allColorings C fallback V := by
+  obtain ⟨τ, hτ, hagree⟩ := allColorings_completeOn C fallback V σ huses
+  have heq : τ = σ := funext fun s => hagree s (hV s)
+  rwa [heq] at hτ
+
+/-! ### A certified argument-minimum over a list -/
+
+/-- A structural argument-minimum.  Ties choose the earlier list member. -/
+def argMin? {X : Type u} (cost : X → Nat) : List X → Option X
+  | [] => none
+  | x :: xs =>
+      match argMin? cost xs with
+      | none => some x
+      | some y => if cost x ≤ cost y then some x else some y
+
+theorem argMin_eq_none_iff {X : Type u} (cost : X → Nat) :
+    ∀ xs : List X, argMin? cost xs = none ↔ xs = [] := by
+  intro xs
+  induction xs with
+  | nil => simp [argMin?]
+  | cons x xs ih =>
+      cases h : argMin? cost xs with
+      | none => simp [argMin?, h]
+      | some y => by_cases hxy : cost x ≤ cost y <;> simp [argMin?, h, hxy]
+
+theorem argMin_mem {X : Type u} (cost : X → Nat) :
+    ∀ {xs : List X} {x : X}, argMin? cost xs = some x → x ∈ xs := by
+  intro xs
+  induction xs with
+  | nil => simp [argMin?]
+  | cons a rest ih =>
+      intro x hx
+      cases htail : argMin? cost rest with
+      | none =>
+          simp [argMin?, htail] at hx
+          subst x
+          exact List.mem_cons_self
+      | some b =>
+          by_cases hab : cost a ≤ cost b
+          · simp [argMin?, htail, hab] at hx
+            subst x
+            exact List.mem_cons_self
+          · simp [argMin?, htail, hab] at hx
+            subst x
+            exact List.mem_cons_of_mem a (ih htail)
+
+/-- The returned member costs no more than any member of the searched list. -/
+theorem argMin_le_of_mem {X : Type u} (cost : X → Nat) :
+    ∀ {xs : List X} {x : X}, argMin? cost xs = some x →
+      ∀ {y : X}, y ∈ xs → cost x ≤ cost y := by
+  intro xs
+  induction xs with
+  | nil => simp [argMin?]
+  | cons a rest ih =>
+      intro x hx y hy
+      cases htail : argMin? cost rest with
+      | none =>
+          have hrest : rest = [] := (argMin_eq_none_iff cost rest).mp htail
+          subst rest
+          simp [argMin?] at hx
+          subst x
+          rcases List.mem_cons.mp hy with hya | hfalse
+          · subst y
+            exact Nat.le_refl _
+          · exact False.elim (List.not_mem_nil hfalse)
+      | some b =>
+          by_cases hab : cost a ≤ cost b
+          · simp [argMin?, htail, hab] at hx
+            subst x
+            rcases List.mem_cons.mp hy with rfl | hy
+            · exact Nat.le_refl _
+            · exact Nat.le_trans hab (ih htail hy)
+          · simp [argMin?, htail, hab] at hx
+            subst x
+            rcases List.mem_cons.mp hy with rfl | hy
+            · omega
+            · exact ih htail hy
+
+/-- All enumerated valid colourings, still as total functions. -/
+def validColorings {S : Type u} {Seg : Type v} [DecidableEq S] [MergeState S]
+    [DecidableEq Seg] (I : Invariant S) [DecidablePred I]
+    (V : List S) (C : List Seg) (fallback : Seg) : List (S → Seg) :=
+  (allColorings C fallback V).filter fun σ => decide (FiniteValid V σ I)
+
+theorem mem_validColorings_iff {S : Type u} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I]
+    (V : List S) (C : List Seg) (fallback : Seg) (σ : S → Seg) :
+    σ ∈ validColorings I V C fallback ↔
+      σ ∈ allColorings C fallback V ∧ FiniteValid V σ I := by
+  simp [validColorings]
+
+/-- Raw exact search: minimize palette usage over every valid colouring in the
+explicit function space. -/
+def minimumColoring? {S : Type u} {Seg : Type v} [DecidableEq S] [MergeState S]
+    [DecidableEq Seg] (I : Invariant S) [DecidablePred I]
+    (V : List S) (C : List Seg) (fallback : Seg) : Option (S → Seg) :=
+  argMin? (usedColorCount V C) (validColorings I V C fallback)
+
+theorem minimumColoring_spec {S : Type u} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I]
+    (V : List S) (C : List Seg) (fallback : Seg) {σ : S → Seg}
+    (hσ : minimumColoring? I V C fallback = some σ) :
+    σ ∈ allColorings C fallback V
+      ∧ FiniteValid V σ I
+      ∧ ∀ τ, τ ∈ allColorings C fallback V → FiniteValid V τ I →
+          usedColorCount V C σ ≤ usedColorCount V C τ := by
+  have hm : σ ∈ validColorings I V C fallback :=
+    argMin_mem _ hσ
+  have hs := (mem_validColorings_iff I V C fallback σ).mp hm
+  refine ⟨hs.1, hs.2, fun τ hτ hv => ?_⟩
+  exact argMin_le_of_mem _ hσ
+    ((mem_validColorings_iff I V C fallback τ).mpr ⟨hτ, hv⟩)
+
+/-- Feasibility at an exact finite width. -/
+def FiniteWidth {S : Type u} {Seg : Type v} [DecidableEq Seg] [MergeState S]
+    (I : Invariant S) (V : List S) (C : List Seg) (n : Nat) : Prop :=
+  ∃ σ : S → Seg, UsesOnly V C σ ∧ SegmentedIConfluent σ I
+    ∧ usedColorCount V C σ = n
+
+/-- `n` is feasible and no other feasible width is smaller. -/
+def LeastSuch (F : Nat → Prop) (n : Nat) : Prop :=
+  F n ∧ ∀ m, F m → n ≤ m
+
+/-- A successful search result.  The minimality theorem ranges over *every*
+valid total seam using the supplied palette, not merely over a table index. -/
+structure MinimumSeam {S : Type u} {Seg : Type v} [DecidableEq Seg]
+    [MergeState S] (I : Invariant S) (V : List S) (C : List Seg) where
+  seam : S → Seg
+  usesOnly : UsesOnly V C seam
+  segmented : SegmentedIConfluent seam I
+  minimum : ∀ τ : S → Seg, UsesOnly V C τ → SegmentedIConfluent τ I →
+    usedColorCount V C seam ≤ usedColorCount V C τ
+
+theorem MinimumSeam.leastSuch {S : Type u} {Seg : Type v} [DecidableEq Seg]
+    [MergeState S] {I : Invariant S} {V : List S} {C : List Seg}
+    (m : MinimumSeam I V C) :
+    LeastSuch (FiniteWidth I V C) (usedColorCount V C m.seam) := by
+  constructor
+  · exact ⟨m.seam, m.usesOnly, m.segmented, rfl⟩
+  · rintro n ⟨τ, huses, hseg, rfl⟩
+    exact m.minimum τ huses hseg
+
+/-- Turn a raw minimum into its proof-carrying form.  Carrier coverage is used
+once, to promote the finite validity pair to a global seam certificate. -/
+def certifyMinimum {S : Type u} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I]
+    (V : List S) (hV : ∀ s : S, s ∈ V) (C : List Seg) (fallback : Seg)
+    {σ : S → Seg} (hσ : minimumColoring? I V C fallback = some σ) :
+    MinimumSeam I V C where
+  seam := σ
+  usesOnly := allColorings_usesOnly C fallback V (minimumColoring_spec I V C fallback hσ).1
+  segmented := (segmented_iff_properColoring hV).mpr
+    ⟨(minimumColoring_spec I V C fallback hσ).2.1.1,
+     seamStableOn_of_pool hV (minimumColoring_spec I V C fallback hσ).2.1.2⟩
+  minimum := by
+    intro τ huses hseg
+    have hτall := allColorings_complete C fallback hV τ huses
+    have hτvalid : FiniteValid V τ I :=
+      (segmentedOn_iff_properColoring.mp (segmentedOn_of_segmented hseg V))
+    exact (minimumColoring_spec I V C fallback hσ).2.2 τ hτall hτvalid
+
+/-- **EXHAUSTIVE REFUSAL.** A `none` result rules out every valid seam whose
+values on the covered carrier lie in the supplied palette.  It says nothing
+about colours outside `C` or carriers not covered by `V`. -/
+theorem minimumColoring_none_exhaustive {S : Type u} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I]
+    (V : List S) (hV : ∀ s : S, s ∈ V) (C : List Seg) (fallback : Seg)
+    (hraw : minimumColoring? I V C fallback = none) :
+    ∀ σ : S → Seg, UsesOnly V C σ → ¬ SegmentedIConfluent σ I := by
+  intro σ huses hseg
+  have hempty : validColorings I V C fallback = [] :=
+    (argMin_eq_none_iff (usedColorCount V C) _).mp hraw
+  have hσall := allColorings_complete C fallback hV σ huses
+  have hvalid : FiniteValid V σ I :=
+    segmentedOn_iff_properColoring.mp (segmentedOn_of_segmented hseg V)
+  have hmem : σ ∈ validColorings I V C fallback :=
+    (mem_validColorings_iff I V C fallback σ).mpr ⟨hσall, hvalid⟩
+  rw [hempty] at hmem
+  exact List.not_mem_nil hmem
+
+/-- The two possible certified results of finite synthesis.  Unlike `Option`,
+the refusal constructor retains the exhaustive negative theorem. -/
+inductive MinimumSynthesis {S : Type u} {Seg : Type v} [DecidableEq Seg]
+    [MergeState S] (I : Invariant S) (V : List S) (C : List Seg) : Type (max u v) where
+  | found (minimum : MinimumSeam I V C)
+  | refused (exhaustive : ∀ σ : S → Seg, UsesOnly V C σ →
+      ¬ SegmentedIConfluent σ I)
+
+/-- **The exact finite synthesizer.** The positive branch carries a valid
+least-width seam; the negative branch carries the exhaustive refusal theorem. -/
+def synthesizeMinimumSeam {S : Type u} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I]
+    (V : List S) (hV : ∀ s : S, s ∈ V) (C : List Seg) (fallback : Seg) :
+    MinimumSynthesis I V C :=
+  match h : minimumColoring? I V C fallback with
+  | none => .refused (minimumColoring_none_exhaustive I V hV C fallback h)
+  | some σ => .found (certifyMinimum I V hV C fallback (σ := σ) h)
+
+/-- Forget the refusal proof only when an `Option`-shaped API is required. -/
+def MinimumSynthesis.toOption {S : Type u} {Seg : Type v} [DecidableEq Seg]
+    [MergeState S] {I : Invariant S} {V : List S} {C : List Seg} :
+    MinimumSynthesis I V C → Option (MinimumSeam I V C)
+  | .found m => some m
+  | .refused _ => none
+
+def synthesizeMinimumSeam? {S : Type u} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I]
+    (V : List S) (hV : ∀ s : S, s ∈ V) (C : List Seg) (fallback : Seg) :
+    Option (MinimumSeam I V C) :=
+  (synthesizeMinimumSeam I V hV C fallback).toOption
+
+/-- The search is total in the semantic sense by its result type, and either
+branch exposes its entire certificate to callers. -/
+theorem minimumSeam_search_total {S : Type u} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I]
+    (V : List S) (hV : ∀ s : S, s ∈ V) (C : List Seg) (fallback : Seg) :
+    (match synthesizeMinimumSeam I V hV C fallback with
+      | .found m => LeastSuch (FiniteWidth I V C) (usedColorCount V C m.seam)
+      | .refused _ => ∀ σ, UsesOnly V C σ → ¬ SegmentedIConfluent σ I) := by
+  cases synthesizeMinimumSeam I V hV C fallback with
+  | found m => exact m.leastSuch
+  | refused h => exact h
+
+/-! ### Exact run: the pin clash needs exactly two colours -/
+
+def pinMinimumSearch : Option (MinimumSeam pinInv pinStates [false, true]) :=
+  synthesizeMinimumSeam? pinInv pinStates pinStates_complete [false, true] false
+
+theorem pinMinimumSearch_isSome : pinMinimumSearch.isSome = true := by
+  decide
+
+def pinMinimum : MinimumSeam pinInv pinStates [false, true] :=
+  pinMinimumSearch.get (by decide)
+
+/-- The computed optimum is nontrivial and exact: the single clash edge forces
+two colours, and exhaustive synthesis attains two. -/
+theorem pinMinimum_uses_two_colors :
+    usedColorCount pinStates [false, true] pinMinimum.seam = 2 := by
+  decide
+
+theorem pin_minimum_is_exact :
+    LeastSuch (FiniteWidth pinInv pinStates [false, true]) 2 := by
+  have h := pinMinimum.leastSuch
+  rwa [pinMinimum_uses_two_colors] at h
 
 end Uwueave.SeamColoring
