@@ -68,7 +68,10 @@ import Uwueave.Gated
 import Uwueave.Fugue
 import Uwueave.WeaveState
 import Uwueave.GatedEra
+import Uwueave.Ancestral
+import Uwueave.RALin
 import Uwueave.SeamAlgebra
+import Uwueave.Tactics
 
 open Lean Elab Command in
 /-- Fail the build unless every constant in the `Uwueave` namespace stays
