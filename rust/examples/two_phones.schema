@@ -1,0 +1,10 @@
+# The two phones, as a schema. The same two promises the story tells —
+# now asked of the catalog rather than narrated.
+#
+#   cargo run --bin uwueave-check -- examples/two_phones.schema
+
+field list: gset            # the shopping list
+field wallet: pncounter     # the shared balance
+
+invariant list: member      # "an item you added never disappears"
+invariant wallet: balance   # "the balance never goes negative"

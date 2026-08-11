@@ -44,6 +44,120 @@ Each of those is a theorem here, and — the part we're proudest of — some of
 them **provably don't apply** to your particular problem, so the menu you get is
 short and honest rather than a list of vague possibilities.
 
+## Try it
+
+Those two phones are a program. You need [elan](https://elan.lean-lang.org) on
+your `PATH` — the decision layers are compiled from the Lean, so the Rust build
+insists on a working Lean toolchain rather than linking whatever was on disk
+last time. The first build is slow; after that it's incremental.
+
+```sh
+git clone https://github.com/emberian/lean-uwueave && cd lean-uwueave/rust
+cargo run --example two_phones
+```
+
+```
+lean-uwueave — the whole idea, in two phones
+═══════════════════════════════════════════
+
+━━ 1. the shopping list — the promise that survives meeting ━━
+
+  phone A, offline:  + eggs   [519add]
+  phone B, offline:  + bread  [38932b]
+
+  ...the phones sync...
+
+  phone A now holds:  bread, eggs
+  phone B now holds:  bread, eggs
+
+  A.merge(B) == B.merge(A):        true   (commutative)
+  merging the same delta twice:    true   (idempotent — gossip may repeat)
+  still acyclic, no check run:     true   (grounded_acyclic)
+
+  Nothing was lost, nobody waited, and there was no server. This is
+  what "FREE" means: the merge provably cannot break "the list only grows".
+
+━━ 2. the shared $100 balance — the promise that cannot ━━
+
+  The rule the app promises its user:  balance >= 0
+
+  start:                       $100
+  phone A, offline:  -$80  →   $20    legal on A  (20 >= 0)
+  phone B, offline:  -$80  →   $20    legal on B  (20 >= 0)
+
+  ...the phones sync...
+
+  merged:                      $-60   ← the rule is broken
+  merged the other way:        $-60   ← and it converges perfectly
+  both directions agree:       true   (it is a correct CRDT)
+```
+
+That merge isn't a strawman: it's a genuine semilattice join, commutative and
+idempotent, and it loses nothing. It still overdraws the account, because the
+promise was never one a merge could keep. A third section — trimmed here —
+shows the priced exit, where a spend runs out *locally and immediately* instead
+of waiting for a peer, and re-dividing the budget is the only thing that needs
+a meeting.
+
+Two more examples follow the same shape:
+[`collaborate`](rust/examples/collaborate.rs) builds a real document with two
+people in it and shows a move that un-happens after a sync (named, in a
+per-op trace, rather than silently), and [`gated`](rust/examples/gated.rs)
+revokes authority mid-flight and shows the ops still sitting in storage while
+the view drops them. [`rust/README.md`](rust/README.md) is the crate tour.
+
+### Ask it about your own schema
+
+The same two promises, handed to the tool instead of narrated
+([`rust/examples/two_phones.schema`](rust/examples/two_phones.schema)):
+
+```
+field list: gset            # the shopping list
+field wallet: pncounter     # the shared balance
+
+invariant list: member      # "an item you added never disappears"
+invariant wallet: balance   # "the balance never goes negative"
+```
+
+```sh
+cargo run --bin uwueave-check -- examples/two_phones.schema
+```
+
+```
+FIELD   SHAPE      INVARIANT  VERDICT    THEOREM(S)
+-----------------------------------------------------------------------------------------------
+list    gset       member     FREE       gset_mem_iconfluent — Uwueave/Catalog.lean
+wallet  pncounter  balance    ESCALATES  pncounter_nonneg_not_iconfluent — Uwueave/Catalog.lean
+```
+
+Every `ESCALATES` comes with the two devices you can watch fail, and with the
+exits priced:
+
+```
+wallet · balance — ESCALATES
+  cites: pncounter_nonneg_not_iconfluent — Uwueave/Catalog.lean
+  the two-replica repro:
+    Both replicas start from the same 10 credited. Each spends 10 against its
+    own decrement key — individually legal, net exactly 0. The merged counter
+    has spent 20 against 10: net −10. A bounded shared resource cannot be
+    replicated coordination-free.
+  ways out:
+    - escrow: pre-partition the bound into per-replica quotas. Each replica's
+      local bound survives every merge, and the global bound follows by
+      summing the quotas.
+      (escrow_local_bound_iconfluent — Uwueave/Catalog.lean;
+      escrow_global_bound [unlisted] — Uwueave/Catalog.lean)
+    - segmented (re-allocation seam): run free within an allocation and
+      coordinate only to change the allocation — one invariant, both verdicts,
+      with the seam named.
+      (budget_segmented — Uwueave/Segmented.lean)
+```
+
+`uwueave-check --help` lists the ten shapes and eleven invariant kinds it
+knows. A pair the Lean development doesn't settle comes back `UNCLASSIFIED`
+rather than guessed — [`rust/examples/loom.schema`](rust/examples/loom.schema)
+is a bigger, real schema that deliberately contains one.
+
 ## What you can use without reading any proofs
 
 - **A command-line tool.** Describe your app's shared data in a few lines;
