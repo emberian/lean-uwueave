@@ -24,6 +24,22 @@
 //!   watched happen) — and the kernel's v2 per-op trace
 //!   ([`MoveLog::replay_traced`]) makes that anomaly observable, naming the
 //!   exact op each replay skipped.
+//! * [`seq`] — an RGA-style sequence CRDT with tombstones: a grow-only,
+//!   content-addressed element set (union merge + tombstone-OR) whose visible
+//!   linearization is **authored in Lean** (`Uwueave/SeqKernel.lean`),
+//!   compiled to C by lake, and called through the same shim. This crate does
+//!   not contain a linearization implementation. `Uwueave/Sequence.lean` is
+//!   the abstract model, and its priced anomalies stay priced:
+//!   `interleaving_anomaly` (concurrent runs can strictly alternate) is
+//!   reproduced through the real kernel in [`seq`]'s tests, and
+//!   `run_order_by_id` (sibling order is id arbitration, not intention)
+//!   applies verbatim — the id here being a blake3 content address.
+//!
+//!   ⚠ Build note, until the root Lean module imports `Uwueave.SeqKernel`:
+//!   `lake build` (the default target) does not emit `SeqKernel.c`, so run
+//!   `lake build Uwueave.SeqKernel` from the repo root before `cargo build`
+//!   (build.rs compiles every `.c` in the emitted-IR tree, so once emitted it
+//!   is picked up — and kept fresh only by re-running that command).
 //!
 //! ## What is and is not claimed
 //!
@@ -47,6 +63,8 @@
 pub mod causal;
 mod ffi;
 pub mod movelog;
+pub mod seq;
 
 pub use causal::{CausalWeave, InsertError, MergeError, NodeId};
 pub use movelog::{MoveLog, MoveOp, OpOutcome, TracedReplay};
+pub use seq::{SeqCrdt, SeqDeleteError, SeqInsertError, SeqMergeError, SeqMergeStats};

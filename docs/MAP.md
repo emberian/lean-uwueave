@@ -49,6 +49,7 @@ records whether `Uwueave/Audit.lean` pins the theorem's axiom footprint
 | `Uwueave/ORMap.lean` | The observed-remove map — documents are maps. Add-wins scoped (`ormap_get_survives`), the **doomed-update anomaly** as a theorem (a nested write concurrent with its key's removal survives the merge but is masked by the view), and the centerpiece: remove-wins and update-wins views provably *disagree on the same merged state* (`ormap_policy_divergence`) — the merge is policy-neutral; the choice is yours and visible. |
 | `Uwueave/Automata.lean` | Replicated automata sorted by the same verdicts: semilattice-action runs converge as instances of the delta laws (`run_same_inputs`); commuting inputs may be replayed in any order (`exec_perm`, axiom-free — the seed of the Mazurkiewicz/Zielonka connection, cited not claimed); DFA determinism is the uniqueness ceiling (concrete clash), with LWW-arbitration vs accept-the-NFA priced as exits; token firing under escrow reads the segmented theorems as Petri nets. |
 | `Uwueave/Authority.lean` | Local-first permissions: delegation chains as a grounded CRDT — issuing narrowed grants is coordination-free (`wf_iconfluent`), authority provably only narrows (`scope_le_root`), sole-admin escalates (the duelling-admins clash), revocation's late arrivals only ever *shrink* authority (`authority_view_antitone`) — the derived view's instability points fail-closed, the security dual of `view_not_stable` — and the per-id uniqueness premise is priced like Sequence's: `uniqueGrant_violation_extracts_collision` turns any violation into a hash-collision exhibit (collision resistance, not injectivity, is what a deployment supplies). |
+| `Uwueave/SeqKernel.lean` | The sequence CRDT, **implemented** the house way: RGA-with-tombstones order decision authored in Lean, exported as `uwueave_seq_kernel` beside the move kernel. Proved: every visible element appears (`linearizeK_mem`), exactly once (`linearizeK_nodup` — groundedness alone), ancestors precede (`linearizeK_ancestor_precedes`), and deletes filter without reordering (`linearizeK_sublist_emitAll`). The brief's index-ordered hypothesis was refuted by the lane as vacuous-for-real-inputs and replaced by rank-groundedness. Non-claims: `interleaving_anomaly` still governs (reproduced through the shipping kernel in a Rust test); Fugue cited, not implemented. |
 | `Uwueave/Necessity.lean` | **Bailis necessity, modeled** (delivered by grok via `GROKJOB.md`): an execution model where coordination-freedom is definitional (`Impl.tryApply` sees local state only), and the theorem the library previously only cited — a *reachable* clash refutes coordination-free-convergent-safety (`necessity`, axiom-free core), with sufficiency back (`iconfluent_implies_cfcs`). Satisfiable (`gset_true_is_cfcs`) and refutable (`atMostOneBit_necessity`) per the job's falsifiability bar; the MAP's Live/LatticeOnly axis is now a formal hypothesis (`ReachableClash`). |
 | `Uwueave/Ceiling.lean` | The four uniqueness refutations proved to be **one theorem**: `uniqueness_ceiling` — an invariant entailing "at most one element per selector key" over a grow-only set is never I-confluent — with the generic witness constructor `merge_breaks_uniqueOn` (two distinct same-key elements, one per replica, produce the clash). `ceiling_atMostOne` / `ceiling_uniqueAnchor` / `ceiling_uniqueGrant` / `ceiling_determinism` re-derive the Catalog, Sequence, Authority and Automata refutations verbatim as one-line instances, at the originals' own witnesses; the originals stay in their home files with their narratives and pins. The mutex-shaped ceilings (`or_breaks_iconfluence`, sole-admin) are the same trap but a different selector shape — they cap occupied *keys*, not elements per key — and keep their own refutations. |
 
@@ -107,6 +108,10 @@ verified by grepping `Uwueave/Audit.lean`.
 | `active_path_not_iconfluent` | Weave | finite-story | Live | yes |
 | `absReplay_acyclic` | ExecRefine | ∀-general | — | yes |
 | `kernel_derived_view_sec` | ExecRefine | ∀-general | — | total gate |
+| `linearizeK_mem` | SeqKernel | parametric | — | total gate |
+| `linearizeK_nodup` | SeqKernel | parametric | — | total gate |
+| `linearizeK_ancestor_precedes` | SeqKernel | parametric | — | total gate |
+| `linearizeK_sublist_emitAll` | SeqKernel | ∀-general | — | total gate |
 | `necessity` | Necessity | ∀-general | — | total gate |
 | `reachable_clash_refutes_cfcs` | Necessity | ∀-general | — | total gate |
 | `iconfluent_implies_cfcs` | Necessity | ∀-general | — | total gate |
@@ -133,7 +138,7 @@ verified by grepping `Uwueave/Audit.lean`.
 | `duelling_revocations_not_iconfluent` | Authority | finite-story | Live | yes |
 | `uniqueness_ceiling` | Ceiling | ∀-general | — | no |
 
-69 rows: 28 ∀-general · 14 parametric · 27 finite-story. Of the 18 negative
+73 rows: 29 ∀-general · 17 parametric · 27 finite-story. Of the 18 negative
 results tagged: 11 Live · 2 LatticeOnly · 5 Unknown. Reachability derivations,
 per module docstring: **Live** — `pncounter` ("each spends 10 on its own
 decrement key"), `lww_cross_field` (the two-writer timestamp story),

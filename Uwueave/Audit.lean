@@ -56,6 +56,7 @@ import Uwueave.ExecRefine
 import Uwueave.Ceiling
 import Uwueave.Seams
 import Uwueave.Necessity
+import Uwueave.SeqKernel
 
 open Lean Elab Command in
 /-- Fail the build unless every constant in the `Uwueave` namespace stays

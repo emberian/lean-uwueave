@@ -8,7 +8,7 @@
 //! chain, falling back to the first weave parent when no override exists),
 //! which is the reading direction the kernel's output contract defines.
 
-use uwueave::{CausalWeave, MoveLog, MoveOp, NodeId, OpOutcome};
+use uwueave::{CausalWeave, MoveLog, MoveOp, NodeId, OpOutcome, SeqCrdt};
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 
@@ -346,5 +346,87 @@ proptest! {
         prop_assert_eq!(&wa, &wb);
         prop_assert_eq!(&la, &lb);
         prop_assert_eq!(la.replay(&wa), lb.replay(&wb));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (f) sequence CRDT: merge laws + linearization determinism (Lean kernel)
+// ---------------------------------------------------------------------------
+
+/// One planned sequence edit. Anchor/delete picks are resolved modulo the ids
+/// present at apply time, so anchors always exist — the API's invariant; an
+/// insert with no pick (or an empty state) lands at the root.
+#[derive(Debug, Clone)]
+enum SeqEdit {
+    Insert { anchor_pick: Option<usize>, contents: Vec<u8> },
+    Delete { pick: usize },
+}
+
+fn seq_edit() -> impl Strategy<Value = SeqEdit> {
+    prop_oneof![
+        4 => (prop::option::of(any::<usize>()), prop::collection::vec(any::<u8>(), 0..4))
+            .prop_map(|(anchor_pick, contents)| SeqEdit::Insert { anchor_pick, contents }),
+        1 => any::<usize>().prop_map(|pick| SeqEdit::Delete { pick }),
+    ]
+}
+
+fn apply_seq_edits(s: &mut SeqCrdt, ids: &mut Vec<NodeId>, edits: &[SeqEdit]) {
+    for e in edits {
+        match e {
+            SeqEdit::Insert { anchor_pick, contents } => {
+                let anchor = if ids.is_empty() {
+                    None
+                } else {
+                    anchor_pick.map(|k| ids[k % ids.len()])
+                };
+                let id = s.insert(anchor, contents).expect("anchors exist by construction");
+                ids.push(id);
+            }
+            SeqEdit::Delete { pick } => {
+                if !ids.is_empty() {
+                    s.delete(&ids[pick % ids.len()]).expect("ids exist by construction");
+                }
+            }
+        }
+    }
+}
+
+proptest! {
+    /// Sequence-CRDT laws through the Lean kernel: merge of divergent
+    /// replicas (shared prefix, concurrent suffixes with deletes) is
+    /// commutative and idempotent on the full structure, the converged
+    /// linearizations agree, and the linearization is deterministic
+    /// call-to-call. (The *order decision* stays in Lean; this asserts only
+    /// equalities between calls into the crate.)
+    #[test]
+    fn seq_merge_laws_and_linearization_determinism(
+        prefix in prop::collection::vec(seq_edit(), 0..6),
+        sa in prop::collection::vec(seq_edit(), 0..6),
+        sb in prop::collection::vec(seq_edit(), 0..6),
+    ) {
+        let mut a = SeqCrdt::new();
+        let mut ids_a = Vec::new();
+        apply_seq_edits(&mut a, &mut ids_a, &prefix);
+        let mut b = a.clone();
+        let mut ids_b = ids_a.clone();
+        apply_seq_edits(&mut a, &mut ids_a, &sa);
+        apply_seq_edits(&mut b, &mut ids_b, &sb);
+
+        let mut ab = a.clone();
+        ab.merge(&b).expect("API-built states are anchor-closed and collision-free");
+        let mut ba = b.clone();
+        ba.merge(&a).expect("API-built states are anchor-closed and collision-free");
+        prop_assert_eq!(&ab, &ba); // comm, full structure (incl. tombstones)
+        prop_assert_eq!(ab.visible(), ba.visible()); // converged documents agree
+
+        let mut aa = a.clone();
+        aa.merge(&a).expect("self-merge never refuses");
+        prop_assert_eq!(&aa, &a); // idem
+        let mut abb = ab.clone();
+        abb.merge(&b).expect("re-merge never refuses");
+        prop_assert_eq!(&abb, &ab); // idem, delta-shaped
+
+        prop_assert_eq!(a.visible(), a.visible()); // deterministic call-to-call
+        prop_assert_eq!(ab.text(), ba.text()); // and the bytes agree too
     }
 }

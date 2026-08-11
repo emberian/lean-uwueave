@@ -263,3 +263,24 @@ shipping systems can exist. Delivery: `Uwueave/KernelCFCS.lean` +
 
 *(Queued behind wave 6: Fugue non-interleaving for the sequence kernel —
 posted once `Uwueave/SeqKernel.lean` lands so the target defs exist.)*
+
+# JOB 8 — Fugue non-interleaving for the sequence kernel (open)
+
+*Posted the moment `Uwueave/SeqKernel.lean` landed, as promised.*
+
+The kernel now ships an RGA-order decision (`linearizeK`) whose own test
+reproduces the interleaving anomaly through the compiled artifact. Fugue
+(Weidner–Kleppmann, "The Art of the Fugue") is the design whose theorem is
+*maximal non-interleaving*. The job: formalize a Fugue-style order at this
+repo's scale — either as an alternative decision core beside `linearizeK`
+(a new file, `Uwueave/Fugue.lean`, reusing SeqKernel's codec/WFK machinery
+by import) or as a pure order-theory module — and prove the strongest
+non-interleaving statement you can honestly reach: at minimum, the concrete
+scenario that defeats `linearizeK` (the alternating-runs witness) does NOT
+interleave under the Fugue order; at best, a general left/right-origin
+non-interleaving theorem at miniature scale. Falsifiability: the anomaly
+witness must be *expressible* in your model and provably non-interleaved
+under Fugue while provably interleaved under RGA (both directions — that
+contrast IS the deliverable). Honest scope for whatever of the paper's full
+maximality claim you don't reach. Delivery: `Uwueave/Fugue.lean` +
+`## JOB 8 RESULT` here.

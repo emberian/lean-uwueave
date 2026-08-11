@@ -13,8 +13,10 @@
 extern void lean_initialize_runtime_module(void);
 
 extern lean_object *initialize_uwueave_Uwueave(uint8_t builtin);
+extern lean_object *initialize_uwueave_Uwueave_SeqKernel(uint8_t builtin);
 extern lean_object *uwueave_replay_kernel(lean_object *bytes);
 extern lean_object *uwueave_request_canonical(lean_object *bytes);
+extern lean_object *uwueave_seq_kernel(lean_object *bytes);
 
 static int g_initialized = 0;
 
@@ -23,6 +25,16 @@ void shim_uweave_init(void) {
     return;
   lean_initialize_runtime_module();
   lean_object *res = initialize_uwueave_Uwueave(1);
+  if (lean_io_result_is_ok(res)) {
+    lean_dec_ref(res);
+  } else {
+    lean_io_result_show_error(res);
+    abort();
+  }
+  /* SeqKernel is not (yet) in the root module's import closure, so its
+   * module initializer must run explicitly. Re-initialization of shared
+   * imports is guarded on the Lean side, so this is safe either way. */
+  res = initialize_uwueave_Uwueave_SeqKernel(1);
   if (lean_io_result_is_ok(res)) {
     lean_dec_ref(res);
   } else {
@@ -48,6 +60,22 @@ uint8_t *shim_uweave_replay(const uint8_t *in, size_t len, size_t *out_len) {
 }
 
 void shim_uweave_free(uint8_t *p) { free(p); }
+
+/* Feed `len` bytes to the Lean sequence kernel (Uwueave/SeqKernel.lean, SEQ
+ * FORMAT v1); returns a malloc'd buffer the caller frees with
+ * shim_uweave_free, its length in *out_len. Bytes-through, exactly like
+ * shim_uweave_replay. */
+uint8_t *shim_uweave_seq(const uint8_t *in, size_t len, size_t *out_len) {
+  lean_object *arr = lean_alloc_sarray(1, len, len);
+  memcpy(lean_sarray_cptr(arr), in, len);
+  lean_object *out = uwueave_seq_kernel(arr); /* consumes arr */
+  size_t n = lean_sarray_size(out);
+  uint8_t *buf = (uint8_t *)malloc(n ? n : 1);
+  memcpy(buf, lean_sarray_cptr(out), n);
+  lean_dec_ref(out);
+  *out_len = n;
+  return buf;
+}
 
 /* Ask the Lean kernel whether `len` bytes are the canonical request encoding
  * (decode → re-encode with the proven `encodeRequest` → compare). Returns 1
