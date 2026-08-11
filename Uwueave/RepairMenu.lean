@@ -163,12 +163,14 @@ becomes a generated row when a typed repair backs it and the repair's
 `seamCrossings` **is** the hand `Nat`; the transport is the projection
 `Price.seamCrossings`.
 *needs* **a typed repair whose crossing count equals the hand number**.
-*without it* two survivors, both in this file:
+*without it* the first survivor in this file:
 `the_ceiling_seam_hand_price_has_no_forced_backing` — the hand `0` is below the
-clique-forced `1`, so no `SeamFloor`-priced row can display it; and
-`no_free_pin_arbitration` — quantified over **every** repair onto the arbitrated
-ceiling promise, by anyone: the price is not `Price.free` and its `assumptions`
-are not empty, while the hand row prints `0`.
+clique-forced `1`, so no `SeamFloor`-priced row can display it. A different
+failure survives even when the crossing projection matches:
+`ceiling_arbitration_agrees_only_on_crossings` and `no_free_pin_arbitration`
+show that the hand row's `0` is also the repair's `seamCrossings`, while the
+full price is not free and must charge a trusted-announcer premise. The
+transport can succeed there; the scalar reading cannot retain what justified it.
 
 Lineage: `Repair.lean` (the semantic authority this projects FROM) ·
 `Exits.lean` (the UX this regenerates, and its witnesses, kept) ·
@@ -1281,8 +1283,10 @@ theorem consequence_is_free_data {S : Type} [MergeState S] {I : Invariant S}
 /-! ## §8. TRANSPORT: an `Exits` row → a `RepairMenu` row.
 
 The transport is the projection `Price.seamCrossings`; the hypothesis is that a
-typed repair backs the hand row at that number; and the two counterexamples below
-are hand rows for which no such repair exists. -/
+typed repair backs the hand row at that number. The two examples below separate
+two failures: the seam row has no forced backing at its hand number, while the
+arbitration row can match that number and still lose every non-crossing price
+when read through the scalar projection. -/
 
 /-- **The transport.** A hand row becomes a generated row when a typed repair
 backs it and the repair's crossing count is the hand row's `Nat`. -/
@@ -1314,14 +1318,17 @@ theorem the_ceiling_seam_hand_price_has_no_forced_backing :
     ∧ ceilingFloor.floor ≠ (Exit.seam (S := Cost.PinSet) Bool (fun s => s false) 0).price :=
   ⟨rfl, rfl, by decide⟩
 
-/-- ⚠ **Counterexample 2 — a hand price no repair *by anyone* can back.**
-`Exits.ceilingMenu`'s arbitration row prints `0`, in a currency whose zero
-`Exits.lean`'s ⟨scope⟩ note warns is "not the same zero". Quantified over
-**every** repair onto the arbitrated ceiling promise, however anyone prices it:
-the price is not `Price.free` and its `assumptions` are not empty, because
-`Premise.trustedAnnouncer` is in the target's trust and not in the source's and
-`premisesCharged` has no flag to clear. This is `Repair.no_free_arbitration` at
-the exit the hand menu prices at zero. -/
+/-- ⚠ **Counterexample 2 — matching the hand number does not make the repair
+free.** `Exits.ceilingMenu`'s arbitration row prints `0`, and
+`ceiling_arbitration_agrees_only_on_crossings` proves that a typed arbitration
+repair can have the same `seamCrossings`, so this is **not** a counterexample to
+`transport`'s hypothesis. It is the counterexample to reading that scalar as a
+complete price. Quantified over **every** repair onto the arbitrated ceiling
+promise, however anyone prices it: the price is not `Price.free` and its
+`assumptions` are not empty, because `Premise.trustedAnnouncer` is in the
+target's trust and not in the source's, and `premisesCharged` has no flag to
+clear. This is `Repair.no_free_arbitration` at the exit whose crossing projection
+is zero. -/
 theorem no_free_pin_arbitration (r : Repair ceilingPromise arbitratedCeilingPromise) :
     r.price ≠ Price.free ∧ r.price.assumptions ≠ [] := by
   have hq : Premise.trustedAnnouncer ∈ arbitratedCeilingPromise.trust := by decide

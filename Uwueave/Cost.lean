@@ -112,8 +112,11 @@ validity, and we state it as scope:
   * ⟨UNDONE⟩ **Crossings are not meetings.** A "coordination event" here is a
     seam crossing on one replica's stream. How many peers must attend, and
     whether two replicas crossing "the same" boundary hold one meeting or two,
-    is not modelled. §8's batching result is the only amortization proved, and
-    it amortizes by *re-blocking the workload*, not by agreeing in advance.
+    is not determined by this judgement. `Scheduling.lean` now models those
+    questions with explicit coeffects and proves that neither scalar determines
+    the other; this file deliberately has no transport to that richer layer.
+    §8's batching result amortizes only by *re-blocking the workload*, not by
+    agreeing in advance.
   * ⟨UNDONE⟩ **No liveness, no delivery, no time.** `crossings` counts events,
     never wall-clock; `Liveness.lean`/`Delta.lean` own that axis and are not
     composed with this one.

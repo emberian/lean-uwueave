@@ -31,7 +31,7 @@ Both halves are proved here, over concrete data types with reachable witnesses:
     I-confluent for the max-join and is **not** ancestrally confluent for the
     MRDT counter merge. The direction the brief expected to be free is refuted;
     and the reason is worth more than the refutation (§4.3): the two-way verdict
-    was bought by a join that **drops a committed operation**
+    was bought by a join that **drops an operation's effect**
     (`join_not_serializing` vs `counter_serializing`). *I-confluence is a property
     of the merge, not of the semantics — a lossy merge is I-confluent for
     invariants the semantics cannot keep.*
@@ -120,11 +120,11 @@ halves of the result robust to ambiguity, in opposite ways:
     `rc` — implicitly: `lockPriority` *is* a conflict-resolution policy, a
     symmetric total preference over concurrently granted holders.
   * **Modeled only in its one-op-per-branch form**: RA-linearizability. `Serializing`
-    demands that the merge of two single concurrent operations be one of the two
-    serializations. The full condition (arbitrary op sequences, an interleaving
-    witness) is not formalized; the one-op form is what both the prize and the
-    impossibility need, and it is a *weaker* hypothesis, so §7's ∀-quantified
-    impossibility is *stronger* for it.
+    demands that the merge of two single, concurrently admitted operations be
+    one of the two serializations. The full condition (arbitrary op sequences,
+    an interleaving witness) is not formalized; the one-op form is what both the
+    prize and the impossibility need, and it is a *weaker* hypothesis, so §7's
+    ∀-quantified impossibility is *stronger* for it.
   * **Not modeled**: `σ₀` and initial-state reachability (an LCA here is any
     `I`-legal state the two branches fork from — the analogue of Bailis's legal
     ancestor); convergence on a *version DAG*. This file models the single
@@ -333,19 +333,27 @@ theorem Guarded.reachable_step (g : Guarded S Op) {op : Op} {s : S}
   ⟨[op], by simp [RunsTo, run, Guarded.impl, h]⟩
 
 /-- **Effect-faithfulness** (RA-linearizability, one operation per branch): the
-merge of two concurrently-applied operations is one of their two serializations.
-A merge satisfying this invents no outcome and skips no operation: it applies
-both, and only chooses the order — which is exactly what an MRDT's `rc` policy
-is for. (Under that order an earlier effect may of course be overwritten by a
-later one; that is sequential semantics, not loss.) -/
+merge of two concurrently admitted operations is one of their two
+serializations. The guard hypotheses are load-bearing: an aborted operation
+produces no branch delta, so faithfulness must not constrain a triple that no
+run can produce. A merge satisfying this invents no outcome and skips no
+committed operation: it applies both, and only chooses the order — which is
+exactly what an MRDT's `rc` policy is for. (Under that order an earlier effect
+may of course be overwritten by a later one; that is sequential semantics, not
+loss.) Both guards are checked at the common ancestor; the two right-hand sides
+then apply the effects unconditionally, even when the second operation's guard
+would reject that sequential state. -/
 def Serializing (M : AncestralMerge S) (g : Guarded S Op) : Prop :=
   ∀ (l : S) (a b : Op),
+    g.guard a l = true → g.guard b l = true →
     M.merge3 l (g.eff a l) (g.eff b l) = g.eff b (g.eff a l) ∨
     M.merge3 l (g.eff a l) (g.eff b l) = g.eff a (g.eff b l)
 
-/-- The same demand made of a two-way join. §4 refutes it for the max-join on a
-counter, which is how "the two-way verdict was bought by losing an operation"
-becomes a theorem rather than a remark. -/
+/-- The guard-free analogue for a two-way join. §4 refutes it for the max-join
+on a counter, which is how "the two-way verdict was bought by losing an effect"
+becomes a theorem rather than a remark. Unlike `Serializing`, this comparison
+deliberately ranges over every effect, including effects the implementation
+would abort. -/
 def SerializingJoin [MergeState S] (g : Guarded S Op) : Prop :=
   ∀ (l : S) (a b : Op),
     (g.eff a l ⊔ g.eff b l) = g.eff b (g.eff a l) ∨
@@ -418,7 +426,7 @@ theorem iconfluent_does_not_imply_ancestral :
       IConfluent I ∧ ¬ AncestralConfluent counterAM (spendOps 1).impl I :=
   ⟨fun n => n ≤ 1, ceiling_iconfluent 1, ceiling_not_ancestral 0⟩
 
-/-! ### §4.3 Why the two-way verdict was free: the join dropped an operation.
+/-! ### §4.3 Why the two-way verdict was free: the join dropped an effect.
 
 `ceiling_iconfluent` is not the invariant being safe. It is `max` refusing to
 count the second spend. The next pair makes that a theorem: the three-way merge
@@ -428,16 +436,17 @@ is effect-faithful and the two-way join is not, and the escalation in
 /-- The counter MRDT merge **is** effect-faithful: two concurrent spends merge
 to the state either serialization would have produced. -/
 theorem counter_serializing (B : Nat) : Serializing counterAM (spendOps B) := by
-  intro l a b
+  intro l a b _ _
   left
   show counterMerge l (l + 1) (l + 1) = l + 1 + 1
   unfold counterMerge
   omega
 
-/-- ⚠ **The max-join is not effect-faithful**: the witness is two concurrent
-spends from `0`, which join to `1` while either serialization gives `2`. One
-committed operation is gone. This is the whole content of the ceiling's two-way
-"freedom". -/
+/-- ⚠ **The max-join is not guard-free effect-faithful**: the witness is two
+spend effects from `0`, which join to `1` while either serialization gives `2`.
+One effect is gone. The theorem deliberately ranges over effects even when the
+budget guard would reject them; §7's reachable impossibility and
+`serialization_clash_defeats_every_merge` carry the admitted-operation claim. -/
 theorem join_not_serializing (B : Nat) : ¬ SerializingJoin (spendOps B) := by
   intro h
   have h0 := h 0 () ()
@@ -665,7 +674,7 @@ effect-faithful. Whenever both replicas moved, the policy's winner is the state
 one of the two serializations produces; whenever one did not, the other's state
 is trivially that serialization. -/
 theorem lock_serializing : Serializing lockAM lockOps := by
-  intro l a b
+  intro l a b _ _
   have hconst : ∀ (o : LockOp) (s t : Lock), lockEff o s = lockEff o t := by
     intro o s t; cases o <;> rfl
   show lockMerge l (lockEff a l) (lockEff b l) = lockEff b (lockEff a l) ∨
@@ -765,7 +774,7 @@ theorem serialization_clash_defeats_every_merge (M : AncestralMerge S)
   intro hAC
   have hm := hAC l (g.eff a l) (g.eff b l) hl ha hb
     (g.reachable_step hga) (g.reachable_step hgb)
-  cases hser l a b with
+  cases hser l a b hga hgb with
   | inl h => exact hab (h ▸ hm)
   | inr h => exact hba (h ▸ hm)
 

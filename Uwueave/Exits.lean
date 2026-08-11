@@ -48,14 +48,10 @@ docstring warning"*. Precisely what changed:
     below have no escrow row at all. An absent row and a refuted row are
     different constructors there.
 
-⚠ **Inherited display debt, named and not repaired here.** Five `String`
-literals still price in "meetings", in five `def` bodies: `forkEntry`,
+✓ **Inherited display debt closed.** The five `String` literals in `forkEntry`,
 `fullEntry`, `ceilingMenu`'s arbitration row, `balanceMenu`'s escrow row, and
-`duelMenu`'s arbitration row (wave 14's records lane found them at `:764`,
-`:775`, `:961`, `:1042`, `:1208`; this status block moved every one of those
-numbers, which is its own small argument for citing the `def` and not the line).
-They sit in `def` bodies, which this
-status pass may not touch, and nothing constrains them:
+`duelMenu`'s arbitration row now say either `seam crossings` or name the typed
+multidimensional bill. Nothing makes those strings semantic evidence:
 `RepairMenu.consequence_is_free_data` proves two rows with the same exit and the
 same availability proof may carry contradictory sentences. The generated menu
 does not reproduce them — a generated row's delta is a five-axis
@@ -276,7 +272,8 @@ its availability check needs, and nothing more:
   * `weakenedInvariant J` — give up and assert less.
   * `exposedFork` — keep both replicas as branches; stop merging.
   * `rollback keep` — arbitration constrained to *discard only* (`keep s ⊑ s`).
-  * `fullCoordination workload` — meet on every op. -/
+  * `fullCoordination workload` — use the identity seam, so every state-changing
+    op crosses; any meeting schedule remains a separate interpretation. -/
 inductive Exit (S : Type) [MergeState S] : Type 1 where
   /-- Pre-partition the bound: index type, quota, and the per-replica charge. -/
   | escrow (ι : Type) (q : ι → Nat) (obs : S → Escrow ι)
@@ -824,8 +821,9 @@ def forkEntry {S : Type} [MergeState S] (I : Invariant S) : MenuEntry I where
   exit := .exposedFork
   applies := exposedFork_applies I
   consequence :=
-    "keep both replicas as branches: 0 meetings (fork_price_zero), and the \
-     result type changes — at a clash there are provably two distinct legal \
+    "keep both replicas as branches: 0 seam crossings (fork_price_zero), but \
+     the typed bill has one resolution write and a plural read \
+     (Repair.forkPrice); at a clash there are provably two distinct legal \
      branches and nothing here picks one (fork_presents_two_branches)"
 
 /-- The full-coordination row, available to every invariant — content in
@@ -835,7 +833,8 @@ def fullEntry {S : Type} [MergeState S] (I : Invariant S) (n : Nat) : MenuEntry 
   exit := .fullCoordination n
   applies := fullCoordination_applies I n
   consequence :=
-    "meet on every op: n meetings for an n-op workload, the ceiling \
+    "budget the identity seam at most n seam crossings for an n-op \
+     workload: the workload-length crossing ceiling \
      (fullCoordination_is_the_ceiling); always available because σ = id is \
      always a valid seam (identity_seam_segmented)"
 
@@ -1021,7 +1020,9 @@ def ceilingMenu : ExitMenu Cost.pinInv where
         applies := pinKeepTrue_arbitrates
         consequence :=
           "an exogenous winner keeps its pin and every other pin is dropped: \
-           0 meetings, but the verdict is not the merge \
+           0 seam crossings, but the typed repair charges one arbiter cut, a \
+           rollback window of 1, and trustedAnnouncer \
+           (RepairMenu.pinArbitrate); the verdict is not the merge \
            (arbitration_overrides) and the arbiter is not a join-hom \
            (arbitration_not_faithful_joinHom); the ERA form of this price is \
            arbitration_spends_antitonicity" } ]
@@ -1102,8 +1103,9 @@ def balanceMenu : ExitMenu balanceInv where
     [ { exit := .escrow Bool (fun _ => 5) id
         applies := balance_escrow_applies
         consequence :=
-          "give each device 5: 0 meetings while inside your share \
-           (escrow_price_zero). ⚠ the price is reachability — \
+          "give each device 5: 0 seam crossings while inside your share \
+           (escrow_price_zero). ⚠ the real price is reachability, a currency \
+           Repair.Price does not yet carry — \
            escrow_forbids_a_clash_replica proves at least one of the two legal \
            replicas is now out of quota, and here it is both: neither device \
            can spend the whole budget alone any more. Re-splitting needs \
@@ -1268,10 +1270,12 @@ def duelMenu : ExitMenu DuelInv where
         applies := arbKeep_arbitrates 1
         consequence :=
           "an announced winner's admin grant survives and the rival's is \
-           dropped: 0 meetings between replicas (GatedEra.ge_deterministic), \
-           paid for in antitonicity (arbitration_spends_antitonicity) and in a \
-           verdict that is not the merge (arbitration_overrides). ⚠ it does not \
-           preserve Authority.WF: arbKeep_can_orphan" },
+           dropped: 0 seam crossings, but the typed repair charges one arbiter \
+           cut, a rollback window of 1, and trustedAnnouncer \
+           (RepairMenu.duelArbitrate); it is paid for in antitonicity \
+           (arbitration_spends_antitonicity) and in a verdict that is not the \
+           merge (arbitration_overrides). ⚠ it does not preserve Authority.WF: \
+           arbKeep_can_orphan" },
       { exit := .rollback (arbKeep 1)
         applies := arbKeep_rolls_back 1
         consequence :=

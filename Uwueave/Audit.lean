@@ -124,6 +124,7 @@ import Uwueave.RenderSix
 import Uwueave.Bounds
 import Uwueave.MenuTotality
 import Uwueave.Preo.Demo
+import Uwueave.Scheduling
 import Uwueave.Tactics
 
 open Lean Elab Command in

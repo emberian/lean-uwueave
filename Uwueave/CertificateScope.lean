@@ -130,13 +130,13 @@ and the answer is split, both halves proved:
     transported to this carrier, and `WorldFuture.lean`'s boundary ("a seal is
     trusted, not verified") stands unchanged. `epoch_sufficient_on_wellformed`
     is a fact about a `Nat` field, not about a finalisation.
-  * ⟨UNDONE⟩ **`Evidence.Closed`'s positive row is for the value evaluator
-    only.** `closed_licenses_the_values` proves closure licenses delivery-
-    stability of `Evidence.values`; `closed_is_not_a_sound_delivery_certificate`
-    refutes it for the *view*. The conjunction `Closed ∧ RosterKnown` is very
-    likely sound for the view too, and is **not proved here**: it needs a
-    congruence lemma for `render` in `(values, Closed)` that `Evidence.lean`
-    does not have and this file may not add there.
+  * ⟨TERMINAL⟩ **`Evidence.Closed` licenses values; closure plus a known roster
+    licenses the view.** `closed_licenses_the_values` proves the first statement,
+    while `closed_is_not_a_sound_delivery_certificate` refutes closure alone
+    for `render`. `closed_and_rosterKnown_licenses_render` proves the exact
+    repair: a known roster turns every delivery into an `Evidence.SealedFuture`,
+    and `Evidence.render_congr` transports stability of `(values, Closed)` to
+    the rendered view.
   * ⟨UNDONE⟩ **One evaluator at a time.** A replica answering a family of
     queries needs the common refinement of their residual quotients. Not stated,
     not proved — `MinimalSummary`'s ⟨UNDONE⟩, inherited.
@@ -1221,8 +1221,8 @@ contain no news.
 
 This is `Evidence.render_retracts_when_a_new_source_appears` at the delivery
 index rather than the extension index, and it is why `WorldFuture.RosterKnown`
-exists. ⟨UNDONE⟩ `Closed ∧ RosterKnown` is not proved sound here; see the
-boundary. -/
+exists. `closed_and_rosterKnown_licenses_render` immediately below proves that
+the conjunction is the positive repair. -/
 theorem closed_is_not_a_sound_delivery_certificate :
     ¬ WorldFuture.WorldCertSound (closedKey (α := Holes.Val)) := by
   intro h
@@ -1232,6 +1232,34 @@ theorem closed_is_not_a_sound_delivery_certificate :
     show WorldFuture.renderW WorldFuture.wRosterUnknown = Evidence.View.exact 47 from
       Evidence.four_states_inhabited.1] at hmov
   exact absurd hmov (Evidence.view_ne_of_tag (by simp [Evidence.viewTag]))
+
+/-- **Closure plus a known roster licenses the rendered view under delivery.**
+Closure freezes the candidate values. `RosterKnown` supplies the missing
+membership-closure fact: because a delivery keeps the pool fixed, every future
+roster is the present roster, so the delivery projects to an
+`Evidence.SealedFuture`. Closure therefore survives as well, and
+`Evidence.render_congr` says those are exactly the two facts the view reads.
+
+The conjunction is sharp at the named boundary: closure alone is refuted by
+`closed_is_not_a_sound_delivery_certificate`. -/
+theorem closed_and_rosterKnown_licenses_render {α : Type}
+    {w : WorldFuture.World α}
+    (hc : Evidence.Closed (WorldFuture.observe w))
+    (hr : WorldFuture.RosterKnown w) :
+    Evidence.FreeTermination WorldFuture.DeliveryFuture
+      (WorldFuture.renderW (α := α)) w := by
+  intro v hv
+  have hroster : v.roster ⊑ w.roster := by
+    have heq : v.roster = w.roster :=
+      congrArg (fun p => p.2.1) hv.2.1
+    rw [heq]
+    exact leq_refl _
+  have hsealed : Evidence.SealedFuture (WorldFuture.observe w)
+      (WorldFuture.observe v) :=
+    WorldFuture.sealed_projects
+      ⟨WorldFuture.delivery_is_extension hv, hroster, hr⟩
+  obtain ⟨hvalues, hclosed⟩ := Evidence.sealed_future_of_closed hc hsealed
+  exact Evidence.render_congr hvalues ⟨fun _ => hc, fun _ => hclosed⟩
 
 /-- Values are monotone in the evidence order — the missing half of the `Stable`
 bridge below. -/

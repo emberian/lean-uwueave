@@ -55,6 +55,10 @@ def     N.iₖ.obligation : Obligation N.iₖ                         -- …or, 
 def     N.iₖ.classification : Classification N.iₖ _               -- ⚠ the row's answer
 theorem N.iₖ.onState  : IConfluent (fun s => N.iₖ (N.fⱼ s))       -- FREE rows only
 def     N.iₖ.seamOnState : SegVerdict (fun d => N.iₖ (N.fⱼ d)) Seg -- SEAM rows only
+def     N.documentSeamLeft / .documentSeamRight                   -- nested lifts
+def     N.documentSeamBase : SegVerdict (fun d => N.i₁ … ∧ N.i₂ …) _
+def     N.documentSeamFreeₖ                                       -- absorbed FREE rows
+def     N.documentSeam                                             -- final seam fold
 
 @[reducible] def N.dₖ.on : cⱼ → T        := fun fⱼ => <expr>
 def     N.dₖ : N.State → T               := fun s => N.dₖ.on (N.fⱼ s)
@@ -76,6 +80,12 @@ Four of those lines are the point:
     the declared document's scale; their proof arguments are welded to the
     *computed* answer (`iconfluent_of_isFree … rfl`), not to the elaborator's
     opinion of it.
+  * `N.documentSeam` is emitted when a declaration has exactly two seam rows on
+    distinct fields, wherever those fields sit in the right-nested state. Two
+    custom `seamAlong` sections plant each verdict's legal witness in the other
+    field; `.andSeams` then forms the pair seam. Finally `.absorbFree` adds each
+    FREE row whose legality at the carried clash pair kernel-checks. A free row
+    that is false or undecidable there is omitted, never assumed.
 
 ## The rule registry
 
@@ -103,6 +113,17 @@ Four of those lines are the point:
      `Seams.schemaSegVerdict` and `SeamAlgebra.flagDaySegVerdict` are the next
      three, each pinned to a concrete world that no `preo` surface can spell
      yet.
+  7. **pin self-seam** — the `Spec.atMostOneClash` ceiling over `GSet Nat`,
+     coordinated on the pin set itself via `SegVerdict.selfSeam`. A final
+     fallback applies the same conservative self seam to any one-field global
+     clash the registry already certified; free verdicts cannot pass its
+     `isFree = false` premise.
+  8. **document composition** — with exactly two seam rows on distinct fields,
+     lift both through arbitrary right-nested projection paths (`seamAlong`),
+     conjoin them (`andSeams`), then absorb every FREE row whose truth at both
+     carried clash documents is discharged by kernel decision (`absorbFree`).
+     The emitted `N.documentSeam` coordinates on the pair of seam values and
+     carries the left row's concrete global clash throughout.
 
 **Mergeability family**, attempted on every `derive` row: `verdict_exists`,
 `verdict_restrict`, `verdict_high`, `verdict_image` (`fromResults`) and
@@ -129,6 +150,7 @@ exists** — a `sorry`-backed `Verdict` prints exactly like a real one.
   * a declaration with no fields.
 -/
 import Uwueave.Preo.Classification
+import Uwueave.SeamAlgebra
 
 namespace Uwueave.Preo
 
@@ -268,8 +290,8 @@ private def carrierOf (kind : Ident) (arg? : Option Term) : CommandElabM Term :=
         counter use `Escrow ι`."
   | "LWW", some _ =>
       throwErrorAt kind "preo: `LWW` takes no argument — `Catalog.LWW` is a \
-        concrete (timestamp, value) register. For a keyed family of registers, \
-        this fragment has no `per` yet."
+        concrete (timestamp, value) register. Put the key before the colon: \
+        `field <name> per <Key> : LWW`."
   | _, _ =>
       throwErrorAt kind "preo: unknown field kind `{k}`. The fragment has six: \
         `GrowSet α` (grow-only set), `Slot α` (a grow-only set carrying a \
@@ -369,6 +391,23 @@ private structure Fired where
   cite : String
   deriving Inhabited
 
+/-- A field-scale seam retained until the declaration is complete, so the
+two-field document rule can compose one seam from each component. -/
+private structure FiredSeam where
+  field : Nat
+  inv : Ident
+  const : Ident
+  segTy : Term
+  deriving Inhabited
+
+/-- The products of classifying one invariant, including declaration-scale
+facets retained for the document-seam fold. -/
+private structure InvariantResult where
+  row : Row
+  seam? : Option FiredSeam
+  freeOnState? : Option Ident
+  deriving Inhabited
+
 @[command_elab preoDecl]
 def elabPreoDecl : CommandElab := fun stx => do
   let `(command| preo $declId:ident where
@@ -383,17 +422,29 @@ def elabPreoDecl : CommandElab := fun stx => do
   -- §3.1 Fields: name, kind syntax, carrier, default.
   let mut fieldIdents : Array Ident := #[]
   let mut fieldKinds : Array String := #[]
+  let mut fieldKeys : Array (Option Term) := #[]
   let mut carriers : Array Term := #[]
   let mut defaults : Array Term := #[]
   for f in fs do
-    let `(preoField| field $nm : $k $[$a]?) := f
+    let `(preoField| field $nm $[per $key]? : $k $[$a]?) := f
       | throwErrorAt f "preo: malformed field"
     if fieldIdents.any (·.getId == nm.getId) then
       throwErrorAt nm "preo: duplicate field `{nm.getId}`"
+    let baseCarrier ← carrierOf k a
+    let baseDefault ← defaultOf k a
+    let carrier : Term ← match key with
+      | none => pure baseCarrier
+      | some key => `($key → $baseCarrier)
+    let default : Term ← match key with
+      | none => pure baseDefault
+      | some key => `(fun (_ : $key) => $baseDefault)
     fieldIdents := fieldIdents.push nm
-    fieldKinds := fieldKinds.push (pp k ++ (a.map (fun t => " " ++ pp t)).getD "")
-    carriers := carriers.push (← carrierOf k a)
-    defaults := defaults.push (← defaultOf k a)
+    fieldKinds := fieldKinds.push
+      ((key.map (fun key => "per " ++ pp key ++ " : ")).getD ""
+        ++ pp k ++ (a.map (fun t => " " ++ pp t)).getD "")
+    fieldKeys := fieldKeys.push key
+    carriers := carriers.push carrier
+    defaults := defaults.push default
   let n := carriers.size
   let fieldNames := fieldIdents.map (·.getId)
   -- §3.2 The state type: carriers, right-nested.
@@ -446,6 +497,8 @@ def elabPreoDecl : CommandElab := fun stx => do
         evidence := fullDecl ++ (fieldIdents[i]!.getId ++ `merge_hom)
         isObligation := false, cite := "MergeState by inferInstance (checked)"
         seamCite := "" }
+  let mut declarationSeams : Array FiredSeam := #[]
+  let mut declarationFrees : Array Ident := #[]
   -- §3.4 Invariants.
   for inv in invs do
     let `(preoInv| invariant $nm : $pred $[:= $supplied]?) := inv
@@ -477,7 +530,7 @@ def elabPreoDecl : CommandElab := fun stx => do
       else pure carriers[idxs[0]!]!
     let readsStr := String.intercalate " × " (idxs.toList.map (fun k =>
       fieldNames[k]!.toString))
-    let row : Row ← withRef nm do
+    let result : InvariantResult ← withRef nm do
       -- The invariant, with the FIELD NAME(S) as the binder(s): the predicate
       -- reads exactly as written. `@[reducible]` so `DecidablePred` synthesis
       -- can see through the definition.
@@ -527,6 +580,19 @@ def elabPreoDecl : CommandElab := fun stx => do
               Uwueave.Tactics.classifyFinite $invId)) with
         | .ok _ => globals := globals.push { const := vId, route := "classifyFinite", cite := cite }
         | .error _ => pure ()
+      if isCross && fieldKeys[idxs[0]!]!.isNone && fieldKeys[idxs[1]!]!.isSome then
+        let vId := mkVId globals.size
+        let cite := "Confluence.keyed_cross_iconfluent applied to \
+          Spec.pointsAtExisting_iconfluent (referential integrity for every key, \
+          earned once against the JOINT merge and lifted pointwise)"
+        match ← tryEmit (← `(command|
+            def $vId : Uwueave.Spec.Verdict $invId :=
+              Uwueave.Spec.Verdict.free
+                (Uwueave.keyed_cross_iconfluent
+                  (R := Uwueave.Spec.PointsAtExisting)
+                  Uwueave.Spec.pointsAtExisting_iconfluent))) with
+        | .ok _ => globals := globals.push { const := vId, route := "keyed-cross-FK", cite := cite }
+        | .error _ => pure ()
       if isCross then
         let vId := mkVId globals.size
         let cite := "Spec.pointsAtExisting_iconfluent through Verdict.cross_free \
@@ -560,9 +626,41 @@ def elabPreoDecl : CommandElab := fun stx => do
             seam? := some (seamId, ← `((Bool → Nat)),
               "FREE within the allocation (Segmented.budget_segmented); the seam is \
                the allocation `Prod.fst`, so spends never coordinate and only a \
-               RE-ALLOCATION is a meeting. Globally refuted by the carried clash \
+               RE-ALLOCATION crosses this seam; scheduling any meeting requires \
+               explicit demands. Globally refuted by the carried clash \
                (Preo.budget_not_iconfluent_at).")
         | .error _ => pure ()
+        -- The pins-side seam used by `WeaveState.docSeam`: the whole pin set
+        -- is the coordination key. This exact-Nat rule reaches the unbounded
+        -- ceiling that neither finite decision nor the search tactic can.
+        if seam?.isNone then
+          match ← tryEmit (← `(command|
+              def $seamId : Uwueave.Spec.SegVerdict $invId $carrier :=
+                Uwueave.Spec.SegVerdict.selfSeam
+                  Uwueave.Spec.atMostOneClash rfl)) with
+          | .ok _ =>
+              floorCheck nm "seam verdict" (fullDecl ++ (nm.getId ++ `seam))
+              seam? := some (seamId, carrier,
+                "FREE only while the entire field is fixed \
+                 (SegVerdict.selfSeam on Spec.atMostOneClash). This is the \
+                 conservative pin seam: every pin-set change coordinates; \
+                 the carried singleton/singleton clash refutes global freedom.")
+          | .error _ => pure ()
+        -- Any independently certified clash admits the same conservative
+        -- upper bound. This does not guess a clash: `rfl` must show that the
+        -- already-emitted verdict is a clash before `selfSeam` will elaborate.
+        if seam?.isNone && !globals.isEmpty then
+          match ← tryEmit (← `(command|
+              def $seamId : Uwueave.Spec.SegVerdict $invId $carrier :=
+                Uwueave.Spec.SegVerdict.selfSeam $(globals[0]!.const) rfl)) with
+          | .ok _ =>
+              floorCheck nm "seam verdict" (fullDecl ++ (nm.getId ++ `seam))
+              seam? := some (seamId, carrier,
+                "FREE only while the entire field is fixed \
+                 (SegVerdict.selfSeam on the row's certified clash). This is \
+                 a sound conservative upper bound, not a claim that no coarser \
+                 seam exists.")
+          | .error _ => pure ()
       -- A seam entails the clash, so a row with a seam and no global route
       -- still gets its `Verdict` — demoted from the seam it already proved.
       if globals.isEmpty then
@@ -589,9 +687,9 @@ def elabPreoDecl : CommandElab := fun stx => do
              over it) nor `FinEnum` (which would let `classifyFinite` decide); "
         let seamNote :=
           if isCross then "no seam rule is tried on a cross-field row (the registry's \
-            one entry, `Preo.budgetSeam`, is a single-carrier fiber); "
-          else "the seam registry (`Preo.budgetSeam`) did not typecheck at this \
-            invariant; "
+            entries are single-carrier fibers); "
+          else "the seam registry (`Preo.budgetSeam`, the pin ceiling, and the \
+            certified-clash self seam) did not typecheck at this invariant; "
         let why :=
           enumNote ++ seamNote ++ "and `verdict` said: " ++ tacticSaid.take 400 ++
           " — DISCHARGE by supplying evidence with `:= <term>` (a catalog verdict such \
@@ -606,7 +704,8 @@ def elabPreoDecl : CommandElab := fun stx => do
                       "finite decision (Tactics.classifyFinite)",
                       "cross-FK (Spec.pointsAtExisting_iconfluent)",
                       "search (the `verdict` tactic)",
-                      "seam (Preo.budgetSeam)"]
+                      "seam (Preo.budgetSeam)",
+                      "pin/self seam (SegVerdict.selfSeam)"]
             discharge := $(Syntax.mkStrLit why)))
         oblId? := some oId
       -- ── The accumulated Classification. Every column the report prints is
@@ -633,27 +732,32 @@ def elabPreoDecl : CommandElab := fun stx => do
       let classFull := fullDecl ++ (nm.getId ++ `classification)
       -- ── Document-scale readings, welded to the COMPUTED answer.
       let ans ← readAnswer classFull
+      let mut freeOnState? : Option Ident := none
       if ans == some (some true) then
         let onStateId := mkIdent (declName ++ (nm.getId ++ `onState))
         if isCross then
           let accA := mkIdent (declName ++ fieldNames[idxs[0]!]!)
           let accB := mkIdent (declName ++ fieldNames[idxs[1]!]!)
-          let _ ← tryEmit (← `(command|
+          match ← tryEmit (← `(command|
             theorem $onStateId :
                 Uwueave.IConfluent (S := $stateId) (fun s => $invId ($accA s, $accB s)) :=
               Uwueave.Preo.proj_iconfluent (π := fun s : $stateId => ($accA s, $accB s))
                 (fun _ _ => rfl)
                 (Uwueave.Tactics.iconfluent_of_isFree
-                  (v := $(globals[0]!.const)) rfl)))
+                  (v := $(globals[0]!.const)) rfl))) with
+          | .ok _ => freeOnState? := some onStateId
+          | .error _ => pure ()
         else
           let accId := mkIdent (declName ++ fieldNames[idxs[0]!]!)
           let homId := mkIdent (declName ++ (fieldNames[idxs[0]!]! ++ `merge_hom))
-          let _ ← tryEmit (← `(command|
+          match ← tryEmit (← `(command|
             theorem $onStateId :
                 Uwueave.IConfluent (S := $stateId) (fun s => $invId ($accId s)) :=
               Uwueave.Preo.proj_iconfluent $homId
                 (Uwueave.Tactics.iconfluent_of_isFree
-                  (v := $(globals[0]!.const)) rfl)))
+                  (v := $(globals[0]!.const)) rfl))) with
+          | .ok _ => freeOnState? := some onStateId
+          | .error _ => pure ()
       if let some (seamId, segTy, _) := seam? then
         let fname := fieldNames[idxs[0]!]!
         let accId := mkIdent (declName ++ fname)
@@ -684,8 +788,93 @@ def elabPreoDecl : CommandElab := fun stx => do
                 ++ s!"see `{fullDecl ++ o.getId.replacePrefix declName .anonymous}`"
             else String.intercalate " ⊕ " (globals.toList.map (·.cite))
           seamCite := match seam? with | some (_, _, s) => s | none => "" }
-      return r
-    rows := rows.push row
+      return {
+        row := r
+        seam? := seam?.map fun (seamId, segTy, _) =>
+          { field := idxs[0]!, inv := invId, const := seamId, segTy := segTy }
+        freeOnState? := freeOnState? }
+    if let some seam := result.seam? then
+      declarationSeams := declarationSeams.push seam
+    if let some h := result.freeOnState? then
+      declarationFrees := declarationFrees.push h
+    rows := rows.push result.row
+  -- ── The DOCUMENT-SEAM rule. Two field seams may sit anywhere in the
+  -- right-nested state. Each is lifted with `seamAlong`, using a section that
+  -- plants the OTHER verdict's legal `x` at the other coordinated field and
+  -- ordinary defaults everywhere else. Those custom sections make the
+  -- side-conditions of `andSeams` available from the verdicts' own `.hx`,
+  -- without assuming that a field kind's structural default satisfies its
+  -- invariant (the zero quota, importantly, does not satisfy budget 10).
+  if declarationSeams.size == 2 then
+    let a := declarationSeams[0]!
+    let b := declarationSeams[1]!
+    let (left, right) := if a.field < b.field then (a, b) else (b, a)
+    if left.field != right.field then
+      let leftSeam := left.const
+      let rightSeam := right.const
+      let leftAcc := mkIdent (declName ++ fieldNames[left.field]!)
+      let rightAcc := mkIdent (declName ++ fieldNames[right.field]!)
+      let leftHom := mkIdent (declName ++ (fieldNames[left.field]! ++ `merge_hom))
+      let rightHom := mkIdent (declName ++ (fieldNames[right.field]! ++ `merge_hom))
+      let rightX : Term ← `(Uwueave.Spec.SegVerdict.x $rightSeam)
+      let leftX : Term ← `(Uwueave.Spec.SegVerdict.x $leftSeam)
+      let leftPlant ← plantFn left.field n (defaults.set! right.field rightX)
+      let rightPlant ← plantFn right.field n (defaults.set! left.field leftX)
+      let leftLiftId := mkIdent (declName ++ `documentSeamLeft)
+      let rightLiftId := mkIdent (declName ++ `documentSeamRight)
+      let baseId := mkIdent (declName ++ `documentSeamBase)
+      let documentSeamId := mkIdent (declName ++ `documentSeam)
+      elabCommand (← `(command|
+        /-- The left field's seam at document scale. Its section plants the
+        right seam verdict's legal left witness, so the two lifted invariants
+        can be conjoined without an unproved default-legality assumption. -/
+        def $leftLiftId :=
+          Uwueave.Preo.seamAlong $leftAcc $leftHom $leftPlant
+            (fun _ => rfl) (fun _ _ => rfl) $leftSeam))
+      elabCommand (← `(command|
+        /-- The right field's seam at document scale, with the left seam
+        verdict's legal left witness planted symmetrically. -/
+        def $rightLiftId :=
+          Uwueave.Preo.seamAlong $rightAcc $rightHom $rightPlant
+            (fun _ => rfl) (fun _ _ => rfl) $rightSeam))
+      elabCommand (← `(command|
+        /-- The two seamed field invariants conjoined at document scale. Its
+        seam is the pair of their field seams; replicas sharing a fiber of that
+        pair merge without coordination. The carried global clash is the left
+        invariant's concrete witness with the right verdict's legal left
+        witness held fixed. -/
+        def $baseId :=
+          Uwueave.Spec.SegVerdict.andSeams $leftLiftId $rightLiftId
+            (Uwueave.Spec.SegVerdict.hx $rightSeam)
+            (Uwueave.Spec.SegVerdict.hx $rightSeam)))
+      -- Free rows may ride this already-stable seam, but `absorbFree` honestly
+      -- requires them to hold at its carried clash pair. Attempt that proof by
+      -- kernel decision; a row whose legality is undecidable or false at the
+      -- generated witnesses is left out rather than assumed.
+      let mut currentSeam := baseId
+      let mut absorbed : Nat := 0
+      for freeProof in declarationFrees do
+        let suffix := Name.mkSimple s!"documentSeamFree{absorbed + 1}"
+        let nextId := mkIdent (declName ++ suffix)
+        match ← tryEmit (← `(command|
+            /-- One coordination-free row absorbed into the declaration seam.
+            This constant exists only because the row holds at both carried
+            clash documents; `by decide` is a kernel-checked side condition. -/
+            def $nextId :=
+              Uwueave.Spec.SegVerdict.absorbFree $currentSeam $freeProof
+                (by decide) (by decide))) with
+        | .ok _ =>
+            floorCheck declId "absorbed document seam verdict" (ns ++ nextId.getId)
+            currentSeam := nextId
+            absorbed := absorbed + 1
+        | .error _ => pure ()
+      elabCommand (← `(command|
+        /-- The declaration's composed document seam: its two seam rows, plus
+        every coordination-free row whose legality at the carried clash pair
+        the registry also proved. A free row without that inhabitance proof is
+        omitted from this conjunction, never silently assumed. -/
+        def $documentSeamId := $currentSeam))
+      floorCheck declId "document seam verdict" (fullDecl ++ `documentSeam)
   -- §3.5 Derives — the fourth verdict.
   for der in ders do
     let `(preoDerive| derive $nm : $ty = $body $[:= $ev]?) := der

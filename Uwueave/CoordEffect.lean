@@ -93,9 +93,11 @@ is exactly the number the scalar grade computes.
     "coordination event" here is a **seam crossing on one replica's stream**.
     How many peers must attend, whether two replicas crossing "the same"
     boundary hold one meeting or two, and whether several future seam values can
-    be agreed in one round are **not modelled**. Every `Nat` in this file is a
-    crossing count under the stated stream model, and a `@ ≤ n` grade built on
-    it budgets crossings, not meetings.
+    be agreed in one round are not determined here. `Scheduling.lean` adds the
+    explicit participant/scope/epoch/evidence/round/barrier coeffects and
+    refutes any scalar conversion in either direction. Every `Nat` in this file
+    remains a crossing count under the stated stream model, and a `@ ≤ n` grade
+    built on it budgets crossings, not meetings.
   * ⟨scope⟩ `[DecidableEq Seg]` on every seam, inherited from `crossings`.
   * ⟨scope⟩ Per-stream, per-seam counting is `Cost.lean`'s; composition here is
     **pointwise addition of two streams' counts under a shared strategy**. That
@@ -109,10 +111,13 @@ is exactly the number the scalar grade computes.
   * ⟨UNDONE⟩ **A scheduling / coalescing semantics — the named next step.**
     Turning crossings into meetings needs a model of *attendance* (which
     replicas must be in a round) and *coalescing* (when two crossings share
-    one). Until that exists, `⊗` = pointwise `+` is an upper bound on any
-    coalescing model's cost, and `optimum` of it is a budget in crossings.
-    Nothing in this file justifies the word "meeting", and no theorem here uses
-    it. This is the transmutable obligation, not a theorem of the model.
+    one). `⊗` = pointwise `+` is an upper bound only for a **pure-coalescing**
+    interpretation that emits at most one schedulable demand per crossing. A
+    protocol may instead require several barriers or several currencies for one
+    crossing, so there is no generic inequality in either direction. `optimum`
+    here remains a budget in crossings. Nothing in this file justifies the word
+    "meeting", and no theorem here uses it. This is the transmutable obligation,
+    not a theorem of the model.
   * ⟨UNDONE⟩ **No typing rules.** This is the *semantics* a graded session type
     would be checked against; there is no elaborator, no `session … @ ≤ n`
     syntax, and no subsumption rule here. `SeamAlgebra`'s composition laws are

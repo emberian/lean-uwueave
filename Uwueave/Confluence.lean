@@ -36,7 +36,7 @@ Literature:
 
 namespace Uwueave
 
-universe u v
+universe u v w
 
 /-! ## §1. The merge -/
 
@@ -208,6 +208,17 @@ theorem pi_iconfluent {K : Type u} {V : Type v} [MergeState V]
     {J : K → Invariant V} (hJ : ∀ k, IConfluent (J k)) :
     IConfluent (S := K → V) (fun f => ∀ k, J k (f k)) :=
   fun x y hx hy k => hJ k (x k) (y k) (hx k) (hy k)
+
+/-- **The keyed cross lift.** A relational invariant already proved against
+the joint merge of `A × B` lifts over a shared `A` and a keyed family
+`K → B`: each key instantiates the same joint-merge proof at
+`(shared, keyedValue)`. This does not manufacture a relational result from
+separate field proofs; `h` is the required cross-field theorem. -/
+theorem keyed_cross_iconfluent {A : Type u} {B : Type v} {K : Type w}
+    [MergeState A] [MergeState B] {R : A → B → Prop}
+    (h : IConfluent (S := A × B) (fun p => R p.1 p.2)) :
+    IConfluent (S := A × (K → B)) (fun p => ∀ k, R p.1 (p.2 k)) :=
+  fun x y hx hy k => h (x.1, x.2 k) (y.1, y.2 k) (hx k) (hy k)
 
 /-- **Conjunction of two invariants on the *same* state.** Unlike the product
 lift this needs no independence — both invariants see the same merge. -/

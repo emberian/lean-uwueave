@@ -44,6 +44,7 @@ one syntactic fact the classification carrier depends on, and it is the whole
 preo <Name> where
   field <name> : <kind>                       -- kind ∈ GrowSet α · Slot α · Escrow ι
                                               --      · Quota ι · Counter · LWW
+  field <name> per <Key> : <kind>             -- keyed family, merged pointwise
   invariant <name> : <predicate>              -- ONE field, or TWO (a cross-field
                                               -- invariant, over the product state)
   invariant <name> : <predicate> := <verdict> -- author-supplied evidence, kernel-checked
@@ -254,8 +255,12 @@ Three points of grammar worth stating, because each was a real failure first:
     there is no way to supply a verdict without supplying its proof, and the
     report marks the row `supplied` rather than `derived` regardless. -/
 
-/-- `field <name> : <kind> [<arg>]` — one field of the declared state. -/
-syntax preoField := withPosition(&"field" ident " : " ident (ppSpace colGt term:max)?)
+/-- A field of the declared state, either scalar or keyed. The keyed spelling
+`field <name> per <Key> : <kind>` elaborates to `Key → <carrier>` and inherits
+the pointwise `MergeState`; `per` is non-reserved, like `field` itself. -/
+syntax preoField := withPosition(&"field" ident
+  (ppSpace &"per" ppSpace colGt term:51)?
+  " : " ident (ppSpace colGt term:max)?)
 
 /-- `invariant <name> : <predicate> [:= <verdict term>]` — one invariant, over
 **one or two** fields, optionally with its evidence supplied by the author. A

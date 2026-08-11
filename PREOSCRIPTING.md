@@ -118,8 +118,12 @@ peer barriers · arbiter cuts · network rounds · user prompts · rollbacks
 
 Calling all five "meetings" manufactures attractive false zeroes. A meeting is
 a *scheduling interpretation* over demands with scope, participants, epoch,
-evidence and rounds — and turning crossings into meetings is unbuilt, named
-work, not an inherited fact.
+evidence and rounds. `Uwueave/Scheduling.lean` now builds that interpretation:
+proof-carrying obligations compose pointwise under one shared strategy, a
+schedule witnesses coverage, and five currencies remain separate. Its exact
+2-crossings→1-meeting, 0→1, and 1→2 examples prove there is no scalar
+conversion in either direction. What remains unbuilt is the surface protocol
+AST and its explicit elaboration to those demands—not the scheduling judgement.
 
 ### 4.4 Prices are records, not numbers
 
@@ -248,10 +252,10 @@ decorated struct fields can only classify what we already know how to classify.
 
 ```
 preo Swarm where
-  findings   : GrowSet (Agent, Claim)
-  holds      : Slot File      per Agent
-  spent      : Escrow Tokens  per Agent
-  roster     : EraGroup
+  field findings : GrowSet (Agent, Claim)
+  field holds per Agent : Slot File
+  field spent per Agent : Escrow Tokens
+  field roster : EraGroup
 
   invariant one_writer : ∀ f, |{a | holds a = f}| ≤ 1
   invariant in_budget  : ∀ a, spent a ≤ alloc a
@@ -271,6 +275,9 @@ Note what the session carries that our first sketch did not: a **plan**, a
 **multi-currency budget**, and an actual **protocol shape**. An `allows` list
 naming an operation vocabulary is not a workload — if `reallocate` may repeat
 without bound, no finite worst-case bound follows from membership in a list.
+The `field … per … : …` spelling is live; the future and session forms in this
+example remain the next surface fragments and are intentionally not accepted by
+the current parser.
 
 ### 7.1 Deep only where analysis requires it
 
@@ -363,10 +370,10 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | ✅ seam verdicts in the surface | `Preo.budgetSeam`, `Preo.seamAlong`, `Segmented.budget_segmented` | **CLOSED** (was "inexpressible"). A globally clashing invariant now carries a `SegVerdict` facet *alongside* its clash — `Preo.seam_forces_clash` proves a seam is not a third alternative but forces the ESCALATES column. `Demo`'s `LoomDoc2.in_budget.seam` **is** `WeaveState.quotaVerdict`, by `rfl`. `seamAlong` lifts it to the whole declared document, using the emitted section (`<field>.plant`) that fragment 1 said the elaborator could not synthesize. |
 | ✅ cross-field invariants in the surface | `Spec.Verdict.cross`, `Spec.pointsAtExisting_iconfluent` | **CLOSED** (was refused by name). A two-field invariant is classified against the *product* state; `LoomDoc2.fk` **is** `Spec.refIntVerdict` by `rfl`. ⚠ narrower than `WeaveState.bookmarksVerdict`, which is the per-user keyed form — this surface has no `per`. Three or more fields is still refused: `Verdict.cross` is binary. |
 | ✅ `derive` + mergeability verdict | `JoinHom.Fourth`, `summaryFold_iff_joinHom`, `Preo.mergeability_comp` | **CLOSED**. `derive n : T = <expr>` emits the computation plus a `Fourth` facet with its `Fourth.Correct` proof. Registry: ∃-read, filtered view, high-water mark, set image (`fromResults`) and count (`needsEvidence`, via `no_count_merge_without_provenance`) — each *attempted by typechecking*, so an unknown shape is an obligation, never a guess. ⚠ the `needsEvidence` transport to document scale needs the projection **surjective**, not merely a hom; the elaborator emits `<field>.surj` for exactly that. |
-| **seam composition in the surface** | `SeamAlgebra.prodSeams` exists | **unbuilt**: the registry has one single-field seam rule, so `WeaveState.weaveDocSeamVerdict` (a document segmented over `(pins, allocation)` — *two* coordination features) is still not derivable. A missing rule, not a missing theorem. |
-| **`per` / keyed families in the surface** | `WeaveState.keyed_cross_iconfluent` | **unbuilt**: why the cross row above is the one-user shape. |
+| ✅ **seam composition in the surface** | `SegVerdict.selfSeam`, `liftFst`/`liftSnd`, `andSeams`, `absorbFree`, `prependFree` | **CLOSED at the general surface/combinator layer.** `TwinQuota.documentSeam` is the existing product seam by `rfl`; `NestedSurface` finds two seam rows through eight right-nested fields and absorbs six checked FREE rows; the general algebra reconstructs `WeaveState.weaveDocSeamVerdict` as the same value. The exact hand carrier is still not one surface declaration because flat fields cannot name grouped `WeaveCore`, and FREE verdicts cannot manufacture its legal planting witness `core₀`. |
+| ✅ **`per` / keyed families in the surface** | `Confluence.keyed_cross_iconfluent`, pointwise `MergeState` | **CLOSED for field carriers and keyed referential integrity.** `field bookmarks per Bool : GrowSet Nat` emits `Bool → GSet Nat`; `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Unsupported keyed relations remain obligations, and automatic keyed clash seams still require a concrete key/default witness. |
 | **declaration composition** | — | **unbuilt** |
-| **scheduling: crossings → meetings** | — | **unbuilt** |
+| ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan` | **built below the surface**: typed origins, metadata-rich demands, separate currencies, witnessed bounds, shared-strategy composition, and exact non-function refutations. **Unbuilt:** protocol/session syntax and a theorem-backed elaboration from bounded sequence/parallel/sync into demands. |
 
 ## 11. What would make us abandon this
 

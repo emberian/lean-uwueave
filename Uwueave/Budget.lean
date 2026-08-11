@@ -59,9 +59,11 @@ the verdict is indexed by.
   * ⟨UNDONE⟩ **Crossings are not meetings.** Repeated from `Cost.lean` rather
     than inherited from it: a "coordination event" here is a seam crossing on
     one replica's stream. How many peers must attend, and whether two replicas
-    crossing "the same" boundary hold one meeting or two, is not modelled. A
-    budget in this file is a budget of *crossings*, and calling it a budget of
-    meetings would be a category error.
+    crossing "the same" boundary hold one meeting or two, is not determined by
+    this judgement. `Scheduling.lean` now carries and schedules those coeffects,
+    while proving there is no scalar conversion in either direction. No theorem
+    transports this file's `ForcedFloor` to a meeting floor. A budget here is a
+    budget of *crossings*; calling it a budget of meetings is a category error.
   * ⟨TERMINAL for this file⟩ **The per-stream scope is inherited whole.**
     `Cost.no_seam_frees_both` proves the crossing measure undercounts a
     *concurrent* workload: two streams each free under a seam of their own, no

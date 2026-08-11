@@ -516,9 +516,10 @@ theorem causal_dag_free (rank : Nat → Nat) :
       coordination for you; we are a <em>judgement engine</em> that reports and quits.</p>
       <p><code>Uwueave/Exits.lean</code> is the answer. Eight exits, each an
       <code>inductive Exit</code> constructor carrying exactly the data its availability check
-      needs. <code>Exit.Applies</code> is that check; <code>Exit.price</code> is a
-      <code>Nat</code>; and every price is <strong>earned by a named theorem</strong>, because a
-      number with no theorem behind it is a lie. A <code>MenuEntry</code> cannot be constructed
+      needs. <code>Exit.Applies</code> is that check; its historical
+      <code>Exit.price : Nat</code> is only a <strong>seam-crossing projection</strong>.
+      <code>RepairMenu</code> is the generated semantic authority and reads a seven-field
+      <code>Repair.Price</code> instead. A <code>MenuEntry</code> cannot be constructed
       without an <code>Applies</code> term, so an unsound row is unrepresentable, and
       <code>menu_sound</code>&rsquo;s real content is its second conjunct: the invariant the menu
       is <em>for</em> genuinely fails I-confluence, recovered from the pair the menu carries.</p>
@@ -527,13 +528,13 @@ theorem causal_dag_free (rank : Nat → Nat) :
     <div class="tablewrap">
       <table>
         <thead>
-          <tr><th>Exit</th><th>What it spends</th><th>Price</th><th>The theorem that earns the price</th></tr>
+          <tr><th>Exit</th><th>What it spends</th><th>Crossing projection / typed bill</th><th>The theorem that earns the price</th></tr>
         </thead>
         <tbody>
           <tr>
             <td><code>escrow</code></td>
             <td>reachability &mdash; a state that was legal stops being reachable</td>
-            <td class="num">0 meetings</td>
+            <td class="num">0 seam crossings; reachability spent</td>
             <td><code>escrow_price_zero</code>. ⚠ the cost:
               <code>escrow_forbids_a_clash_replica</code> (at a clash, the two replicas cannot
               both be inside quota) and <code>faithful_escrow_implies_iconfluent</code> (an
@@ -542,8 +543,8 @@ theorem causal_dag_free (rank : Nat → Nat) :
           </tr>
           <tr>
             <td><code>seam</code></td>
-            <td>meetings, but only where the projection <code>σ</code> changes</td>
-            <td class="num">the floor</td>
+            <td>seam crossings, only where the projection <code>σ</code> changes</td>
+            <td class="num">the crossing floor</td>
             <td><code>seam_price_is_forced</code>, reading <code>Cost.coordination_forced</code>
               &mdash; a workload with <em>n</em> clash blocks costs at least <em>n</em>
               crossings <strong>under every seam in every universe</strong>. No re-choice of
@@ -552,7 +553,7 @@ theorem causal_dag_free (rank : Nat → Nat) :
           <tr>
             <td><code>arbitration</code></td>
             <td>the merge stops being a join &mdash; an exogenous verdict lands</td>
-            <td class="num">0 ⚠</td>
+            <td class="num">0 crossings; arbiter cut, rollback window, trust</td>
             <td><code>arbitration_needs_no_meeting</code> for the zero;
               <code>arbitration_overrides</code>, <code>arbitration_not_faithful_joinHom</code>
               and <code>arbitration_spends_antitonicity</code> for the bill. <strong>A different
@@ -561,7 +562,7 @@ theorem causal_dag_free (rank : Nat → Nat) :
           <tr>
             <td><code>strongerMetadata</code></td>
             <td>representability &mdash; some legal state loses its representative</td>
-            <td class="num">0 meetings</td>
+            <td class="num">0 seam crossings; representability spent</td>
             <td><code>strongerMetadata_price_zero</code>, and
               <code>refinement_needs_unreachability</code>: if the richer carrier covered every
               legal state, the invariant would have been I-confluent all along. The tags did not
@@ -570,7 +571,7 @@ theorem causal_dag_free (rank : Nat → Nat) :
           <tr>
             <td><code>weakenedInvariant</code></td>
             <td>the invariant stops saying what you wanted</td>
-            <td class="num">0 meetings</td>
+            <td class="num">0 seam crossings; guarantee weakened</td>
             <td><code>weakenedInvariant_price_zero</code>, priced by
               <code>weakening_is_strict</code>: not &ldquo;may admit&rdquo; &mdash; <em>does</em>
               admit, at the clash pair itself.
@@ -580,7 +581,7 @@ theorem causal_dag_free (rank : Nat → Nat) :
           <tr>
             <td><code>exposedFork</code></td>
             <td>the result type &mdash; plurality becomes the caller&rsquo;s problem</td>
-            <td class="num">0 meetings</td>
+            <td class="num">0 crossings; 1 resolution write; plural read</td>
             <td><code>fork_price_zero</code> over <code>branches_iconfluent</code>;
               <code>fork_presents_two_branches</code> is the price: at a clash there are
               provably two <em>distinct</em> legal branches and nothing here picks one.</td>
@@ -588,15 +589,15 @@ theorem causal_dag_free (rank : Nat → Nat) :
           <tr>
             <td><code>rollback</code></td>
             <td>at least one replica&rsquo;s contribution is dropped</td>
-            <td class="num">0 ⚠</td>
+            <td class="num">0 crossings; rollback/discard spent</td>
             <td><code>rollback_is_an_arbitration</code> plus the discard-only constraint, which
               is what makes <code>rollback_loses_a_replica</code> available. <strong>A different
               currency</strong> &mdash; see below.</td>
           </tr>
           <tr>
             <td><code>fullCoordination</code></td>
-            <td>meetings, one per op</td>
-            <td class="num">workload</td>
+            <td>identity-seam crossings, at most one per op</td>
+            <td class="num">workload-length crossing ceiling</td>
             <td><code>identity_seam_segmented</code> (σ = id is always a valid seam, so this
               exit is unconditional) and <code>fullCoordination_is_the_ceiling</code> (nothing
               ever costs more than the workload length).</td>
@@ -612,13 +613,19 @@ theorem causal_dag_free (rank : Nat → Nat) :
       <code>zero_price_of_iconfluent</code>: an exit that hands back a globally I-confluent
       invariant leaves a one-point seam, and a one-point seam never increments
       <code>Cost.crossings</code> (<code>crossings_unit_seam_eq_zero</code>).</p>
-      <p><code>arbitration</code> and <code>rollback</code> are priced <code>0</code> for a
-      <em>different</em> reason: no <em>meeting between replicas</em> is needed, because the
+      <p><code>arbitration</code> and <code>rollback</code> also project to
+      <code>seamCrossings = 0</code>, but are not free: no <em>meeting between replicas</em> is
+      needed for the local verdict, because the
       verdict is computed locally from the merged state
       (<code>GatedEra.ge_deterministic</code> is the deployed form). Their real price is paid
-      in §4.5&rsquo;s theorems, not in crossings. <strong>Reading the two zeros as the same zero
+      in arbiter cuts, rollback exposure and trust premises, not in crossings.
+      <strong>Reading the two zeros as the same zero
       is the false-zero mistake the file exists to refuse</strong> &mdash; it is flagged
       ⟨scope⟩ in the source, at the definition, not in a footnote.</p>
+      <p><code>Scheduling.no_crossing_count_determines_least_meetings</code> makes the other
+      boundary explicit: no function of a crossing count recovers a least meeting count.
+      Schedules retain separate peer-barrier, arbiter-cut, network-round, user-prompt and
+      rollback currencies instead of inventing a meeting scalar.</p>
       <p><strong>And the reviewer who asked for the menu refused that repair as too
       weak.</strong> A <code>Nat</code> price cannot be right, because arbitration costs a
       trusted announcement and a rollback window, a fork changes the output contract from
@@ -724,7 +731,7 @@ theorem causal_dag_free (rank : Nat → Nat) :
           <text x="522" y="156" font-size="12.5" font-weight="650" fill="currentColor">divisible: 10 splits into 5 + 5</text>
           <text x="522" y="176" font-size="10.5" fill="var(--muted)">the shared balance — every device gets a positive share</text>
           <text x="522" y="196" font-size="10" font-family="var(--mono)" fill="var(--free)">balance_escrow_applies</text>
-          <text x="522" y="216" font-size="10.5" fill="var(--muted)">escrow ✓ · 0 meetings inside your share</text>
+          <text x="522" y="216" font-size="10.5" fill="var(--muted)">escrow ✓ · 0 crossings; reachability spent</text>
 
           <rect x="510" y="256" width="360" height="124" rx="10" fill="var(--bg)" stroke="var(--clash)"/>
           <text x="522" y="280" font-size="12.5" font-weight="650" fill="currentColor">indivisible: 1 does not split</text>
@@ -775,9 +782,11 @@ theorem pin_clash : ¬ Cost.pinInv (pinT ⊔ pinF)   -- the merge pins two</code
           seam frees both streams, so two replicas running them concurrently must coordinate
           and no per-stream count reports it.</li>
         <li><span class="badge pattern">arbitration</span>
-          <code>pinKeepTrue_arbitrates</code>, price <strong>0</strong> meetings &mdash; but the
-          verdict is not the merge (<code>arbitration_overrides</code>) and the arbiter is not a
-          join-homomorphism (<code>arbitration_not_faithful_joinHom</code>).</li>
+          <code>pinKeepTrue_arbitrates</code>, <strong>0 seam crossings</strong> &mdash; but the
+          typed row charges one arbiter cut, a rollback window of 1 and
+          <code>trustedAnnouncer</code> (<code>RepairMenu.pinArbitrate</code>). The verdict is not
+          the merge (<code>arbitration_overrides</code>) and the arbiter is not a join-homomorphism
+          (<code>arbitration_not_faithful_joinHom</code>).</li>
         <li><span class="badge clash">escrow ✗</span> <code>pin_escrow_starves</code>: for
           <em>every</em> quota. Give both slots a positive share and both can be pinned inside
           quota, so the entailment would certify a two-pin state. A bound of one does not
@@ -800,8 +809,9 @@ def balY : Balance := fun b =&gt; if b then 0 else 10   -- B spends it all on de
 theorem balance_clash : ¬ balanceInv (balX ⊔ balY)   -- merged: 20 against a bound of 10</code></pre>
       <ul class="exits">
         <li><span class="badge free">escrow ✓</span> <code>balance_escrow_applies</code>, price
-          <strong>0</strong> meetings while inside your share. ⚠ the price is
-          <em>reachability</em>: <code>escrow_forbids_a_clash_replica</code> proves at least one
+          <strong>0 seam crossings</strong> while inside your share. ⚠ the real price is
+          <em>reachability</em>, a currency <code>Repair.Price</code> does not yet carry:
+          <code>escrow_forbids_a_clash_replica</code> proves at least one
           of the two legal replicas is now out of quota &mdash; and here it is both, since
           neither device may spend the whole budget alone any more. Re-splitting needs
           <code>Segmented.budget_segmented</code>&rsquo;s seam.</li>
@@ -829,8 +839,9 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
                                                 -- root-parented, only the winner</code></pre>
       <ul class="exits">
         <li><span class="badge pattern">arbitration</span> <code>arbKeep_arbitrates</code>,
-          price <strong>0</strong> meetings between replicas
-          (<code>GatedEra.ge_deterministic</code>), paid for in antitonicity
+          <strong>0 seam crossings</strong>, while <code>RepairMenu.duelArbitrate</code> charges
+          one arbiter cut, a rollback window of 1 and <code>trustedAnnouncer</code>. The local
+          verdict is deterministic (<code>GatedEra.ge_deterministic</code>) but paid for in antitonicity
           (<code>arbitration_spends_antitonicity</code>, bundling
           <code>GatedEra.ge_not_antitone</code> with the concrete before/after verdict pair).
           ⚠ and it does not preserve well-formedness: <code>arbKeep_can_orphan</code> exhibits
@@ -1311,7 +1322,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       </article>
 
       <article class="card">
-        <h3>SeamAlgebra <span class="sub">two seamed fields: one meeting, or two?</span></h3>
+        <h3>SeamAlgebra <span class="sub">two seamed fields: one seam axis, or two?</span></h3>
         <ul class="vlist">
           <li><span class="badge seam">the prize</span> <code>linked_segmented</code> &mdash;
           <strong>two seams collapse into one exactly where the invariant links them</strong>:

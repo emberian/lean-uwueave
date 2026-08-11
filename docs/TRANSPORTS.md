@@ -161,6 +161,20 @@ projection is proper and the invariant still is not segmented.
 needs **no covering pool**, because the live vertex set is the quantifier's own
 domain.
 
+**13a. Carrier-global clique → live clique, width, and scenario floor** ⚠
+*transport* `CliqueLive.liveClique_of_clique` turns a global clique of observed
+states into a `LiveClique`; from there `live_clique_forces_live_width` gives the
+domain lower bound, while `live_clique_forces_scenario_floor` charges
+`k - 1` to a fork scenario whose endpoints form the clique · *needs*
+**pairwise `CoReachable` from one base** for the global-to-live step (scenario
+endpoints get this for free from `liveClique_of_stream_clique`), and an
+`Admissible` live-strategy space to state the optimum · *without it*
+`slot_global_clique_three` coexists with `no_live_triangle`: the global clique
+has size 3 while the two-operation protocol has live width 2, and
+`no_three_stream_clique` proves the globally priced three-branch workload cannot
+be run. `the_third_op_restores_the_third_domain` supplies the missing operation
+and raises both the live clique and live optimum back to 3.
+
 ---
 
 ## IV. Merge models
@@ -203,6 +217,22 @@ both**. The two obligations are **logically independent**.
 base policy `MergeModel.BaseDecision.Valid` fully licenses. Safety is not
 agreement.
 
+**18a. Same append-only record → same derived view** ⚠ **the convergence
+repair**
+*transport* `HistoryPolicy.recordDetermined_converges` proves
+`HistoryConvergent P` · *needs* exactly **`RecordDetermined P`**: the selector
+must be a function of the record rather than of a previously materialized merge
+result · *without it* `HistoryPolicy.nosy_diverges` gives two `SameRecord`
+histories with unequal views and proves both `¬ HistoryConvergent ccNosy` and
+`¬ RecordDetermined ccNosy`.
+⚠ *separate order crossing*: `HistoryPolicy.replicas_agree_on_order` needs
+both `SelectorSymmetric P` **and** `ReconcileSymmetric P`; these are not
+hypotheses of `recordDetermined_converges`, and merge commutativity does not
+supply them for an arbitrary policy. `the_swap_is_order_dependence` /
+`self_base_selector_not_symmetric` witness the failure, while
+`the_self_base_policy_is_not_history_licensed` shows `ValidInHistory` rejects
+the very self-base decisions the state-level licence admitted.
+
 ---
 
 ## V. Computation
@@ -237,6 +267,40 @@ property is cheap here · *without the analogue*
 the residual quotient carries **no merge** and the no-trade-off property
 **fails** at the future index.
 
+**22a. Rendered text → result-mergeable summary** ✗ **REFUTED**
+*would-be transport* “the visible string is derived, so replicas may gossip and
+merge it” · *needs* result-determinacy / incremental mergeability (equivalently
+a suitable combiner; folding through a target lattice additionally needs a
+`JoinHom`) · *without it* `TextSummary.no_text_merge_without_provenance`
+hands every combiner the same two rendered inputs and requires two different
+merged outputs, `ba` and `ab`; `witnesses_wf` proves the states and merges are
+well formed. Thus `text_not_incrementallyMergeable`, `text_not_resultDetermined`,
+and `text_not_joinHom` rule out all three readings.
+⚠ *the repair* `text_architecture_is_forced`: retain and replicate the op-set
+evidence (`opset_sufficient`) and derive the view; the evidence architecture is
+free while merging rendered results is impossible.
+
+**22b. Live elements after tombstone GC → sufficient text evidence** ✗
+**REFUTED**
+*would-be transport* any summary factoring through `garbageCollected 5` is
+sufficient for `text 5` · *needs* a restriction on admissible future contexts,
+such as causal stability; that restriction is **not modelled here** · *without
+it* `TextSummary.no_gc_summary_sufficient`, powered by
+`tombstones_are_load_bearing`, gives two currently identical, well-formed,
+anchor-closed replicas that a normal peer later separates: dropping the
+tombstone resurrects the deleted character. The partial converse is exact but
+narrower: `tombstoned_content_never_read` permits dropping a deleted glyph's
+content, not its positional identity.
+
+**22c. Separating witness under an order policy → `needsEvidence`** ✅
+*transport* `TextSummary.rendered_order_requiresEvidence` · *needs* a pair that
+renders the same now and a context whose merges render differently · *without
+the separating context* the conclusion is false in general (a constant renderer
+is incrementally mergeable by the constant combiner). The worked theorem
+`verdict_order_policy_invariant` instantiates the schema for **two concrete
+cores**, RGA and Fugue: they choose opposite merged orders and both require
+evidence. It is not a universal theorem over every order policy.
+
 ---
 
 ## VI. Evidence, futures, certificates
@@ -265,14 +329,35 @@ droppable**, `root_scope_not_sufficient`, `base_scope_sufficient`.
 *without it* `CertificateScope.closed_is_not_a_sound_delivery_certificate` — a
 closed world renders `exact 47` and **one delivery later** renders
 `provisional 47`, because the roster lives in the pool. Sound for the **values**;
-unsound for the **view**. ◻ `Closed ∧ RosterKnown` unbuilt (needs a `render`
-congruence `Evidence.lean` lacks).
+unsound for the **view**.
+⚠ *the repaired transport* `CertificateScope.closed_and_rosterKnown_licenses_render`
+· *needs* both `Evidence.Closed (observe w)` and `RosterKnown w`; the first
+freezes candidate values and the second proves every delivery future has the
+same closure bit. `Evidence.render_congr` then transports the rendered view.
+The counterexample above proves neither premise may be silently read as the
+other.
 
 **27. Capability declaration → property of the computation** ✗ **REFUTED**
 *without it* `ResultStatus.declaration_is_relative_to_the_reach` — the same
 evaluator and the same declaration, satisfied over one reachable set and refuted
 over that set closed under a **single** admissible extension. A capability is a
 property of a computation **over a reach**.
+
+**27a. Abstract collapse licence → Era finalisation certificate** ⚠
+*transport* `EraCertificate.era_cut_licenses_the_collapse` gives
+`Holes.Stable (arriving w u) (roleAnswer u w)`, and
+`era_finalisation_is_a_sound_certificate` states the same delivery-only result
+as `CertificateScope.KeyCertSound` · *needs* **`Settled w`** — every event the
+arbiter named has arrived — and the **delivery axis only** · *without
+settlement* `delivery_alone_does_not_license_the_finalised_view` gives an
+announced-but-undelivered event that moves `finalView` under delivery.
+⚠ *axes not transported*: `the_cut_axis_breaks_the_seal` shows an announcement
+moves the finalised view even at a quiesced, settled world;
+`backdated_cut_rewrites_the_finalised_view` refutes dishonest/backdated cut
+growth; and `an_event_born_finalised_rewrites_the_view` shows issuance with a
+forged already-announced id rewrites the prefix despite an honest arbiter. These
+are not failures of the delivery theorem: they name the honest-extension and
+event-id-unforgeability premises required to cross those other axes.
 
 ---
 
@@ -347,6 +432,20 @@ grade was silently assuming — refuted on the same witness by
 ✅ *and the consolation* `forced_le_optimum_compose` — forced **floors** *are*
 additive across composed streams even though optima are not.
 
+**35a. Seam crossings → peer meetings** ✗ **REFUTED, both directions**
+*without it* `Scheduling.no_crossing_count_determines_least_meetings` and
+`no_least_meeting_count_determines_crossings` — two compatible crossing demands
+coalesce (2 crossings → least 1 meeting), while an ambient barrier costs one
+meeting at 0 crossings. `one_crossing_can_need_two_rounds` additionally refutes
+the old unconditional “crossings upper-bound any coalescing schedule” wording:
+one crossing may emit two incompatible round-tagged demands.
+⚠ *the exact transport retained* `SessionProfile.crossingProfile_comp` forgets
+the coeffects and recovers `CoordEffect.Profile.comp`; `composed_plan_uses_one_strategy`
+keeps one admissible strategy after pointwise composition. A `Schedule` then
+supplies the missing witness — participants, scope, epoch, evidence, round,
+barrier, and separate currencies — and `least_le_upper` transports its proved
+upper bound. No transport from `Budget.ForcedFloor` to a meeting floor exists.
+
 **36. Lower bound → acceptance** ✗ **REFUTED**
 *without it* `Budget.lower_bound_does_not_license_acceptance` — and the reason
 is deeper than the statement: **"the floor" is not a function.** There is a
@@ -366,19 +465,22 @@ gives `k−1` where `coordination_forced` gives `0`
 
 **37b. A hand `Exits` row → a generated `RepairMenu` row** ⚠
 *transport* `RepairMenu.transport` / `RepairMenu.transport_preserves_the_hand_number`
-— the transport **is** the projection `Price.seamCrossings`: a hand row becomes a
-generated row when a typed repair backs it and the repair's crossing count is the
-hand row's `Nat`, and then the generated row shows all seven currencies while
-still recovering the one the hand menu printed.
-*needs* **a typed repair whose crossing count equals the hand number.**
-*without it* — two survivors, both exhibited:
-`RepairMenu.the_ceiling_seam_hand_price_has_no_forced_backing` (the ceiling's
-hand seam row prints `0`; the clique the same clash carries forces `1` under
-**every** valid seam, so no `SeamFloor`-priced row can display the hand number)
-and `RepairMenu.no_free_pin_arbitration` (the ceiling's hand arbitration row
-prints `0`; quantified over **every** repair onto the arbitrated ceiling promise,
-by anyone, the price is not `Price.free` and its `assumptions` are not empty —
-`premisesCharged` has no flag to clear).
+— the formal transport is exactly the projection `Price.seamCrossings`: given
+any hand row, target promise, and typed repair whose crossing count equals the
+hand row's `Nat`, the generated row displays the repair's full seven-currency
+price and recovers that `Nat`.
+*needs* only **`r.price.seamCrossings = e.exit.price`**. The theorem does **not**
+relate the hand `Exit` tag or `Exit.Applies` witness to the repair's semantics.
+*without the equality in the forced-seam lane*
+`RepairMenu.the_ceiling_seam_hand_price_has_no_forced_backing` shows the hand
+seam row's `0` differs from the clique-forced `SeamFloor.floor = 1`, so no row
+priced from that forced floor can be its backing.
+⚠ *and crossing equality is deliberately weaker than semantic backing*:
+`RepairMenu.no_free_pin_arbitration` does **not** refute the transport premise
+— `pinArbitrate` has zero seam crossings and therefore matches the hand
+arbitration row's `0`. It instead proves that every such repair has a non-free
+full `Price` and nonempty assumptions. Thus the scalar survives projection while
+the hand row's implied “free” reading does not.
 ✅ *and the direction that now cannot fail*: `RepairMenu.menu_price_is_projection`
 and `menu_delta_is_projection` — every price and delta a generated menu shows is
 the `price`/`relation` field of a `Repair`, or of an obligation that agrees with
@@ -408,6 +510,69 @@ unreachable.
 ⚠ *the repair* `Acyclicity.grounded_iconfluent` — rank-groundedness *is*
 I-confluent and implies acyclicity, and content-addressing supplies the rank for
 free.
+
+**40a. Result evidence ↔ evidence document** ✅
+*transport* `DerivedDocument.encodeEvidence_iso`: `encodeEvidence` and
+`decodeEvidence` are join homomorphisms and mutual inverses, so the source and
+target are the same mergeable state at different indices · *needs* no external
+hypothesis for these carriers; the encoding has one constructor for each of the
+three grow-only evidence components · *without that full encoding*
+`value_only_encoding_is_not_faithful` gives equal candidate values for distinct
+open/exact evidences that render `provisional 47` and `exact 47`. This refutes
+fidelity of the coarser encoding, not its merge preservation.
+
+**40b. Set-image derivation → mergeable derived document** ⚠
+*transport* `DerivedDocument.deriveDoc_hom` / `deriveDoc_ships` · *needs* the
+actual construction `encodeEvidence ∘ evidenceOf`; `evidenceOf_joinHom` is
+unconditional in the deterministic `f` when obligations and certificates are
+fixed, and `encodeEvidence` is the homomorphism from row 40a · *without that
+construction* merely returning a document proves nothing:
+`tallyDoc_not_joinHom` and `tallyDoc_requires_evidence` show a document-valued
+count that no result combiner can merge.
+
+**40c. Count result → result-mergeable document** ✗ **REFUTED**
+*would-be transport* encoding the scalar count as an `EvidenceDoc` makes it
+mergeable from document results · *needs* provenance distinguishing which
+elements contributed · *without it* `DerivedDocument.tallyDoc_requires_evidence`
+ranges over every binary combiner on documents: `tallyDoc sawA` and
+`tallyDoc sawB` are identical inputs, while the same-element and
+different-element merges require different output documents.
+
+**40d. Count-derived document → sufficient summary** ✗ **REFUTED**
+*would-be transport* document shape makes a count-derived result sufficient ·
+*needs* retained evidence; formally, `deriveDoc_not_hom D` assumes
+`D = k ∘ JoinHom.card` and proves such a factorization is **insufficient** ·
+*without provenance* `tallyDoc_not_sufficient` is the concrete instance. This
+is a sufficiency refutation, distinct from row 40b's mergeability refutation.
+
+**40e. Mergeable count document → retained provenance** ⚠
+*transport* `DerivedDocument.mergeable_count_document_must_retain_the_evidence`
+· *needs* both `JoinHom g` **and** a factorization
+`JoinHom.card = k ∘ g` · *without the hom premise*, the count-only
+`tallyDoc` still factors the count but has
+`tallyDoc sawA = tallyDoc sawB` and is not mergeable; *without factorization*, a
+constant join homomorphism need not distinguish those replicas because no count
+can be decoded from it. The positive target is inhabited by
+`seenDoc_retains_the_evidence`:
+`seenDoc` is a homomorphism, the count factors through it, and it separates the
+two one-element replicas.
+
+**40f. Shared-rank pipeline → merged pipeline terminates uniquely** ⚠
+*transport* `DerivedDocument.pipelines_merge_coordination_free` · *needs*
+`[Inhabited D]`, a full `P : Stratified D`, and the arriving dependency graph
+grounded under **the same `P.rank`** · *without the shared grounded discipline*
+`Acyclicity.acyclicity_not_iconfluent` shows acyclic graphs can merge cyclic,
+while `acyclic_pipelines_are_not_all_grounded` gives an acyclic infinite chain
+with no `Nat` rank, so “acyclic” cannot silently replace “stratified”.
+
+**40g. Sound evidence evaluator → sound derived-document evaluator** ✅
+*transport* the general `DerivedDocument.sound6_transport`; the specialization
+is `docStatus_sound6` · *needs* maps `φ` and `ψ` with the right-inverse law
+`∀ t, φ (ψ t) = t`; at this carrier `decode_encode` discharges it
+unconditionally · *without it* — n/a for the specialized isomorphism, and the
+source proves no general no-section counterexample, so none is asserted here.
+The worked `one_renderer_serves_both` is a consequence of the isomorphism, not
+of document shape alone.
 
 ---
 
@@ -439,6 +604,84 @@ about the **feed**.
 event growth makes promotion impossible. Fail-closed guarantees shrinkage and
 pays with both duellists; arbitration guarantees agreement and pays the sign
 table.
+
+---
+
+## XI. Preoscript: evidence entering the language
+
+**44a. Field-scale confluence → declared-state confluence** ⚠
+*transport* `Preo.proj_iconfluent`, emitted as `<invariant>.onState` after the
+field verdict reduces to FREE · *needs* the field projection `π` to preserve
+join · *without it* monotonicity is insufficient:
+`JoinHom.monotone_pullback_can_fail` is the existing counterexample from row 20.
+A field-scale CLASH is intentionally not transported by this theorem; that
+needs the section in row 44b.
+
+**44b. Field-scale seam verdict → declared-state seam verdict** ⚠
+*transport* `Preo.seamAlong`, emitted as `<invariant>.seamOnState` · *needs* a
+join-homomorphic projection **and a section** `ι` satisfying
+`π (ι a) = a` and `π (ι a ⊔ ι b) = a ⊔ b`; the section plants the
+field verdict's concrete clash in a legal document · *without it* a constant
+projection onto one legal field state can have a coordination-free pullback
+even when the field invariant clashes outside its image, so no document-scale
+`SegVerdict` can carry that clash. Fragment 1's recorded refusal was exactly
+the absence of this plant; fragment 2 emits it with legal defaults.
+
+**44c. Field `fromResults` verdict → declared-state `fromResults` verdict** ⚠
+*transport* `Preo.mergeability_comp` · *needs in its present signature* both a
+join-homomorphic `π` and a surjectivity witness; its `.fromResults` proof branch
+uses only preservation of join, but no split public theorem currently removes
+the unused surjectivity argument · *without join preservation* cardinality is
+the concrete failure: `JoinHom.monotone_not_joinHom` and
+`no_count_merge_without_provenance` show a monotone field projection whose
+results cannot be merged. The surface therefore emits an actual field
+projection, not an arbitrary read.
+
+**44d. Field `needsEvidence` verdict → declared-state `needsEvidence` verdict** ⚠
+*transport* `Preo.not_incrementallyMergeable_comp`, packaged by
+`mergeability_comp` · *needs* `π` to preserve join **and be surjective**; the
+generated `<field>.surj` is a document with that field value and legal defaults
+elsewhere · *without surjectivity* the conclusion is false: take a constant
+projection into a proper sub-image on which `g` is constant. Then `g` may fail
+to be incrementally mergeable on its whole carrier while `g ∘ π` is merged by
+the constant combiner.
+
+**44e. Registry route order → certified semantic answer** ⚠
+*transport* `Preo.run_answer_congr` (and permutation corollary
+`run_answer_of_perm`) · *needs* membership-equivalent registries;
+`answerOf_congr` states the weaker exact condition that the same global/seam
+facet kinds were reached · *without that condition* an empty registry answers
+`none`, while adding a seam rule answers `some false`
+(`run_answer_of_seam`). Explanation order is **not** transported: the facet
+lists remain ordered report-policy data. Merge-answer uniqueness is the
+separate theorem `run_mergeAnswer_unique` and needs no registry equality once
+both answers exist.
+
+**44f. Two field seam verdicts → one document seam verdict** ⚠
+*transport* the elaborator's emitted `N.documentSeam`, built with
+`seamAlong` through arbitrary right-nested paths, `andSeams`, and a checked
+`absorbFree` fold. `TwinQuota.documentSeam` is the existing `prodSeams` value;
+`NestedSurface.documentSeam = documentSeamFree6` proves all six FREE rows were
+absorbed, both by `rfl`. At the general algebra layer, `SegVerdict.selfSeam`
+for pins plus `prependFree` reconstructs
+`Preo.Demo.weaveDocViaAlgebra = WeaveState.weaveDocSeamVerdict` by `rfl`
+· *needs* exactly two certified seam rows on distinct fields and each absorbed
+FREE row to hold at both carried clash documents · *without the second seam*
+there is no pair of fibers; without a checked legal side condition the FREE row
+is omitted. The remaining exact surface obstruction is representation, not
+seam algebra: flat declarations cannot name grouped `WeaveCore`, and a FREE
+verdict cannot manufacture the legal seed `core₀` needed for planting.
+
+**44g. Joint cross verdict → keyed cross verdict** ⚠
+*transport* `Confluence.keyed_cross_iconfluent`, emitted by the keyed-cross-FK
+route for `field bookmarks per K : GrowSet Nat`; the acceptance check is
+`Preo.Demo.KeyedDoc.fk.verdict = WeaveState.bookmarksVerdict` by `rfl`
+· *needs* a real `IConfluent` proof against the joint `A × B` merge and applies
+it pointwise to the shared `A × (K → B)` carrier · *without that joint proof*
+no per-field lift is valid: `Catalog.lww_cross_field_not_iconfluent` refutes the
+generic componentwise shortcut, and an unsupported keyed predicate remains an
+`Obligation`. Automatic keyed clash seams additionally need a concrete key and
+legal default family; the surface does not invent them.
 
 ---
 
@@ -476,8 +719,15 @@ The standing ambition, stated so it can be measured:
 > **Every judgement crossing has a transport theorem with exact hypotheses, or a
 > runnable witness proving that no such unconditional transport exists.**
 
-Rows currently ✗ with no repair: 5 *(superseded by 6–7)*, 16 *(partial)*, 18,
-26, 27, 40 *(repaired at a different judgement)*. Rows ◻ unbuilt: the
-`Closed ∧ RosterKnown` certificate, and every crossing into `Preo` — the
-language has verdict rows but no transport rows, which is the next thing this
-file will be embarrassed about.
+Rows currently ✗ with no complete repair: 5 *(superseded by 6–7)*,
+16 *(partial)*, 18 *(repaired under record determination by 18a)*, 22b
+*(causal-stability contexts unmodelled)*, 27, and 40 *(repaired at the
+grounded judgement)*. Row 26 is repaired under `Closed ∧ RosterKnown` while
+retaining the single-premise refutation. Preoscript now has the projection,
+seam, mergeability, route-invariance, nested document-seam, and keyed-cross
+transports in rows 44a–44g. What remains is different work: declarations still
+carry no operation vocabulary from which to derive reachability, no rule
+produces a typed `Repair P Q`, multi-field derives and three-or-more-field
+invariants are refused, and the exact hand `WeaveCore` grouping/legal seed is
+not expressible by a flat declaration even though the general seam algebra now
+reconstructs its verdict.

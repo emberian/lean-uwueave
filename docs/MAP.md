@@ -8,28 +8,12 @@ and fails the build on any axiom outside Lean's floor — a stray `sorry` or
 (That total coverage is a fact about the **gate**, not about this table; the
 [ledger](#keystone-ledger) below is a reading aid, not a trust mechanism.)
 
-⚠ **What this table covers — it is not the module list.** The file table below
-has thirty-eight rows; the tree has fifty-eight modules. The twenty without a
-row are the wave 9–13 work — the priced-exit / typed-repair / synthesis /
-replicated-computation spine — and the import graph will not lead you to them
-either: eleven of them have no in-tree importer except the root aggregator and
-`Uwueave/Audit.lean`, which imports them only so the gate can see them.
-
-`Budget` · `CoordEffect` · `EraKernel` · `Evidence` · `Exits` · `Fugue` ·
-`Gated` · `Histories` · `HonestRender` · `JoinHom` · `MergeModel` ·
-`MinimalSummary` · `Recoverable` · `Repair` · `ResultStatus` · `SeamColoring` ·
-`Tactics/Core` · `WeaveState` · `Wellformed` · `WorldFuture`
-
-`Fugue` and `Gated` have a keystone-ledger row below and no file row;
-`Tactics/Core` sits under the `Tactics` row; the rest have no presence here at
-all — including `Uwueave/WeaveState.lean` and `Uwueave/Wellformed.lean`, which
-call themselves "the library's demo of itself" and "the theorem Grove has and
-we lacked". Their only other index is `PREOSCRIPTING.md` §10, whose status
-column reads **"in flight"** for seven modules that are landed, complete and
-inside the axiom gate (`Repair`, `CoordEffect`, `Budget`, `MergeModel`,
-`SeamColoring`, `MinimalSummary`, `WorldFuture`) — that column tracks the
-*language feature*, not the module. Backfilling these rows is open work; until
-then, re-derive the list rather than trusting the count, which will rot:
+✅ **Coverage, 2026-08-11.** The file table below has one row for each of the
+78 tracked Lean module files under `Uwueave/`, including the nested `Preo` and
+`Tactics` modules. This is a documentation invariant rather than a trust
+mechanism: the root aggregator and `#gate_covers_root` remain the authorities
+for transitive gate coverage. Re-derive the table's coverage instead of
+trusting this prose after adding or moving a module:
 
 ```sh
 for f in $(git ls-files 'Uwueave/*.lean'); do
@@ -73,7 +57,7 @@ curiosity.)
 
 | File | What it settles |
 |---|---|
-| `Uwueave/Confluence.lean` | The judgement itself: `MergeState`, `IConfluent`, and `escalation_witness` — a failed invariant *always* yields a runnable two-replica repro. Plus the lifts that let a document's verdict be computed field-by-field. |
+| `Uwueave/Confluence.lean` | The judgement itself: `MergeState`, `IConfluent`, and `escalation_witness` — a failed invariant *always* yields a runnable two-replica repro. Plus the product, Pi, and keyed-cross transports that let document verdicts be computed structurally without pretending separate field proofs establish a relation. |
 | `Uwueave/Catalog.lean` | The classic structures — G-Set, counters, LWW, escrow — with merge laws proved and keystone invariants classified. The pattern worth internalizing: ceilings, uniqueness, and mutual exclusion escalate; grow-only facts and per-replica quotas run free; a lone LWW register can never merge-break anything (`lww_every_invariant_iconfluent`) while two LWW registers can break any invariant *relating* them (`lww_cross_field_not_iconfluent`). |
 | `Uwueave/Acyclicity.lean` | The DAG dichotomy of part 2 above: `acyclicity_not_iconfluent`, `grounded_iconfluent`, `grounded_acyclic` — packaged as `causal_dag_free`. |
 | `Uwueave/Move.lean` | The op-log pattern's guarantee, once and generically (`derived_view_sec`), and its price on a concrete miniature (`view_not_stable`). |
@@ -98,9 +82,10 @@ curiosity.)
 | `Uwueave/Gluing.lean` | **`guardGluing_iff_iconfluent`** — named four times in a sibling repo's design study and never built there (its kernel forbade partial cones). Guarded holes with delta-shaped fills; divergent fills glue iff the guard is I-confluent, under `Spanning` — and `stampedHole` proves the iff is *not a renaming* — `Spanning` is **not removable** (`stampedHole_glues` + `excl_not_iconfluent`: a non-spanning hole that glues while its guard clashes), so `Glues` and `IConfluent` are genuinely different predicates. ⚠ Read the direction: `Spanning` is *sufficient*, not proved necessary — the ⟸ half of `guardGluing_iff_iconfluent` never touches it. Consequences: the sheaf-shaped `glue_eq_merged_fill`, a hole verdict `Spec.Verdict` cannot express, partially-glueable holes via seams, and one-shot *sharpened*: gluing licenses local double-fill. |
 | `Uwueave/Cost.lean` | **Coordination frequency is real and has a floor**: `crossings` counts σ-changes along a workload, and `coordination_forced` shows clash blocks in the *spec* force the count for every seam in every universe. Tight instance: three budget re-divisions cost exactly 3. Self-correction included: linking seams did **not** lower the document's floor — it made the obvious seam optimal. The undercounting verdict is proved and stated as the measure's domain of validity. |
 | `Uwueave/Choreo.lean` | **The verdict moves onto the program**: choreographies over replica-owned CRDT state, endpoint projection with `projection_sound` as pointwise state equality (no bisimulation — the channel *is* the lattice), and `coordination_free_iff_iconfluent`, iff-shaped with neither direction `Iff.rfl`. The seam refinement the in-house prior art never had: `seam_coordination_free` — barriers exactly at σ-changes, free within fibers, no global `IConfluent` hypothesis anywhere. ⚠ Retracted with the file: the choreography × CRDT junction is **not** empty — Kuhn–Melgratti–Tuosto (ECOOP 2023) project swarm protocols to local-first peer machines with progress under unavailability. The defensible claim is narrower: an I-confluence-derived coordination verdict **plus** a seam refinement over it is what we could not find elsewhere. |
+| `Uwueave/Scheduling.lean` | **Crossings are effects; meetings discharge coeffects.** `Session.comp` adds crossing counts while reindexing proof-carrying obligation origins, and `SessionProfile.comp` retains one shared strategy until a `ProfilePlan` chooses it. Schedules witness coverage and retain five separate currencies. The exact 2-crossings→1-meeting, 0→1, and 1→2 examples prove neither scalar determines the other; `no_crossing_count_determines_least_meetings` is the explicit non-function. No `Budget.ForcedFloor`→meeting-floor or unannotated `Choreo` extraction is claimed. |
 | `Uwueave/RALin.lean` | **Correctness ≠ safety**, against Sal (arXiv:2603.27202): `ra_linearizable_but_unsafe` — Sal's own Table-2 PN-counter, RA-linearizable for any fork and branches, every branch legal at every prefix, and the merge overdraws. Converse: the max-counter loses updates, making *every* invariant I-confluent while failing RA-lin — safety bought by data loss. `quadrants` inhabits all four cells; `ra_lin_preserves_inductive_invariants` (axiom-free) is what RA-lin *does* buy; `guarding_moves_the_bug` shows the verdicts entangled through op preconditions. |
 | `Uwueave/Ancestral.lean` | **The LCA question, answered: incomparable.** Two-way I-confluence can be bought by a join that drops a committed op (effect-faithfulness is the honesty condition); mutual exclusion under hand-off is free with an ancestor (`lock_ancestral_confluent`) and provably beyond every two-way join; the bounded counter is beyond every honest merge (`budget_defeats_every_faithful_merge`) — escrow stands. `clash_dichotomy` names the rule: **resurrection** clashes an LCA repairs; **accumulation** clashes nothing repairs. |
-| `Uwueave/SeamAlgebra.lean` | The calculus segmented confluence lacked: product/pi/and lifts hold; refinement REFUTED (a conjunctive observation over grow-only fields is not a seam); free-riding refuted with stability pinned necessary and sufficient; the dividing line as an iff (`left_only_seam_iff`); and the prize, `linked_segmented` — two seams collapse into one exactly where well-formedness makes one seam a function of the other. |
+| `Uwueave/SeamAlgebra.lean` | The calculus segmented confluence lacked: product/pi/and lifts hold; refinement REFUTED (a conjunctive observation over grow-only fields is not a seam); free-riding refuted with stability pinned necessary and sufficient; the dividing line as an iff (`left_only_seam_iff`); and the prize, `linked_segmented` — two seams collapse into one exactly where well-formedness makes one seam a function of the other. `selfSeam` turns an already-certified clash into the conservative identity seam, while `prependFree` supplies the conjunction-order mirror needed to reconstruct the hand weave seam. |
 | `Uwueave/GatedEra.lean` | Arbitrated authority composed with the op gate: `ge_deterministic`, `ge_duel_resolved` (the survivor's op stands where fail-closed denied both), `ge_finalised_stable`. The finding: `antitone_forbids_enabling` — any permission rule antitone in event growth makes promotion impossible. Fail-closed guarantees shrinkage; arbitration guarantees agreement; the trade is a theorem. |
 | `Uwueave/Tactics.lean` | `classify` — five kernel-checked routes to a verdict; failure is loud and carries the clash, and "no clash found" is explicitly **NO VERDICT**. Adversarially verified against false goals. Plus the idiom kit with a measured ~161→25-line shrink list beside a measured not-replaceable list. |
 | `Uwueave/Era.lean` | The ERA protocol core, **implemented** from the paper (cuts, epochs, the four-op grammar, authorised execution, sorted-insert canonicalisation): delivery-independence by the set-function route (`resolve_same_sets`), rollback-immunity of the finalised prefix (`final_view_immune`), and the payoff — `duelling_admins_resolved`: one deterministic survivor at every replica, where `Authority.duelling_admins_annihilate` killed both. Corrects four guesses in `Seams.lean` (headline: the arbiter never names a winner, only orders events — and nobody coordinates; the epoch boundary is a trusted announcement priced in rollback). |
@@ -111,6 +96,46 @@ curiosity.)
 | `Uwueave/Nary.lean` | **n-ary tails** (JOB 6): `net_enum`, PN nonneg refutation over any two distinct keys, escrow sum bound over enum, `BudgetInvN` / `budget_segmented_enum`; Catalog/Segmented Bool results recover as instances; zero new `MergeState` proofs. |
 | `Uwueave/KernelCFCS.lean` | **Move kernel as `Necessity.Impl`** (JOB 7): honest that under `GroundedBase` the derived-acyclicity invariant is true of every log (embedding package, not new confluence); real content is materialization ↔ membership and view determination via `absReplay_ext_mem`; `move_kernel_cfcs` + `move_kernel_view_sec`. |
 | `Uwueave/Ceiling.lean` | The four uniqueness refutations proved to be **one theorem**: `uniqueness_ceiling` — an invariant entailing "at most one element per selector key" over a grow-only set is never I-confluent — with the generic witness constructor `merge_breaks_uniqueOn` (two distinct same-key elements, one per replica, produce the clash). `ceiling_atMostOne` / `ceiling_uniqueAnchor` / `ceiling_uniqueGrant` / `ceiling_determinism` re-derive the Catalog, Sequence, Authority and Automata refutations verbatim as one-line instances, at the originals' own witnesses; the originals stay in their home files with their narratives and pins. The mutex-shaped ceilings (`or_breaks_iconfluence`, sole-admin) are the same trap but a different selector shape — they cap occupied *keys*, not elements per key — and keep their own refutations. |
+| `Uwueave/Budget.lean` | A budget trichotomy whose constructors carry the right kind of evidence: a witnessed plan may accept, a forced floor may reject (`rejected_sound`), and a named synthesis gap remains unresolved. `lower_bound_does_not_license_acceptance` refutes acceptance from one affordable lower bound, while `reblocking_escapes_the_floor` proves that changing the workload's blocking would invalidate rejection. The unit is per-stream seam crossings, not meetings. |
+| `Uwueave/CoordEffect.lean` | Coordination grades are strategy-indexed cost profiles, composed pointwise and minimized only when the session closes. `opt_compose_ge_sum_opt` names the compositional inequality, `optimum_compose_achieved` returns one coherent strategy that pays the result, and `pin_session_costs_exactly_one` proves the scalar alternative reports 0 for a session that costs 1. The strategy list is finite, nonempty, and chosen — not an enumeration of every seam. |
+| `Uwueave/EraKernel.lean` | The executable ERA codec and `@[export uwueave_era_resolve]`: Rust marshals bytes, while this module calls `Era.resolve` and emits roles plus per-event status. `eraReplay_same_sets` proves byte-level delivery independence for the whole response; `duel_trace_marks_the_skip` and `duel_response_words` expose the paper's duel through the shipped format. Event-id uniqueness is enforced by the Rust boundary for attribution, not required here for deterministic resolution. |
+| `Uwueave/Evidence.lean` | The epistemic carrier separates candidates, outstanding obligations, and certificates, yielding exact/provisional and closed/open fork states instead of conflating value plurality with future openness. `closed_iconfluent` says closure merges while determinacy does not; `divergent_futures_force_nonexact` forbids exactness across admissible divergent futures. `render_retracts_when_a_new_source_appears` pins the boundary: `render` is sound for the sealed future, not arbitrary membership extension. |
+| `Uwueave/Exits.lean` | The eight-exit display vocabulary and its worked ceiling, balance, and duel menus. Its typed applicability witnesses and refutations remain useful, but `Exit.price` and the hand-authored rows are explicitly superseded as semantic authority by `RepairMenu`: the price is independent free data, and the ceiling seam row demonstrably prints 0 where 1 is forced. Escrow tracks divisibility, not the resurrection/accumulation dichotomy. |
+| `Uwueave/Fugue.lean` | A Fugue-style left/right origin tree, its op-set insertion model, and the RGA contrast on the same editing intent. `run_contiguous` / `fugue_runs_never_interleave` prove generated concurrent runs remain contiguous under the stated groundedness and concurrency hypotheses; `rga_head_runs_interleave` versus `fugue_head_runs_stay_contiguous` exhibits the concrete anomaly and repair. This is the model and theorem, not the shipping sequence kernel. |
+| `Uwueave/Gated.lean` | Authorization as a derived view over grants, revocations, and move ops. `gated_sec` inherits SEC, `gated_antitone` proves late revocation can only remove effects, and `kernel_gate_agrees_gatedOps` connects the model to the shipping kernel under `WF` plus unique grants. Signatures remain a deployment premise; the gate bounds what a cited grant may do, not who may cite it. |
+| `Uwueave/Histories.lean` | Repeated and criss-cross merge over a rank-grounded version DAG. `repeated_merge_breaks_the_invariant` shows the one-fork ancestral theorem does not close under merging its own results; `base_accident_decides_the_invariant` gives two equally maximal bases with legal versus illegal outcomes; `swap_never_converges` proves coherent base choice alone is not convergence. The failure is merge closure, not the one-step merge theorem. |
+| `Uwueave/HonestRender.lean` | Rendering honesty over an abstract five-way carrier: `consumers_factor` proves every consumer is a five-handler dispatch, `no_honest_projection` rules out a silent total projection at a forked site, and `singularSelection_implies_namedPolicy` makes singular resolution name its policy. `salience_is_not_enforceable` is a proved limit: an abstract interface cannot force visually distinct pixels. The five-way inability to separate absent from pending is repaired, not erased, by `RenderSix`. |
+| `Uwueave/JoinHom.lean` | The exact boundary between shipping evidence and shipping a derived summary. `summaryFold_iff_joinHom` is the architecture iff; `no_count_merge_without_provenance` refutes every binary combiner on counts; `count_summary_must_distinguish` makes provenance necessary. `monotone_pullback_can_fail` retracts the stronger monotonicity claim: upward-closed result invariants pull back, arbitrary ones do not. |
+| `Uwueave/MergeModel.lean` | One parameterized confluence judgement over genuinely different merge signatures: join CRDT, ancestral/MRDT, and op-replay. Laws are separate predicates rather than class fields; the ancestral witness is refutably non-idempotent, and op-replay is a function of the op set but not of the two materialized views. `iconfluentIn_join_iff` and `iconfluentIn_ancestral_iff` recover the existing judgements without reproving them. |
+| `Uwueave/MinimalSummary.lean` | Contextual equivalence constructs the coarsest future-sufficient *partition* for a query. `ctxQuot_coarsest_sufficient` proves the universal property and `ctxQuot_fold_answers` makes the quotient shippable; membership collapses to one bit, exact count collapses nothing, and the three-element threshold quotient has five classes. This is not a minimum-bit representation or a reachable-context quotient. |
+| `Uwueave/Recoverable.lean` | The positive ancestral converse, with the merge constructed: `faithful_stepConfluent_iff_legalSerialization` characterizes when recoverable deltas admit a faithful invariant-preserving three-way merge. `comm_forces_symmetric_chooser` derives chooser symmetry from commutativity, while `budget_boundary` isolates illegal serialization as the counter obstruction. Step confluence alone still does not lift through longer branches. |
+| `Uwueave/Repair.lean` | Typed transformations `Repair P Q`, multidimensional `Price`, and five-axis `PromiseRelation` replace a flat exit plus scalar. `introduced_premise_forces_a_charge` and `no_free_arbitration` make trust costs unprintable as free; `crossings_cannot_see_the_difference` proves a crossing count cannot distinguish arbitration, fork exposure, and retained evidence. Repairs compose, but their summed declared prices are not claimed minimal and nothing here searches for a repair. |
+| `Uwueave/ResultStatus.lean` | Six runtime statuses separate static mergeability from reach-relative capability. `declaration_is_relative_to_the_reach` proves one declaration can hold on a reach and fail after one admissible extension; `sixth_cell_is_distinguishable` separates definitive absence from pending despite identical empty candidate sets. `forget_statusOf` recovers the five-way render, and value-dependent finality refutes any status determined only by closure structure. |
+| `Uwueave/SeamColoring.lean` | The safety clause of segmentation is exactly graph colouring (`safetyClause_iff_properColoring`); full segmentation additionally needs fiber stability, and `coloring_alone_does_not_segment` proves that residual is real. `synthesizeSeam?` returns a certified seam or an honest `none`; on the pin ceiling, traversal order recovers each hand-written seam. No completeness is claimed without a covering finite pool. |
+| `Uwueave/Tactics/Core.lean` | The cycle-free machinery below the `classify` demonstrations and verdict-value layer: complete `FinEnum`s, heuristic `Probes`, the `Clash` evidence type, the search `findClash`, and the positive tactic routes. `Clash.not_iconfluent` makes every returned hit a refutation, while `findClash_none` says only that the supplied pool contains no clash. Verdict-valued `classifyIn?` / `classifyFinite` deliberately live one module up because `Spec.Verdict` would reintroduce the import cycle. |
+| `Uwueave/WeaveState.lean` | The library's composed loom document: node/content/activation/bookmark/pin/authority/quota fields inherit their merges, and `core_iconfluent` assembles the free field invariants. The pin ceiling stays deliberately live in `weaveDocVerdict`; `weaveDoc_segmented` lifts the combined pin/allocation seam to the whole document. It is a classified miniature, not a claim that text, moves, signatures, or networking are modeled here. |
+| `Uwueave/Wellformed.lean` | Structural well-formedness is separated from application legality. `merge_preserves_wellformed` is unconditional, while `merged_doc_violates_onePin_but_is_wellFormed` proves a merge can violate the pin promise and remain a renderable document; `no_crash` quantifies over every reader total on well-formed documents. Unique anchors are deliberately excluded because including them would make the headline false. |
+| `Uwueave/WorldFuture.lean` | Futures indexed by epistemic worlds rather than materialized states. `delivery_future_is_not_state_indexed` exhibits equal observed states with different issued-but-undelivered pools; `quiescence_is_a_sound_certificate` makes the world-keyed check sound, while `no_sound_state_cert_accepts_openW` proves that reusing the same fact at the state key is impossible. Frontier plus epoch still does not separate the witness; the pool does. |
+| `Uwueave/Bounds.lean` | The modal and quantitative lower bounds meet in `coordination_necessary_and_costly`, but not at zero: `zero_floor_does_not_imply_cfcs` gives live pin forks that every per-stream clash decomposition misses. `fork_clash_charges_the_pair` recovers the missing joint charge. `ew_rejected_at_zero_over_unreachable_pair` then exposes the old cost model's reachability hole by rejecting on the element-wide OR-Set pair that no protocol cut reaches. |
+| `Uwueave/CertificateScope.lean` | Future-sufficient keys as the quotient by equal residual futures, with `resQuot_coarsest_sufficient` proving the factorization property. This resembles `MinimalSummary` only at the kernel shape: `residual_is_not_a_join_congruence` refutes a merge on these classes. `deliveryKey_sufficient` shows the pool belongs in the key and the epoch may be dropped; `closed_is_not_a_sound_delivery_certificate` separates value closure from view finality. |
+| `Uwueave/CliqueLive.lean` | Clique certificates jointly constrain live seam width and fork-scenario cost. `live_clique_forces_live_width` and `live_clique_forces_scenario_floor` are general lower bounds; `the_live_clique_number_determines_both` pins the slot witness at live 2 versus global 3. Width is not claimed equal to clique number in general: colouring may need more colours, and seam stability adds non-graph obligations; `the_two_floors_are_incomparable` says block and clique floors must both be reported. |
+| `Uwueave/DerivedDocument.lean` | Evidence is encoded as a document without loss (`encodeEvidence_iso`), and `deriveDoc_hom` makes "a computation over a loom yields a little loom" a one-line join-hom composition. `tallyDoc_requires_evidence` transfers the count impossibility to documents while `seenDoc_joinHom` exhibits the provenance-retaining escape. Rank-grounded pipelines terminate and merge freely; acyclicity alone is explicitly weaker. `docStatus_encodeEvidence` lets the six-status renderer serve both primary evidence and derived documents. |
+| `Uwueave/EraCertificate.lean` | ERA finalization as a delivery certificate: under the readable `Settled` premise, `era_finalisation_is_a_sound_certificate`; `era_stops_before_quiescence` shows the final prefix can stabilize while the full view still moves. Honest cut extension preserves that prefix, but `backdated_cut_rewrites_the_finalised_view` refutes the claim without the hypothesis. `an_event_born_finalised_rewrites_the_view` names the Byzantine boundary: announced event ids must be unforgeable. |
+| `Uwueave/ForkGrade.lean` | A fork-aware coordination profile whose worlds are path endpoints by construction. `liveScenario_optimum_eq_zero_iff_no_live_clash` reflects zero (the reverse needs the constant seam in the strategy space); `cfcs_iff_locallySafe_and_all_finite_scenarios_zero` bridges the modal and quantitative readings. `the_disagreement_resolved` puts the pin workload's per-stream floor 0 beside its live fork optimum 1 on the same carrier. |
+| `Uwueave/HistoryBase.lean` | Merge-base validity moved from state pairs onto a version DAG: `ValidInHistory` means lowest common base, two distinct maximal bases, or a proof that no common ancestor exists. `coherent_never_unavailable` makes unavailable a cross-history answer; the state and history obligations are independent in both directions. Base-scoped state certificates are sound where unscoped and root-scoped reuse fail, and `the_model_certifies_what_the_history_breaks` shows a safe state-level decision model can refuse the very merge a real history records. |
+| `Uwueave/HistoryPolicy.lean` | Four policy judgements — base robustness, selector safety, explicit ambiguity, and history convergence — with their separations inhabited. The crown is `recordDetermined_converges`: equal records under one record-determined policy derive equal views over any rank-grounded version DAG. `the_swap_is_order_dependence` identifies the two-cycle as asymmetric self-base selection, and `the_self_base_policy_is_not_history_licensed` shows history validity refuses exactly that policy. |
+| `Uwueave/LiveBudget.lean` | A reachability-aware budget verdict: only `liveRejected` carries a proof that the realized path cost agrees with the abstract workload; `carrierGlobalBound` has no model field and therefore cannot claim liveness. `ew_no_live_realization` proves the element-wide workload admits no live realization at all, while `claim_sound` assigns each constructor exactly the proposition it may print. `pathSegmented_iff_liveSegmented` connects the path-local strategy space to `LiveSegmented`. |
+| `Uwueave/LiveCost.lean` | Proof-carrying paths replace reachability side conditions. `ClashChain.accused_are_connected` follows from construction, `cost_floor_becomes_live` names the required total simulation `Grounds`, and `totalModel_grounds_everything` says why a permissive model gives the repair no teeth. The tag-scoped OR-Set clash is live and charged; the element-wide pair refuses a live accusation and `ewTeleport_not_grounded` locates the failed transport. |
+| `Uwueave/LiveSegmented.lean` | Segmentation relativized to co-reachable states, closing the strategy-space reachability hole. `live_optimum_strictly_below_global_optimum` proves least live width 2 versus least carrier-global width 3; `the_third_domain_is_charged_for_an_unreachable_pair` identifies the exact extra edge. The safety clause still equals live proper colouring, while fiber stability remains independent; the file records which `SeamAlgebra` laws survive or need weaker live hypotheses. |
+| `Uwueave/MenuTotality.lean` | Makes seam-menu applicability decidable over a covering pool, provides real synthesis, and replaces a free hand-authored floor with a clique-backed `CertifiedSeam`. `uniqueOn_singletons_clash_iff` corrects the false "ceiling graph is complete" conjecture; `atMostOne_seam_row_refuted_at_every_finite_segment` shows the `Nat` ceiling admits no finite seam. `clique_forces_joint_crossings` supplies the concurrent `k-1` floor that `the_clique_floor_is_invisible_to_the_block_calculus` proves the sequential block calculus cannot see. |
+| `Uwueave/Preo/Classification.lean` | Fragment 2's facet algebra: rules accumulate global verdicts, seams, mergeability results, or honest obligations. `verdict_agree`, `seam_forces_clash`, and `fourth_unique` prevent contradictory evidence; `run_answer_of_perm` proves route-order invariance. `mergeability_comp` transports a derived computation along one field projection, requiring surjectivity only for the negative `needsEvidence` direction. |
+| `Uwueave/Preo/Demo.lean` | Executable acceptance tests for `preo`: `LoomDoc2` retains seam/cross/derive facets; `TwinQuota` derives a product document seam; `NestedSurface` finds two seams through eight fields and absorbs six checked FREE rows; `KeyedDoc` makes `per` change the carrier and re-derives `WeaveState.bookmarksVerdict` by `rfl`. The general algebra also reconstructs `weaveDocSeamVerdict` as the same value. Unsupported shapes still become obligations. |
+| `Uwueave/Preo/Elab.lean` | The command elaborator that turns a `preo` declaration into ordinary state/projection definitions plus kernel-checked `Verdict`, `SegVerdict`, `Fourth.Correct`, or `Obligation` values. It supports keyed `per` carriers, conservative clash self-seams, two seam rows anywhere in a right-nested document, and checked FREE-row absorption. Routes accumulate by facet family and the report reduces its answer from emitted terms; unsupported predicates never inherit a carrier-shaped guess. |
+| `Uwueave/Preo/Syntax.lean` | The fragment-2 surface and its small semantic support: six field kinds, optional `field name per Key : Kind` families, one- or two-field invariants, one-field derives, report rows, and an evidence-free `Obligation`. `proj_iconfluent` is the uniform join-homomorphic projection lift. There is deliberately no deep expression AST; ordinary Lean terms stay opaque except for which declared fields they mention. |
+| `Uwueave/RenderProgress.lean` | Splits pending truth, fair-delivery progress, and authorized actionability into separate contracts. `statusOf_pending_escapable_by_sealing` proves the old escapability clause can be discharged by abandoning every source; `pending_progress_under_fair_delivery` gives the actual liveness result; `a_revoked_actor_gets_no_button` makes authorization load-bearing. The semantic widget forbids `loading` at `absent`, though pixel salience remains outside the model. |
+| `Uwueave/RenderSix.lean` | The six-way carrier and soundness contract that distinguish definitive absence from pending. `five_handlers_cannot_separate` proves the old limit and `six_carrier_separates` retires it; `statusOf_sound6` adds absent-final and pending-escapable obligations while folding back to the five-way contract. `spinner_is_an_honest_five_status_renderer` proves the old interface admits a forever-spinner; `absence_is_the_more_defensible_badge` is specifically a two-sided merge fact, not a unilateral one. |
+| `Uwueave/RepairMenu.lean` | Menus generated from typed repairs: every row is available, conditional with a priced obligation, or universally impossible. `menu_price_is_projection` and `menu_delta_is_projection` prevent independent display drift; `ceiling_seam_row_disagrees` demonstrates the old hand row's 0 versus the generated forced 1. The seam acceptance test inhabits all three row constructors, while `no_free_pin_arbitration` and the escrow refutations keep absent rows distinct from impossible ones. |
+| `Uwueave/TextSummary.lean` | Applies the summary theorems to sequence views. `no_text_merge_without_provenance` refutes every combiner on rendered text with well-formed replica states; `linearize_not_joinHom` separately exposes a causally pending-anchor boundary. `tombstones_are_load_bearing` and `no_gc_summary_sufficient` prove that deleting the tombstone resurrects a character in a future context, while `tombstoned_content_never_read` isolates what may be discarded. `verdict_order_policy_invariant` shows RGA and Fugue can disagree on order and agree on the evidence verdict. |
 
 ## Keystone ledger
 
@@ -121,7 +146,7 @@ each `Live` / `LatticeOnly` tag cites nothing beyond the named module's own
 docstrings (upgraded by `CausalReach` theorems where those supersede them);
 `—` marks rows the axis does not apply to. Every row is covered by
 `#audit_floor`'s total gate — there is no per-row trust column to read. The
-table currently holds 126 rows:
+table currently holds 285 rows:
 
 | Theorem | Module | Generality | Reachability |
 |---|---|---|---|
@@ -189,6 +214,16 @@ table currently holds 126 rows:
 | `coordination_free_iff_iconfluent` | Choreo | ∀-general | — |
 | `seam_coordination_free` | Choreo | ∀-general | — |
 | `atMostOne_sync_cannot_be_dropped` | Choreo | finite-story | Live |
+| `compatibility_axes_are_load_bearing` | Scheduling | finite-story | — |
+| `SessionProfile.crossingProfile_comp` | Scheduling | ∀-general | — |
+| `least_le_upper` | Scheduling | ∀-general | — |
+| `composed_plan_uses_one_strategy` | Scheduling | ∀-general | — |
+| `crossings_can_exceed_meetings` | Scheduling | finite-story | Live |
+| `meetings_can_exceed_crossings` | Scheduling | finite-story | Live |
+| `no_crossing_count_determines_least_meetings` | Scheduling | finite-story | Live |
+| `no_least_meeting_count_determines_crossings` | Scheduling | finite-story | Live |
+| `one_crossing_can_need_two_rounds` | Scheduling | finite-story | Live |
+| `meetings_cannot_erase_currency` | Scheduling | finite-story | Live |
 | `ra_linearizable_but_unsafe` | RALin | finite-story | Live |
 | `ra_lin_preserves_inductive_invariants` | RALin | ∀-general | — |
 | `maxctr_every_invariant_iconfluent` | RALin | ∀-general | — |
@@ -251,23 +286,174 @@ table currently holds 126 rows:
 | `sole_admin_not_iconfluent` | Authority | finite-story | Live |
 | `duelling_revocations_not_iconfluent` | Authority | finite-story | Live |
 | `uniqueness_ceiling` | Ceiling | ∀-general | — |
+| `rejected_sound` | Budget | ∀-general | — |
+| `lower_bound_does_not_license_acceptance` | Budget | finite-story | — |
+| `reblocking_escapes_the_floor` | Budget | finite-story | — |
+| `opt_compose_ge_sum_opt` | CoordEffect | ∀-general | — |
+| `optimum_compose_achieved` | CoordEffect | ∀-general | — |
+| `pin_session_costs_exactly_one` | CoordEffect | finite-story | — |
+| `eraReplay_same_sets` | EraKernel | ∀-general | — |
+| `duel_response_words` | EraKernel | finite-story | Live |
+| `closed_iconfluent` | Evidence | ∀-general | — |
+| `divergent_futures_force_nonexact` | Evidence | ∀-general | — |
+| `render_retracts_when_a_new_source_appears` | Evidence | finite-story | Unknown |
+| `monotonicity_and_finality_are_independent` | Evidence | finite-story | — |
+| `pin_escrow_starves` | Exits | finite-story | — |
+| `repeated_merge_breaks_the_invariant` | Histories | finite-story | LatticeOnly |
+| `base_accident_decides_the_invariant` | Histories | finite-story | LatticeOnly |
+| `swap_never_converges` | Histories | parametric | LatticeOnly |
+| `consumers_factor` | HonestRender | ∀-general | — |
+| `no_honest_projection` | HonestRender | ∀-general | Unknown |
+| `salience_is_not_enforceable` | HonestRender | ∀-general | — |
+| `summaryFold_iff_joinHom` | JoinHom | ∀-general | — |
+| `no_count_merge_without_provenance` | JoinHom | ∀-general | — |
+| `count_summary_must_distinguish` | JoinHom | ∀-general | — |
+| `monotone_pullback_can_fail` | JoinHom | finite-story | — |
+| `iconfluentIn_join_iff` | MergeModel | ∀-general | — |
+| `iconfluentIn_ancestral_iff` | MergeModel | ∀-general | — |
+| `ancestral_not_idempotent` | MergeModel | finite-story | Live |
+| `replay_not_observational` | MergeModel | finite-story | Live |
+| `ctxQuot_coarsest_sufficient` | MinimalSummary | ∀-general | — |
+| `ctxQuot_fold_answers` | MinimalSummary | ∀-general | — |
+| `mem_ctxEquiv_iff` | MinimalSummary | ∀-general | — |
+| `card_ctxEquiv_iff` | MinimalSummary | parametric | — |
+| `threshold_quotient_not_cappedCount` | MinimalSummary | finite-story | — |
+| `faithful_stepConfluent_iff_legalSerialization` | Recoverable | ∀-general | — |
+| `comm_forces_symmetric_chooser` | Recoverable | ∀-general | — |
+| `budget_boundary` | Recoverable | parametric | — |
+| `crossings_cannot_see_the_difference` | Repair | finite-story | — |
+| `no_free_arbitration` | Repair | parametric | — |
+| `weakened_chain_is_not_the_original` | Repair | finite-story | — |
+| `declaration_is_relative_to_the_reach` | ResultStatus | finite-story | Live |
+| `sixth_cell_is_distinguishable` | ResultStatus | finite-story | — |
+| `absence_outlives_exactness` | ResultStatus | finite-story | — |
+| `segmented_iff_properColoring` | SeamColoring | ∀-general | — |
+| `pin_synthesizeSeam_isSome` | SeamColoring | finite-story | — |
+| `coloring_alone_does_not_segment` | SeamColoring | finite-story | Unknown |
+| `Clash.not_iconfluent` | Tactics/Core | ∀-general | — |
+| `findClash_none` | Tactics/Core | ∀-general | — |
+| `core_iconfluent` | WeaveState | parametric | — |
+| `weaveDocVerdict` (def) | WeaveState | finite-story | Live |
+| `weaveDoc_segmented` | WeaveState | parametric | — |
+| `merge_preserves_wellformed` | Wellformed | parametric | — |
+| `merged_doc_violates_onePin_but_is_wellFormed` | Wellformed | finite-story | Live |
+| `no_crash` | Wellformed | ∀-general | — |
+| `delivery_future_is_not_state_indexed` | WorldFuture | finite-story | Live |
+| `quiescence_is_a_sound_certificate` | WorldFuture | ∀-general | — |
+| `no_sound_state_cert_accepts_openW` | WorldFuture | ∀-general | — |
+| `coordination_necessary_and_costly` | Bounds | ∀-general | — |
+| `zero_floor_does_not_imply_cfcs` | Bounds | parametric | Live |
+| `fork_clash_charges_the_pair` | Bounds | ∀-general | Live |
+| `ew_rejected_at_zero_over_unreachable_pair` | Bounds | finite-story | LatticeOnly |
+| `resQuot_coarsest_sufficient` | CertificateScope | ∀-general | — |
+| `deliveryKey_sufficient` | CertificateScope | ∀-general | — |
+| `residual_is_not_a_join_congruence` | CertificateScope | finite-story | — |
+| `closed_is_not_a_sound_delivery_certificate` | CertificateScope | finite-story | Live |
+| `live_clique_forces_live_width` | CliqueLive | ∀-general | — |
+| `live_clique_forces_scenario_floor` | CliqueLive | ∀-general | — |
+| `triple_clash_forces_triangle` | CliqueLive | ∀-general | — |
+| `the_two_floors_are_incomparable` | CliqueLive | parametric | — |
+| `the_live_clique_number_determines_both` | CliqueLive | finite-story | — |
+| `encodeEvidence_iso` | DerivedDocument | ∀-general | — |
+| `deriveDoc_hom` | DerivedDocument | ∀-general | — |
+| `tallyDoc_requires_evidence` | DerivedDocument | finite-story | — |
+| `pipelines_merge_coordination_free` | DerivedDocument | ∀-general | — |
+| `acyclic_pipelines_are_not_all_grounded` | DerivedDocument | parametric | — |
+| `docStatus_encodeEvidence` | DerivedDocument | parametric | — |
+| `era_finalisation_is_a_sound_certificate` | EraCertificate | parametric | — |
+| `era_stops_before_quiescence` | EraCertificate | finite-story | — |
+| `honest_announcement_resumes_the_finalised_view` | EraCertificate | ∀-general | — |
+| `backdated_cut_rewrites_the_finalised_view` | EraCertificate | finite-story | Live |
+| `an_event_born_finalised_rewrites_the_view` | EraCertificate | finite-story | Live |
+| `liveScenario_optimum_eq_zero_iff_no_live_clash` | ForkGrade | ∀-general | — |
+| `cfcs_iff_locallySafe_and_no_reachableClash` | ForkGrade | ∀-general | — |
+| `cfcs_iff_locallySafe_and_all_finite_scenarios_zero` | ForkGrade | ∀-general | — |
+| `the_disagreement_resolved` | ForkGrade | parametric | Live |
+| `coherent_never_unavailable` | HistoryBase | ∀-general | — |
+| `the_base_scope_repairs_the_state_keyed_certificate` | HistoryBase | finite-story | Live |
+| `the_model_certifies_what_the_history_breaks` | HistoryBase | finite-story | LatticeOnly |
+| `safety_is_selector_relative` | HistoryPolicy | finite-story | LatticeOnly |
+| `recordDetermined_converges` | HistoryPolicy | ∀-general | — |
+| `ccHistory_not_policyGenerated` | HistoryPolicy | ∀-general | LatticeOnly |
+| `the_swap_is_order_dependence` | HistoryPolicy | finite-story | LatticeOnly |
+| `the_self_base_policy_is_not_history_licensed` | HistoryPolicy | finite-story | LatticeOnly |
+| `claim_sound` | LiveBudget | ∀-general | — |
+| `ew_no_live_realization` | LiveBudget | finite-story | LatticeOnly |
+| `carrier_global_rejection_is_not_live` | LiveBudget | ∀-general | LatticeOnly |
+| `pathSegmented_iff_liveSegmented` | LiveBudget | ∀-general | — |
+| `ClashChain.accused_are_connected` | LiveCost | ∀-general | Live |
+| `cost_floor_becomes_live` | LiveCost | ∀-general | Live |
+| `orset_tag_scoped_clash_is_live` | LiveCost | finite-story | Live |
+| `ew_pair_refuses_a_live_accusation` | LiveCost | parametric | LatticeOnly |
+| `clashBlocks_head_coReachable` | LiveSegmented | ∀-general | Live |
+| `live_optimum_strictly_below_global_optimum` | LiveSegmented | finite-story | LatticeOnly |
+| `the_third_domain_is_charged_for_an_unreachable_pair` | LiveSegmented | finite-story | LatticeOnly |
+| `liveSegmented_iff_liveProperColoring` | LiveSegmented | ∀-general | — |
+| `seam_row_dichotomy` | MenuTotality | ∀-general | — |
+| `uniqueOn_singletons_clash_iff` | MenuTotality | ∀-general | — |
+| `atMostOne_seam_row_refuted_at_every_finite_segment` | MenuTotality | ∀-general | — |
+| `clique_forces_joint_crossings` | MenuTotality | ∀-general | Live |
+| `the_clique_floor_is_invisible_to_the_block_calculus` | MenuTotality | parametric | — |
+| `verdict_agree` | Preo/Classification | ∀-general | — |
+| `seam_forces_clash` | Preo/Classification | ∀-general | — |
+| `run_answer_of_perm` | Preo/Classification | ∀-general | — |
+| `mergeability_comp` | Preo/Classification | ∀-general | — |
+| `one_pin_escalates` | Preo/Demo | finite-story | Live |
+| `loomDocFree` | Preo/Demo | parametric | — |
+| `loomDoc2Free` | Preo/Demo | parametric | — |
+| `elabPreoDecl` (def) | Preo/Elab | ∀-general | — |
+| `proj_iconfluent` | Preo/Syntax | ∀-general | — |
+| `statusOf_pending_escapable_by_sealing` | RenderProgress | ∀-general | — |
+| `pending_progress_under_fair_delivery` | RenderProgress | ∀-general | Live |
+| `a_truthful_spinner_may_wait_forever` | RenderProgress | finite-story | Live |
+| `a_revoked_actor_gets_no_button` | RenderProgress | finite-story | — |
+| `absence_is_not_unilaterally_merge_closed` | RenderProgress | finite-story | Unknown |
+| `constant_widget_is_not_honest` | RenderProgress | ∀-general | — |
+| `statusOf_sound6` | RenderSix | ∀-general | — |
+| `five_handlers_cannot_separate` | RenderSix | ∀-general | — |
+| `spinner_is_an_honest_five_status_renderer` | RenderSix | finite-story | — |
+| `absence_is_the_more_defensible_badge` | RenderSix | parametric | Unknown |
+| `menu_price_is_projection` | RepairMenu | ∀-general | — |
+| `menu_delta_is_projection` | RepairMenu | ∀-general | — |
+| `ceiling_seam_row_disagrees` | RepairMenu | finite-story | — |
+| `duel_two_tags_one_repair` | RepairMenu | finite-story | — |
+| `no_free_pin_arbitration` | RepairMenu | parametric | — |
+| `seam_row_takes_all_three_constructors` | RepairMenu | finite-story | — |
+| `no_text_merge_without_provenance` | TextSummary | ∀-general | Live |
+| `linearize_not_joinHom` | TextSummary | ∀-general | LatticeOnly |
+| `tombstones_are_load_bearing` | TextSummary | finite-story | Live |
+| `no_gc_summary_sufficient` | TextSummary | ∀-general | Live |
+| `text_architecture_is_forced` | TextSummary | parametric | — |
+| `verdict_order_policy_invariant` | TextSummary | finite-story | Live |
+| `keyed_cross_iconfluent` | Confluence | ∀-general | — |
+| `SegVerdict.prependFree` | SeamAlgebra | ∀-general | — |
+| `SegVerdict.selfSeam` | SeamAlgebra | ∀-general | — |
+| `LoomDoc.one_wide.seam` | Preo/Demo | finite-story | Live |
+| `KeyedDoc.fk.verdict` | Preo/Demo | finite-story | — |
+| `TwinQuota.documentSeam` | Preo/Demo | finite-story | Live |
+| `NestedSurface.documentSeam` | Preo/Demo | finite-story | Live |
+| `NestedSurface.documentSeamFree6` | Preo/Demo | finite-story | Live |
+| `weaveCoordViaAlgebra` | Preo/Demo | finite-story | Live |
+| `weaveDocViaAlgebra` | Preo/Demo | finite-story | Live |
 
 Ledger rows grow with the tree; reachability is derived from module docstrings
 **and** from `CausalReach` theorems where those supersede older caution notes.
 **Live** (selection): `pncounter`, `lww_cross_field`, `acyclicity`,
-`view_not_stable`, `interleaving_anomaly`, `active_path`, `ormap_doomed_update`,
-`ormap_policy_divergence`, `determinism`, `sole_admin`, `duelling_revocations`,
-**and** (post–JOB 2) `orset_present_not_iconfluent` / `ormap_present_not_iconfluent`
-under tag-scoped rem-after-add (`CausalReach.orset_clash_joint`), plus
-at-most-one / mutex / budget concurrent-op shapes (`atMostOne_joint`,
-`budget_joint`). **Unknown / CA-blocked** — Sequence and Authority dup-pair
-refutations: free-id fragments are Live (`sequence_dup_frag_joint`); full
-uniqueness under content addressing is a collision-extraction premise, not a
-cut theorem. **LatticeOnly** — the `CausalReach` element-wide row
-(`ew_clashL_unreachable`) is the axis's one deliberate inhabitant: it *proves*
-the lattice pair unreachable under that protocol reading; none remain for the
-OR-Set/OR-Map presence clashes under the tag-scoped reading. The Seams `Live`
-tags follow that module's own partition narratives (an epoch-1 replica's
-claims gossiped across the boundary; a v0 record carried into a v1 store).
+`view_not_stable`, `interleaving_anomaly`, `active_path`, the OR-Set/OR-Map
+tag-scoped remove shapes, fork scenarios, proof-carrying paths, and the text
+histories whose modules construct the operations from a common start. The
+Seams `Live` tags follow that module's own partition narratives (an epoch-1
+replica's claims gossiped across the boundary; a v0 record carried into a v1
+store). **Unknown / CA-blocked** remains the conservative label where a module
+gives a lattice witness or abstract renderer obstruction without settling an
+operational history; Sequence and Authority's full id-uniqueness refutations
+still depend on a collision-extraction premise even though their free-id
+fragments are Live. **LatticeOnly** now has several proved inhabitants rather
+than one: the element-wide OR-Set pair (`CausalReach`, `Bounds`, `LiveCost`,
+`LiveBudget`), the carrier-global seam domain that `LiveSegmented` charges only
+for that unreachable pair, history/base-policy examples explicitly shown not
+run-realized or not history-licensed, and `TextSummary`'s pending-anchor state
+that the shipping merge rejects. Tag-scoped OR-Set/OR-Map presence clashes do
+not belong in this column.
 Trust is not a column: every row is inside `#audit_floor`'s total gate, and
 per-theorem axiom profiles are `#print axioms <name>` away.

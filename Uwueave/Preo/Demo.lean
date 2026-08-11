@@ -2,10 +2,17 @@
 # Uwueave.Preo.Demo — the acceptance test: does the elaborator rediscover what
 `WeaveState.lean` proved by hand?
 
-**Two declarations.** `LoomDoc` (§1–§3) is fragment 1, kept verbatim as a
-regression — six fields, six invariants, the same six verdicts by the same
-routes. `LoomDoc2` (§3½) is fragment 2: the three surface forms fragment 1
-refused, each checked against the hand proof it is supposed to rediscover.
+**Five declarations.** `LoomDoc` (§1–§3) retains fragment 1's six fields and
+six invariants as a regression, while the formerly unresolved `Slot Nat` row
+now reaches the conservative pins self seam. `LoomDoc2` (§3½) is fragment 2:
+the three surface forms fragment 1 refused, each checked against the hand proof
+it is supposed to rediscover.
+`TwinQuota` (§3¾) is the document-seam acceptance: two independently budgeted
+fields become one derived verdict over their pair of allocation seams.
+`NestedSurface` (§3⅘) exercises the same registry through eight right-nested
+fields and absorbs six legal coordination-free rows.
+`KeyedDoc` (§3⅝) closes the keyed cross-field gap and rediscovers the hand
+bookmarks verdict as a value.
 
 ## The fragment-2 result, stated before you read the file
 
@@ -14,17 +21,18 @@ refused, each checked against the hand proof it is supposed to rediscover.
   * **the seam row is the hand-written seam, as a value** —
     `LoomDoc2.in_budget.seam = WeaveState.quotaVerdict` by `rfl`;
   * **the cross row is `Spec.refIntVerdict`, as a value** — the FK verdict
-    `WeaveState.bookmarksVerdict` is built from, ⚠ at the one-user shape
-    because this fragment still has no `per`;
+    `WeaveState.bookmarksVerdict` is built from, ⚠ at the one-user shape kept
+    by `LoomDoc2`; §3⅝ exercises the full keyed shape;
   * **two derives with opposite mergeability verdicts** — an existential read
     `fromResults`, a count `needsEvidence`, plus a third refused outright.
 
-§3½'s header carries the detail and the one gap that is *not* closed
-(`WeaveState.weaveDocSeamVerdict`'s two-feature document seam).
+§3½'s header carries the detail. §3¾ closes its two-feature surface
+composition gap; §3⅞ then reconstructs `WeaveState.weaveDocSeamVerdict` as a
+value at the general combinator layer and states the remaining surface gap.
 
-## The fragment-1 result (`LoomDoc`), unchanged
+## The fragment-1 declaration (`LoomDoc`), with its pin gap closed
 
-**It agrees, and one row it cannot reach at all.**
+**It agrees, including the formerly unreachable unbounded pin row.**
 
   * `notes` — `GrowSet Nat`, invariant `notes 0 = true`. Derived FREE.
     `WeaveState.nodesVerdict` proves the same invariant over the same carrier by
@@ -35,15 +43,14 @@ refused, each checked against the hand proof it is supposed to rediscover.
     (`PREOSCRIPTING.md` §6).
   * `pin` — `Slot (Fin 3)`, the uniqueness ceiling. Derived ESCALATES **with the
     witness pair `{0}` / `{1}`** — the *same two singletons* `Spec.atMostOneClash`
-    and `WeaveState.pinA`/`pinB` carry by hand. §2 checks that as membership
+    and `WeaveState.pinA`/`pinB` carry by hand. Its certified finite clash also
+    receives the conservative self seam. §2 checks the witness as membership
     bits, by `rfl`, rather than by looking at it.
   * `wide_pin` — `Slot Nat`, the identical ceiling at `WeaveState`'s own id type.
-    **UNRESOLVED.** `∀ m n : Nat, …` is not decidable, so no route applies, and
-    the elaborator says so and quotes `classify`'s diagnosis instead of guessing.
-    `Catalog.gset_atMostOne_not_iconfluent` is exactly the theorem that "must
-    stay hand-proved" per `Tactics.Core`'s header, and this row is that sentence
-    happening. Two `Slot` fields sit side by side in the declaration on purpose:
-    the fragment boundary is a property of the *index type*, not of the shape.
+    Binary search still cannot decide `∀ m n : Nat, …`, but the pin seam rule
+    recognizes the exact `Spec.atMostOneClash` shape and packages its existing
+    repro with `SegVerdict.selfSeam`. The result is ESCALATES plus "coordinate
+    whenever the pin set changes", not a guessed finite decision.
   * `budget` — `Escrow Bool`. No route (the value lattice is `Nat`, which is
     infinite and does not select pointwise), so the author supplies
     `Catalog.escrow_local_bound_iconfluent`. Reported `supplied`, never
@@ -196,13 +203,14 @@ theorem loomDocFree : IConfluent (S := LoomDoc.State) (fun s =>
     (and_iconfluent LoomDoc.in_budget.onState
       (and_iconfluent LoomDoc.grown.onState LoomDoc.titled.onState))
 
-/-- The unresolved row is *not* one of them, and this is the point of the
-`Obligation` type: `LoomDoc.one_wide.obligation` exists, prints, and names its
-own remaining work — and there is no function anywhere that turns it into a
-verdict. Discharging it means writing `:= Uwueave.Spec.atMostOneClash` on the
-declaration (which typechecks — the invariant is that theorem's, verbatim) or
-proving it. Until someone does, the table says UNRESOLVED. -/
-example : LoomDoc.one_wide.obligation.onField = "wide_pin" := rfl
+/-- **The formerly unresolved unbounded row is the hand pins seam.** Search did
+not become magically decidable: the registry matched the exact catalog clash,
+then `selfSeam` added the identity projection while preserving its witnesses. -/
+example : LoomDoc.one_wide.seam =
+    Uwueave.Spec.SegVerdict.selfSeam WeaveState.pinsVerdict rfl := rfl
+
+/-- Its binary facet is the same hand verdict after forgetting the seam. -/
+example : LoomDoc.one_wide.verdict = WeaveState.pinsVerdict := rfl
 
 /-! ## §3. What it refuses
 
@@ -326,9 +334,10 @@ prescribed, and every claim in this header is a `rfl` further down.
     literally `Spec.refIntVerdict` (`rfl`). ⚠ One honest difference, stated
     rather than glossed: `WeaveState.bookmarksVerdict` is the *keyed* form
     (`∀ u, PointsAtExisting ns (bm u)`, through `keyed_cross_iconfluent`),
-    because that document has per-user bookmarks. This fragment has no `per`,
-    so `LoomDoc2` declares the one-user shape. Same theorem underneath, smaller
-    statement, and the report does not pretend otherwise.
+    because that document has per-user bookmarks. `LoomDoc2` deliberately keeps
+    the fragment-2 one-user shape as a regression; §3⅝ declares the full keyed
+    form. Same theorem underneath, smaller statement here, and the report does
+    not pretend otherwise.
   * **(c) Two derives, OPPOSITE mergeability verdicts.** `anyone` (an
     existential read) is `fromResults`; `tally` (a count) is `needsEvidence`,
     and it got there through `JoinHom.no_count_merge_without_provenance` — an
@@ -341,13 +350,12 @@ prescribed, and every claim in this header is a `rfl` further down.
 than the hand result — (b)'s keyed-vs-plain — it is said above and again at the
 row.
 
-⚠ And one thing this file does NOT show, because it is not true: the derived
-seam does not make `WeaveState.weaveDocSeamVerdict` derivable. That object
-segments a **whole eight-field document** over `(pins, allocation)` — two
-coordination features at once — and the registry has one single-field rule.
-`LoomDoc2.in_budget.seamOnState` is the document-scale seam of *one* field.
-The gap is a missing rule (`SeamAlgebra.prodSeams` composing two seam facets),
-not a missing theorem. -/
+⚠ One thing this file still does NOT show, because it is not yet true: the
+derived seam does not make `WeaveState.weaveDocSeamVerdict` derivable. That
+object segments a **whole eight-field document** over `(pins, allocation)`.
+The two-Quota declaration in §3¾ closes the product-shaped composition rule;
+the eventual eight-field prize additionally needs a pins-side surface seam and
+`SegVerdict.absorbFree` wiring for the coordination-free conjuncts. -/
 
 preo LoomDoc2 where
   field nodes     : GrowSet Nat
@@ -446,7 +454,8 @@ example : LoomDoc2.fk.verdict = Spec.refIntVerdict := rfl
 /-- Agreement with the document `WeaveState` classified by hand. ⚠ The
 statements are not identical and the header says so: `bookmarksVerdict` is the
 per-user family (`keyed_cross_iconfluent` over `∀ u`), this row is the one-user
-shape, because `preo` has no `per`. What is compared here is the answer. -/
+regression shape. What is compared here is the answer; §3⅝ checks exact keyed
+value equality. -/
 example : LoomDoc2.fk.verdict.isFree = WeaveState.bookmarksVerdict.isFree := rfl
 
 /-- The FREE side of the accumulated answer, cashed: `Classification.answer_true`
@@ -464,6 +473,30 @@ replica, after any merge, on the whole five-field document. -/
 example : IConfluent (S := LoomDoc2.State)
     (fun s => LoomDoc2.fk (LoomDoc2.nodes s, LoomDoc2.bookmarks s)) :=
   LoomDoc2.fk.onState
+
+/-! ### 3⅝. A keyed cross row is the hand bookmarks verdict
+
+`field bookmarks per Bool : GrowSet Nat` has carrier
+`Bool → GSet Nat` and pointwise merge. The invariant is classified once against
+the joint merge of `nodes × GSet Nat`, then
+`Uwueave.keyed_cross_iconfluent` transports that proof to every user. -/
+
+preo KeyedDoc where
+  field nodes : GrowSet Nat
+  field bookmarks per Bool : GrowSet Nat
+
+  invariant fk : ∀ u n, bookmarks u n = true → nodes n = true
+
+#preo_report KeyedDoc
+
+/-- **The keyed surface rediscovers the full hand verdict as the same value.**
+This is no longer the one-user approximation of `LoomDoc2.fk`: carrier,
+predicate, and proof route all have the `User → GSet NodeId` shape. -/
+example : KeyedDoc.fk.verdict = WeaveState.bookmarksVerdict := rfl
+
+/-- The keyed field's emitted carrier and accessor are definitionally the
+pointwise family the surface promises. -/
+example : KeyedDoc.bookmarks (fun _ => false, fun u n => u && n == 0) true 0 = true := rfl
 
 /-! ### 3½.3 (c) The two derives, and the third that is refused -/
 
@@ -580,6 +613,156 @@ theorem loomDoc2Free : IConfluent (S := LoomDoc2.State) (fun s =>
       ∧ LoomDoc2.grown (LoomDoc2.height s))) :=
   and_iconfluent LoomDoc2.genesis.onState
     (and_iconfluent LoomDoc2.fk.onState LoomDoc2.grown.onState)
+
+/-! ## §3¾. Two row seams become one document seam
+
+This is the seam-registry composition acceptance. Each invariant independently
+reaches `Preo.budgetSeam 10`; because the declaration has exactly two fields,
+the elaborator lifts the left verdict with `SegVerdict.liftFst`, lifts the right
+with `.liftSnd`, and conjoins them on `TwinQuota.State` with `.andSeams`.
+
+The result is not merely extensionally plausible. It is the existing hand
+composition `budgetSegVerdict.prodSeams budgetSegVerdict` as a value, by `rfl`:
+same pair-of-allocations seam and the same left-field concrete clash with the
+right field held at its carried legal witness. -/
+
+preo TwinQuota where
+  field east : Quota Bool
+  field west : Quota Bool
+
+  invariant east_budget : Uwueave.Segmented.BudgetInv 10 east
+  invariant west_budget : Uwueave.Segmented.BudgetInv 10 west
+
+#preo_report TwinQuota
+
+/-- **The registry rediscovers the hand composition as the same value.** This
+checks more than agreement of answers: `rfl` sees the pair seam, both lifted
+field verdicts, and the carried global repro. Proof-valued fields are irrelevant
+by proof irrelevance; every computational field is definitionally identical. -/
+example : TwinQuota.documentSeam =
+    Spec.budgetSegVerdict.prodSeams Spec.budgetSegVerdict := rfl
+
+/-- The derived document seam watches both allocation functions. No scalar or
+single-field seam has been substituted for the pair. -/
+example : TwinQuota.documentSeam.σ =
+    (fun d : TwinQuota.State => (d.1.1, d.2.1)) := rfl
+
+/-- The composed verdict retains a concrete global refutation: two legal
+two-quota documents can merge outside the conjunction. -/
+example : ¬ IConfluent (S := TwinQuota.State) (fun d =>
+    TwinQuota.east_budget (TwinQuota.east d) ∧
+      TwinQuota.west_budget (TwinQuota.west d)) :=
+  TwinQuota.documentSeam.escalatesGlobally
+
+/-! ## §3⅘. Nested-state composition and checked free absorption
+
+This declaration deliberately has eight flat surface fields, with the pin and
+quota at the far end of the right-nested product. The document rule must find
+and lift those two seams without assuming they are `Prod.fst`/`Prod.snd` of the
+whole state. Its custom sections plant each seam verdict's legal `x` in the
+other coordinated field; in particular they do **not** plant the structural
+zero quota, which is illegal at budget 10.
+
+The six preceding free rows all hold at the carried pin-clash documents, so
+the registry's `absorbFree` attempts succeed. The numbered sixth constant in
+the acceptance below is an intentional tripwire: silently skipping even one
+side condition makes this module fail to elaborate. -/
+
+preo NestedSurface where
+  field nodes     : GrowSet Nat
+  field bookmarks : GrowSet Nat
+  field flags     : GrowSet Bool
+  field spend     : Escrow Bool
+  field height    : Counter
+  field title     : LWW
+  field pins      : Slot Nat
+  field quota     : Quota Bool
+
+  invariant nodes_clear : nodes 0 = false
+    := .free (Uwueave.Catalog.gset_notmem_iconfluent 0)
+  invariant bookmarks_clear : bookmarks 0 = false
+    := .free (Uwueave.Catalog.gset_notmem_iconfluent 0)
+  invariant flags_clear : flags false = false
+    := .free (Uwueave.Catalog.gset_notmem_iconfluent false)
+  invariant spend_clear : ∀ u, spend u ≤ 0
+    := .free (Uwueave.Catalog.escrow_local_bound_iconfluent (fun _ => 0))
+  invariant height_zero : height = 0
+  invariant title_zero : title.ts = 0
+  invariant one_pin : ∀ m n, pins m = true → pins n = true → m = n
+  invariant in_budget : Uwueave.Segmented.BudgetInv 10 quota
+
+#preo_report NestedSurface
+
+/-- All six free rows were absorbed after the two seam rows. This equality is
+definitionally trivial only if every side-condition attempt emitted its
+numbered constant. -/
+example : NestedSurface.documentSeam = NestedSurface.documentSeamFree6 := rfl
+
+/-- **The nested registry derives the hand document-seam shape.** Its carrier
+is the surface's flat right nest rather than `WeaveState.WeaveDoc`, but the
+coordination projection is exactly `(pins, allocation)` through that nest. -/
+example : NestedSurface.documentSeam.σ = (fun d : NestedSurface.State =>
+    (NestedSurface.pins d, (NestedSurface.quota d).1)) := rfl
+
+/-- The absorbed result still carries the concrete pin clash at whole-document
+scale; absorption never weakens or existentially forgets the repro. -/
+example : ¬ IConfluent (fun d : NestedSurface.State =>
+    (((((((NestedSurface.one_pin (NestedSurface.pins d)
+      ∧ NestedSurface.in_budget (NestedSurface.quota d))
+      ∧ NestedSurface.nodes_clear (NestedSurface.nodes d))
+      ∧ NestedSurface.bookmarks_clear (NestedSurface.bookmarks d))
+      ∧ NestedSurface.flags_clear (NestedSurface.flags d))
+      ∧ NestedSurface.spend_clear (NestedSurface.spend d))
+      ∧ NestedSurface.height_zero (NestedSurface.height d))
+      ∧ NestedSurface.title_zero (NestedSurface.title d))) :=
+  NestedSurface.documentSeam.escalatesGlobally
+
+/-! ## §3⅞. The general algebra reconstructs the eight-field hand verdict
+
+The current surface cannot declare `WeaveCore` as one grouped/custom carrier,
+nor can a free verdict manufacture the legal seed `core₀` that absorption
+honestly requires. That is an elaborator-surface boundary, not an algebra gap.
+At the term layer the route is now complete and contains no theorem specialized
+to `WeaveState`:
+
+1. turn the already-certified pins clash into its conservative identity seam;
+2. compose it with the quota allocation seam;
+3. lift that coordination surface beside the free core; and
+4. prepend the free core with `SegVerdict.prependFree`.
+
+Choosing the hand proof's own legal planting values (`quota₀`, `core₀`) makes
+the result the same `SegVerdict` value, not merely the same projection. -/
+
+/-- The pins-side seam the document needs: coordinate on the whole pin set.
+`selfSeam` retains `pinsVerdict`'s singleton/singleton repro verbatim. -/
+def weavePinsSeam :
+    SegVerdict (S := GSet Nat)
+      (fun s => ∀ m n, s m = true → s n = true → m = n) (GSet Nat) :=
+  Uwueave.Spec.SegVerdict.selfSeam WeaveState.pinsVerdict rfl
+
+/-- The two non-free fields composed over `(pins, allocation)`. The quota is
+held at the hand proof's legal `quota₀` while the carried pins clash fires. -/
+def weaveCoordViaAlgebra :
+    SegVerdict (S := GSet Nat × Segmented.QuotaState)
+      (fun p => (∀ m n, p.1 m = true → p.1 n = true → m = n)
+        ∧ Segmented.BudgetInv 10 p.2)
+      (GSet Nat × (Bool → Nat)) :=
+  (weavePinsSeam.liftFst WeaveState.quota₀).andSeams
+    (WeaveState.quotaVerdict.liftSnd WeaveState.pinA)
+    WeaveState.quota₀_legal WeaveState.quota₀_legal
+
+/-- **The eventual prize at the general combinator layer.** No field of this
+record is hand-written here: identity seam, product lifts, same-state seam
+conjunction, and free-prefix absorption reconstruct the existing value. -/
+def weaveDocViaAlgebra :
+    SegVerdict WeaveState.weaveDocInv (GSet Nat × (Bool → Nat)) :=
+  (weaveCoordViaAlgebra.liftSnd WeaveState.core₀).prependFree
+    (WeaveState.fst_iconfluent WeaveState.core_iconfluent)
+    WeaveState.core₀_legal WeaveState.core₀_legal
+
+/-- **Whole-value rediscovery by reduction.** The seam, both complete document
+witnesses, and every non-proof field coincide with the hand artifact. -/
+example : weaveDocViaAlgebra = WeaveState.weaveDocSeamVerdict := rfl
 
 /-! ## §4. The keywords are not stolen
 

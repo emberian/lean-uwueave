@@ -800,7 +800,7 @@ list. Neither open door is on it. `docs/TRUST.md:117` independently records the
 same gap, so the fact is known in the tree — it just never reached the file that
 ships it.
 
-### E.5 P1 — `Uwueave/Exits.lean` prices in a currency the tree retracted
+### E.5 P1 — `Uwueave/Exits.lean` priced in a currency the tree retracted — **RESOLVED 2026-08-11**
 
 `Uwueave/Exits.lean:235` — "**The price of an exit, in meetings.**"
 `Uwueave/Exits.lean:226-228` — "§3. The price, **in meetings**". Eleven
@@ -815,9 +815,14 @@ Contradicted by:
 - `Uwueave/Budget.lean:59-64`, `Uwueave/CoordEffect.lean:90-98`,
   `PREOSCRIPTING.md:109-122` — all corrected.
 
-Four sibling files repeat the disclaimer; the file that committed the error is the
-one that never got swept. (`docs/index.html` still prints "0 meetings" in its Exits
-table and corrects itself further down the page.)
+Four sibling files repeated the disclaimer while the source and website still
+printed the old scalar. The follow-up sweep corrected all five `Exits` display
+strings and the website table/examples in place: seam projections now say
+**crossings**, arbitration shows its typed `arbiterCuts`/rollback/trust bill,
+and the site cites `Scheduling.no_crossing_count_determines_least_meetings`.
+The historical theorem name `arbitration_needs_no_meeting` remains for API
+stability and keeps only its valid negative meaning: replicas do not directly
+agree with one another when an arbiter supplies the decision.
 
 ### E.6 P1 — `Uwueave/Exits.lean` §4.8 conflates two mechanisms and drops a quantifier
 

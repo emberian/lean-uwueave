@@ -42,18 +42,20 @@ equivalence, and `LegalSerialization` is the whole content.
 
 ## What each ingredient does, and what breaks without it
 
-  * **§1 Recoverability.** `DeltaRecoverable g` says two operations agreeing at
-    one state agree everywhere; `DeltaRecovery g` is the *instrument* — a map
-    `recover : S → S → (S → S)` with `recover l (eff a l) = eff a` — and the two
-    are equivalent (`deltaRecovery_iff_deltaRecoverable`, the ⇐ direction by
-    `Classical.choice`). It is neither vacuous nor universal: the lock and the
-    bounded counter both have **computable, choice-free** recoveries, and §1.4's
-    `Ghost` has none. That non-example carries a theorem rather than a shrug —
-    `ambiguous_delta_defeats_faithfulness` shows an ambiguous delta makes
-    `Serializing` **unsatisfiable**: `ghost_no_faithful_merge` refutes it for
-    *every* `AncestralMerge Nat` at once. Recoverability is not a convenience
-    hypothesis, it is the precondition for effect-faithfulness to be a
-    consistent demand on a function of states.
+  * **§1 Recoverability.** `DeltaRecoverableOn g` says two admitted operations
+    agreeing at one state agree everywhere; `DeltaRecoveryOn g` is the
+    *instrument* — a map `recover : S → S → (S → S)` with
+    `recover l (eff a l) = eff a` for admitted `a` — and the two are equivalent
+    (`deltaRecoveryOn_iff_deltaRecoverableOn`, the ⇐ direction by
+    `Classical.choice`). The guard-free `DeltaRecoverable` and `DeltaRecovery`
+    remain as strictly stronger variants. The condition is neither vacuous nor
+    universal: the lock and bounded counter have **computable, choice-free**
+    recoveries, and §1.4's always-admitted `Ghost` has none. That non-example
+    carries a theorem rather than a shrug — `ambiguous_delta_defeats_faithfulness`
+    shows an admitted ambiguous delta makes `Serializing` **unsatisfiable**:
+    `ghost_no_faithful_merge` refutes it for *every* `AncestralMerge Nat` at
+    once. Recoverability is not a convenience hypothesis, it is the precondition
+    for effect-faithfulness to be a consistent demand on a function of states.
   * **§2 A legal serialization.** `LegalSerialization` is the ∀-quantified
     resurrection branch of `clash_dichotomy`, and `legalSerialization_or_escalation`
     connects them by theorem: for any effect-faithful merge, either it holds or
@@ -115,13 +117,12 @@ iff-shaped form of the dichotomy the two files together now have.
     file `Uwueave/Histories.lean` — not imported, not assumed, not anticipated by
     any definition here. `StepGenerated` is the cheapest possible stand-in and is
     named as such, not as a solution.
-  * ⟨UNDONE⟩ **Recoverability is stated guard-free.** `DeltaRecoverableOn` is the
-    weaker, more honest version — only deltas an implementation can actually
-    produce need be recoverable — and `deltaRecoverable_on` gives one direction.
-    The gap is not closable *inside* `Ancestral`'s vocabulary, and the reason is
-    exact: `Serializing` quantifies over all `a b : Op` with no guard hypothesis,
-    so a merge must be faithful even at deltas no run can produce. Fixing that is
-    an edit to `Serializing`, which this file may not make.
+  * **Recoverability is guard-relative.** `DeltaRecoverableOn` is the exact
+    hypothesis used by the construction: only deltas an implementation can
+    actually commit need be recoverable. `DeltaRecoveryOn` is its equivalent
+    proof instrument, and the original guard-free forms remain available as
+    stronger sufficient conditions. This scope matches `Serializing`, which
+    constrains exactly two operations admitted concurrently at their ancestor.
   * ⟨TERMINAL⟩ **"Up to contextual equivalence" is realised, and it is realised
     where it belongs.** §1.3 defines `DeltaRecoverableUpTo` and `SerializingUpTo`
     over `MinimalSummary.CtxEquiv` (with `obs` presenting the invariant as a
@@ -177,8 +178,8 @@ def DeltaRecoverable (g : Guarded S Op) : Prop :=
   ∀ (l : S) (a b : Op), g.eff a l = g.eff b l → g.eff a = g.eff b
 
 /-- The guard-relativized form: only deltas an implementation can actually
-*commit* need be recoverable. Weaker, and the honest hypothesis — see the
-boundary note on why the construction cannot yet use it. -/
+*commit* need be recoverable. This is the exact hypothesis of the construction,
+via the equivalent instrument `DeltaRecoveryOn`. -/
 def DeltaRecoverableOn (g : Guarded S Op) : Prop :=
   ∀ (l : S) (a b : Op), g.guard a l = true → g.guard b l = true →
     g.eff a l = g.eff b l → g.eff a = g.eff b
@@ -187,6 +188,46 @@ def DeltaRecoverableOn (g : Guarded S Op) : Prop :=
 theorem deltaRecoverable_on {g : Guarded S Op} (h : DeltaRecoverable g) :
     DeltaRecoverableOn g :=
   fun l a b _ _ hab => h l a b hab
+
+/-- **A guard-relative recovery map.** `recover l x` is the effect replayed for
+the branch from `l` to `x`. Its specification applies exactly when `x` was
+produced by an operation admitted at `l`; no law is imposed on deltas that the
+implementation aborts and therefore cannot commit. -/
+structure DeltaRecoveryOn (g : Guarded S Op) where
+  /-- The recovered effect of the delta from the ancestor to a branch state. -/
+  recover : S → S → (S → S)
+  /-- An admitted operation's delta recovers that operation's effect. -/
+  spec : ∀ (l : S) (a : Op), g.guard a l = true → recover l (g.eff a l) = g.eff a
+
+/-- A guarded recovery determines the effects of admitted operations that
+produce the same delta. -/
+theorem DeltaRecoveryOn.recoverableOn {g : Guarded S Op} (D : DeltaRecoveryOn g) :
+    DeltaRecoverableOn g := by
+  intro l a b hga hgb hab
+  rw [← D.spec l a hga, ← D.spec l b hgb, hab]
+
+open Classical in
+/-- Guard-relative recoverability builds its recovery instrument by selecting
+only among admitted operations that produced the observed delta. Values with no
+such producer are irrelevant to the specification and use the identity fallback. -/
+noncomputable def recoveryOfRecoverableOn (g : Guarded S Op)
+    (h : DeltaRecoverableOn g) : DeltaRecoveryOn g where
+  recover l x :=
+    if hx : ∃ o : Op, g.guard o l = true ∧ g.eff o l = x then
+      g.eff hx.choose
+    else
+      fun _ => x
+  spec := by
+    intro l a hga
+    have hx : ∃ o : Op, g.guard o l = true ∧ g.eff o l = g.eff a l :=
+      ⟨a, hga, rfl⟩
+    rw [dif_pos hx]
+    exact h l hx.choose a hx.choose_spec.1 hga hx.choose_spec.2
+
+/-- **Guard-relative recoverability and its instrument are equivalent.** -/
+theorem deltaRecoveryOn_iff_deltaRecoverableOn (g : Guarded S Op) :
+    Nonempty (DeltaRecoveryOn g) ↔ DeltaRecoverableOn g :=
+  ⟨fun ⟨D⟩ => D.recoverableOn, fun h => ⟨recoveryOfRecoverableOn g h⟩⟩
 
 /-- **The recovery map — recoverability as an instrument rather than a
 property.** `recover l x` is the effect the merge replays for the branch that
@@ -198,6 +239,11 @@ structure DeltaRecovery (g : Guarded S Op) where
   recover : S → S → (S → S)
   /-- On a delta an operation produced, the recovery is that operation's effect. -/
   spec : ∀ (l : S) (a : Op), recover l (g.eff a l) = g.eff a
+
+/-- A guard-free recovery is, in particular, a guard-relative recovery. -/
+def DeltaRecovery.toOn {g : Guarded S Op} (D : DeltaRecovery g) : DeltaRecoveryOn g where
+  recover := D.recover
+  spec := fun l a _ => D.spec l a
 
 /-- A recovery map exists only if the deltas determine the effects: if `a` and
 `b` agree at `l` the map must return the same function for both, and `spec`
@@ -316,20 +362,22 @@ theorem legality_wellDefined_of_upTo [MergeState S] {g : Guarded S Op}
     I (g.eff a (g.eff c l)) ↔ I (g.eff b (g.eff c l)) :=
   iff_of_decide_eq (h l a b hab (g.eff c l)).1
 
-/-- **Effect-faithfulness weakened the same way**: the merge lands on a state
-contextually equivalent to one of the two serializations, rather than on it.
-`Ancestral.Serializing` is the special case where the equivalence is equality. -/
+/-- **Effect-faithfulness weakened the same way**: for two operations admitted
+at their common ancestor, the merge lands on a state contextually equivalent to
+one of the two serializations, rather than on it. `Ancestral.Serializing` is the
+special case where the equivalence is equality. -/
 def SerializingUpTo [MergeState S] (M : AncestralMerge S) (g : Guarded S Op)
     (I : Invariant S) [DecidablePred I] : Prop :=
   ∀ (l : S) (a b : Op),
+    g.guard a l = true → g.guard b l = true →
     CtxEquiv (obs I) (M.merge3 l (g.eff a l) (g.eff b l)) (g.eff b (g.eff a l)) ∨
     CtxEquiv (obs I) (M.merge3 l (g.eff a l) (g.eff b l)) (g.eff a (g.eff b l))
 
 /-- An effect-faithful merge is faithful up to equivalence. -/
 theorem serializing_upTo [MergeState S] {M : AncestralMerge S} {g : Guarded S Op}
     {I : Invariant S} [DecidablePred I] (h : Serializing M g) : SerializingUpTo M g I := by
-  intro l a b
-  rcases h l a b with h' | h'
+  intro l a b hga hgb
+  rcases h l a b hga hgb with h' | h'
   · exact Or.inl (by rw [h']; exact ctxEquiv_refl _ _)
   · exact Or.inr (by rw [h']; exact ctxEquiv_refl _ _)
 
@@ -341,14 +389,17 @@ Four total, individually harmless arithmetic operations. Two of them collide at
 serializations disagree. No merge — no *possible* merge — is effect-faithful for
 them. -/
 
-/-- **An ambiguous delta makes effect-faithfulness unsatisfiable.** If `a` and
-`c` produce the same branch state at `l`, and so do `b` and `d`, then the merge
-of that one triple has to be a serialization of `a,b` *and* a serialization of
-`c,d`. Four disequations say those two two-element sets are disjoint, and the
-merge has nowhere to land. The quantifier is over *every* `AncestralMerge`, so
-this is not about a bad choice of merge. -/
+/-- **An admitted ambiguous delta makes effect-faithfulness unsatisfiable.** If
+all four operations are admitted at `l`, `a` and `c` produce the same branch
+state there, and so do `b` and `d`, then the merge of that one producible triple
+has to be a serialization of `a,b` *and* a serialization of `c,d`. Four
+disequations say those two two-element sets are disjoint, and the merge has
+nowhere to land. The quantifier is over *every* `AncestralMerge`, so this is not
+about a bad choice of merge. -/
 theorem ambiguous_delta_defeats_faithfulness (M : AncestralMerge S)
     (g : Guarded S Op) (l : S) (a b c d : Op)
+    (hga : g.guard a l = true) (hgb : g.guard b l = true)
+    (hgc : g.guard c l = true) (hgd : g.guard d l = true)
     (hac : g.eff a l = g.eff c l) (hbd : g.eff b l = g.eff d l)
     (h₁ : g.eff b (g.eff a l) ≠ g.eff d (g.eff c l))
     (h₂ : g.eff b (g.eff a l) ≠ g.eff c (g.eff d l))
@@ -357,11 +408,11 @@ theorem ambiguous_delta_defeats_faithfulness (M : AncestralMerge S)
     (hser : Serializing M g) : False := by
   have hcong : M.merge3 l (g.eff a l) (g.eff b l) = M.merge3 l (g.eff c l) (g.eff d l) := by
     rw [hac, hbd]
-  rcases hser l a b with hp | hp
-  · rcases hser l c d with hq | hq
+  rcases hser l a b hga hgb with hp | hp
+  · rcases hser l c d hgc hgd with hq | hq
     · exact h₁ (hp.symm.trans (hcong.trans hq))
     · exact h₂ (hp.symm.trans (hcong.trans hq))
-  · rcases hser l c d with hq | hq
+  · rcases hser l c d hgc hgd with hq | hq
     · exact h₃ (hp.symm.trans (hcong.trans hq))
     · exact h₄ (hp.symm.trans (hcong.trans hq))
 
@@ -409,7 +460,7 @@ hypothesis on merges is not a restriction, it is an empty class, and every
 theorem ghost_no_faithful_merge (M : AncestralMerge Nat) : ¬ Serializing M ghostOps := by
   intro hser
   exact ambiguous_delta_defeats_faithfulness M ghostOps 0
-    Ghost.inc Ghost.add2 Ghost.dbl Ghost.tri rfl rfl
+    Ghost.inc Ghost.add2 Ghost.dbl Ghost.tri rfl rfl rfl rfl rfl rfl
     (by decide) (by decide) (by decide) (by decide) hser
 
 /-! ## §2. A legal serialization exists — the resurrection branch, ∀-quantified
@@ -541,19 +592,19 @@ first. Three laws come out: `comm`, `fastforward`, and `Serializing`. -/
 
 /-- The merge induced by a recovery and a raw ordering function. Stated with a
 bare `sel` (no laws) so §4.3 can ask what the laws are *for*. -/
-def mergeOfSel [DecidableEq S] {g : Guarded S Op} (D : DeltaRecovery g)
+def mergeOfSel [DecidableEq S] {g : Guarded S Op} (D : DeltaRecoveryOn g)
     (sel : S → S → S → S × S) (l x y : S) : S :=
   if x = l then y else if y = l then x else D.recover l (sel l x y).2 (sel l x y).1
 
 /-- The merge induced by a symmetric chooser. -/
-def mergeOfChooser [DecidableEq S] {g : Guarded S Op} (D : DeltaRecovery g)
+def mergeOfChooser [DecidableEq S] {g : Guarded S Op} (D : DeltaRecoveryOn g)
     (C : SymmetricChooser S) : S → S → S → S :=
   mergeOfSel D C.sel
 
 /-- The merge is symmetric — **because the chooser is**. The two fast-forward
 branches are symmetric by inspection; the third is symmetric exactly when
 `C.symm` holds. -/
-theorem mergeOfChooser_comm [DecidableEq S] {g : Guarded S Op} (D : DeltaRecovery g)
+theorem mergeOfChooser_comm [DecidableEq S] {g : Guarded S Op} (D : DeltaRecoveryOn g)
     (C : SymmetricChooser S) (l x y : S) :
     mergeOfChooser D C l x y = mergeOfChooser D C l y x := by
   unfold mergeOfChooser mergeOfSel
@@ -567,27 +618,27 @@ theorem mergeOfChooser_comm [DecidableEq S] {g : Guarded S Op} (D : DeltaRecover
 
 /-- Fast-forward holds on the nose: it is the merge's first branch. -/
 theorem mergeOfChooser_fastforward [DecidableEq S] {g : Guarded S Op}
-    (D : DeltaRecovery g) (C : SymmetricChooser S) (l y : S) :
+    (D : DeltaRecoveryOn g) (C : SymmetricChooser S) (l y : S) :
     mergeOfChooser D C l l y = y := by
   unfold mergeOfChooser mergeOfSel
   rw [if_pos rfl]
 
 /-- **The constructed three-way merge.** -/
-def ancestralMergeOf [DecidableEq S] {g : Guarded S Op} (D : DeltaRecovery g)
+def ancestralMergeOf [DecidableEq S] {g : Guarded S Op} (D : DeltaRecoveryOn g)
     (C : SymmetricChooser S) : AncestralMerge S where
   merge3 := mergeOfChooser D C
   comm := mergeOfChooser_comm D C
   fastforward := mergeOfChooser_fastforward D C
 
-/-- **The constructed merge is effect-faithful.** Each of the three branches is a
-serialization: an unmoved side makes the other side's state the serialization
-outright, and otherwise the recovery replays the second operation's effect on the
-first one's state. `D.spec` is the only thing used, and it is used exactly
-twice. -/
+/-- **The constructed merge is effect-faithful.** For two admitted operations,
+each of the three branches is a serialization: an unmoved side makes the other
+side's state the serialization outright, and otherwise the guarded recovery
+replays the second operation's effect on the first one's state. `D.spec` is the
+only recovery law used, and each use is discharged by that operation's guard. -/
 theorem ancestralMergeOf_serializing [DecidableEq S] {g : Guarded S Op}
-    (D : DeltaRecovery g) (C : SymmetricChooser S) :
+    (D : DeltaRecoveryOn g) (C : SymmetricChooser S) :
     Serializing (ancestralMergeOf D C) g := by
-  intro l a b
+  intro l a b hga hgb
   show mergeOfSel D C.sel l (g.eff a l) (g.eff b l) = g.eff b (g.eff a l) ∨
        mergeOfSel D C.sel l (g.eff a l) (g.eff b l) = g.eff a (g.eff b l)
   unfold mergeOfSel
@@ -601,11 +652,11 @@ theorem ancestralMergeOf_serializing [DecidableEq S] {g : Guarded S Op}
       · refine Or.inl ?_
         rw [if_neg hx, if_neg hy, h]
         show D.recover l (g.eff b l) (g.eff a l) = g.eff b (g.eff a l)
-        rw [D.spec l b]
+        rw [D.spec l b hgb]
       · refine Or.inr ?_
         rw [if_neg hx, if_neg hy, h]
         show D.recover l (g.eff a l) (g.eff b l) = g.eff a (g.eff b l)
-        rw [D.spec l a]
+        rw [D.spec l a hga]
 
 /-! ### §4.1 Invariant preservation needs the chooser to *choose legally*. -/
 
@@ -627,7 +678,7 @@ theorem stepConfluent_of_ancestralConfluent {g : Guarded S Op} {I : Invariant S}
 /-- **A discerning chooser**: when either order is legal, the one it picks is.
 Note what this does *not* demand — no preference between two legal orders, which
 is precisely the freedom the tie-break is needed to resolve. -/
-def Discerning {g : Guarded S Op} (D : DeltaRecovery g) (C : SymmetricChooser S)
+def Discerning {g : Guarded S Op} (D : DeltaRecoveryOn g) (C : SymmetricChooser S)
     (I : Invariant S) : Prop :=
   ∀ l x y : S, (I (D.recover l y x) ∨ I (D.recover l x y)) →
     I (D.recover l (C.sel l x y).2 (C.sel l x y).1)
@@ -637,7 +688,7 @@ branches return a replica's own legal state; the third is handed the disjunction
 `LegalSerialization` supplies — transported through `D.spec` from *operations* to
 *recovered deltas* — and a discerning chooser keeps it. -/
 theorem ancestralMergeOf_stepConfluent [DecidableEq S] {g : Guarded S Op}
-    {I : Invariant S} (D : DeltaRecovery g) (C : SymmetricChooser S)
+    {I : Invariant S} (D : DeltaRecoveryOn g) (C : SymmetricChooser S)
     (hdisc : Discerning D C I) (hleg : LegalSerialization g I) :
     StepConfluent (ancestralMergeOf D C) g I := by
   intro l a b hl hga hgb ha hb
@@ -653,10 +704,10 @@ theorem ancestralMergeOf_stepConfluent [DecidableEq S] {g : Guarded S Op}
       refine hdisc l (g.eff a l) (g.eff b l) ?_
       rcases hleg l a b hl hga hgb ha hb with h | h
       · refine Or.inl ?_
-        rw [D.spec l b]
+        rw [D.spec l b hgb]
         exact h
       · refine Or.inr ?_
-        rw [D.spec l a]
+        rw [D.spec l a hga]
         exact h
 
 /-! ### §4.2 A discerning symmetric chooser exists — the tie-break supplies it.
@@ -669,14 +720,14 @@ choice is irrelevant). -/
 /-- The chooser built from a tie-break: legality decides when it can, and the
 tie-break decides when legality cannot. -/
 def tieSel (I : Invariant S) [DecidablePred I] {g : Guarded S Op}
-    (D : DeltaRecovery g) (T : TieBreak S) (l x y : S) : S × S :=
+    (D : DeltaRecoveryOn g) (T : TieBreak S) (l x y : S) : S × S :=
   if I (D.recover l y x) then
     (if I (D.recover l x y) then T.pair x y else (x, y))
   else
     (if I (D.recover l x y) then (y, x) else T.pair x y)
 
 theorem tieSel_choice (I : Invariant S) [DecidablePred I] {g : Guarded S Op}
-    (D : DeltaRecovery g) (T : TieBreak S) (l x y : S) :
+    (D : DeltaRecoveryOn g) (T : TieBreak S) (l x y : S) :
     tieSel I D T l x y = (x, y) ∨ tieSel I D T l x y = (y, x) := by
   unfold tieSel
   by_cases hA : I (D.recover l y x)
@@ -695,7 +746,7 @@ theorem tieSel_choice (I : Invariant S) [DecidablePred I] {g : Guarded S Op}
 tests, so the one-legal cases are symmetric by construction; the both-legal and
 neither-legal cases fall to `TieBreak.pair_comm`. -/
 theorem tieSel_symm (I : Invariant S) [DecidablePred I] {g : Guarded S Op}
-    (D : DeltaRecovery g) (T : TieBreak S) (l x y : S) :
+    (D : DeltaRecoveryOn g) (T : TieBreak S) (l x y : S) :
     tieSel I D T l x y = tieSel I D T l y x := by
   unfold tieSel
   by_cases hA : I (D.recover l y x)
@@ -710,14 +761,14 @@ theorem tieSel_symm (I : Invariant S) [DecidablePred I] {g : Guarded S Op}
 
 /-- **The chooser the construction uses.** -/
 def tieChooser (I : Invariant S) [DecidablePred I] {g : Guarded S Op}
-    (D : DeltaRecovery g) (T : TieBreak S) : SymmetricChooser S where
+    (D : DeltaRecoveryOn g) (T : TieBreak S) : SymmetricChooser S where
   sel := tieSel I D T
   choice := tieSel_choice I D T
   symm := tieSel_symm I D T
 
 /-- **…and it is discerning.** -/
 theorem tieChooser_discerning (I : Invariant S) [DecidablePred I] {g : Guarded S Op}
-    (D : DeltaRecovery g) (T : TieBreak S) : Discerning D (tieChooser I D T) I := by
+    (D : DeltaRecoveryOn g) (T : TieBreak S) : Discerning D (tieChooser I D T) I := by
   intro l x y h
   show I (D.recover l (tieSel I D T l x y).2 (tieSel I D T l x y).1)
   unfold tieSel
@@ -750,7 +801,7 @@ construction; drop it and `AncestralMerge` cannot be built.
 may do as it likes — which is why the hypothesis `hne` is there and is not
 removable.) -/
 theorem comm_forces_symmetric_chooser [DecidableEq S] {g : Guarded S Op}
-    (D : DeltaRecovery g) (sel : S → S → S → S × S)
+    (D : DeltaRecoveryOn g) (sel : S → S → S → S × S)
     (hchoice : ∀ l x y, sel l x y = (x, y) ∨ sel l x y = (y, x))
     (l x y : S) (hx : x ≠ l) (hy : y ≠ l)
     (hne : D.recover l y x ≠ D.recover l x y)
@@ -783,7 +834,7 @@ resurrection clash — commutative, fast-forwarding, and invariant-preserving on
 every admitted concurrent pair. Not "some clash is repairable": the merge is one
 function and it is legal at every triple the hypothesis covers. -/
 theorem exists_faithful_stepConfluent_merge [DecidableEq S] {g : Guarded S Op}
-    (I : Invariant S) [DecidablePred I] (D : DeltaRecovery g) (T : TieBreak S)
+    (I : Invariant S) [DecidablePred I] (D : DeltaRecoveryOn g) (T : TieBreak S)
     (hleg : LegalSerialization g I) :
     ∃ M : AncestralMerge S, Serializing M g ∧ StepConfluent M g I :=
   ⟨ancestralMergeOf D (tieChooser I D T),
@@ -799,7 +850,7 @@ theorem legalSerialization_of_stepConfluent {g : Guarded S Op} {I : Invariant S}
     LegalSerialization g I := by
   intro l a b hl hga hgb ha hb
   have hm := hst l a b hl hga hgb ha hb
-  rcases hser l a b with h | h
+  rcases hser l a b hga hgb with h | h
   · exact Or.inl (h ▸ hm)
   · exact Or.inr (h ▸ hm)
 
@@ -814,13 +865,14 @@ theorem legalSerialization_of_stepConfluent_upTo [MergeState S] {g : Guarded S O
     LegalSerialization g I := by
   intro l a b hl hga hgb ha hb
   have hm := hst l a b hl hga hgb ha hb
-  rcases hser l a b with h | h
+  rcases hser l a b hga hgb with h | h
   · exact Or.inl (legal_of_ctxEquiv h hm)
   · exact Or.inr (legal_of_ctxEquiv h hm)
 
-/-- ⚑ **THE CONVERSE, AS AN IFF.** For a delta-recoverable implementation with a
-tie-break: an effect-faithful ancestral merge that repairs every resurrection
-clash **exists exactly when some serialization is always legal**.
+/-- ⚑ **THE CONVERSE, AS AN IFF.** For a guard-relatively delta-recoverable
+implementation with a tie-break: an effect-faithful ancestral merge that repairs
+every resurrection clash **exists exactly when some serialization is always
+legal**.
 
 Read against `Ancestral`: `clash_dichotomy` said *either* a serialization is
 legal *or* the merge escalates, and left open whether the first branch is ever
@@ -830,7 +882,7 @@ machinery that turns it into a merge rather than as further conditions on the
 invariant. -/
 theorem faithful_stepConfluent_iff_legalSerialization [DecidableEq S]
     {g : Guarded S Op} {I : Invariant S} [DecidablePred I]
-    (D : DeltaRecovery g) (T : TieBreak S) :
+    (D : DeltaRecoveryOn g) (T : TieBreak S) :
     (∃ M : AncestralMerge S, Serializing M g ∧ StepConfluent M g I)
       ↔ LegalSerialization g I :=
   ⟨fun ⟨M, hser, hst⟩ => legalSerialization_of_stepConfluent M hser hst,
@@ -879,7 +931,7 @@ theorem stepConfluent_implies_ancestralConfluent {g : Guarded S Op} {I : Invaria
 /-- **The converse, at the resolution `AncestralConfluent` is stated in** — the
 construction plus the step-generation bridge. -/
 theorem exists_faithful_ancestralConfluent_merge [DecidableEq S] {g : Guarded S Op}
-    (I : Invariant S) [DecidablePred I] (D : DeltaRecovery g) (T : TieBreak S)
+    (I : Invariant S) [DecidablePred I] (D : DeltaRecoveryOn g) (T : TieBreak S)
     (hleg : LegalSerialization g I) (hsg : StepGenerated g I) :
     ∃ M : AncestralMerge S, Serializing M g ∧ AncestralConfluent M g.impl I := by
   obtain ⟨M, hser, hst⟩ := exists_faithful_stepConfluent_merge I D T hleg
@@ -934,7 +986,7 @@ theorem step_repair_does_not_lift :
     have hl2 : l + 1 ≤ 2 := by simpa [spendOps] using hga
     show l + 1 + 1 ≤ 3
     omega
-  exact ⟨hleg, exists_faithful_stepConfluent_merge _ (spendRecovery 2) natTie hleg⟩
+  exact ⟨hleg, exists_faithful_stepConfluent_merge _ (spendRecovery 2).toOn natTie hleg⟩
 
 /-! ## §6. The lock is an instance — the test of whether the converse has content
 
@@ -999,7 +1051,7 @@ theorem lock_stepGenerated : StepGenerated lockOps AtMostOne := by
 
 /-- The merge the general construction produces for the lock. -/
 def lockConstructedMerge : AncestralMerge Lock :=
-  ancestralMergeOf lockRecovery (tieChooser AtMostOne lockRecovery lockTie)
+  ancestralMergeOf lockRecovery.toOn (tieChooser AtMostOne lockRecovery.toOn lockTie)
 
 /-- ⚑ **The construction rediscovers `lockMerge`.** On legal replicas — which is
 every triple `AncestralConfluent` quantifies over — the merge built from
@@ -1042,8 +1094,8 @@ of whether the converse has content, and it passes. -/
 theorem lock_ancestral_confluent_is_an_instance :
     AncestralConfluent lockAM lockImpl AtMostOne := by
   have hst : StepConfluent lockConstructedMerge lockOps AtMostOne :=
-    ancestralMergeOf_stepConfluent lockRecovery _
-      (tieChooser_discerning AtMostOne lockRecovery lockTie) lock_legalSerialization
+    ancestralMergeOf_stepConfluent lockRecovery.toOn _
+      (tieChooser_discerning AtMostOne lockRecovery.toOn lockTie) lock_legalSerialization
   have hac : AncestralConfluent lockConstructedMerge lockOps.impl AtMostOne :=
     stepConfluent_implies_ancestralConfluent lockConstructedMerge lock_stepGenerated hst
   intro l x y hl hx hy hrx hry
@@ -1056,7 +1108,7 @@ it — with the merge quantified existentially rather than named. -/
 theorem lock_faithful_merge_exists :
     ∃ M : AncestralMerge Lock, Serializing M lockOps ∧
       AncestralConfluent M lockImpl AtMostOne :=
-  exists_faithful_ancestralConfluent_merge AtMostOne lockRecovery lockTie
+  exists_faithful_ancestralConfluent_merge AtMostOne lockRecovery.toOn lockTie
     lock_legalSerialization lock_stepGenerated
 
 /-! ## §7. The boundary: accumulation fails at exactly one hypothesis
@@ -1085,13 +1137,13 @@ by a separate argument — no effect-faithful merge repairs it. The dichotomy of
 satisfies the right-hand side and gets a merge, the counter refutes it and gets
 the impossibility. -/
 theorem budget_boundary (B : Nat) :
-    Nonempty (DeltaRecovery (spendOps (B + 1))) ∧ Nonempty (TieBreak Nat)
+    Nonempty (DeltaRecoveryOn (spendOps (B + 1))) ∧ Nonempty (TieBreak Nat)
       ∧ ¬ LegalSerialization (spendOps (B + 1)) (fun n => n ≤ B + 1)
       ∧ ¬ ∃ M : AncestralMerge Nat, Serializing M (spendOps (B + 1)) ∧
             StepConfluent M (spendOps (B + 1)) (fun n => n ≤ B + 1) :=
-  ⟨⟨spendRecovery (B + 1)⟩, ⟨natTie⟩, budget_not_legalSerialization B,
+  ⟨⟨(spendRecovery (B + 1)).toOn⟩, ⟨natTie⟩, budget_not_legalSerialization B,
    fun hex => budget_not_legalSerialization B
-     ((faithful_stepConfluent_iff_legalSerialization (spendRecovery (B + 1)) natTie).mp hex)⟩
+     ((faithful_stepConfluent_iff_legalSerialization (spendRecovery (B + 1)).toOn natTie).mp hex)⟩
 
 /-- **`Ancestral.budget_defeats_every_faithful_merge`, re-derived from the iff.**
 Not a second proof of the same fact by the same route: there the impossibility
@@ -1112,7 +1164,8 @@ operations can be run in some legal order, the LCA is the fix* — but nothing s
 the fix exists. It does, under exactly three conditions, and the conditions are
 the ones codex named:
 
-  * the merge must be able to tell what each branch did (`DeltaRecovery`),
+  * the merge must be able to tell what each admitted branch did
+    (`DeltaRecoveryOn`),
     without which effect-faithfulness is not merely hard but **unsatisfiable**
     (`ghost_no_faithful_merge`);
   * some order of the two deltas must be legal (`LegalSerialization`), which the
@@ -1121,12 +1174,13 @@ the ones codex named:
     merge law `comm` forces (`comm_forces_symmetric_chooser`) and a tie-break
     supplies.
 
-What is left open is stated where it lives, and the first of the three is left
-open *with a counterexample rather than a caveat*: multi-operation branches
+What is left open is stated where it lives, and the first is left open *with a
+counterexample rather than a caveat*: multi-operation branches
 (§5.1 — `stepConfluent_does_not_imply_ancestralConfluent` shows a step-complete
 repair failing at length two, and `step_repair_does_not_lift` shows the missing
-ingredient is history coherence and not legality; sibling file),
-guard-relativized recoverability (§1, blocked on `Serializing`'s shape), and any
-claim about *which* legal merge is the right one (§4.2, a free parameter). -/
+ingredient is history coherence and not legality; sibling file), the general
+compositional form of guard-relative recovery beyond one operation (§1 and
+§5.1), and any claim about *which* legal merge is the right one (§4.2, a free
+parameter). -/
 
 end Uwueave.Recoverable

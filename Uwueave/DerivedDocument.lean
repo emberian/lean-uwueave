@@ -26,10 +26,10 @@ ours.
   * **Claim 2 — merge closure.** `deriveDoc (x ⊔ y) = deriveDoc x ⊔ deriveDoc y`
     — a join-**homomorphism** requirement, not a monotonicity one. §2 for the
     positive (`deriveDoc_hom`, one line over two named ingredients), §3 for the
-    necessary negative (`deriveDoc_not_hom`): counting has no document-valued
-    derivation that commutes with merge, and the reason is `JoinHom.lean`'s
-    `no_count_merge_without_provenance` and `MinimalSummary`'s
-    `card_ctxEquiv_iff`, transported to this carrier rather than re-proved.
+    necessary negative (`deriveDoc_not_hom`): a document computed from the bare
+    count is not a sufficient merge summary. A provenance-retaining document
+    does work (`seenDoc_retains_the_evidence`), exactly as
+    `JoinHom.no_count_merge_without_provenance` predicts.
   * **Claim 3 — recursion.** Codex: *do not call it a fixed point until
     recursive self-dependence is actually modelled.* §4 does the house-friendly
     version — rank-grounded dependency edges, terminating evaluation, **unique**
@@ -70,10 +70,10 @@ does not apply *to this node set*. It applies where the DAG content actually is
 | `Evidence`'s componentwise merge | every component grow-only | `encodeEvidence_merge` (§1.2) |
 | `Holes.evalSet_hom` | none (any `f`) | `deriveDoc_hom` (§2) |
 | `JoinHom.no_count_merge_without_provenance` | — | `tallyDoc_requires_evidence` (§3) |
-| `MinimalSummary.no_count_derived_summary_sufficient` | — | `deriveDoc_not_hom` (§3) |
-| `JoinHom.count_summary_must_distinguish` | the summary is a hom | `seenDoc_retains_the_evidence` (§3.1) |
+| `MinimalSummary.no_count_derived_summary_sufficient` | the document factors through `card` | `deriveDoc_not_hom` (§3) |
+| `JoinHom.count_summary_must_distinguish` | the summary is a hom and `card` factors through it | `seenDoc_retains_the_evidence` (§3.1) |
 | `Acyclicity.grounded_iconfluent` | a shared rank | `pipelines_merge_coordination_free` (§4) |
-| `RenderSix.statusOf_sound6` | a section of the encoding | `docStatus_sound6` (§6) |
+| `RenderSix.statusOf_sound6` | a right inverse / section of the encoding | `docStatus_sound6` (§6) |
 
 The row that refuses is the count, and it refuses in the sharpest available
 form: not "this combiner is wrong" but "**no** document computed from the count

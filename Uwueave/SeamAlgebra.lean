@@ -619,6 +619,28 @@ def absorbFree {S : Type u} {Seg : Type v} [MergeState S] {I J : Invariant S}
   hy := ⟨v.hy, hJy⟩
   hbad := fun h => v.hbad h.1
 
+/-- **Prepend a free invariant without changing the seam.** This is the
+conjunction-order mirror of `absorbFree`: `J` is coordination-free, `v`
+already supplies the stable seam for `I`, and legality of `J` at the carried
+clash pair makes that same pair a clash of `J ∧ I`.
+
+The order is semantically immaterial but definitionally load-bearing for a
+schema whose invariant is written `freeCore ∧ coordinatedSurface`. In
+particular it lets the general algebra reconstruct `WeaveState.weaveDocInv` in
+its declared order instead of proving an after-the-fact commutation lemma. -/
+def prependFree {S : Type u} {Seg : Type v} [MergeState S] {I J : Invariant S}
+    (v : SegVerdict I Seg) (hJ : IConfluent J) (hJx : J v.x) (hJy : J v.y) :
+    SegVerdict (fun s => J s ∧ I s) Seg where
+  σ := v.σ
+  seamFree := fun x y hσ hx hy =>
+    have hI := v.seamFree x y hσ hx.2 hy.2
+    ⟨⟨hJ x y hx.1 hy.1, hI.1⟩, hI.2⟩
+  x := v.x
+  y := v.y
+  hx := ⟨hJx, v.hx⟩
+  hy := ⟨hJy, v.hy⟩
+  hbad := fun h => v.hbad h.2
+
 /-- **Two seamed invariants on ONE carrier, conjoined** — the same-state
 counterpart of `prodSeams`, and the rule a *document* actually needs: a
 document has one carrier, and its two coordination features are two seamed
@@ -710,6 +732,34 @@ def liftSnd {A : Type u} {B : Type v} {SegB : Type w} [MergeState A]
   hx := w.hx
   hy := w.hy
   hbad := fun h => w.hbad h
+
+/-- **A certified clash always has the conservative self seam.** Coordinating
+on the entire state makes every fiber a singleton: equal legal replicas merge
+idempotently, preserve the invariant, and remain in that singleton. The clash
+is carried unchanged.
+
+This is an honest fallback, not a claim of useful coarseness or minimality. It
+says "coordinate whenever this field changes"; algebra-specific seams such as
+the quota allocation are strictly more informative because they permit many
+distinct states inside one fiber. The `h` premise prevents a free verdict from
+being mislabeled as a `SegVerdict`, whose data always includes a global clash. -/
+def selfSeam {S : Type u} [MergeState S] {I : Invariant S}
+    (v : Verdict I) (h : v.isFree = false) : SegVerdict I S :=
+  match v with
+  | .free _ => by simp [Verdict.isFree] at h
+  | .clash x y hx hy hbad =>
+      { σ := id
+        seamFree := by
+          intro a b hab ha _hb
+          change a = b at hab
+          subst b
+          exact ⟨by simpa only [merge_idem] using ha,
+            by simp only [id_eq, merge_idem]⟩
+        x := x
+        y := y
+        hx := hx
+        hy := hy
+        hbad := hbad }
 
 /-- **Change the seam** — `seam_substitute` as a combinator: re-report an
 existing verdict against a different coordination point, given that the new one

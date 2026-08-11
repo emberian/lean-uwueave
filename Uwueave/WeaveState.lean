@@ -164,7 +164,7 @@ theorem keyed_cross_iconfluent {A : Type u} {B : Type v} {U : Type w}
     [MergeState A] [MergeState B] {R : A → B → Prop}
     (h : IConfluent (S := A × B) (fun p => R p.1 p.2)) :
     IConfluent (S := A × (U → B)) (fun p => ∀ u, R p.1 (p.2 u)) :=
-  fun x y hx hy u => h (x.1, x.2 u) (y.1, y.2 u) (hx u) (hy u)
+  Uwueave.keyed_cross_iconfluent h
 
 /-! ## §2. The document
 
@@ -305,7 +305,8 @@ def pinsVerdict :
 verdict**, `Spec.budgetSegVerdict` reused verbatim. Globally refuted (two
 legal re-allocations merge over budget — the carried clash), free within an
 allocation (`Segmented.budget_segmented`). What a user sees: spending
-storage never waits for anyone; only *re-dividing* the budget is a meeting. -/
+storage never waits for anyone; only *re-dividing* crosses the allocation
+seam, while `Scheduling` demands determine actual meetings. -/
 def quotaVerdict : SegVerdict (BudgetInv 10) (User → Nat) :=
   budgetSegVerdict
 

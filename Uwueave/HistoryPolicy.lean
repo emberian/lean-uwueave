@@ -91,14 +91,14 @@ its witness.
 
 > **One-shot merge safety → history convergence** ✗ **REFUTED**, ⚠ repaired
 > *transport* `HistoryPolicy.recordDetermined_converges` — same record + same
-> policy ⇒ same derived view · *needs* the selector to read the **record** and to
-> be **symmetric in the pair** (`RecordDetermined`, `SelectorSymmetric`); the
-> merge's own `AncestralMerge.comm` is **not** enough · *without it*
-> `Histories.swap_never_converges` — a base policy `MergeModel.BaseDecision.Valid`
-> fully licenses, every step legal (`Ancestral.lock_merge_atMostOne`), two
-> replicas swapping forever — and `HistoryPolicy.nosy_diverges` for the record
-> half. ⚠ *what the version level already does* the swap's decision is
-> **refused** by `HistoryBase.ValidInHistory`
+> policy ⇒ same derived view · *needs* the selector to read the **record**
+> (`RecordDetermined`) · *without it* `HistoryPolicy.nosy_diverges` consults a
+> recorded merge result and separates two otherwise-identical records. Pair
+> symmetry is a distinct, one-step order-agreement judgement:
+> `replicas_agree_on_order` needs `SelectorSymmetric` and
+> `ReconcileSymmetric`; `Histories.swap_never_converges` witnesses why that
+> separate law matters. ⚠ *what the version level already does* the swap's
+> self-base decisions are **refused** by `HistoryBase.ValidInHistory`
 > (`the_self_base_policy_is_not_history_licensed`), so the state-level and
 > history-level licences disagree about exactly this policy.
 
@@ -1551,12 +1551,14 @@ theorem the_self_base_policy_is_not_history_licensed :
     · exact absurd he (by decide)
     · exact absurd ha.rank_lt (by decide)
 
-/-- ⚠ **The excluded class, stated.** A policy that fails *either* symmetry
-condition is outside every convergence theorem here, and both failures are
-witnessed rather than hypothesised: the swap for the order half
-(`Histories.swap_never_converges`, eternal), the nosy selector for the record
-half (`nosy_diverges`). Everything else — every `RecordDetermined` policy —
-converges by `recordDetermined_converges`. -/
+/-- ⚠ **The two obstructions, kept distinct.** The swap witnesses failure of
+order agreement when replicas choose different self-bases; `nosy_diverges`
+witnesses failure of history convergence when a selector is not
+record-determined. The positive convergence statement is exactly the last
+conjunct: every `RecordDetermined` policy converges. It does **not** require
+selector symmetry — `ccPickLeft_convergent` is the deliberately asymmetric
+sanity check — while `replicas_agree_on_order` is the separate theorem that
+does. -/
 theorem the_obstruction :
     (∀ (n : Nat) (x y : Lock), x ≠ y →
         (iter swapRound n (x, y)).1 ≠ (iter swapRound n (x, y)).2)

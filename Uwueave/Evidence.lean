@@ -401,6 +401,18 @@ noncomputable def render {α : Type} (e : ResultEvidence α) : View α :=
     (if Closed e then View.forkedClosed else View.forkedOpen)
   else View.vacuous
 
+/-- **`render` reads exactly `(values, Closed)`.** Two evidences with the same
+candidate-value set and the same closure truth render identically; attribution,
+the particular obligation set, and the particular certificates may differ.
+
+This is the congruence needed to transport a value-stability result into a
+view-stability result once closure is also known to survive. -/
+theorem render_congr {α : Type} {s t : ResultEvidence α}
+    (hv : values s = values t) (hc : Closed s ↔ Closed t) :
+    render s = render t := by
+  classical
+  simp only [render, hv, hc]
+
 /-- `render` answers `exact a` on a sealed, inhabited, closed evidence. -/
 theorem render_exact {α : Type} {e : ResultEvidence α} {a : α}
     (hm : values e a = true) (hs : Holes.SealsTo (values e) a) (hc : Closed e) :

@@ -69,5 +69,6 @@ import Uwueave.Bounds
 import Uwueave.MenuTotality
 import Uwueave.Preo.Demo
 import Uwueave.Choreo
+import Uwueave.Scheduling
 import Uwueave.Tactics
 import Uwueave.Audit
