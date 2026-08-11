@@ -94,6 +94,7 @@ import Uwueave.Holes
 import Uwueave.Cost
 import Uwueave.JoinHom
 import Uwueave.Evidence
+import Uwueave.Wellformed
 import Uwueave.Tactics
 
 open Lean Elab Command in
