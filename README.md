@@ -122,7 +122,7 @@ This library began as a gift into the [loom](https://github.com/socketteer/loom)
 / [universal-weave](https://github.com/transkatgirl/universal-weave)
 ecosystem — branching-document tools whose builders ask exactly the right
 questions about merging — and grew from the
-[dregg](https://dreggnet.com) metatheory. Made by ember + Claude. The name
+[dregg](https://github.com/emberian/dregg) metatheory. Made by ember + Claude. The name
 is spelled lean-uwueave, and that was never a typo.
 
 License: Unlicense OR MIT.

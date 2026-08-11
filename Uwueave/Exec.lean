@@ -118,22 +118,42 @@ def applyOp (firstParent : Array Int) (n : Nat) (ov : Array Int) (op : Op) : Arr
     else if chainHits firstParent ov d op.child (n + 1) then ov
     else ov.set! op.child op.dest
 
-/-- The replay: decode, sort, fold, encode. -/
-def replay (input : ByteArray) : ByteArray :=
+/-- **The pure decision layer**: sort the ops into the total replay order and
+fold them over an initially override-free view. Everything the kernel *decides*
+— ordering, the cycle-skip rule — happens here, on `Array Int × Array Op`, with
+no bytes in sight. `Uwueave/ExecRefine.lean` proves this layer's view acyclic
+(`absReplay_acyclic`) whenever the structural base is grounded. -/
+def absReplay (firstParent : Array Int) (ops : Array Op) : Array Int :=
+  let n := firstParent.size
+  (ops.qsort opLt).foldl (applyOp firstParent n) (Array.replicate n (-2))
+
+/-- Decode words `2 .. 2+n` as the structural first-parent array (`n` = word 0). -/
+def decodeBase (input : ByteArray) : Array Int :=
+  let n := (getWord input 0).toNat
+  (Array.range n).map (fun i => toI (getWord input (2 + i)))
+
+/-- Decode the `m` ops (`m` = word 1) following the parent block. -/
+def decodeOps (input : ByteArray) : Array Op :=
   let n := (getWord input 0).toNat
   let m := (getWord input 1).toNat
-  let firstParent : Array Int :=
-    (Array.range n).map (fun i => toI (getWord input (2 + i)))
-  let ops : Array Op :=
-    (Array.range m).map (fun j =>
-      let o := 2 + n + j * 4
-      { lamport := getWord input o
-        replica := getWord input (o + 1)
-        child   := (getWord input (o + 2)).toNat
-        dest    := toI (getWord input (o + 3)) })
-  let sorted := ops.qsort opLt
-  let ov := sorted.foldl (applyOp firstParent n) (Array.replicate n (-2))
-  (Array.range n).foldl (fun b i => pushWord b (ofI (ov.getD i (-2)))) ByteArray.empty
+  (Array.range m).map (fun j =>
+    let o := 2 + n + j * 4
+    { lamport := getWord input o
+      replica := getWord input (o + 1)
+      child   := (getWord input (o + 2)).toNat
+      dest    := toI (getWord input (o + 3)) })
+
+/-- Encode the override view, one little-endian word per entry. -/
+def encodeView (ov : Array Int) : ByteArray :=
+  ov.foldl (fun b v => pushWord b (ofI v)) ByteArray.empty
+
+/-- The replay: literally decode → `absReplay` → encode. The byte layer's
+agreement with the decision layer is **by construction** — this is a
+composition, not a re-implementation, so there is no fold/bytes gap to close by
+proof. (The output length is right because `absReplay` preserves the view's
+size — `size_absReplay` in `ExecRefine`.) -/
+def replay (input : ByteArray) : ByteArray :=
+  encodeView (absReplay (decodeBase input) (decodeOps input))
 
 /-- The C entry point. Owned `ByteArray` in, owned `ByteArray` out. -/
 @[export uwueave_replay_kernel]
