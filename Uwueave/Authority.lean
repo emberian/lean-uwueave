@@ -55,6 +55,12 @@ Three positive results and two refutations:
     uniqueness is an explicit hypothesis (`UniqueGrant`) that the lattice does
     *not* preserve (`wf_unique_not_iconfluent`) — the same discipline as the
     rank remark in `Acyclicity.lean` and `UniqueAnchor` in `Sequence.lean`.
+    No `InjectiveHash` typeclass will be added — a design decision: assuming
+    injectivity of a finite-codomain hash mis-models collision resistance
+    (finite hashes are not injective, by pigeonhole); the honest boundary is
+    `UniqueGrant` ("this state exhibits no collision"), with
+    `uniqueGrant_violation_extracts_collision` turning any violation into a
+    constructive collision witness.
   * **Signatures.** That only `parent`'s holder can mint a grant naming that
     parent is authentication, outside this model entirely.
 
@@ -236,8 +242,9 @@ def dupA : GrantSet :=
         || g == ((2 : Nat), (1 : Nat), (3 : Nat))
 
 /-- Replica B of the duplication pair: the *same id* `2` granted from the
-root with a different scope. Content addressing would forbid exactly this
-state pair (one id, two (parent, scope) preimages); the model permits it. -/
+root with a different scope. Under content addressing this state pair is
+precisely a hash-collision exhibit (one id, two distinct (parent, scope)
+preimages); the model permits it. -/
 def dupB : GrantSet := fun g => g == ((2 : Nat), (0 : Nat), (4 : Nat))
 
 theorem dupA_wf : WF 9 dupA := by
@@ -275,6 +282,36 @@ theorem wf_unique_not_iconfluent :
   intro h
   obtain ⟨-, huniq⟩ := h dupA dupB ⟨dupA_wf, dupA_unique⟩ ⟨dupB_wf, dupB_unique⟩
   exact absurd (huniq 2 1 3 0 4 (by decide) (by decide)).1 (by decide)
+
+/-- **The collision extractor — the CR-reduction reading of `UniqueGrant`.**
+A state violating `UniqueGrant` *constructs* two distinct (parent, scope)
+payloads sharing one grant id — when ids are content-derived
+(`id = hash(parent, scope, …)`), that is two distinct preimages under one
+digest: exactly the adversary's output in the collision-resistance game.
+
+Read at the model boundary: the premise `UniqueGrant s` is **not** "the hash
+is injective" — false of every finite-codomain hash, by pigeonhole, so a model
+assuming it would assume nonsense — it is "this state exhibits no collision",
+and this lemma is the standard computational-CR handoff: any violation is a
+constructive collision witness, so an adversary that reaches a violating state
+*is* a collision-finder. A deployment discharges the premise computationally —
+collision resistance of the hash plus the polynomial bound on how many grants
+any execution ever constructs. Compare
+`Sequence.uniqueAnchor_violation_extracts_collision` — the same handoff, one
+costume over. (Classical unpack of `¬∀`, the `escalation_witness` recipe.) -/
+theorem uniqueGrant_violation_extracts_collision {s : GrantSet}
+    (h : ¬ UniqueGrant s) :
+    ∃ i p σ p' σ' : Nat, (p, σ) ≠ (p', σ')
+      ∧ s (i, p, σ) = true ∧ s (i, p', σ') = true := by
+  apply Classical.byContradiction
+  intro hcon
+  apply h
+  intro i p σ p' σ' hg hg'
+  apply Classical.byContradiction
+  intro hne
+  exact hcon ⟨i, p, σ, p', σ',
+    fun hpair => hne ⟨congrArg Prod.fst hpair, congrArg Prod.snd hpair⟩,
+    hg, hg'⟩
 
 /-- **The verdict, packaged** (`causal_dag_free`'s shape): issuing attenuated
 grants is coordination-free, and every reachable state — every replica, every

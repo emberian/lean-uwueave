@@ -84,6 +84,12 @@ below `n`, so a chain has length at most `n` and fuel `n` suffices
     their complexity on tombstones and garbage collection.
   * **Exactly-once needs `UniqueAnchor`**, an assumption the lattice does not
     preserve (see above); membership and anchor-precedence do not.
+  * **No `InjectiveHash` typeclass will be added — a design decision, not an
+    omission**: assuming injectivity of a finite-codomain hash mis-models
+    collision resistance (finite hashes are not injective by definition —
+    pigeonhole), so the boundary is stated as `UniqueAnchor` ("this state
+    exhibits no collision"), and `uniqueAnchor_violation_extracts_collision`
+    turns any violation into a constructive collision witness.
   * **Real sequence CRDTs solve problems this miniature does not.** Loro, Yjs,
     Automerge/RGA descendants and especially Fugue (which targets exactly the
     interleaving anomaly proved here) handle deletion, rich positions, byte
@@ -143,8 +149,11 @@ theorem wf_iconfluent (n : Nat) : IConfluent (S := SeqState) (WF n) := by
       simp [hb]
 
 /-- No id is inserted with two different anchors. `linearize_count_one` needs
-this; the model cannot enforce it (see `wf_unique_anchor_not_iconfluent`), a
-content-addressed id scheme enforces it cryptographically. -/
+this; the model cannot enforce it (see `wf_unique_anchor_not_iconfluent`), and
+a content-addressed id scheme discharges it by collision resistance — a
+violating state hands over a collision exhibit
+(`uniqueAnchor_violation_extracts_collision`), never by hash "injectivity",
+which no finite hash has. -/
 def UniqueAnchor (s : SeqState) : Prop :=
   ∀ i a a', s (i, a) = true → s (i, a') = true → a = a'
 
@@ -153,9 +162,9 @@ anchored to 1. -/
 def dupX : SeqState := fun p => p == ((1 : Nat), (0 : Nat)) || p == ((2 : Nat), (1 : Nat))
 
 /-- Replica Y of the duplication pair: element 2 at the root — the *same id*
-as X's second insertion, with a different anchor. Content addressing would
-forbid exactly this state pair (same id, different (content, anchor) preimage);
-the model permits it. -/
+as X's second insertion, with a different anchor. Under content addressing
+this state pair is precisely a hash-collision exhibit (same id, two distinct
+(content, anchor) preimages); the model permits it. -/
 def dupY : SeqState := fun p => p == ((2 : Nat), (0 : Nat))
 
 theorem dupX_wf : WF 5 dupX := by
@@ -193,6 +202,32 @@ theorem wf_unique_anchor_not_iconfluent :
   intro h
   obtain ⟨-, huniq⟩ := h dupX dupY ⟨dupX_wf, dupX_unique⟩ ⟨dupY_wf, dupY_unique⟩
   exact absurd (huniq 2 1 0 (by decide) (by decide)) (by decide)
+
+/-- **The collision extractor — the CR-reduction reading of `UniqueAnchor`.**
+A state violating `UniqueAnchor` *constructs* two distinct anchors sharing one
+id — when ids are content-derived (`id = hash(content, anchor)`), that is two
+distinct preimages under one digest: exactly the adversary's output in the
+collision-resistance game.
+
+Read at the model boundary: the premise `UniqueAnchor s` is **not** "the hash
+is injective" — false of every finite-codomain hash, by pigeonhole, so a model
+assuming it would assume nonsense — it is "this state exhibits no collision",
+and this lemma is the standard computational-CR handoff: any violation is a
+constructive collision witness, so an adversary that reaches a violating state
+*is* a collision-finder. A deployment discharges the premise computationally —
+collision resistance of the hash plus the polynomial bound on how many objects
+any execution ever constructs. (Classical unpack of `¬∀`, the
+`escalation_witness` recipe.) -/
+theorem uniqueAnchor_violation_extracts_collision {s : SeqState}
+    (h : ¬ UniqueAnchor s) :
+    ∃ i a a', a ≠ a' ∧ s (i, a) = true ∧ s (i, a') = true := by
+  apply Classical.byContradiction
+  intro hcon
+  apply h
+  intro i a a' ha ha'
+  apply Classical.byContradiction
+  intro hne
+  exact hcon ⟨i, a, a', hne, ha, ha'⟩
 
 /-! ## §2. The linearization — a deterministic derived view -/
 
