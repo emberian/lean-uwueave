@@ -30,8 +30,11 @@ tool needs that later, it can quote *into* this layer.)
 The worked examples at the bottom are the intended user experience: a loom
 document schema assembled in six lines, classified field-by-field; poisoned
 variants showing a single field's (and a single *key's*) counterexample
-propagating to the whole document; and a budgeted variant whose quota field
-reports the seam — spends free, re-allocation the only coordination point.
+propagating to the whole document; a budgeted variant whose quota field
+reports the seam — spends free, re-allocation the only coordination point;
+and a relational shelf schema — nodes plus bookmarks — classified through
+the cross-field hole (`Verdict.cross`), where no lift applies and each
+verdict is earned against the joint merge.
 -/
 import Uwueave.Move
 import Uwueave.Segmented
@@ -124,6 +127,54 @@ def keyedClash {K : Type u} {V : Type v} [MergeState V] [DecidableEq K]
       · simpa [h] using hf₀ k)
     (fun hall => hbad (by simpa using hall k₀))
 
+/-! ### The cross-field hole — relational invariants get no free ride.
+
+`prodFree` and `keyedFree` lift invariants that mention **one field each**:
+their target shape is `IA p.1 ∧ IB p.2`, and the independence hypothesis of
+`product_iconfluent` is exactly that syntactic split. A *relational*
+invariant `R p.1 p.2` — `parent ∈ nodes`, "the summary matches its source",
+`fieldA ≤ fieldB` — is precisely the shape that hypothesis excludes, and no
+lift for it exists because no true lemma of that shape exists:
+`Catalog.lww_cross_field_not_iconfluent` refutes the candidate
+"componentwise-fine implies relationally-fine" in the strongest way (each
+LWW component alone is invariant-*proof*, and the relation still dies at
+merge). Until now those invariants left the DSL and became hand theorems
+(`Weave.active_path_not_iconfluent`) or silence.
+
+`cross` names the hole as a first-class classification target. It is
+definitionally just `Verdict` over the product state — which is the point:
+the only ways to inhabit it are `cross_free` (an actual `IConfluent` proof
+against the JOINT merge) and `cross_clash` (an actual two-replica repro).
+There is no third constructor, and in particular there is no
+`cross_of_componentwise`. -/
+
+/-- **The relational verdict.** `cross R` classifies the cross-field
+invariant `fun p => R p.1 p.2` over the componentwise-merged product — the
+shape `product_iconfluent`'s independence hypothesis excludes, so **no lift
+applies**: produce one with `cross_free` (a real joint-merge confluence
+proof) or `cross_clash` (a real clash), never from per-field verdicts. -/
+abbrev cross (R : A → B → Prop) : Type (max u v) :=
+  Verdict (S := A × B) (fun p => R p.1 p.2)
+
+/-- Fill the cross-field hole with evidence: an `IConfluent` proof of the
+relational invariant against the joint merge. There is no shortcut that
+assembles this from per-field facts — that candidate lemma is false
+(`Catalog.lww_cross_field_not_iconfluent`). -/
+def cross_free {R : A → B → Prop}
+    (h : IConfluent (S := A × B) (fun p => R p.1 p.2)) : cross R :=
+  .free h
+
+/-- Refute a relational invariant with a clash, stated in components: two
+legal replicas `(a₁, b₁)` and `(a₂, b₂)` whose merge breaks the relation.
+`hbad` is stated on `a₁ ⊔ a₂` and `b₁ ⊔ b₂` directly — the product merge is
+componentwise by definition, so the field-level repro *is* the pair-level
+repro. -/
+def cross_clash {R : A → B → Prop}
+    (a₁ : A) (b₁ : B) (a₂ : A) (b₂ : B)
+    (h₁ : R a₁ b₁) (h₂ : R a₂ b₂)
+    (hbad : ¬ R (a₁ ⊔ a₂) (b₁ ⊔ b₂)) : cross R :=
+  .clash (a₁, b₁) (a₂, b₂) h₁ h₂ hbad
+
 /-- Erase the evidence, keep the answer — for reporting. -/
 def isFree {S : Type u} [MergeState S] {I : Invariant S} : Verdict I → Bool
   | .free _ => true
@@ -189,6 +240,19 @@ def mutexClash :
     (Or.inl ⟨rfl, rfl⟩) (Or.inr ⟨rfl, rfl⟩)
     (fun h => h.elim (fun hbad => absurd hbad.2 (by decide))
                      (fun hbad => absurd hbad.2 (by decide)))
+
+/-- `Catalog.lww_cross_field_not_iconfluent`'s witness pair, packaged as a
+clash through `Verdict.cross_clash` — the archetype of the cross-field hole.
+The relational invariant `fieldA.val ≤ fieldB.val` over two LWW registers:
+replica 1 wrote both fields to 5 at t=2; replica 2's `fieldA` write is stale
+(t=1, loses) and its `fieldB` write fresh (t=3, wins); the merge keeps
+`(5, 0)`, an interleaving neither replica ever held. Each register alone is
+invariant-proof (`lwwSingleFree`) — it is the *relation* that clashes, which
+is why no per-field lift could ever have classified it. -/
+def lwwPairLeClash : Verdict (S := LWW × LWW) (fun p => p.1.val ≤ p.2.val) :=
+  Verdict.cross_clash (R := fun a b : LWW => a.val ≤ b.val)
+    ⟨2, 5⟩ ⟨2, 5⟩ ⟨1, 0⟩ ⟨3, 0⟩
+    (by decide) (by decide) (by decide)
 
 /-! ## §3. The seam verdict — between `free` and consensus.
 
@@ -389,11 +453,152 @@ def budgetDocVerdict (quota : Bool → Nat) : Verdict (budgetDocInv quota) :=
     ((fun n => n == 0), ((fun _ => ⟨1, 0⟩), (fun _ => 0)))
     ⟨rfl, fun _ => Nat.le_refl 1, fun _ => Nat.zero_le _⟩
 
+/-! ### The relational variant — the cross-field hole, worked
+
+Give the document a foreign-key-shaped feature: `bookmarks` that point at
+`nodes`, both grow-only sets. "Every bookmark points at an existing node"
+mentions BOTH fields, so `product_iconfluent`'s independence hypothesis
+excludes it, no lift applies, and the invariant goes through
+`Verdict.cross` — where a verdict must be earned against the joint merge.
+
+Which way does it land? The reflex says relational = doomed (`lwwPairLeClash`,
+the active path). The reflex is wrong here: referential integrity over two
+grow-only sets **is I-confluent** — a bookmark in the merged set came from
+one replica, and that replica's node for it survives into the merged node
+set, because nodes only grow. Monotone relational invariants over monotone
+fields can be free; what dooms a cross-field invariant is not mentioning two
+fields but fearing growth. The same schema then yields the invariant that
+does fear growth — the census *ceiling* "bookmarks never outnumber nodes" —
+and its clash needs a *relationally* bad pair: each replica is within
+census, and only the merge's mixture (two bookmarks against one node)
+breaks the bound. Both verdicts ride the ordinary transports to
+whole-document form below. -/
+
+/-- The referential pair: `nodes` and `bookmarks`, both grow-only. -/
+abbrev RefDoc := GSet Nat × GSet Nat  -- (nodes, bookmarks)
+
+/-- The foreign-key relation: every bookmark points at an existing node. -/
+def PointsAtExisting (nodes bookmarks : GSet Nat) : Prop :=
+  ∀ n, bookmarks n = true → nodes n = true
+
+/-- **Referential integrity over grow-only sets is I-confluent** — the
+positive cross-field result, proved against the joint merge (no lift could
+have produced it). A bookmark present in `x ⊔ y` is present in `x` or in
+`y`; whichever replica holds it also holds its node, and that node survives
+the union. -/
+theorem pointsAtExisting_iconfluent :
+    IConfluent (S := RefDoc) (fun d => PointsAtExisting d.1 d.2) := by
+  intro x y hx hy n hn
+  show (x.1 n || y.1 n) = true
+  have hn' : (x.2 n || y.2 n) = true := hn
+  cases hb : x.2 n with
+  | true  => simp [hx n hb]
+  | false =>
+    have hy2 : y.2 n = true := by simpa [hb] using hn'
+    simp [hy n hy2]
+
+/-- Referential integrity, wired through the hole: a `free` cross verdict.
+The evidence is `pointsAtExisting_iconfluent` — a joint-merge proof, not a
+lift. -/
+def refIntVerdict : Verdict.cross PointsAtExisting :=
+  Verdict.cross_free pointsAtExisting_iconfluent
+
+/-- The two-slot census: how many of the ids `0` and `1` a set holds.
+Counting over the miniature id-world (the same move as `Weave`'s three-node
+world) keeps every concrete instance decidable. -/
+def census2 (s : GSet Nat) : Nat :=
+  (if s 0 then 1 else 0) + (if s 1 then 1 else 0)
+
+/-- The census is monotone under pointwise inclusion. -/
+theorem census2_mono {s t : GSet Nat} (hsub : ∀ n, s n = true → t n = true) :
+    census2 s ≤ census2 t := by
+  have h0 : (if s 0 then 1 else 0 : Nat) ≤ (if t 0 then 1 else 0) := by
+    cases hs : s 0 with
+    | false => exact Nat.zero_le _
+    | true  => rw [hsub 0 hs]; exact Nat.le_refl _
+  have h1 : (if s 1 then 1 else 0 : Nat) ≤ (if t 1 then 1 else 0) := by
+    cases hs : s 1 with
+    | false => exact Nat.zero_le _
+    | true  => rw [hsub 1 hs]; exact Nat.le_refl _
+  exact Nat.add_le_add h0 h1
+
+/-- The census ceiling: bookmarks never outnumber nodes (miniature census).
+An `abbrev` so concrete instances stay `decide`-able through the name. -/
+abbrev CensusBounded (nodes bookmarks : GSet Nat) : Prop :=
+  census2 bookmarks ≤ census2 nodes
+
+/-- ⚠ The census ceiling dies at merge, and its clash is genuinely
+relational: each replica holds ONE node (`0`) and ONE bookmark — within
+census — but they bookmark *different* ids, so the merged shelf holds two
+bookmarks against one node. Neither field misbehaved (both merges are plain
+unions); the mixture did. Note the second replica's bookmark dangles
+(id `1` is not a node) — census-legal, integrity-illegal — which is exactly
+the state `refint_rescues_census` shows the FK invariant excludes. -/
+def censusClash : Verdict.cross CensusBounded :=
+  Verdict.cross_clash (R := CensusBounded)
+    (fun n => n == 0) (fun n => n == 0)
+    (fun n => n == 0) (fun n => n == 1)
+    (by decide) (by decide) (by decide)
+
+/-- **The rescue** — the first live witness of `andFree`'s honesty note ("a
+conjunction with a non-confluent conjunct is not automatically
+non-confluent"): the census ceiling clashes alone (`censusClash`), yet its
+conjunction with referential integrity is I-confluent. Here the rescue is
+total: integrity *implies* the census bound at every state (`census2_mono`
+on the inclusion), so the confluent conjunct excludes every clash state the
+ceiling had — the census clash needed a dangling bookmark. -/
+theorem refint_rescues_census :
+    IConfluent (S := RefDoc)
+      (fun d => PointsAtExisting d.1 d.2 ∧ CensusBounded d.1 d.2) := by
+  intro x y hx hy
+  have href := pointsAtExisting_iconfluent x y hx.1 hy.1
+  exact ⟨href, census2_mono href⟩
+
+/-- The rescued conjunction, as a `free` cross verdict. -/
+def refIntCensusVerdict :
+    Verdict.cross (fun nodes bookmarks =>
+      PointsAtExisting nodes bookmarks ∧ CensusBounded nodes bookmarks) :=
+  Verdict.cross_free refint_rescues_census
+
+/-- The shelf document: the referential pair plus per-node LWW metadata —
+the whole-document carrier for the cross verdicts. -/
+abbrev ShelfDoc := RefDoc × (Nat → LWW)
+
+/-- **The whole shelf, free.** `product_iconfluent` glues the *fields*
+together as ever — but the first conjunct's confluence is the cross result
+`pointsAtExisting_iconfluent`, earned inside the field against its joint
+merge. Lifts compose around a cross verdict; they just never substitute for
+one. -/
+def shelfVerdict :
+    Verdict (S := ShelfDoc)
+      (fun d => PointsAtExisting d.1.1 d.1.2 ∧ ∀ k, 1 ≤ (d.2 k).ts) :=
+  .free (product_iconfluent
+    pointsAtExisting_iconfluent
+    (pi_iconfluent fun _ => lww_every_invariant_iconfluent (fun r => 1 ≤ r.ts)))
+
+/-- ⚠ The census ceiling's clash, transported to the whole shelf:
+`prodClashLeft` lifts `censusClash`'s witness pair, holding a legal metadata
+map fixed. The field-level relational repro *is* the document-level repro —
+cross verdicts ride the same transports as everything else. -/
+def shelfCensusVerdict :
+    Verdict (S := ShelfDoc)
+      (fun d => CensusBounded d.1.1 d.1.2 ∧ ∀ k, 1 ≤ (d.2 k).ts) :=
+  Verdict.prodClashLeft
+    (IA := fun r : RefDoc => CensusBounded r.1 r.2)
+    (IB := fun m : Nat → LWW => ∀ k, 1 ≤ (m k).ts)
+    ((fun n => n == 0), (fun n => n == 0))
+    ((fun n => n == 0), (fun n => n == 1))
+    (by decide) (by decide) (by decide)
+    (fun _ => ⟨1, 0⟩) (fun _ => Nat.le_refl 1)
+
 /-! ### The report — all three verdict kinds, side by side.
 
 `free` (the clean schema), `clash` with a repro (the poisoned variants —
 field-level and key-level), and the *seam* (the budgeted variant): globally
-refuted, free within an allocation, coordinate only at re-allocation. -/
+refuted, free within an allocation, coordinate only at re-allocation. The
+cross rows below extend the table: relational invariants reach the same two
+answers through `Verdict.cross`, earned against the joint merge, never
+through a lift. -/
 
 /-- The report, evaluated: the clean schema is free, the poisoned one is not —
 and both answers are backed by the terms above, not by this `Bool`. -/
@@ -426,5 +631,27 @@ example (a b : QuotaState) (hσ : a.1 = b.1)
     (ha : BudgetInv 10 a) (hb : BudgetInv 10 b) : (a ⊔ b).1 = a.1 :=
   budgetSegVerdict.staysInSeam hσ ha hb
 
+/-! #### The cross rows — free-cross / clash-cross. -/
+
+/-- Free-cross: referential integrity, relational and coordination-free —
+the joint-merge proof, not a lift, put it in this column. -/
+example : refIntVerdict.isFree = true := rfl
+
+/-- Clash-cross: the census ceiling and the LWW-pair archetype, each backed
+by a packaged two-replica repro. -/
+example : censusClash.isFree = false := rfl
+example : lwwPairLeClash.isFree = false := rfl
+
+/-- The rescue row: a clashing conjunct, conjoined with the confluent
+invariant that excludes its clash states, lands back in the free column —
+`andFree`'s `none` was honest, and this is the witness. -/
+example : refIntCensusVerdict.isFree = true := rfl
+
+/-- The whole-shelf rows: the free cross verdict glues into a free document;
+the clash cross verdict transports to a whole-document repro. -/
+example : shelfVerdict.isFree = true := rfl
+example : shelfCensusVerdict.isFree = false := rfl
+
 end Uwueave.Spec
+
 
