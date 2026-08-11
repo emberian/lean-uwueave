@@ -63,6 +63,7 @@ import Uwueave.Nary
 import Uwueave.KernelCFCS
 import Uwueave.SeqKernel
 import Uwueave.Era
+import Uwueave.EraKernel
 
 open Lean Elab Command in
 /-- Fail the build unless every constant in the `Uwueave` namespace stays

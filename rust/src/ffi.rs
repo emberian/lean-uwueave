@@ -1,7 +1,7 @@
 //! The small FFI surface to the Lean-compiled kernels. See `shim.c` for the
-//! C side; see `Uwueave/Exec.lean` (move replay) and `Uwueave/SeqKernel.lean`
-//! (sequence linearization) for the semantics — and for the byte-level
-//! contracts both sides speak.
+//! C side; see `Uwueave/Exec.lean` (move replay), `Uwueave/SeqKernel.lean`
+//! (sequence linearization) and `Uwueave/EraKernel.lean` (ERA arbitration)
+//! for the semantics — and for the byte-level contracts both sides speak.
 
 use std::sync::Once;
 
@@ -11,6 +11,7 @@ extern "C" {
     fn shim_uweave_free(p: *mut u8);
     fn shim_uweave_request_canonical(input: *const u8, len: usize) -> u8;
     fn shim_uweave_seq(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
+    fn shim_uweave_era(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
 }
 
 static INIT: Once = Once::new();
@@ -47,6 +48,20 @@ pub fn seq_kernel(input: &[u8]) -> Vec<u8> {
     let mut out_len: usize = 0;
     unsafe {
         let ptr = shim_uweave_seq(input.as_ptr(), input.len(), &mut out_len);
+        let out = std::slice::from_raw_parts(ptr, out_len).to_vec();
+        shim_uweave_free(ptr);
+        out
+    }
+}
+
+/// Run the Lean ERA arbitration kernel on an encoded request (see
+/// `Uwueave/EraKernel.lean` for the ERA FORMAT v1 word layout). Initializes
+/// the Lean runtime on first use.
+pub fn era_kernel(input: &[u8]) -> Vec<u8> {
+    INIT.call_once(|| unsafe { shim_uweave_init() });
+    let mut out_len: usize = 0;
+    unsafe {
+        let ptr = shim_uweave_era(input.as_ptr(), input.len(), &mut out_len);
         let out = std::slice::from_raw_parts(ptr, out_len).to_vec();
         shim_uweave_free(ptr);
         out

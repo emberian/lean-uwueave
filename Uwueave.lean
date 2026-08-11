@@ -23,6 +23,7 @@ import Uwueave.Nary
 import Uwueave.KernelCFCS
 import Uwueave.SeqKernel
 import Uwueave.Era
+import Uwueave.EraKernel
 import Uwueave.Segmented
 import Uwueave.Spec
 import Uwueave.Weave

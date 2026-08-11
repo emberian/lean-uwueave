@@ -40,6 +40,25 @@
 //!   `lake build Uwueave.SeqKernel` from the repo root before `cargo build`
 //!   (build.rs compiles every `.c` in the emitted-IR tree, so once emitted it
 //!   is picked up — and kept fresh only by re-running that command).
+//! * [`era`] — ERA epoch-resolved arbitration for group management (join /
+//!   write / promote / demote, the duelling-admins conflict): two grow-only
+//!   substrates (events value-keyed by eid, arbiter cut records) whose
+//!   resolution — epoch assignment, execution order, authorised execution,
+//!   the surviving admin — is **authored in Lean**
+//!   (`Uwueave/EraKernel.lean`, whose decision layer is *literally*
+//!   `Era.resolve`), compiled to C by lake, and called through the same
+//!   shim. This crate does not contain an arbitration implementation.
+//!   `Era.duelling_admins_resolved` is the guarantee (one deterministic
+//!   survivor at every replica); the kernel's `(eid, status)` trace makes
+//!   the paper's ✗ marks observable, naming each event the arbitration
+//!   skipped.
+//!
+//!   ⚠ Build note, until the root Lean module imports `Uwueave.EraKernel`:
+//!   same stale-C hazard as SeqKernel above — run
+//!   `lake build Uwueave.EraKernel` from the repo root before `cargo build`
+//!   to (re-)emit `EraKernel.c`. Root wiring kills the hazard for good
+//!   (plain `lake build` then keeps the C fresh); that wiring is the
+//!   orchestrator's, not this module's.
 //!
 //! ## What is and is not claimed
 //!
@@ -61,10 +80,15 @@
 //! tests and zero formal evidence.
 
 pub mod causal;
+pub mod era;
 mod ffi;
 pub mod movelog;
 pub mod seq;
 
 pub use causal::{CausalWeave, InsertError, MergeError, NodeId};
+pub use era::{
+    EraEvent, EraEventStatus, EraGroup, EraMergeError, EraMergeStats, EraRecordError,
+    EraResolution, EraRole,
+};
 pub use movelog::{MoveLog, MoveOp, OpOutcome, TracedReplay};
 pub use seq::{SeqCrdt, SeqDeleteError, SeqInsertError, SeqMergeError, SeqMergeStats};

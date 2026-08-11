@@ -8,7 +8,7 @@
 //! chain, falling back to the first weave parent when no override exists),
 //! which is the reading direction the kernel's output contract defines.
 
-use uwueave::{CausalWeave, MoveLog, MoveOp, NodeId, OpOutcome, SeqCrdt};
+use uwueave::{CausalWeave, EraEvent, EraGroup, EraRole, MoveLog, MoveOp, NodeId, OpOutcome, SeqCrdt};
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 
@@ -428,5 +428,93 @@ proptest! {
 
         prop_assert_eq!(a.visible(), a.visible()); // deterministic call-to-call
         prop_assert_eq!(ab.text(), ba.text()); // and the bytes agree too
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (g) ERA: delivery-order independence of resolve (Lean kernel, via FFI)
+// ---------------------------------------------------------------------------
+
+/// Build one ERA event from a generated spec. Eids are the spec's position,
+/// so they are distinct by construction — the eid-uniqueness premise
+/// `era.rs` documents and enforces, satisfied the way a content address
+/// would satisfy it. Small user/epoch ranges force real interaction (joins,
+/// promotions of the same targets, duels); cut eids may name absent events
+/// (they stay pending — the kernel totalizes).
+fn era_event(eid: u64, kind: u64, actor: u64, target: u64, role_sel: u64) -> EraEvent {
+    let role = match role_sel {
+        0 => EraRole::Outsider,
+        1 => EraRole::Reader,
+        2 => EraRole::Writer,
+        _ => EraRole::Admin,
+    };
+    match kind {
+        0 => EraEvent::join(eid, actor),
+        1 => EraEvent::write(eid, actor),
+        2 => EraEvent::promote(eid, actor, target, role),
+        _ => EraEvent::demote(eid, actor, target, role),
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn era_inputs() -> impl Strategy<
+    Value = (Vec<EraEvent>, Vec<EraEvent>, Vec<(u64, u64)>, Vec<(u64, u64)>, Vec<prop::sample::Index>),
+> {
+    let events = prop::collection::vec((0u64..4, 0u64..4, 0u64..4, 0u64..4), 0..12).prop_map(
+        |specs| {
+            specs
+                .into_iter()
+                .enumerate()
+                .map(|(i, (kind, actor, target, role_sel))| {
+                    era_event(i as u64, kind, actor, target, role_sel)
+                })
+                .collect::<Vec<_>>()
+        },
+    );
+    let cuts = prop::collection::vec((0u64..4, 0u64..16), 0..8);
+    (events, cuts).prop_flat_map(|(evs, cuts)| {
+        (
+            Just(evs.clone()),
+            Just(evs).prop_shuffle(),
+            Just(cuts.clone()),
+            Just(cuts).prop_shuffle(),
+            prop::collection::vec(any::<prop::sample::Index>(), 0..4),
+        )
+    })
+}
+
+proptest! {
+    /// The same event set and cut set, recorded in different orders with
+    /// redeliveries, resolve identically through the Lean kernel — the two
+    /// replicas' wire bytes really differ (arrival order is the transport),
+    /// so the agreement is `EraKernel.eraReplay_same_sets` (riding
+    /// `Era.resolve_same_sets` / `execOrder_same_sets` / `usersOf_same_sets`)
+    /// exercised end-to-end through the FFI, view, roster and ✗ trace alike.
+    #[test]
+    fn era_resolve_delivery_order_independent(
+        (evs, shuffled, cuts, cuts_shuffled, dups) in era_inputs(),
+    ) {
+        let mut a = EraGroup::new();
+        for e in &evs {
+            a.record(*e).expect("eids are distinct by construction");
+        }
+        for &(epoch, eid) in &cuts {
+            a.record_cut(epoch, eid);
+        }
+        let mut b = EraGroup::new();
+        for e in &shuffled {
+            b.record(*e).expect("eids are distinct by construction");
+        }
+        if !evs.is_empty() {
+            for d in &dups {
+                // Redelivery of an identical event: idempotent by contract.
+                b.record(evs[d.index(evs.len())]).expect("identical redelivery is Ok");
+            }
+        }
+        for &(epoch, eid) in &cuts_shuffled {
+            b.record_cut(epoch, eid);
+            b.record_cut(epoch, eid); // cut redelivery is idempotent too
+        }
+        prop_assert_eq!(a.resolve(), b.resolve());
     }
 }
