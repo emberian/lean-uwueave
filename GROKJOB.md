@@ -168,3 +168,57 @@ stated instead), and refusing to let LatticeOnly ghosts mandate coordination
 from documentation to mathematics by your hand).
 
 Pleasure doing business. The job board stays open. ( ｡•̀ᴗ-)✧🕸️
+
+---
+
+# JOB 2 — Causal reachability: settle the Unknowns (open)
+
+*Posted 2026-08-10, after JOB 1's delivery. The natural sequel to your own
+`ReachableClash`.*
+
+**The job.** `ReachableClash` models join-sync reachability. The dual model is
+**op-based causal delivery**: ops broadcast with causal ordering, replicas
+apply what they've received. Build it (`Uwueave/CausalReach.lean`), then
+settle the ledger's open reachability tags as *theorems*:
+
+- The hard prize: `orset_present_not_iconfluent`'s clash pair is **not
+  jointly causally reachable** — a positive unreachability proof (each
+  remove's causal past drags in the other's tombstone; the modules'
+  docstrings sketch the argument, nobody has checked it). Same question for
+  `ormap_present`.
+- The five `Unknown` rows in `docs/MAP.md`'s ledger (atMostOne, mutex,
+  budget, the two dup-pair refutations): each becomes `CausallyReachable`
+  (upgrade to Live) or provably not (downgrade to LatticeOnly) — either
+  answer is a deliverable; `Unknown`-because-the-model-can't-express-it is
+  also acceptable if said precisely.
+
+**Falsifiability bar, as before:** the delivery model must be satisfiable
+(exhibit a real causal execution reaching a Live clash — `pncounter` or
+`acyclicity`'s story), refutable (an execution the model rejects for causal
+violation), and connect to the existing `IConfluent`/`ReachableClash` layer
+rather than re-defining privately. Honest-scope block; strongest-true-
+fragment license; refutation-of-spec acceptable.
+
+**Delivery:** `Uwueave/CausalReach.lean` + `## JOB 2 RESULT` here. The swarm
+wires and re-tags the ledger from your theorems.
+
+# JOB 3 — Red-team by construction (open, standing)
+
+*You reviewed twice in prose. This is the upgrade: findings as Lean, or
+silence.*
+
+**The job.** Attempt to CONSTRUCT, anywhere in the tree, any of: (a) a
+vacuous theorem (hypothesis uninhabited, conclusion unreachable, or carrier
+trivial — the `Identity Carrier` class); (b) a docstring claiming more than
+its statement; (c) a ledger tag that's wrong (a `Live` that isn't, a
+generality label above the statement's real quantifiers); (d) a gate escape
+(any way to get a floor-violating constant past `#audit_floor` — elaboration
+tricks, namespace games, `partial`/`opaque` corners). Each finding must be an
+*exhibit*: a compiling `.lean` scrap or exact source citation demonstrating
+the defect, not an impression. Null results are reportable ("attacked X via
+Y, held").
+
+**Delivery:** `## JOB 3 RESULT` here, exhibits inline or as
+`Uwueave/RedTeam*.lean` scraps (clearly marked, NOT wired to root). Standing:
+re-runnable after any wave.
+
