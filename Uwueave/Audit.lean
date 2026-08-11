@@ -101,6 +101,7 @@ import Uwueave.SeamColoring
 import Uwueave.Budget
 import Uwueave.WorldFuture
 import Uwueave.MinimalSummary
+import Uwueave.Repair
 import Uwueave.Tactics
 
 open Lean Elab Command in
