@@ -257,20 +257,20 @@
     by whether they can survive merging with <strong>zero coordination</strong>: every safe one
     gets a proof, every impossible one a concrete two-replica counterexample, and every
     workaround a proved price. The companion Rust crate implements the blessed fragment, and
-    its two trickiest decisions &mdash; move replay and sequence linearization &mdash; are
-    <em>compiled from the Lean itself</em>, not re-implemented.</p>
+    its three trickiest decisions &mdash; move replay, sequence linearization and ERA
+    resolution &mdash; are <em>compiled from the Lean itself</em>, not re-implemented.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">29</div><div class="l">Lean modules</div>
-        <div class="s">one judgement, <code>Confluence</code> to <code>Era</code></div></div>
-      <div class="stat"><div class="n">1978</div><div class="l">constants audited, total</div>
-        <div class="s"><code>#audit_floor</code> walks the whole namespace &mdash; zero-lag, no list (count from the 2026-08-10 audit)</div></div>
-      <div class="stat"><div class="n">98</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">43</div><div class="l">Lean modules</div>
+        <div class="s">one judgement, <code>Confluence</code> to <code>Choreo</code></div></div>
+      <div class="stat"><div class="n">3871</div><div class="l">constants audited, total</div>
+        <div class="s"><code>#audit_floor</code> walks the whole namespace &mdash; zero-lag, no list (count from the last committed build &mdash; wave 10a, 2026-08-11; it grows with the tree, so read the number your own <code>lake build</code> prints)</div></div>
+      <div class="stat"><div class="n">126</div><div class="l">keystones in the ledger</div>
         <div class="s">with generality &amp; reachability axes</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
         <div class="s">Lean core only &mdash; nothing to vendor, nothing to pin</div></div>
-      <div class="stat"><div class="n">2</div><div class="l">compiled kernels</div>
-        <div class="s">move replay + sequence (RGA with tombstones), authored in Lean, linked into the Rust crate</div></div>
+      <div class="stat"><div class="n">3</div><div class="l">compiled kernels</div>
+        <div class="s">move replay, sequence (RGA with tombstones) and ERA resolution, authored in Lean, linked into the Rust crate</div></div>
     </div>
     <p class="stats-foot">The counts are checkable, not decorative:
     <code>ls Uwueave/*.lean | wc -l</code>; the ledger tally line in
@@ -1306,9 +1306,37 @@ cd rust &amp;&amp; cargo test   # compiles both Lean kernels to C and links them
     O&rsquo;Neil — <em>The Escrow Transactional Method</em>, TODS&nbsp;1986 ·
     Birgisson et al. — macaroons, NDSS&nbsp;2014 ·
     Dougal — <em>ERA: Epoch-Resolved Arbitration</em>, PaPoC&nbsp;2026 ·
-    Almeida, Shapiro — the blocklace, 2024.
+    Almeida, Shapiro — the blocklace, 2024 ·
+    Hellerstein — <em>Complete CALM</em>, 2026 ·
+    Power, Koutris, Hellerstein — <em>The Free Termination Property of Queries Over
+    Time</em>, 2025 ·
+    Haas, Mogk, Yanakieva, Bieniusa, Mezini — <em>LoRe</em>, 2023 ·
+    Kuhn, Melgratti, Tuosto — <em>Behavioural Types for Local-First Software</em>,
+    ECOOP&nbsp;2023 ·
+    Kuper, Newton — <em>LVars</em>, FHPC&nbsp;2013 ·
+    Omar, Voysey, Chugh, Hammer — <em>Live Functional Programming with Typed Holes</em>,
+    POPL&nbsp;2019 ·
+    Adams, Griffis, Porter, Satish, Zhao, Omar — <em>Grove</em>, POPL&nbsp;2025 ·
+    Rioux, Zdancewic — <em>Functional Meaning for Parallel Streaming</em>&nbsp;(λ∨), 2025 ·
+    Brun, Decova, Lattuada, Traytel — <em>Verified Progress Tracking for Timely
+    Dataflow</em>, ITP&nbsp;2021 ·
+    Schiefer, Litt, Jackson — <em>Merge What You Can, Fork What You Can&rsquo;t</em>,
+    PaPoC&nbsp;2022 ·
+    Alvaro, Conway, Hellerstein, Maier — <em>Blazes</em>, ICDE&nbsp;2014 ·
+    Roy et al. — <em>The Homeostasis Protocol</em>, SIGMOD&nbsp;2015 ·
+    Weidner, Kleppmann — <em>The Art of the Fugue</em>, 2023 ·
+    Ramesh, Soundarapandian, Sivaramakrishnan — <em>Sal</em>, 2026.
     The full annotated bibliography &mdash; what each established, what we took, and what we
     deliberately declined &mdash; lives at <code>docs/BIBLIOGRAPHY.md</code> in the repo.</p>
+
+    <p>⚠ <strong>Retractions.</strong> On 2026-08-11 an outside reader found eight novelty
+    claims of ours that the literature refutes or narrows &mdash; among them &ldquo;nobody
+    offers all three verdicts&rdquo; (LoRe does), &ldquo;the choreography&nbsp;×&nbsp;CRDT
+    junction is empty&rdquo; (it is occupied), and a proposed <em>iff</em> between a
+    persisting hole and non-monotonicity (refuted in both directions). They are retracted in
+    the text where each was made; <code>FORCODEX.md</code>&nbsp;§0.5 indexes all eight. The
+    theorems are unaffected &mdash; what changed is the size of the claim around them. A
+    retraction is a first-class artifact here, and this paragraph is one.</p>
     <p>License: Unlicense OR MIT, same spirit as universal-weave.</p>
   </div>
 </footer>

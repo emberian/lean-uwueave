@@ -54,6 +54,41 @@ choreography** by this library's judgement (`IConfluent` / `SegmentedIConfluent`
     programming", POPL 2013 (EPP correspondence).
   * Bailis et al., VLDB 2015 (I-confluence); Whittaker–Hellerstein, VLDB 2019
     (segmented invariant confluence) — via `Uwueave.Confluence` / `Uwueave.Segmented`.
+  * Kuhn, Melgratti, Tuosto — "Behavioural Types for Local-First Software",
+    ECOOP 2023 (LIPIcs 263:15). **The junction this file sits in is occupied,
+    and this is the occupant** — see the retraction immediately below.
+
+## ⚠ Retraction — "the choreography × CRDT junction is empty"
+
+The design memo this file was built from (`FORCODEX.md` §4.7, retraction 2)
+claimed a literature search "found **nothing** at the choreography × CRDT
+junction". **That claim is withdrawn.** Kuhn–Melgratti–Tuosto (ECOOP 2023)
+specify *swarm protocols* from a global viewpoint and **project** them to
+per-peer machines that communicate by event notification over a replicated
+log — local-first by construction, with peers making progress while
+disconnected and, under the paper's well-formedness conditions, eventual
+recovery of consistency and eventual agreement between each machine's locally
+observable behaviour and the global specification. Choreographic projection
+over eventually-consistent replicated state, with a progress guarantee under
+unavailability, published three years before this file.
+
+**The narrower claim this file does make, and which we have not found
+elsewhere:** no system we could find combines *projected local-first
+protocols* with a coordination verdict **derived from I-confluence**
+(`coordination_free_iff_iconfluent`) **and** a **seam refinement** over that
+verdict (`seam_coordination_free`). Kuhn et al. ask whether a projection
+conforms and eventually converges; they do not ask whether an application
+invariant survives the merge, and they carry no segmented notion — nothing of
+the form "a barrier is required exactly at σ-changes and is free within a
+fiber". Those two theorems are the delta. It is a small claim on purpose;
+"the junction is empty" was not, and was false.
+
+(A neighbouring cell is occupied too, and §4's framing elsewhere should stop
+treating it as open ground: **Grove** — Adams, Griffis, Porter, Satish, Zhao,
+Omar, POPL 2025 — is a bidirectionally typed collaborative structure-editor
+calculus over a CmRDT edit log in which conflicts are **represented with
+holes**. Typed holes × replicated collaborative editing is prior art. See
+`Uwueave/Holes.lean`.)
 
 ## In-house prior art — credited precisely, and the delta
 

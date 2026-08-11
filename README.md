@@ -97,6 +97,18 @@ assumptions, and wherever our models stop short of a hard problem (rich text
 being the famous one), the file says so at the top. Honest boundaries beat
 impressive blurs.
 
+That extends to claims about the *field*. A theorem being machine-checked says
+nothing about whether someone published it first, and those are separate
+questions with separate evidence. On 2026-08-11 an outside reader showed that
+eight of our novelty claims were already answered in the literature — that
+nobody offered a certain combination of verdicts (LoRe did), that a certain
+junction was empty (it was occupied), that a proposed equivalence held (it is
+refuted in both directions). Every one is **retracted in the text where it was
+made**, indexed in `FORCODEX.md` §0.5, with the papers annotated in the
+bibliography. None of the theorems changed; the size of the claims around them
+did. If you find another, tell us — a retraction is a deliverable here, and
+the only embarrassing part is the interval before it lands.
+
 ## Going deeper
 
 - **[The map](docs/MAP.md)** — every module and what it settles, theorem

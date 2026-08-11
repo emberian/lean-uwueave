@@ -18,6 +18,21 @@ The triangulation, and what each corner contributes:
     evaluation proceeds *around* a hole, and the result refines as holes fill.
     Hazel's hole is the **non-blocking** version of a threshold read: instead
     of waiting for the answer you carry the shape of not-having-it.
+
+    ⚠ **That last sentence is a provocation, and is labelled one.** "LVars
+    block, Hazel doesn't" is rhetorically good and technically sloppy: the two
+    are not one unknown under two policies, they are two unknowns. An LVar's
+    threshold read blocks on a **synchronization** unknown — the value is a
+    lattice point, it exists, and the read waits for it to cross a bound. A
+    Hazel hole is **syntactic/semantic incompleteness** — no term has been
+    written at that position, and evaluation carries the shape of the absence.
+    λ∨ (Rioux–Zdancewic 2025) keeps them apart *inside one calculus*: `⊥`
+    (produced nothing) is a different point from `⊥v` (produced something,
+    nothing known about it), and both differ from `⊤` (an inconsistent result
+    — the ambiguity error a join of incomparable symbols yields). The bridge
+    between the two unknowns is **to be built, not asserted**; nothing below
+    depends on the analogy holding. What is actually used from each corner is
+    the lattice, and the lattice is `GSet World`.
   * **CALM** (Hellerstein–Alvaro) and **I-confluence** (Bailis et al.;
     `Confluence.lean`) — the judgement. Which results can be computed with no
     coordination at all, and which ones name a coordination point.
@@ -168,6 +183,58 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     memo's open question (attributed holes; "who do I need" as a computed
     value) is supported by the codomain and computed by nothing.
 
+## ⚠ Three retractions from the design memo this file was built from
+
+`FORCODEX.md` §4 made claims the literature refutes. They are withdrawn there;
+they are recorded here because this is the file they were about.
+
+  1. **"Every piece of machinery in this repo transfers from data to
+     computation unchanged."** ⚠ **FALSE**, and the damage is in "unchanged".
+     Monotone (`x ⊑ y → f x ⊑ f y`) and join-preserving
+     (`f (x ⊔ y) = f x ⊔ f y`) are different properties, and a verdict
+     transported across a computation needs the **second**; monotone alone
+     gives `f x ⊔ f y ⊑ f (x ⊔ y)` and no equation, i.e. gossip-then-compute
+     and compute-then-gossip may part. **`evalSet_hom` below is not affected
+     and it is worth saying why**: it takes the *image* of a candidate-world
+     set under a deterministic `f`, and images genuinely distribute over
+     unions — the content is that `∃` distributes over `∨`. The defect was the
+     generalization from it, never the theorem. `Uwueave/JoinHom.lean` proves
+     the separation rather than assuming it away: `monotone_not_joinHom`
+     (`card` is monotone and is not a join homomorphism, both conjuncts about
+     one function on one carrier), and the sharp form
+     `no_count_merge_without_provenance`, quantified over **every** binary
+     combiner — the local pair `(1, 1)` must mean `1` when two replicas saw
+     the same element and `2` when they saw different ones, so no merge on
+     summaries alone is exact and provenance is *forced*. The same file
+     refutes the follow-on (`monotone_pullback_can_fail`) and states the
+     architecture as an iff (`summaryFold_iff_joinHom`).
+  2. **"A monotone expression's holes fill by gossip alone."** ⚠ Only under a
+     **finite closed scope with fair and complete delivery**. Monotonicity
+     says an answer never has to be taken back; it says nothing about when a
+     node may stop waiting. Power–Koutris–Hellerstein (2025) call that second
+     question *free termination* and separate it cleanly: a Boolean threshold
+     query is monotone by construction, and its free-termination states are
+     **exactly** those at or above its threshold antichain — below the line
+     (`|R| > 10` when the truth is `false`) the answer is already correct and
+     no node may ever say so. A monotone expression whose hole is open
+     forever. In an indefinitely writable system that is the common case, and
+     it is why §6's collapse takes a `Stable` hypothesis rather than a
+     monotonicity side condition.
+  3. **"Era's arbiter cut *is precisely* the causal cut / the LVar freeze."**
+     ⚠ Softened to what is true: the three **play related roles** — each
+     restricts which futures are admissible — and their **evidentiary
+     meanings differ**, so what a collapse licensed by each is worth differs.
+     An LVars freeze is local and unilateral inside one runtime (a later write
+     is an error it raises, which is why LVars gets *quasi*-determinism). A
+     causal cut is epistemic: downward-closed, so it excludes futures nobody
+     has *seen*, not futures that may still be *sent*. Era's arbiter cut is
+     social and trusted: a third party announces an epoch and
+     `Era.final_view_immune` makes the finalised prefix stop moving — bought
+     with a trusted role and priced in rollback, not derived from the lattice.
+     `Stable` is abstract in `Arriving` for exactly this reason: three ways to
+     discharge one hypothesis, and the transport from `Era.final_view_immune`
+     into a `Stable` hypothesis is named **unbuilt** in the boundary above.
+
 Literature, PDFs in `~/paperbin/uweave/`:
   * Kuper, Newton — "LVars: Lattice-based Data Structures for Deterministic
     Parallelism", FHPC 2013.
@@ -177,6 +244,23 @@ Literature, PDFs in `~/paperbin/uweave/`:
     Easy", CACM 2020.
   * Bailis et al. — "Coordination Avoidance in Database Systems", VLDB 2015
     (the judgement, already `Confluence.lean`'s).
+  * Rioux, Zdancewic — "Functional Meaning for Parallel Streaming" (λ∨),
+    arXiv:2504.02975, 2025. **Prior art for a generic `Partial α`**: a whole
+    lambda calculus over an approximation/streaming order, with joins of
+    partial computations as a first-class parallel operator, absence
+    distinguished from unknown-value, and ambiguity as an explicit error.
+  * Power, Koutris, Hellerstein — "The Free Termination Property of Queries
+    Over Time", arXiv:2502.00222, 2025. **Settlement is state-relative**
+    (their Theorem 22 pairs a query with an input); monotonicity is not.
+  * Adams, Griffis, Porter, Satish, Zhao, Omar — "Grove: A Bidirectionally
+    Typed Collaborative Structure Editor Calculus", POPL 2025. **Typed holes
+    × collaborative replicated editing is already occupied** — a CmRDT edit
+    log with conflicts represented as holes in the typed term. Not archived
+    locally; cited from an external review.
+  * Brun, Decova, Lattuada, Traytel — "Verified Progress Tracking for Timely
+    Dataflow", ITP 2021. Frontiers as **antichains** bounding what may still
+    arrive, verified in Isabelle/HOL — the shape an `Arriving` component of
+    `Stable` should take if it ever becomes concrete.
 -/
 import Uwueave.Ceiling
 import Uwueave.MVRegister
@@ -753,17 +837,26 @@ a *separate operation with a precondition*. Sealing is the claim "the answer is
 `a`" — a determinacy claim (`sealsTo_determinate`) — and §5 just proved
 determinacy is not free. What makes a seal safe is therefore not the state but
 the **future**: a licence saying nothing that can still arrive will move it.
-That is LVars' freeze, without the blocking: we do not wait for the licence, we
-require it before collapsing, and carry the fork until then.
+That plays the role LVars' freeze plays, with the blocking removed: we do not
+wait for the licence, we require it before collapsing, and carry the fork until
+then. ⚠ *Role, not identity* — the memo's "this **is** LVars' freeze / Era's
+arbiter cut / the causal cut" is retracted in the header. A freeze is a local
+unilateral act of one runtime; a causal cut is an epistemic statement about
+what has been seen; an arbiter cut is a trusted announcement priced in
+rollback. All three restrict admissible futures; what each one's evidence is
+*worth* differs, and a collapse is only as good as the evidence under it.
 
-`Stable Arriving P` is that licence, abstract in what may still arrive.
+`Stable Arriving P` is that licence, abstract in what may still arrive —
+abstract precisely because those three discharge it differently.
 `stable_inputs_seal_the_result` is the mechanism a real system uses:
 **stability of the inputs transports to stability of the result, along the
 headline** — finalise what you are computing over and the answer is sealed,
 with no argument about the computation at all. `Era.lean`'s arbiter cut is the
-implementing instance of the input-side licence (`Era.final_view_immune`: a
-finalised prefix stops moving); the transport from Era's event lists into a
-`Stable` hypothesis here is named in the boundary as unbuilt. -/
+intended implementing instance of the input-side licence
+(`Era.final_view_immune`: a finalised prefix stops moving); the transport from
+Era's event lists into a `Stable` hypothesis here is named in the boundary as
+unbuilt, and until it is built the instance is a design intention rather than
+a theorem. -/
 
 /-- **A seal**: the claim that `a` is *the* answer — every candidate is `a`. -/
 def SealsTo {α : Type} (P : Partial α) (a : α) : Prop := ∀ b, P b = true → b = a
@@ -813,10 +906,15 @@ is the headline that does it, in one rewrite. Finalise the candidate worlds
 answer is stable for free, whatever the computation was: no monotonicity
 hypothesis, no re-analysis per program.
 
-This is the mechanism §4.2 of the design memo was pointing at when it noticed
-that `Era.final_view_immune` "is precisely the licence to collapse a hole that
-required stability". The licence lives on the inputs; this theorem is why it
-does not have to be re-earned on the output. -/
+This is the mechanism §4.2 of the design memo was reaching for when it said
+`Era.final_view_immune` "is precisely the licence to collapse a hole that
+required stability". ⚠ *Precisely* is retracted (header, retraction 3): a
+finalised prefix, a causal cut and an LVars freeze **play the same role here**
+— each discharges the `Stable` hypothesis — and they differ in what evidence
+buys the restriction, so a collapse licensed by one is not worth what a
+collapse licensed by another is. This theorem is agnostic between them by
+design, which is the point: the licence lives on the inputs, and whatever
+supplies it, the result does not have to re-earn it. -/
 theorem stable_inputs_seal_the_result {α : Type} (f : World → α)
     (W : GSet World) (A : GSet World → Prop) (h : ∀ V, A V → W ⊔ V = W) :
     Stable (fun Q => ∃ V, A V ∧ Q = evalSet f V) (evalSet f W) := by
