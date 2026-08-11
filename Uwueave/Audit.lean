@@ -73,6 +73,7 @@ import Uwueave.RALin
 import Uwueave.SeamAlgebra
 import Uwueave.Gluing
 import Uwueave.Holes
+import Uwueave.Cost
 import Uwueave.Tactics
 
 open Lean Elab Command in
