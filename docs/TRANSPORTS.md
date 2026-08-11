@@ -19,7 +19,7 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 87 numbered transport rows.**
+**Ledger total: 98 numbered transport rows.**
 
 ---
 
@@ -288,6 +288,30 @@ both**. The two obligations are **logically independent**.
 ✅ *and* `HistoryBase.coherent_never_unavailable`: `unavailable` is a
 **cross-history** answer, never satisfiable while walking one coherent history.
 
+**17a. Explicit finite DAG enumeration → certified base search and policy check** ⚠
+*source* a duplicate-free, covering `FiniteHistory.Enumeration D` · *target*
+decidable `Histories.Reaches`, proof-carrying `Histories.BaseSelection` answers
+with an exhaustive common-ancestor list, and exact all-pairs legality for a raw
+`MergeModel.BaseDecision` selector · *transport*
+`FiniteHistory.reaches_iff_bounded` justifies the rank-bounded backward search,
+`mem_commonCandidates_iff` makes the filtered candidate list exact, and
+`policyAccepted_iff` specifies `checkPolicy` on every enumerated ordered pair.
+`toDecision_valid` separately erases a certified `BaseSelection` to the raw
+decision while preserving exact lowest/maximal/unavailable legality; the
+explicit sweep covers every carrier pair by `sweepEntries_complete` · *needs*
+`[DecidableEq V]`, the supplied covering list, its `Nodup` proof, and the
+existing rank-grounded `VersionDag`; rank is a search bound, not an algorithm
+for discovering the graph. The executable branches are exact:
+`cc_root_pair_decision` returns `.selected .root`,
+`cc_merge_pair_decision` retains `.ambiguous .left .right`, and
+`two_pair_decision` returns `.unavailable` only for the edgeless pair ·
+*without a certified constructor* `searchCertified` returns `none` rather than
+relabelling failure as unavailable, and
+`cc_nonlowest_selected_rejected` refuses an arbitrary one of two criss-cross
+maximal bases. This is finite and policy-relative: it does not enumerate an
+arbitrary or infinite DAG, construct a `HistoryPolicy.HistoryMerge`, or prove
+the separate `BaseRobust`/`SelectorSafe` semantic judgements.
+
 **18. Invariant safety → convergence** ✗ **REFUTED**
 *without it* `Histories.swap_never_converges` — an eternal two-cycle under a
 base policy `MergeModel.BaseDecision.Valid` fully licenses. Safety is not
@@ -327,6 +351,25 @@ summaries agrees with the truth **iff** the summary is a join homomorphism.
 (`iconfluent_pullback_of_monotone`) · *without either*
 `monotone_pullback_can_fail`: `(· ≤ 1)` is I-confluent on `Nat`-under-max and
 its pullback along monotone `card` is not.
+
+**20a. Typed expression structure → sufficient dependencies and semantic laws** ⚠
+*source* an intrinsically typed `Preo.Expr.Term Γ t`, its structural holes,
+or a proof-carrying `MergeSafe`/`MonotoneSafe` certificate · *target* exact
+field-dependency sufficiency, `PreservesMerge`, or semantic `Monotone`
+respectively · *transport* `Preo.Expr.Term.eval_ext` proves environments that
+agree on `Term.reads` evaluate equally;
+`Term.dependency_iff_positional_hole` makes every reported dependency exactly
+a positional field or declared opaque hole. `MergeSafe.sound` and
+`MonotoneSafe.sound` erase the structural certificates to their semantic laws
+· *needs* the typed schema and constructor rules; an opaque `CustomNode` must
+declare dependencies and prove read-extensionality, and any positive algebraic
+classification of it must be supplied explicitly · *without a sound
+constructor* `negatedMembership_not_monotone` and
+`summedFields_not_preservesMerge` separate tempting Boolean/addition forms;
+`malformed_not_classified` rejects an ill-typed raw negation, while
+`opaque_not_auto_mergeSafe` refuses to infer a hidden homomorphism. The positive
+analyses are intentionally incomplete, and this is not yet a surface-language
+transport: `Preo.Syntax` and `Preo.Elab` do not import or elaborate these terms.
 
 **21. Evidence → coarsest sufficient summary** ✅
 *transport* `MinimalSummary.ctxQuot_coarsest_sufficient` — universal property
@@ -457,6 +500,9 @@ and constructive failure handoff in
 `authenticIssuer_iff_no_received_forgery` /
 `authenticity_violation_extracts_forgery` · *needs* the exact registered key,
 non-revocation, issuance transcript, and domain-separated `signingMessage`;
+`grant_event_domain_separated`, `move_domain_separated`, and
+`signingMessage_move_injective` make grant/event/move domains and every signed
+move field explicit;
 the theorem transports a trace-relative security premise and does **not** prove
 cryptographic hardness · *without it* `Authenticity.attack_not_authentic` and
 `attack_extracts_forgery` exhibit an accepted grant that issuer 7 never issued;
@@ -509,6 +555,38 @@ and the transition is a valid issuance, yet a different payload born under
 announced id 5 changes Alice from reader to admin and changes `finalView`.
 `finality_failure_refutes_id_authenticity` packages the corresponding
 contrapositive under settlement, grounding, and issuance.
+
+**27g. Authentic signed-event trace → attributable fork observations** ⚠
+*source* `Authenticity.AuthenticIssuer scheme keys keyRevocations issued
+(AuthenticatedAdmission.receivedEvents events)` · *target*
+`Byzantine.SignatureAuthentic (AuthenticatedAdmission.observations codec events)
+(AuthenticatedAdmission.issuedEntries codec issued)` · *transport*
+`AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic` · *needs* each
+`AcceptedEvent` to retain its exact event payload equality and acceptance under
+the indexed key/revocation views, plus the explicit `EventTripleCodec` binding
+signed events to the sequence/id coordinates · *without authentic admission*
+`AuthenticatedAdmission.omitted_authenticity_permits_framing` preserves the
+concrete fork evidence while refuting both attribution and
+`SignatureAuthentic`. The positive path is nonempty:
+`honest_equivocation_attributes_author` derives blame for the two accepted,
+genuinely issued signed events rather than assuming it.
+
+**27h. Accepted signed move → authenticated and capability-authorized operation** ⚠
+*source* a received and accepted signed `Authenticity.MoveClaim`, together with
+`Authenticity.AuthenticIssuer`, `AuthenticatedAdmission.GrantHolder`, and
+`Gated.gatedOps` · *target*
+`AuthenticatedAdmission.AuthenticatedGatedOp` · *transport*
+`AuthenticatedGatedOp.ofAuthenticIssuer`, with projections `authentic` and
+`authorized` · *needs* all three independent axes: genuine issuance derives
+from issuer authenticity, holder binding says the signer may cite that grant,
+and the ordinary gate checks the live capability chain · *without holder
+binding* `mallory_fails_holder_even_when_gate_passes` has a valid signature and
+an old-gate acceptance for Mallory's borrowed grant; *without live authority*
+`valid_signature_over_revoked_grant_fails_authorization` gives Bob an accepted,
+genuinely issued, holder-bound record whose revoked grant still fails the gate;
+*without issuer authenticity* `forged_as_alice_breaks_authenticity` extracts
+the accepted unissued forgery. This is the abstract admission conjunction, not
+a FORMAT-v3/FFI signature lane.
 
 ---
 
@@ -597,6 +675,37 @@ supplies the missing witness — participants, scope, epoch, evidence, round,
 barrier, and separate currencies — and `least_le_upper` transports its proved
 upper bound. No transport from `Budget.ForcedFloor` to a meeting floor exists.
 
+**35b. One real plan → five-currency profile acceptance** ⚠
+*source* `Scheduling.Plan s` plus the pointwise inequalities
+`∀ currency, plan.profile currency ≤ limits currency` · *target*
+`Scheduling.ProfileUpperBound s limits` · *transport*
+`Plan.profileUpperBound`; `Plan.exactProfileUpperBound` supplies the exact
+achieved profile, `ProfileUpperBound.comp` appends two witnessed plans and adds
+every limit coordinate, and `ProfileUpperBound.toUpperBound` forgets everything
+but the peer-barrier coordinate · *needs* **one and the same real plan** to
+satisfy all five inequalities; five independently chosen witnesses are not a
+profile acceptance · *without the other coordinates*
+`least_meetings_do_not_decide_profile_acceptance` gives two sessions with the
+same exact least peer count while a required network action makes only one fit
+the peer-only profile. Stronger still,
+`meeting_floor_does_not_entail_profile_acceptance` exhibits a proved peer floor
+within allowance and refutes full acceptance.
+
+**35c. Finite plan catalog → witnessed acceptance or catalog-relative refusal** ⚠
+*source* caller-supplied `List (Scheduling.Plan s)` and five currency limits ·
+*target* `ScheduleSynthesis.SearchResult s limits catalog` · *transport*
+`ScheduleSynthesis.searchCatalog`; `SearchResult.bound_exists_of_isFound`
+recovers a catalog member and its full `ProfileUpperBound`, while
+`exhaustive_of_not_isFound` names a violating currency for every supplied plan
+· *needs* the catalog itself—every candidate already carries schedule coverage,
+but no theorem says the list enumerates all schedules · *without a crossing-only
+shortcut* `same_crossings_opposite_catalog_verdicts` gives equal crossing counts
+and opposite executable results at the same limits. The ranked variant
+`selectLeast` additionally needs an explicit caller `OrderPolicy` and catalog
+tie order; `selection_is_policy_dependent` makes two policies choose opposite
+peer/network profiles from the same feasible catalog. Refusal and leastness
+remain catalog-relative, and no catalog generator is claimed.
+
 **36. Lower bound → acceptance** ✗ **REFUTED**
 *without it* `Budget.lower_bound_does_not_license_acceptance` — and the reason
 is deeper than the statement: **"the floor" is not a function.** There is a
@@ -653,6 +762,24 @@ the separate currency* `Repair.crossings_cannot_see_the_difference` makes
 crossing count zero. The nonempty semantic witness is `Exits.balX`:
 `Exits.balX_legal` admits one device spending the whole budget in the source,
 while `RepairMenu.escrow_forbids_balX` proves the split target rejects it.
+
+**37d. Explicit repair catalog → least applicable repair or exhaustive catalog refusal** ⚠
+*source* a `RepairSynthesis.Catalog P` whose entries retain stable IDs,
+decidable residual applicability, typed repair constructors, and complete
+`Repair.Price` records, plus a caller `Catalog.Valuation : Price → Nat` ·
+*target* `RepairSynthesis.Catalog.Result catalog valuation` · *transport*
+`Catalog.synthesize`; the found branch exposes the actual repair through
+`Catalog.Found.repair`, preserves its full price by `Found.repair_price`, and
+proves caller-valued leastness by `Catalog.minimum_le_of_applicable`; the
+refusal branch is exhaustive by `minimum_none_exhaustive` and
+`Result.exhaustive_of_isFound_false` · *needs* an explicit `Decidable` for each
+residual (the bridge from `RepairMenu.RepairObligation` is
+`Candidate.ofObligation`) and an explicit catalog/valuation—neither is library
+policy · *without catalog completeness* `Examples.refusedCatalog` refuses both
+of its supplied rows (`refusal_is_exhaustive_for_catalog`) while applicable
+repairs such as `Examples.fullTwo` exist outside that list. Thus refusal is not
+"no repair exists", and this search neither enumerates seam projections nor
+synthesizes an escrow partition.
 
 ---
 
@@ -893,9 +1020,15 @@ for pins plus `prependFree` reconstructs
 · *needs* exactly two certified seam rows on distinct fields and each absorbed
 FREE row to hold at both carried clash documents · *without the second seam*
 there is no pair of fibers; without a checked legal side condition the FREE row
-is omitted. The remaining exact surface obstruction is representation, not
-seam algebra: flat declarations cannot name grouped `WeaveCore`, and a FREE
-verdict cannot manufacture the legal seed `core₀` needed for planting.
+is omitted. The former grouped-carrier obstruction is discharged narrowly:
+`Preo.Demo.groupedCarrierSurface_state_is_weaveDoc` identifies the generated
+state with `WeaveState.WeaveDoc`, while
+`groupedCarrierSurface_core_seed_is_core₀` identifies its explicitly supplied
+legal core seed. `groupedCarrierSurface_core_plant_proj` checks the generated
+carrier projection. The elaborator still does not infer a merge or seed: the
+custom field supplies both via an existing `MergeState` and an explicit term;
+the built-in quota seed is zero and cannot replace the legal `quota₀` at
+budget ten.
 
 **44g. Joint cross verdict → keyed cross verdict** ⚠
 *transport* `Confluence.keyed_cross_iconfluent`, emitted by the keyed-cross-FK
@@ -911,17 +1044,27 @@ legal default family; the surface does not invent them.
 **44h. Protocol AST → checked scheduling plan under one strategy** ⚠
 *source* `Protocol.Term Strategy` plus one selected admissible strategy ·
 *target* `Scheduling.SessionProfile`, `Schedule`, `Plan`, and witnessed
-`UpperBound` data · *transport* `Protocol.elaborate`,
+peer-only `UpperBound` plus five-currency `ProfileUpperBound` data · *transport* `Protocol.elaborate`,
 `elaborateProfilePlan`, and the audit theorem
-`elaborated_composition_uses_one_strategy`; `Annotation.axes_retained` proves
-all seven demand axes survive elaboration · *needs* a single global `strategy`
+`elaborated_composition_uses_one_strategy`; `Elaboration.exactProfileUpperBound`
+retains the exact achieved profile and `elaborate_exactProfileUpperBound_plan`
+pins it to the elaboration's one checked plan. The standalone `preo_budget`
+surface accepts only such a `ProfileUpperBound`:
+`Preo.Demo.coalescedProfileBudget_is_hand_witness` identifies the generated
+value with the existing five-currency witness and
+`coalescedProfileBudget_retains_five_currencies` observes every coordinate.
+`Annotation.axes_retained` proves all seven demand axes survive elaboration ·
+*needs* a single global `strategy`
 and its membership proof in `CoordEffect.Admissible`; parallel or sequential
 subterms do not choose independent optima · *without the full scheduling
 artifact* `Protocol.no_ast_crossing_count_determines_least_meetings` gives two
 inhabited ASTs with equal crossing counts and distinct exact meeting counts,
 while `ast_one_crossing_can_need_two_rounds` shows one crossing can require two
-incompatible rounds. Thus elaboration transports annotations and proofs, not a
-scalar conversion.
+incompatible rounds. At the surface boundary,
+`Preo.Demo.no_crossing_count_accepts_profile_budget` and
+`meeting_floor_does_not_accept_profile_budget` reject the corresponding scalar
+acceptance shortcuts. Thus elaboration transports annotations and proofs, not
+a scalar conversion.
 
 **44i. Broad future certificate → contained-future certificate** ⚠
 *source* `CertificateScope.KeyCertSound key answer broad.future C` · *target*
@@ -997,6 +1140,70 @@ one endpoint waits and the other has terminated;
 `unguarded_and_deadlocked_refutations` packages both failures, while
 `guardedBarrierLoop_progresses` is only the positive one-step, fuel-one case.
 
+**44m. Answered classification → checked verdict artifact** ⚠
+*source* `classification : Preo.Classification I f` plus the licence
+`classification.answer = some answer` · *target* first a `Spec.Verdict I`, then
+an invariant row in `Preo.Export.DeclarationBundle` · *transport*
+`Preo.Classification.checkedVerdict`, whose
+`checkedVerdict_isFree` pins the verdict to the licensed Boolean, followed by
+`DeclarationBundle.addClassification` · *needs* the answer equality and the
+same explicit first-order witness codec required by direct verdict export;
+report strings, route labels, and seam readings are not consulted · *without a
+licence* `no_checkedVerdict_licence_of_answer_none` blocks every unresolved
+classification and `Preo.Export.unresolved_classification_has_no_export_licence`
+instantiates the boundary. The two positive branches are exact:
+`addClassification_free_agrees_with_addVerdict` and
+`addClassification_seam_agrees_with_addVerdict` reduce classification export
+to direct checked-verdict export.
+
+**44n. Neutral artifact encoding → canonical durable frame** ⚠
+*source* `Preo.Artifact.ArtifactEncoding` · *target* canonical `List UInt8`
+inside the version/domain-separated `Durable` frame · *transport*
+`Preo.ArtifactDurable.decodeProjection_projectionBytes_append`, preserving
+arbitrary following journal bytes; `decodeProjection_projectionBytes` is the
+exact one-frame form · *needs* the compositional `WireCodec` roundtrip, exact
+consumption and re-encoding in `canonicalCodecOfWire`, and the exact
+`artifactFormat` · *without exact acceptance* the raw prefix parser retains
+surplus bytes (`parseArtifact_encode_append`) while
+`Examples.overlong_artifact_refused` rejects the same surplus as one artifact;
+*without the exact tag* `wrong_version_refused` and `wrong_domain_refused`
+fail closed. `Examples.two_frames_then_torn_third` adds logical journal recovery
+under an explicit `Durable.TornFrame`; it is not a filesystem or flush
+refinement, and decoded bytes remain first-order data rather than proof.
+
+**44o. Untrusted projection → bounded validated projection** ⚠
+*source* `Preo.ProjectionV1.Projection` plus a caller
+`ValidationConfig` · *target* the privately constructible
+`Preo.ProjectionV1.ValidatedProjectionV1` · *transport*
+`Preo.ProjectionV1.validate` · *needs* the exact V1 schema, explicit limits for
+every variable-length collection, unique stable IDs, matching declaration and
+plan/session references, in-range crossing origins, and the exact ordered
+five-currency profile shape · *without each check* the named executable
+refusals include `duplicate_field_refused`,
+`wrong_field_declaration_refused`, `dangling_plan_session_refused`,
+`out_of_range_crossing_refused`, `noncanonical_profile_refused`, the resource
+bound refusals, and `wrong_schema_refused`. Positive nonempty projections are
+`artifact_example_validates` and `export_example_validates`. Validation
+transports structural well-shapedness only: its public encoding still contains
+no `Spec.Verdict`, authorization, admission token, or permit.
+
+**44p. Validated projection → deterministic data-only Rust source** ⚠
+*source* the privately constructible
+`Preo.ProjectionV1.ValidatedProjectionV1` · *target* a Rust source `String`
+containing only first-order projection data · *transport*
+`Preo.ProjectionV1.renderRustSource`; the raw-input convenience boundary
+`validateAndRender` first performs row 44o's validation. Output is a pure
+function of the validated encoding by `renderRustSource_eq_of_encoding_eq`,
+and `validateAndRender_error` preserves every validation refusal · *needs* the
+private validated type, deterministic list order, Rust string escaping, and
+arbitrary-precision decimal rendering of Lean naturals;
+`Examples.unbounded_decimal_fixture` checks a value beyond machine-word range
+and `Examples.empty_projection_rust_fixture` pins one complete source file ·
+*without validation* no renderer theorem accepts an arbitrary projection.
+This is a data renderer only: there is no theorem that the emitted Rust
+compiles, reconstructs semantic proofs, or issues authorization or a permit,
+and caller-local validation limits are intentionally not serialized.
+
 ---
 
 ## The meta-row
@@ -1041,10 +1248,10 @@ grounded judgement)*. Row 26 is repaired under `Closed ∧ RosterKnown` while
 retaining the single-premise refutation. Preoscript now has the projection,
 seam, mergeability, route-invariance, nested document-seam, keyed-cross,
 protocol, future-variance, first-order artifact, checked-bundle projection, and
-recursive-choreography transports in rows 44a–44l. What remains is different
-work: declarations still carry no operation vocabulary from which to derive
-reachability, no rule produces a typed
+recursive-choreography transports, plus classification export, durable bytes,
+bounded host validation, and deterministic data-only Rust rendering, in rows
+44a–44p. What remains is different work:
+declarations still carry no operation vocabulary from which to derive
+reachability, no Preo rule produces a typed
 `Repair P Q`, multi-field derives and three-or-more-field invariants are
-refused, and the exact hand `WeaveCore` grouping/legal seed is not expressible
-by a flat declaration even though the general seam algebra now reconstructs
-its verdict.
+refused.

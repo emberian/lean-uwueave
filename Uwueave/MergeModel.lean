@@ -127,14 +127,19 @@ clothes.
     two ambiguous bases exposes both; a context that names an antichain of
     frontiers (codex's Timely correction) would want more structure. The list
     is enough for selected/ambiguous/unavailable and no more.
-  * ⟨UNDONE⟩ **Ambiguity is two distinct bases, not a refutation of a lowest
-    one.** §9's `BaseDecision.Valid` demands the pair, because uwueave has no
-    `LowestCommonBase` to refute against — minidregg's
-    `AmbiguousCommonBases.excludes_lowest` is that theorem, and it is next door,
-    not here. `ambiguous_inhabited` shows the situation is real regardless.
-  * ⟨UNDONE⟩ **No repeated or criss-cross merging.** Like `Ancestral`, every
-    judgement here is about a single fork-and-join. Convergence on a version
-    DAG needs Kaki et al.'s further conditions and gets no verdict.
+  * ⟨DONE downstream in `Uwueave.Histories` and `Uwueave.HistoryBase`⟩
+    **History-indexed ambiguity refutes a lowest base.** This lower-level
+    `BaseDecision.Valid` deliberately asks only for two distinct common state
+    bases. `Histories.LowestCommonBase`, `ambiguous_excludes_lowest`, and
+    `HistoryBase.ValidInHistory` strengthen the history-indexed decision to two
+    distinct maximal common bases and prove that no lowest base exists.
+  * ⟨UNDONE, narrowed to operational convergence⟩ **Repeated and criss-cross
+    histories are modeled downstream.** `Histories.VersionDag` admits merge
+    nodes whose results feed later merges, exhibits the criss-cross ambiguity,
+    and checks invariant safety across finite histories; `HistoryPolicy` derives
+    views under explicit selectors. What remains absent is a network execution
+    proving replicas reach the same history and a convergence theorem for
+    repeated merging under stated delivery and selector hypotheses.
 
 Literature: Kaki, Priya, Sivaramakrishnan, Jagannathan, "Mergeable Replicated
 Data Types", OOPSLA 2019 (the `⟨Σ, σ₀, do, merge⟩` three-way model);
@@ -914,11 +919,12 @@ as ancestors of both replicas (and ambiguity must exhibit two distinct ones);
 `unavailable` must **refute** the existence of any. Nothing here is a flag a
 caller sets.
 
-⟨UNDONE⟩ `ambiguous` demands two *distinct* common bases and not a proof that
-no lowest one exists: uwueave has no `LowestCommonBase`, and minidregg's
-`AmbiguousCommonBases.excludes_lowest` is that theorem, next door. Two distinct
-common bases is what a merge-base procedure can hand us here, and
-`ambiguous_inhabited` shows the situation is real. -/
+⟨DONE downstream⟩ This state-level predicate demands two *distinct* common
+bases, not a proof that no lowest one exists. The stronger history-indexed
+contract is `HistoryBase.ValidInHistory`: it uses
+`Histories.MaximalCommonBase`, and `Histories.ambiguous_excludes_lowest` proves
+that two distinct such bases exclude a lowest one. The weaker local predicate
+remains intentional because it has no version DAG to quantify over. -/
 def BaseDecision.Valid {S : Type u} {Op : Type v} (impl : Impl S Op) :
     BaseDecision S → S → S → Prop
   | .selected l, x, y => Reachable impl l x ∧ Reachable impl l y

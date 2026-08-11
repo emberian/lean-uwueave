@@ -132,16 +132,18 @@ committed one. `ResultStatus` still imports nothing from here.
     property of the carrier. A deployment that wants the *type* to refuse must
     export `renderReport` and not `report`; nothing here enforces that, and no
     theorem below assumes it.
-  * **The eliminator is five-way, and the sixth cell is a sibling's.** ⟨UNDONE⟩
+  * **The eliminator is five-way, and the sixth cell is a sibling's.**
+    ⟨DONE downstream in `Uwueave.RenderSix`⟩
     `ResultStatus.sixth_cell_is_distinguishable` proves that
     `Evidence.View.vacuous` folds two states with *opposite* stability —
     "nothing observed yet" and "definitive absence". `dispatch` and
     `Carrier.elim` are over `Evidence.View` because `Evidence.SoundEvaluator`
     and `exact_sound` — §4's seed — are stated there. So a consumer of this
     carrier handles five statuses, not six, and a surface built on it cannot
-    tell a spinner from "there is no answer". The repair is a `Carrier` over
-    `ResultStatus.Status` with a soundness contract proved for `statusOf`;
-    neither exists, and nothing below pretends the fold is faithful.
+    tell a spinner from "there is no answer". This file intentionally retains
+    that five-way carrier. `RenderSix.Carrier6`, `statusOf_sound6`, and
+    `the_named_limit_is_retired` implement and prove the six-way successor while
+    preserving the exact fold back to this carrier.
   * **The eliminator is `Type 0`-valued.** ⟨UNDONE⟩ `Carrier.elim` eliminates
     into `Type`; a `Prop`-valued consumer goes through `Says`, and
     `Classical.choice` can turn `says_total` into a projection. So the barrier

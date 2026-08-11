@@ -6,7 +6,8 @@ Two files were built in parallel and never met. `HonestRender.lean` proves the
 render-boundary guarantees over an **abstract** five-handler carrier and then
 names its own ceiling in its honest boundary:
 
-> **The eliminator is five-way, and the sixth cell is a sibling's.** ⟨UNDONE⟩ …
+> **The eliminator is five-way, and the sixth cell is a sibling's.**
+> ⟨HISTORICAL LIMIT, DISCHARGED HERE⟩ …
 > So a consumer of this carrier handles five statuses, not six, and a surface
 > built on it **cannot tell a spinner from "there is no answer"**. The repair is
 > a `Carrier` over `ResultStatus.Status` with a soundness contract proved for
@@ -84,11 +85,14 @@ sanctioned renderer *does* make, at six named pieces of evidence.
     the difference. This is not repairable by a better carrier — it is
     `Evidence.render_retracts_when_a_new_source_appears` reaching the row it
     always applied to, and `SealedFuture` is where both rows are final.
-  * **`pending_escapable` is the weakest honest liveness.** ⟨UNDONE⟩ It says
-    *some* permitted future is not `pending`, not that every path leaves it and
-    not that any path is taken. A renderer whose spinner stops only on a future
-    no replica reaches satisfies it. Strengthening this needs a notion of
-    eventuality, and this library has futures but no fairness.
+  * **`pending_escapable` is the weakest honest liveness.**
+    ⟨UNDONE as temporal/all-path liveness⟩ It says *some* permitted future is
+    not `pending`, not that every path leaves it and not that any path is taken.
+    `RenderProgress.pending_progress_under_fair_delivery` now proves that a
+    finite fair schedule of genuine deliveries reaches a non-pending status
+    under its responsiveness premise. That theorem does not supply an infinite
+    trace semantics, prove that every execution is fair, or turn this existential
+    future property into temporal eventuality; those stronger claims remain open.
   * **`pending_escapable` needs an inhabitant of the value type.** ⟨TERMINAL⟩
     `statusOf_pending_escapable` takes an `a₀ : α`, because the only thing that
     stops a spinner is a value arriving. Over an empty value type `pending` is
@@ -828,7 +832,8 @@ theorem six_carrier_separates :
   * and what the separation *is about* is `ResultStatus.sixth_cell_is_
     distinguishable`: the two have opposite finality.
 
-That is `HonestRender.lean`'s ⟨UNDONE⟩ boundary item, discharged. -/
+That is the boundary item formerly left open by `HonestRender.lean`, discharged
+here. -/
 theorem the_named_limit_is_retired :
     (∀ a, Evidence.values ResultStatus.emptyClosedW a = false)
       ∧ (∀ a, Evidence.values ResultStatus.emptyOpenW a = false)
@@ -1364,4 +1369,3 @@ theorem presence_enforced_prominence_not6 {β : Type} (C : Carrier6 F α) (s : S
       (fun _ => b) b b b b b b b' b).2.2.2.2.1 hbb⟩
 
 end Uwueave.RenderSix
-

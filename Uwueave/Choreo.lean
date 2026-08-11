@@ -139,11 +139,15 @@ depends on it):
     `projection_sound` is correspondingly *not* head-duality but a pointwise state
     equality — strictly more informative for this fragment, and inapplicable to
     theirs.
-  * ⟨UNDONE here; finite approximation landed⟩ **Recursion.** `Choreo` is finite:
-    no `μ`/`var`, no loops. `Uwueave.ChoreoRec` now adds guarded anonymous
-    recursion through fuel-bounded finite approximants; `approximate_embed` and
-    `projection_sound_approx` preserve this module's finite semantics and
-    projection theorem. It does not add an infinitary or coinductive semantics.
+  * ⟨DONE in `Uwueave.ChoreoRec`⟩ **Finite guarded recursion approximants.**
+    `Choreo` itself remains finite, while `ChoreoRec` adds guarded anonymous
+    recursion through fuel-bounded approximants. `approximate_embed` and
+    `projection_sound_approx` prove conservativity and projection soundness at
+    every finite fuel.
+  * ⟨UNDONE only for infinitary recursion⟩ **No coinductive or infinite-trace
+    semantics.** The finite approximants do not define a limit object, a
+    bisimulation on infinite behavior, or temporal liveness of a recursive
+    protocol. Those stronger claims remain unbuilt.
   * ⟨UNDONE as temporal liveness⟩ **Deadlock-freedom in their sense.** Our only
     blocking construct is `barrier`. `Uwueave.ChoreoRec` now proves the narrow
     operational facts that one guarded barrier loop can take a step and one

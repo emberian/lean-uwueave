@@ -172,10 +172,13 @@ is a bigger, real schema that deliberately contains one.
   collaborative text, node moving, membership and roles — where the delicate
   decisions are compiled from the proofs rather than reimplemented.
 - **A checked language surface.** `preo` declarations now cover ordinary and
-  keyed fields, invariants, derived summaries, retained-world futures, typed
-  protocol terms, and proof-carrying sessions. They can project one canonical
-  first-order artifact whose verdict witnesses, certificates, plans, strategy,
-  and currencies come from checked Lean terms rather than host-authored badges.
+  keyed fields, application carriers with explicit planting seeds, invariants,
+  derived summaries, retained-world futures, typed protocol terms, and
+  proof-carrying sessions. Standalone commands name fully indexed certificates
+  and accept five-currency budgets only through one witnessed plan. The checked
+  meanings can project to canonical first-order artifacts, canonical framed
+  bytes, and a bounded data-only Rust representation; none of those transport
+  layers can manufacture a verdict, certificate, plan, or permit.
 
 ## Some things we found that surprised us
 

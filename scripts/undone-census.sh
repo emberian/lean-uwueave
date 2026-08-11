@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate the lexical ⟨UNDONE⟩ ledger, or fail if the checked-in copy drifted.
+# Generate the lexical ⟨UNDONE…⟩ ledger, or fail if the checked-in copy drifted.
 
 set -euo pipefail
 
@@ -9,6 +9,8 @@ Usage: scripts/undone-census.sh [--check]
 
 With no arguments, regenerate docs/UNDONE.md.
 With --check, compare docs/UNDONE.md with a fresh census and exit nonzero on drift.
+
+UWUEAVE_UNDONE_CENSUS_ROOT may override the repository root for isolated tests.
 EOF
 }
 
@@ -31,9 +33,11 @@ if (( $# > 1 )); then
 fi
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-repo_root=$(CDPATH='' cd -- "$script_dir/.." && pwd)
+default_repo_root=$(CDPATH='' cd -- "$script_dir/.." && pwd)
+repo_root=${UWUEAVE_UNDONE_CENSUS_ROOT:-$default_repo_root}
+repo_root=$(CDPATH='' cd -- "$repo_root" && pwd)
 output="$repo_root/docs/UNDONE.md"
-marker='⟨UNDONE⟩'
+marker_re='⟨UNDONE(⟩|,|[[:space:]]|-|–|—)'
 
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/uwueave-undone.XXXXXX")
 trap 'rm -rf -- "$tmp_dir"' EXIT HUP INT TERM
@@ -56,14 +60,18 @@ if (( $# == 0 )); then
 fi
 
 read -r marker_count block_count file_count < <(
-  awk -v marker="$marker" '
-    index($0, marker) {
-      marker_lines++
-      if (!seen_file[FILENAME]++) marker_files++
+  LC_ALL=C awk -v marker_re="$marker_re" '
+    {
+      marker_on_line = 0
       text = $0
-      while ((at = index(text, marker)) != 0) {
+      while (match(text, marker_re)) {
         marker_occurrences++
-        text = substr(text, at + length(marker))
+        marker_on_line = 1
+        text = substr(text, RSTART + RLENGTH)
+      }
+      if (marker_on_line) {
+        marker_lines++
+        if (!seen_file[FILENAME]++) marker_files++
       }
     }
     END { print marker_occurrences + 0, marker_lines + 0, marker_files + 0 }
@@ -76,12 +84,15 @@ read -r marker_count block_count file_count < <(
   # These backticks are literal generated Markdown, not command substitutions.
   # shellcheck disable=SC2016
   printf '%s%s%s\n\n' \
-    'This is a deterministic, lexical inventory of every literal `⟨UNDONE⟩` ' \
+    'This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family ' \
     'marker in `Uwueave/**/*.lean`. Regenerate it with ' \
     '`scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.'
-  printf -- '- **Literal marker occurrences:** %s\n' "$marker_count"
+  printf -- '- **Marker occurrences:** %s\n' "$marker_count"
   printf -- '- **Extracted blocks (marker-bearing source lines):** %s\n' "$block_count"
   printf -- '- **Lean files containing markers:** %s\n\n' "$file_count"
+  # shellcheck disable=SC2016
+  printf '%s\n\n' \
+    'The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.'
   printf 'Each block begins at one marker-bearing source line and includes its '
   printf 'following continuation lines up to the next blank line, list item, Markdown '
   printf 'heading, or Lean comment terminator. Two markers on one source line therefore '
@@ -89,7 +100,7 @@ read -r marker_count block_count file_count < <(
   printf 'includes definitions, quotations, inherited caveats, and references to older '
   printf 'items: it gates lexical drift, not the semantic status of the work.\n\n'
 
-  awk -v root="$repo_root/" -v marker="$marker" '
+  LC_ALL=C awk -v root="$repo_root/" -v marker_re="$marker_re" '
     function close_block() {
       if (in_block) {
         print "````"
@@ -103,7 +114,7 @@ read -r marker_count block_count file_count < <(
       file_announced = 0
     }
 
-    index($0, marker) {
+    match($0, marker_re) {
       close_block()
       relative = substr(FILENAME, length(root) + 1)
       if (!file_announced) {

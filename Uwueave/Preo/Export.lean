@@ -4,12 +4,16 @@
 `Preo.Artifact` defines the first-order transport types and the individual
 checked projections.  This module supplies the missing declaration-level seam:
 one proof-indexed builder consumes checked language meanings and emits exactly
-one `Artifact.Artifact` plus its canonical encoding.
+one `Artifact.Artifact` plus its canonical structural `ArtifactEncoding`. That
+encoding is first-order data, not a byte serialization; `Preo.ArtifactDurable`
+provides the canonical byte projection and logical torn-tail layer.
 
-The builder accepts five kinds of source:
+The builder accepts six kinds of source:
 
 * a `CheckedDeclaration` and typed fields;
 * `Spec.Verdict` terms together with an explicit witness codec;
+* answered `Preo.Classification` values, whose checked verdict is eliminated
+  immediately together with the same explicit codec;
 * a `Preo.Future.FutureDecl` together with a checked certificate at an exact
   world index;
 * a `Protocol.Elaboration`, whose checked session and plan are projected
@@ -93,6 +97,23 @@ def addVerdict {State S : Type u} [MergeState S]
     bundle.invariants ++ [checked.toArtifact], bundle.futures,
     bundle.sessions, bundle.plans⟩
 
+/-- Add an answered semantic classification. The answer equality is the
+licence: `Classification.checkedVerdict` eliminates the classification
+immediately to its global verdict, or—when no global facet exists—to the
+clash carried by its seam. An unresolved classification supplies no such
+equality and therefore has no call path.
+
+Only the checked facets and the explicit witness codec cross this boundary.
+Route names, citations, obligation text, seam readings, and report strings are
+not inspected or exported. -/
+def addClassification {State S : Type} [MergeState S]
+    (bundle : DeclarationBundle State) {I : Invariant S}
+    {R : Type} {f : S → R} (classification : Preo.Classification I f)
+    {answer : Bool} (answered : classification.answer = some answer)
+    (id : Artifact.InvariantId) (carrierTypeId : Nat)
+    (codec : Artifact.FirstOrderCodec S) : DeclarationBundle State :=
+  bundle.addVerdict id carrierTypeId (classification.checkedVerdict answered) codec
+
 /-- Add a future only while holding a real world-indexed certificate for the
 same `FutureDecl`.  `futureId`, `worldTypeId`, and `relationId` are manifest
 inputs; the declaration's `String` name is neither hashed nor exported as
@@ -175,6 +196,80 @@ def nonnegative : Invariant Nat := fun state => state ≤ state
 
 def nonnegativeVerdict : Spec.Verdict nonnegative :=
   .free (fun _ _ _ _ => Nat.le_refl _)
+
+/-- A representative answered FREE classification. -/
+def nonnegativeClassification : Preo.Classification nonnegative (fun _ => ()) where
+  global := [nonnegativeVerdict]
+  seams := []
+  mergeability := []
+  obligations := []
+
+/-- Exporting the FREE classification is exactly direct checked-verdict export;
+there is no intermediate Boolean verdict or report interpretation. -/
+theorem addClassification_free_agrees_with_addVerdict :
+    DeclarationBundle.addClassification
+        (DeclarationBundle.ofDeclaration declaration) nonnegativeClassification rfl
+        ⟨409⟩ 401 natCodec
+      = DeclarationBundle.addVerdict
+        (DeclarationBundle.ofDeclaration declaration) ⟨409⟩ 401
+        nonnegativeVerdict natCodec :=
+  rfl
+
+/-- The identity seam for the artifact module's concrete Boolean-set clash.
+It is deliberately constructed from semantic fields only; its display reading
+below is not used by export. -/
+def atMostOneBoolSeam :
+    Spec.SegVerdict Artifact.Examples.atMostOneBool (Catalog.GSet Bool) where
+  σ := id
+  seamFree := by
+    intro left right same hleft _
+    change left = right at same
+    subst right
+    exact ⟨by simpa only [merge_idem] using hleft,
+      by simp only [id_eq, merge_idem]⟩
+  x := Artifact.Examples.leftBool
+  y := Artifact.Examples.rightBool
+  hx := by
+    simp [Artifact.Examples.atMostOneBool, Artifact.Examples.leftBool]
+  hy := by
+    simp [Artifact.Examples.atMostOneBool, Artifact.Examples.rightBool]
+  hbad := by
+    intro merged
+    exact merged rfl rfl
+
+def atMostOneBoolSeamFacet : Preo.SeamFacet Artifact.Examples.atMostOneBool :=
+  ⟨Catalog.GSet Bool, atMostOneBoolSeam, "display-only seam reading"⟩
+
+/-- A representative classification answered by a seam alone. -/
+def atMostOneBoolClassification :
+    Preo.Classification Artifact.Examples.atMostOneBool (fun _ => ()) where
+  global := []
+  seams := [atMostOneBoolSeamFacet]
+  mergeability := []
+  obligations := []
+
+/-- Seam export is exactly direct export of the seam's carried clash. The
+facet's `reading` string is absent from both sides. -/
+theorem addClassification_seam_agrees_with_addVerdict :
+    DeclarationBundle.addClassification
+        (DeclarationBundle.ofDeclaration declaration) atMostOneBoolClassification rfl
+        ⟨410⟩ 402 Artifact.Examples.boolSetCodec
+      = DeclarationBundle.addVerdict
+        (DeclarationBundle.ofDeclaration declaration) ⟨410⟩ 402
+        atMostOneBoolSeam.toClash Artifact.Examples.boolSetCodec :=
+  rfl
+
+/-- The unresolved representative has neither a global nor seam facet. -/
+def unresolvedClassification : Preo.Classification nonnegative (fun _ => ()) :=
+  Preo.Classification.empty
+
+/-- **API boundary:** an unresolved classification cannot supply the equality
+required by `addClassification`, hence cannot originate an invariant artifact
+through that builder. -/
+theorem unresolved_classification_has_no_export_licence :
+    ¬ ∃ answer, unresolvedClassification.answer = some answer :=
+  Preo.Classification.no_checkedVerdict_licence_of_answer_none
+    unresolvedClassification rfl
 
 /-- A real future declaration and proof-carrying certificate from
 `Preo.Future`, not a relation tag authored for the artifact. -/

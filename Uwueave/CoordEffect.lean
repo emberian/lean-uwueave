@@ -108,20 +108,23 @@ is exactly the number the scalar grade computes.
 
 ## Non-claims, labelled
 
-  * ⟨UNDONE⟩ **A scheduling / coalescing semantics — the named next step.**
-    Turning crossings into meetings needs a model of *attendance* (which
-    replicas must be in a round) and *coalescing* (when two crossings share
-    one). `⊗` = pointwise `+` is an upper bound only for a **pure-coalescing**
-    interpretation that emits at most one schedulable demand per crossing. A
-    protocol may instead require several barriers or several currencies for one
-    crossing, so there is no generic inequality in either direction. `optimum`
-    here remains a budget in crossings. Nothing in this file justifies the word
-    "meeting", and no theorem here uses it. This is the transmutable obligation,
-    not a theorem of the model.
-  * ⟨UNDONE⟩ **No typing rules.** This is the *semantics* a graded session type
-    would be checked against; there is no elaborator, no `session … @ ≤ n`
-    syntax, and no subsumption rule here. `SeamAlgebra`'s composition laws are
-    the candidate typing rules and are not connected to `Profile` yet.
+  * ⟨DONE downstream in `Uwueave.Scheduling` and `Uwueave.Protocol`⟩
+    **Scheduling and coalescing now have an explicit semantics.** `Scheduling`
+    carries attendance and all five currencies in proof-covered demands, proves
+    exact coalescing counterexamples, and requires one real schedule for a
+    profile upper bound. `Protocol` supplies the compositional deep AST and
+    proof-carrying elaboration. The boundary that remains is a theorem, not
+    missing machinery: `⊗` here is pointwise addition of *crossings*, while a
+    protocol may emit zero, one, or several schedulable demands per crossing.
+    Therefore no generic inequality converts this `optimum` into meetings, and
+    nothing in this file calls it one.
+  * ⟨UNDONE, narrowed to the native surface and general subsumption⟩ **The
+    semantic typing target has landed.** `Protocol.Elaboration` produces checked
+    schedules and exact currency-profile bounds, and Preo has checked
+    `protocol`/`session` forms whose bodies are typed `Protocol.Term`s. What is
+    still absent is a custom parser for those six protocol constructors and a
+    general graded weakening/subsumption judgement over `CoordEffect.Profile`;
+    `SeamAlgebra`'s candidate laws are not connected to such a judgement here.
   * ⟨TERMINAL for this file⟩ **`optimum` is a min over the supplied space.** Not
     a fix, a definition: the infimum over *all* seams is not a `Nat` this file
     can compute, because seams range over every type in every universe.

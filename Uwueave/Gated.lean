@@ -72,8 +72,8 @@ the recipe for fixing that; the recipe was executed, and the item is gone
 rather than reworded.
 
 ⚑ **A second item left the same way — read this as the forward pointer.** The
-list also carried *"conflicting grant issuance is not arbitrated ⟨UNDONE⟩ …
-composing that arbitration with this gate is real work, unstarted"*.
+list also formerly marked conflicting grant issuance and composition with this
+gate as open and unstarted.
 `Uwueave/GatedEra.lean` **is that work, done** — it substitutes `Era.resolve`
 for `Authority.Active` at the authority substrate and delivers
 `ge_deterministic`, `ge_duel_resolved` (the survivor's op stands where
@@ -91,10 +91,13 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     concrete forgery witness. `Uwueave.Byzantine.unauthenticated_submission_can_pass_the_gate`
     separately proves the exact attack here: a submitter not represented in
     `GOp` can cite somebody else's live grant and pass the ordinary gate.
-    ⟨UNDONE at the shipping boundary⟩ No theorem connects accepted
-    `Authenticity.SignedRecord`s to this kernel's grant/op admission, and no
-    concrete EUF-CMA proof is present. The gate bounds what a cited grant can
-    DO, not who may cite it.
+    ⟨UNDONE at the shipping boundary; model admission paid⟩
+    `AuthenticatedAdmission.AuthenticatedGatedOp` now connects a received,
+    accepted signed `MoveClaim` to the abstract gated feed under
+    `Authenticity.AuthenticIssuer` and explicit `GrantHolder` binding. FORMAT
+    v3 and `Exec.Op` carry no issuer, key epoch or signature lane, so no theorem
+    authenticates the request reaching the kernel; no concrete EUF-CMA proof is
+    present. The gate bounds what a cited grant can DO, not who may cite it.
   * **The kernel searches grants by FIRST match; `permitted` quantifies over
     all of them.** ⟨TERMINAL under content addressing, else UNDONE⟩ On a
     substrate satisfying `UniqueGrant` the two coincide, and that is exactly

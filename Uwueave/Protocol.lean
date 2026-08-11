@@ -300,6 +300,22 @@ def Elaboration.upperBound {Strategy : Type} {term : Term Strategy}
   plan := result.plan
   fits := result.fits
 
+/-- Check a caller-supplied five-currency allowance against the one real plan
+carried by this elaboration. -/
+def Elaboration.profileUpperBound {Strategy : Type} {term : Term Strategy}
+    {strategy : Strategy} (result : Elaboration term strategy)
+    (limits : Currency → Nat)
+    (fits : ∀ currency, result.plan.profile currency ≤ limits currency) :
+    ProfileUpperBound result.session limits :=
+  result.plan.profileUpperBound limits fits
+
+/-- The elaboration always yields a full acceptance at the exact profile of
+its checked plan. -/
+def Elaboration.exactProfileUpperBound {Strategy : Type} {term : Term Strategy}
+    {strategy : Strategy} (result : Elaboration term strategy) :
+    ProfileUpperBound result.session result.plan.profile :=
+  result.plan.exactProfileUpperBound
+
 @[simp] theorem elaborate_session {Strategy : Type} (term : Term Strategy)
     (strategy : Strategy) :
     (elaborate term strategy).session = term.denote strategy := rfl
@@ -312,6 +328,11 @@ def Elaboration.upperBound {Strategy : Type} {term : Term Strategy}
 @[simp] theorem elaborate_upperBound_plan {Strategy : Type} (term : Term Strategy)
     (strategy : Strategy) :
     (elaborate term strategy).upperBound.plan =
+      (elaborate term strategy).plan := rfl
+
+@[simp] theorem elaborate_exactProfileUpperBound_plan {Strategy : Type}
+    (term : Term Strategy) (strategy : Strategy) :
+    (elaborate term strategy).exactProfileUpperBound.plan =
       (elaborate term strategy).plan := rfl
 
 /-- Turn a checked elaboration into Scheduling's admissible profile plan. The

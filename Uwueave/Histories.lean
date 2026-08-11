@@ -159,11 +159,16 @@ replaced.
     that they need not: `base_accident_decides_the_invariant` (results 5 vs 4)
     and `swap_never_converges` (an eternal two-cycle under a state-level base
     policy `MergeModel.BaseDecision.Valid` fully licenses).
-  * ⟨UNDONE⟩ **No merge-base *procedure*.** `BaseSelection` is the honest output
-    type and all three cases are inhabited, but nothing here computes one from a
-    DAG — minidregg does not either ("a concrete bounded search **may** return").
-    A procedure would need a decidable reachability, which our `Prop`-valued
-    `Ancestry` does not carry.
+  * ⟨UNDONE, narrowed to unrestricted/total selection⟩ **No total merge-base
+    procedure for an arbitrary `VersionDag`.** Downstream
+    `FiniteHistory.Enumeration` makes finiteness an explicit coverage premise;
+    under it, `FiniteHistory.reaches_iff_bounded` and
+    `Enumeration.decideReaches` decide this `Prop`-valued reachability, while
+    `FiniteHistory.searchCertified` returns a proof-carrying `BaseSelection`
+    with an exhaustive finite common-ancestor list when one of the three cases
+    is found. Its `none` result is deliberately not relabelled `unavailable`.
+    What remains here is the unrestricted/infinite-DAG claim and a totality
+    theorem turning every covered finite pair into a selection.
   * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
     theorems in §4 target `MergeModel.BaseDecision.Valid`, which is fixed at
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.

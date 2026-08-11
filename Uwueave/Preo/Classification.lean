@@ -245,6 +245,59 @@ def answerOf (seams : List (SeamFacet I)) (global : List (Verdict I)) : Option B
 stored — the fragment-1 rule that a stored answer is a second source of truth. -/
 def answer (c : Classification I f) : Option Bool := answerOf c.seams c.global
 
+/-- **Recover the checked semantic verdict, but only from an answered
+classification.** A global facet already carries the desired `Spec.Verdict`;
+when there is no global facet, an answered classification must contain a seam,
+whose carried repro demotes to `Verdict.clash`. With neither facet the equality
+premise is impossible, so an unresolved classification has no construction
+path through this function.
+
+The global head is deliberately preferred when present. `verdict_agree` and
+`seam_forces_clash` prove that this choice cannot change the semantic answer;
+`checkedVerdict_isFree` states that agreement exactly. -/
+def checkedVerdict (c : Classification I f) {a : Bool}
+    (answered : c.answer = some a) : Verdict I := by
+  cases hg : c.global with
+  | cons verdict _ => exact verdict
+  | nil =>
+    cases hs : c.seams with
+    | cons seam _ => exact seam.verdict.toClash
+    | nil =>
+      have impossible : False := by
+        simp [answer, answerOf, hg, hs] at answered
+      exact impossible.elim
+
+/-- The extracted verdict agrees exactly with the answer whose proof licensed
+its extraction. This rules out a hidden second verdict policy in exporters. -/
+theorem checkedVerdict_isFree (c : Classification I f) {a : Bool}
+    (answered : c.answer = some a) : (c.checkedVerdict answered).isFree = a := by
+  rcases c with ⟨global, seams, mergeability, obligations⟩
+  cases global with
+  | cons verdict rest =>
+    cases seams with
+    | nil =>
+      change verdict.isFree = a
+      exact Option.some.inj answered
+    | cons seam seams =>
+      change verdict.isFree = a
+      exact (seam_forces_clash seam.verdict verdict).trans (Option.some.inj answered)
+  | nil =>
+    cases seams with
+    | cons seam seams =>
+      change false = a
+      exact Option.some.inj answered
+    | nil => simp [answer, answerOf] at answered
+
+/-- The empty classification is unresolved. In particular there is no
+equality proof with which to call `checkedVerdict`. -/
+@[simp] theorem empty_answer : (empty (I := I) (f := f)).answer = none := rfl
+
+/-- Any explicitly unresolved classification has no checked-verdict licence. -/
+theorem no_checkedVerdict_licence_of_answer_none (c : Classification I f)
+    (unresolved : c.answer = none) : ¬ ∃ a, c.answer = some a := by
+  rintro ⟨a, answered⟩
+  simp [unresolved] at answered
+
 /-- The item's mergeability answer, or `none` when no rule reached one. -/
 def mergeAnswer (c : Classification I f) : Option JoinHom.Fourth :=
   match c.mergeability with

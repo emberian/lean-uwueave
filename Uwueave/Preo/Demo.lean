@@ -2,7 +2,8 @@
 # Uwueave.Preo.Demo — the acceptance test: does the elaborator rediscover what
 `WeaveState.lean` proved by hand?
 
-**Six declarations.** `LoomDoc` (§1–§3) retains fragment 1's six fields and
+**Seven principal declarations, plus the `Discharged` evidence fixture.**
+`LoomDoc` (§1–§3) retains fragment 1's six fields and
 six invariants as a regression, while the formerly unresolved `Slot Nat` row
 now reaches the conservative pins self seam. `LoomDoc2` (§3½) is fragment 2:
 the three surface forms fragment 1 refused, each checked against the hand proof
@@ -13,8 +14,11 @@ fields become one derived verdict over their pair of allocation seams.
 fields and absorbs six legal coordination-free rows.
 `KeyedDoc` (§3⅝) closes the keyed cross-field gap and rediscovers the hand
 bookmarks verdict as a value.
+`GroupedCarrierSurface` (§3⅞a) uses the explicit-seed custom carrier form to
+recover `WeaveState.WeaveDoc`'s grouped carrier exactly.
 `SemanticSurface` (§4) exercises retained-world futures and proof-carrying
-protocol sessions without manufacturing a new semantic judgement.
+protocol sessions; the standalone certificate and budget commands then consume
+those exact generated meanings without manufacturing a new judgement.
 
 ## The fragment-2 result, stated before you read the file
 
@@ -719,11 +723,14 @@ example : ¬ IConfluent (fun d : NestedSurface.State =>
       ∧ NestedSurface.title_zero (NestedSurface.title d))) :=
   NestedSurface.documentSeam.escalatesGlobally
 
-/-! ## §3⅞. The general algebra reconstructs the eight-field hand verdict
+/-! ## §3⅞a. The general algebra reconstructs the eight-field hand verdict
 
-The current surface cannot declare `WeaveCore` as one grouped/custom carrier,
-nor can a free verdict manufacture the legal seed `core₀` that absorption
-honestly requires. That is an elaborator-surface boundary, not an algebra gap.
+The first surface could not declare `WeaveCore` as one grouped carrier or name
+the legal seed `core₀` that absorption honestly requires. §3⅞b below closes
+both carrier-shape gaps with the explicit-seed custom form. One narrower
+surface boundary remains: built-in `Quota` deliberately plants its structural
+zero, which is not legal for `BudgetInv 10`; the elaborator may not silently
+replace it with the invariant-specific `quota₀`. That is not an algebra gap.
 At the term layer the route is now complete and contains no theorem specialized
 to `WeaveState`:
 
@@ -766,6 +773,39 @@ def weaveDocViaAlgebra :
 witnesses, and every non-proof field coincide with the hand artifact. -/
 example : weaveDocViaAlgebra = WeaveState.weaveDocSeamVerdict := rfl
 
+/-! ## §3⅞b. An application carrier with an explicit planting seed
+
+The six built-in field kinds are useful catalog entries, not a closed universe
+of application state. `custom` accepts the existing grouped `WeaveCore`
+carrier only because its product `MergeState` already exists, and it makes the
+seed visible instead of synthesizing an arbitrary inhabitant. Together with
+the two built-in coordination fields, right nesting is definitionally the hand
+document carrier. -/
+
+preo GroupedCarrierSurface where
+  field core : (custom WeaveState.WeaveCore) := WeaveState.core₀
+  field pins : GrowSet WeaveState.NodeId
+  field quota : Quota WeaveState.User
+
+/-- The predictable alias retains the application carrier, without wrapping or
+flattening it. -/
+theorem groupedCarrierSurface_core_carrier :
+    GroupedCarrierSurface.core.Carrier = WeaveState.WeaveCore := rfl
+
+/-- **Whole carrier acceptance.** Explicit grouping now reaches the hand state
+shape that eight flat surface fields deliberately did not. -/
+theorem groupedCarrierSurface_state_is_weaveDoc :
+    GroupedCarrierSurface.State = WeaveState.WeaveDoc := rfl
+
+theorem groupedCarrierSurface_core_seed_is_core₀ :
+    GroupedCarrierSurface.core.seed = WeaveState.core₀ := rfl
+
+theorem groupedCarrierSurface_core_plant_proj
+    (core : GroupedCarrierSurface.core.Carrier) :
+    GroupedCarrierSurface.core
+        (GroupedCarrierSurface.core.plant core) = core :=
+  GroupedCarrierSurface.core.plant_proj core
+
 /-! ## §4. Named futures and proof-carrying protocol sessions
 
 This is a thin surface over the semantic modules. A future names its complete
@@ -802,7 +842,77 @@ preo SemanticSurface where
 
 #preo_report SemanticSurface
 
-/-! ### 4.1 Future declarations retain worlds and variance -/
+/-! ### 4.1 A session budget is one five-currency plan witness -/
+
+preo_budget CoalescedProfileBudget for SemanticSurface.Coalesced :
+    Scheduling.peerOnlyLimits := Scheduling.coalescedProfileUpperBound
+
+/-- Whole-value acceptance against the existing hand witness. The command does
+not rebuild its plan, limits, or pointwise proof. -/
+theorem coalescedProfileBudget_is_hand_witness :
+    CoalescedProfileBudget = Scheduling.coalescedProfileUpperBound := rfl
+
+theorem coalescedProfileBudget_plan_is_generated_plan :
+    CoalescedProfileBudget.Plan = CoalescedProfileBudget.plan := rfl
+
+/-- Every coordinate remains independently observable. Four genuine zeroes do
+not become a scalar zero and the peer action is not read from crossings. -/
+theorem coalescedProfileBudget_retains_five_currencies :
+    CoalescedProfileBudget.plan.profile .peerBarrier = 1
+      ∧ CoalescedProfileBudget.plan.profile .arbiterCut = 0
+      ∧ CoalescedProfileBudget.plan.profile .networkRound = 0
+      ∧ CoalescedProfileBudget.plan.profile .userPrompt = 0
+      ∧ CoalescedProfileBudget.plan.profile .rollback = 0 := by
+  decide
+
+/-- The standalone surface has no crossing-count acceptance route. -/
+theorem no_crossing_count_accepts_profile_budget :
+    ¬ ∃ accepts : Nat → Bool, ∀ s : Scheduling.Session,
+      accepts s.crossings = true ↔
+        Scheduling.HasProfileUpperBound s Scheduling.zeroLimits :=
+  Scheduling.no_crossing_count_decides_profile_acceptance
+
+/-- Nor can a peer-meeting floor accept the other four coordinates. -/
+theorem meeting_floor_does_not_accept_profile_budget :
+    Scheduling.MeetingFloor Scheduling.mixedCurrencySession 1
+      ∧ 1 ≤ Scheduling.peerOnlyLimits .peerBarrier
+      ∧ ¬ Scheduling.HasProfileUpperBound Scheduling.mixedCurrencySession
+          Scheduling.peerOnlyLimits :=
+  Scheduling.meeting_floor_does_not_entail_profile_acceptance
+
+/-! ### 4.2 Named certificates retain their complete dependent type -/
+
+preo_certificate QuiescedRenderCertificate :
+    Future.CheckedCertificate SemanticSurface.Delivered WorldFuture.renderW
+      (fun w => w) (fun w => WorldFuture.Quiesced w) Future.quiescedIndex :=
+  Future.quiescedWorldCertificate
+
+/-- Whole-value acceptance: the standalone surface adds a stable name, not a
+state-only approximation or a second certificate semantics. -/
+theorem quiescedRenderCertificate_is_hand_certificate :
+    QuiescedRenderCertificate = Future.quiescedWorldCertificate := rfl
+
+/- A deliberately constant observation admits a real extension certificate;
+it is useful here because it lets the surface exercise the variance direction
+without asserting that `renderW` is extension-stable. -/
+preo_certificate ConstantExtensionCertificate :
+    Future.CheckedCertificate SemanticSurface.Working (fun _ => ())
+      (fun _ => ()) (fun _ => True) Future.quiescedIndex := by
+  refine { accepted := True.intro, soundForAll := ?_ }
+  intro _ _ _ _
+  rfl
+
+preo_certificate ConstantDeliveryCertificate :
+    Future.CheckedCertificate SemanticSurface.Delivered (fun _ => ())
+      (fun _ => ()) (fun _ => True) Future.quiescedIndex :=
+  Future.extensionCertificateToDelivery ConstantExtensionCertificate
+
+/-- Certificate variance is extension → delivery, by the semantic API. -/
+theorem constantCertificate_restricts_extension_to_delivery :
+    ConstantDeliveryCertificate =
+    Future.extensionCertificateToDelivery ConstantExtensionCertificate := rfl
+
+/-! ### 4.3 Future declarations retain worlds and variance -/
 
 /-- Whole-value acceptance: the surface future is exactly the semantic
 delivery declaration, including its name, scope and world relation. -/
@@ -834,6 +944,15 @@ example : ¬ Future.CheckedStability SemanticSurface.Working
     WorldFuture.renderW Future.quiescedIndex :=
   Future.delivery_artifact_does_not_promote_to_extension
 
+/-- The concrete delivery certificate cannot be promoted in the unsound
+direction: such a certificate would project the refuted extension stability. -/
+example : ¬ Future.CheckedCertificate SemanticSurface.Working
+    WorldFuture.renderW (fun w => w) (fun w => WorldFuture.Quiesced w)
+      Future.quiescedIndex := by
+  intro certificate
+  exact Future.delivery_artifact_does_not_promote_to_extension
+    certificate.stability
+
 /-- ⚠ Same materialized state, different retained worlds: a checked world
 certificate exists, but no state-indexed certificate may be reused there. -/
 example :
@@ -847,7 +966,7 @@ example :
             WorldFuture.observe C Future.quiescedIndex) :=
   Future.same_state_different_worlds_block_certificate_reuse
 
-/-! ### 4.2 Protocol/session elaboration is one semantic API call -/
+/-! ### 4.4 Protocol/session elaboration is one semantic API call -/
 
 example : SemanticSurface.Coalescing = Protocol.coalescingProtocol := rfl
 example : SemanticSurface.Ambient = Protocol.ambientProtocol := rfl

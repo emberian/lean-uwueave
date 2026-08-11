@@ -16,22 +16,30 @@ There are three connections to the existing development.
 
 1. `Causality.ForkEvidence` is reused exactly.  Once both branches are
    admitted, evidence is permanent under every gossip extension and
-   I-confluent under merge.  Attribution, however, additionally assumes that
-   admitted `(author, sequence, id)` records really were issued by that
-   author.  Without that premise, a forger can frame an honest peer.
+   I-confluent under merge.  The local attribution theorem additionally takes
+   the premise that admitted `(author, sequence, id)` records really were
+   issued by that author.  `AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic`
+   now derives that premise from accepted signed event records through an
+   explicit codec. Without authentic admission, a forger can still frame an
+   honest peer.
 2. `Gated.gatedOps` proves authorization of a cited grant, not authenticity of
    the submitter.  A concrete Mallory submission citing Alice's live root grant
    passes the gate, because submitter identity is deliberately absent from
-   `Gated.GOp`.
+   `Gated.GOp`. `AuthenticatedAdmission.AuthenticatedGatedOp` closes the
+   abstract model conjunction with a signed `MoveClaim`, genuine issuance and
+   explicit holder binding; it does not add signatures to the shipping request.
 3. `EraCertificate`'s issuance counterexample is closed by two explicit
    authenticity premises: announcements name ids already present in the issued
    pool, and an id binds at most one event payload.  Under those premises a
    settled ERA view is stable across issuance.  The existing forged-id witness
    violates collision freedom and reverses the finalised verdict.
 
-No cryptography is proved here.  `SignatureAuthentic`, `IdAuthentic`, and
-`AnnouncementsGrounded` are the exact handoff points to a signature/hash-DAG
-implementation.  The delivery predicates remain independent obligations.
+No cryptography is proved here. `SignatureAuthentic` is now discharged from
+`Authenticity.AuthenticIssuer` for the explicit admitted-event codec in
+`AuthenticatedAdmission`; supplying that issuer premise remains deployment
+work. `IdAuthentic` and `AnnouncementsGrounded` remain uninstantiated hash-DAG
+and announcement-authentication handoff points. The delivery predicates remain
+independent obligations.
 -/
 import Uwueave.Causality
 import Uwueave.Gated
@@ -164,7 +172,9 @@ structure Submission where
   deriving DecidableEq, Repr
 
 /-- A tiny external ownership policy for the witness: grant 1 belongs to
-Alice.  A real deployment discharges this with signatures over the operation. -/
+Alice. `AuthenticatedAdmission` discharges the model-level signed-move,
+holder-binding and gate conjunction. A deployed signature scheme and a
+FORMAT-v3 signature lane remain absent. -/
 def CitationAuthentic (s : Submission) : Prop :=
   s.op.cite = 1 → s.submitter = Era.alice
 

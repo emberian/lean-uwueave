@@ -2,26 +2,32 @@
 
 # ⟨UNDONE⟩ census
 
-This is a deterministic, lexical inventory of every literal `⟨UNDONE⟩` marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
+This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Literal marker occurrences:** 181
-- **Extracted blocks (marker-bearing source lines):** 179
-- **Lean files containing markers:** 42
+- **Marker occurrences:** 186
+- **Extracted blocks (marker-bearing source lines):** 184
+- **Lean files containing markers:** 44
+
+The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
 Each block begins at one marker-bearing source line and includes its following continuation lines up to the next blank line, list item, Markdown heading, or Lean comment terminator. Two markers on one source line therefore count as two occurrences but one extracted block. This ledger intentionally includes definitions, quotations, inherited caveats, and references to older items: it gates lexical drift, not the semantic status of the work.
 
 ## `Uwueave/Authenticity.lean`
 
-### [`Uwueave/Authenticity.lean:49`](../Uwueave/Authenticity.lean#L49)
+### [`Uwueave/Authenticity.lean:58`](../Uwueave/Authenticity.lean#L58)
 
 ````text
-⟨UNDONE⟩ A deployment must instantiate `SignatureScheme`, its key registry,
-key rotation, and its issuance log, then justify `EUFStylePremise` by an actual
-EUF-CMA-style reduction for the chosen signature scheme. This file has no
-security parameter, probabilistic adversary, query bound, side-channel model,
-key-generation entropy, byte codec, or theorem about Ed25519/ML-DSA/another
-concrete primitive. The deterministic trace predicate is the *conclusion* a
-computational proof must supply, not that proof wearing a new name.
+⟨UNDONE at the deployment-cryptography boundary⟩ A deployment must instantiate
+`SignatureScheme`, its key registry, key rotation, and its issuance log, then
+justify `EUFStylePremise` by an actual EUF-CMA-style reduction for the chosen
+signature scheme. `AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic`
+and `AuthenticatedGatedOp.ofAuthenticIssuer` now close the model-level admission
+transports once `AuthenticIssuer` is supplied; they do not supply it. This file
+has no security parameter, probabilistic adversary, query bound, side-channel
+model, key-generation entropy, byte codec, or theorem about
+Ed25519/ML-DSA/another concrete primitive. The deterministic trace predicate is
+the *conclusion* a computational proof must supply, not that proof wearing a new
+name.
 ````
 
 ## `Uwueave/Bounds.lean`
@@ -146,7 +152,28 @@ was reaching for. -/
 
 ## `Uwueave/Choreo.lean`
 
-### [`Uwueave/Choreo.lean:154`](../Uwueave/Choreo.lean#L154)
+### [`Uwueave/Choreo.lean:147`](../Uwueave/Choreo.lean#L147)
+
+````text
+  * ⟨UNDONE only for infinitary recursion⟩ **No coinductive or infinite-trace
+    semantics.** The finite approximants do not define a limit object, a
+    bisimulation on infinite behavior, or temporal liveness of a recursive
+    protocol. Those stronger claims remain unbuilt.
+````
+
+### [`Uwueave/Choreo.lean:151`](../Uwueave/Choreo.lean#L151)
+
+````text
+  * ⟨UNDONE as temporal liveness⟩ **Deadlock-freedom in their sense.** Our only
+    blocking construct is `barrier`. `Uwueave.ChoreoRec` now proves the narrow
+    operational facts that one guarded barrier loop can take a step and one
+    mismatched barrier is deadlocked. Whether every roster replica eventually
+    reaches a barrier remains a *liveness* question (`Uwueave.Liveness` owns that
+    axis): no fairness, eventual-delivery, or temporal deadlock-freedom theorem is
+    claimed.
+````
+
+### [`Uwueave/Choreo.lean:158`](../Uwueave/Choreo.lean#L158)
 
 ````text
   * ⟨UNDONE⟩ **`ReadsAgree` at non-reader replicas.** Projecting a `read` sends no
@@ -158,7 +185,7 @@ was reaching for. -/
     select/branch lives and this fragment does not go.
 ````
 
-### [`Uwueave/Choreo.lean:161`](../Uwueave/Choreo.lean#L161)
+### [`Uwueave/Choreo.lean:165`](../Uwueave/Choreo.lean#L165)
 
 ````text
   * ⟨UNDONE⟩ **Liveness of delivery.** `coordination_free_converges` says *given*
@@ -166,13 +193,13 @@ was reaching for. -/
     result is eventually delivered is the CRDT premise and is not proved here.
 ````
 
-### [`Uwueave/Choreo.lean:264`](../Uwueave/Choreo.lean#L264)
+### [`Uwueave/Choreo.lean:268`](../Uwueave/Choreo.lean#L268)
 
 ````text
 rather than a theorem — see the ⟨UNDONE⟩ note in the header. -/
 ````
 
-### [`Uwueave/Choreo.lean:1077`](../Uwueave/Choreo.lean#L1077)
+### [`Uwueave/Choreo.lean:1081`](../Uwueave/Choreo.lean#L1081)
 
 ````text
 ⟨UNDONE⟩ note in the header is about, and `loomRead_readsAgree` is why it is safe
@@ -238,31 +265,19 @@ sublists and the erase-two-indices bookkeeping — and no numeric separation of
 
 ## `Uwueave/CoordEffect.lean`
 
-### [`Uwueave/CoordEffect.lean:111`](../Uwueave/CoordEffect.lean#L111)
-
-````text
-  * ⟨UNDONE⟩ **A scheduling / coalescing semantics — the named next step.**
-    Turning crossings into meetings needs a model of *attendance* (which
-    replicas must be in a round) and *coalescing* (when two crossings share
-    one). `⊗` = pointwise `+` is an upper bound only for a **pure-coalescing**
-    interpretation that emits at most one schedulable demand per crossing. A
-    protocol may instead require several barriers or several currencies for one
-    crossing, so there is no generic inequality in either direction. `optimum`
-    here remains a budget in crossings. Nothing in this file justifies the word
-    "meeting", and no theorem here uses it. This is the transmutable obligation,
-    not a theorem of the model.
-````
-
 ### [`Uwueave/CoordEffect.lean:121`](../Uwueave/CoordEffect.lean#L121)
 
 ````text
-  * ⟨UNDONE⟩ **No typing rules.** This is the *semantics* a graded session type
-    would be checked against; there is no elaborator, no `session … @ ≤ n`
-    syntax, and no subsumption rule here. `SeamAlgebra`'s composition laws are
-    the candidate typing rules and are not connected to `Profile` yet.
+  * ⟨UNDONE, narrowed to the native surface and general subsumption⟩ **The
+    semantic typing target has landed.** `Protocol.Elaboration` produces checked
+    schedules and exact currency-profile bounds, and Preo has checked
+    `protocol`/`session` forms whose bodies are typed `Protocol.Term`s. What is
+    still absent is a custom parser for those six protocol constructors and a
+    general graded weakening/subsumption judgement over `CoordEffect.Profile`;
+    `SeamAlgebra`'s candidate laws are not connected to such a judgement here.
 ````
 
-### [`Uwueave/CoordEffect.lean:130`](../Uwueave/CoordEffect.lean#L130)
+### [`Uwueave/CoordEffect.lean:133`](../Uwueave/CoordEffect.lean#L133)
 
 ````text
   * ⟨UNDONE⟩ **No liveness, no delivery, no time** — as in `Cost.lean`. A
@@ -307,6 +322,16 @@ values in one round while replicas do occupy the intermediate states. -/
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
 ````
 
+### [`Uwueave/DerivedDocument.lean:95`](../Uwueave/DerivedDocument.lean#L95)
+
+````text
+    and `flat_encodeEvidence_is_projection` back to this carrier. ⟨UNDONE at the
+    deployment boundary⟩ Those graph identities are still logical ids, not
+    cryptographic or content-addressed identities; no hash/signature binding is
+    manufactured by the typed graph. §4's DAG remains the dependency graph
+    *between* derivations, which is a different graph.
+````
+
 ### [`Uwueave/DerivedDocument.lean:113`](../Uwueave/DerivedDocument.lean#L113)
 
 ````text
@@ -339,12 +364,13 @@ values in one round while replicas do occupy the intermediate states. -/
 
 ## `Uwueave/Durable.lean`
 
-### [`Uwueave/Durable.lean:49`](../Uwueave/Durable.lean#L49)
+### [`Uwueave/Durable.lean:52`](../Uwueave/Durable.lean#L52)
 
 ````text
-  * ⟨UNDONE⟩ No refinement connects `List UInt8` here to a host serializer,
-    file descriptor, database transaction, flush primitive, or filesystem
-    crash model.  `DeploymentAssumptions` names that missing boundary.
+  * ⟨UNDONE⟩ No refinement proves that a host serializer emits those bytes
+    byte-for-byte, or connects a file descriptor, database transaction, flush
+    primitive, or filesystem crash observation to the required prefix shape.
+    `DeploymentAssumptions` names that missing boundary.
 ````
 
 ## `Uwueave/EraCertificate.lean`
@@ -379,6 +405,15 @@ had run Era through it:
 
 ````text
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+````
+
+### [`Uwueave/EraCertificate.lean:135`](../Uwueave/EraCertificate.lean#L135)
+
+````text
+    contrapositive is `finality_failure_refutes_id_authenticity`. ⟨UNDONE at the
+    deployment boundary⟩ Recursive hash/signature binding, fraud-proof
+    detection, and the bridge from accepted bytes to those predicates remain
+    unproved.
 ````
 
 ### [`Uwueave/EraCertificate.lean:139`](../Uwueave/EraCertificate.lean#L139)
@@ -444,6 +479,15 @@ non-trivial `SoundEvaluator` (§8), not a vacuous one.
 ````text
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's
 clothes.
+````
+
+### [`Uwueave/Evidence.lean:154`](../Uwueave/Evidence.lean#L154)
+
+````text
+    `Evidence.values`. ⟨UNDONE for this old carrier and deployment⟩
+    `ResultEvidence` still stores no timestamp, progress messages are neither
+    generated nor authenticated, and the successor proves neither full `render`
+    stability nor that a runtime honestly advances its frontier.
 ````
 
 ### [`Uwueave/Evidence.lean:158`](../Uwueave/Evidence.lean#L158)
@@ -558,24 +602,33 @@ paved over. Concretely, what is missing is a function
 
 ## `Uwueave/Gated.lean`
 
-### [`Uwueave/Gated.lean:75`](../Uwueave/Gated.lean#L75)
+### [`Uwueave/Gated.lean:94`](../Uwueave/Gated.lean#L94)
 
 ````text
-list also carried *"conflicting grant issuance is not arbitrated ⟨UNDONE⟩ …
-composing that arbitration with this gate is real work, unstarted"*.
-`Uwueave/GatedEra.lean` **is that work, done** — it substitutes `Era.resolve`
-for `Authority.Active` at the authority substrate and delivers
-`ge_deterministic`, `ge_duel_resolved` (the survivor's op stands where
-fail-closed denied both) and `ge_finalised_stable`, plus the finding
-`antitone_forbids_enabling`. So the item is gone rather than reworded. What
-survives it is a theorem, not a caveat: fail-closed composes as advertised —
-after a duel this file's gate rejects **both** duellists' ops and every op
-citing grants delegated under them (`Authority.duelling_admins_annihilate`) —
-and arbitration's price is that it loses `gated_antitone`'s shrinkage
-(`GatedEra.ge_not_antitone`).
+    ⟨UNDONE at the shipping boundary; model admission paid⟩
+    `AuthenticatedAdmission.AuthenticatedGatedOp` now connects a received,
+    accepted signed `MoveClaim` to the abstract gated feed under
+    `Authenticity.AuthenticIssuer` and explicit `GrantHolder` binding. FORMAT
+    v3 and `Exec.Op` carry no issuer, key epoch or signature lane, so no theorem
+    authenticates the request reaching the kernel; no concrete EUF-CMA proof is
+    present. The gate bounds what a cited grant can DO, not who may cite it.
 ````
 
-### [`Uwueave/Gated.lean:133`](../Uwueave/Gated.lean#L133)
+### [`Uwueave/Gated.lean:126`](../Uwueave/Gated.lean#L126)
+
+````text
+    audits it.** ⟨UNDONE — and the sharpest remaining seam⟩ The gate decides
+    against the grants and revocations *the caller marshalled*. A caller that
+    omits a revocation it has seen gets a more permissive answer, and nothing
+    in Lean can tell: `replay`'s theorems quantify over the decoded arrays,
+    not over what the replica knows. The Rust side sends its whole grow-only
+    substrate (`rust/src/movelog.rs`), which is a claim about a Rust program,
+    i.e. test evidence. Closing this means the request committing to the
+    substrate it was built from — a digest the caller cannot vary per call —
+    and that is unbuilt.
+````
+
+### [`Uwueave/Gated.lean:136`](../Uwueave/Gated.lean#L136)
 
 ````text
     INDICES.** ⟨UNDONE⟩ Enough to make covering decidable and the theorems
@@ -591,6 +644,30 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     `Authority.lean` already names), and that is where this gets fixed. Only
     the MOVED node is gated; gating the destination too is a policy variant,
     not taken.
+````
+
+### [`Uwueave/Gated.lean:158`](../Uwueave/Gated.lean#L158)
+
+````text
+    ⟨UNDONE, in eight named pieces⟩ This item used to read "⟨TERMINAL for this
+    repo⟩ … the Rust marshaller's bytes and Lean's C backend", which is exactly
+    the claim `docs/TRUST.md` exists to retract: an external reviewer (codex)
+    read "the C backend TCB is terminal" and demolished it, and Ledger 2 is the
+    replacement — **ten rows: eight OBLIGATION and two PAID controls**, each
+    with a named disposition. *Nothing open in the execution stack is
+    terminal.* Lean's C code generator, the C compiler and linker, the Lean
+    runtime, `shim.c`, the ABI/FFI boundary, Rust `unsafe`, storage/index glue
+    and durability are eight distinct open boundaries, not one:
+    CakeML is the existence proof for a verified compiler of a functional
+    source language (the codegen half), and CompCert covers exactly one row —
+    the C compiler — because it *starts* at C and does not reach Lean's IR.
+    The former Rust byte marshaller is gone: typed lanes cross the FFI and
+    `Exec.encodeRequestKernel_eq` proves the Lean export delegates to the one
+    canonical `encodeRequest`. That wire-decision boundary and fail-closed
+    build freshness are the two paid controls; neither pays the ABI, shim,
+    runtime or code-generation rows.
+    Read `docs/TRUST.md` Ledger 2, not this bullet, for the current shape;
+    `Exec.lean`'s claim-discipline header is the Lean-side ledger.
 ````
 
 ## `Uwueave/Gluing.lean`
@@ -627,14 +704,19 @@ file is the frontier it named.
 ### [`Uwueave/Histories.lean:162`](../Uwueave/Histories.lean#L162)
 
 ````text
-  * ⟨UNDONE⟩ **No merge-base *procedure*.** `BaseSelection` is the honest output
-    type and all three cases are inhabited, but nothing here computes one from a
-    DAG — minidregg does not either ("a concrete bounded search **may** return").
-    A procedure would need a decidable reachability, which our `Prop`-valued
-    `Ancestry` does not carry.
+  * ⟨UNDONE, narrowed to unrestricted/total selection⟩ **No total merge-base
+    procedure for an arbitrary `VersionDag`.** Downstream
+    `FiniteHistory.Enumeration` makes finiteness an explicit coverage premise;
+    under it, `FiniteHistory.reaches_iff_bounded` and
+    `Enumeration.decideReaches` decide this `Prop`-valued reachability, while
+    `FiniteHistory.searchCertified` returns a proof-carrying `BaseSelection`
+    with an exhaustive finite common-ancestor list when one of the three cases
+    is found. Its `none` result is deliberately not relabelled `unavailable`.
+    What remains here is the unrestricted/infinite-DAG claim and a totality
+    theorem turning every covered finite pair into a selection.
 ````
 
-### [`Uwueave/Histories.lean:167`](../Uwueave/Histories.lean#L167)
+### [`Uwueave/Histories.lean:172`](../Uwueave/Histories.lean#L172)
 
 ````text
   * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
@@ -642,7 +724,7 @@ file is the frontier it named.
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
 ````
 
-### [`Uwueave/Histories.lean:177`](../Uwueave/Histories.lean#L177)
+### [`Uwueave/Histories.lean:182`](../Uwueave/Histories.lean#L182)
 
 ````text
   * ⟨UNDONE⟩ **No delta/patch algebra.** D-0005's route (1) wants residual and
@@ -659,14 +741,7 @@ file is the frontier it named.
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
 ````
 
-### [`Uwueave/HistoryBase.lean:122`](../Uwueave/HistoryBase.lean#L122)
-
-````text
-    Nothing here computes a base from a DAG; `Histories.lean`'s own ⟨UNDONE⟩ on
-    that point stands unchanged.
-````
-
-### [`Uwueave/HistoryBase.lean:130`](../Uwueave/HistoryBase.lean#L130)
+### [`Uwueave/HistoryBase.lean:135`](../Uwueave/HistoryBase.lean#L135)
 
 ````text
   * ⟨UNDONE⟩ **No convergence, still.** Nothing here says two replicas agree.
@@ -677,7 +752,7 @@ file is the frontier it named.
     valid base" is not a proof that a run converges, and no such proof is here.
 ````
 
-### [`Uwueave/HistoryBase.lean:136`](../Uwueave/HistoryBase.lean#L136)
+### [`Uwueave/HistoryBase.lean:141`](../Uwueave/HistoryBase.lean#L141)
 
 ````text
   * ⟨UNDONE⟩ **The version index buys scoping, not separating power.** §6's
@@ -687,7 +762,7 @@ file is the frontier it named.
     **base to scope to**, which a bare world has no room for.
 ````
 
-### [`Uwueave/HistoryBase.lean:141`](../Uwueave/HistoryBase.lean#L141)
+### [`Uwueave/HistoryBase.lean:146`](../Uwueave/HistoryBase.lean#L146)
 
 ````text
   * ⟨UNDONE⟩ **The history/world bridge remains `Type 0`.** The state-level
@@ -697,7 +772,7 @@ file is the frontier it named.
     `WorldFuture.World` still require their carriers in `Type 0`.
 ````
 
-### [`Uwueave/HistoryBase.lean:146`](../Uwueave/HistoryBase.lean#L146)
+### [`Uwueave/HistoryBase.lean:151`](../Uwueave/HistoryBase.lean#L151)
 
 ````text
   * ⟨UNDONE⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
@@ -706,27 +781,27 @@ file is the frontier it named.
     histories. No theorem here says that is the general pattern.
 ````
 
-### [`Uwueave/HistoryBase.lean:299`](../Uwueave/HistoryBase.lean#L299)
+### [`Uwueave/HistoryBase.lean:304`](../Uwueave/HistoryBase.lean#L304)
 
 ````text
     answer exists — the ⟨UNDONE⟩ `MergeModel` §9's own docstring records;
 ````
 
-### [`Uwueave/HistoryBase.lean:549`](../Uwueave/HistoryBase.lean#L549)
+### [`Uwueave/HistoryBase.lean:554`](../Uwueave/HistoryBase.lean#L554)
 
 ````text
 `selected_unique`, which forbids the pair at the history level. ⟨UNDONE⟩ This
 withdraws the *licence*; it is not a convergence proof. -/
 ````
 
-### [`Uwueave/HistoryBase.lean:1118`](../Uwueave/HistoryBase.lean#L1118)
+### [`Uwueave/HistoryBase.lean:1123`](../Uwueave/HistoryBase.lean#L1123)
 
 ````text
 name for it, no more. ⟨UNDONE⟩ There is no theorem here that the version index
 separates worlds a `WorldFuture.WorldCert` cannot — it does not. -/
 ````
 
-### [`Uwueave/HistoryBase.lean:1319`](../Uwueave/HistoryBase.lean#L1319)
+### [`Uwueave/HistoryBase.lean:1324`](../Uwueave/HistoryBase.lean#L1324)
 
 ````text
 ⟨UNDONE⟩ Two histories, not a classification: nothing here says visibility and
@@ -744,27 +819,29 @@ harmlessness are always anti-correlated. -/
 ### [`Uwueave/HistoryPolicy.lean:123`](../Uwueave/HistoryPolicy.lean#L123)
 
 ````text
-  * ⟨UNDONE⟩ **The judgements are asked at a pair, not swept over a history.**
-    `BaseRobust`/`SelectorSafe` quantify over the policy's declared `scope`, and
-    every scope here is one pair (in both orders). Sweeping a whole DAG needs a
-    decidable `Reaches`, which `Histories`' `Prop`-valued `Ancestry` does not
-````
-
-### [`Uwueave/HistoryPolicy.lean:127`](../Uwueave/HistoryPolicy.lean#L127)
-
-````text
-    carry — the same ⟨UNDONE⟩ `Histories.lean` records for "no merge-base
-    *procedure*".
-````
-
-### [`Uwueave/HistoryPolicy.lean:129`](../Uwueave/HistoryPolicy.lean#L129)
-
-````text
-  * ⟨UNDONE⟩ **No selector is *computed* from a DAG.** `ccSelect*`/`lvSelect` are
-    written down and then proved sound; nothing searches. Same reason.
+  * ⟨UNDONE, narrowed to semantic whole-history judgements⟩ **The judgements are
+    asked at a pair, not swept over a history.** `BaseRobust`/`SelectorSafe`
+    quantify over the policy's declared `scope`, and every scope here is one
+    pair (in both orders). Downstream `FiniteHistory.sweepEntries_complete` and
+    `FiniteHistory.checkPolicy` do sweep every ordered pair of an explicitly
+    enumerated finite DAG, but only for exact version-level base-decision
+    admission. They do not sweep `BaseRobust`, `SelectorSafe`, or
+    `HistoryConvergent` over a `History`, and make no delivery/convergence claim.
 ````
 
 ### [`Uwueave/HistoryPolicy.lean:131`](../Uwueave/HistoryPolicy.lean#L131)
+
+````text
+  * ⟨UNDONE, narrowed to a total `HistoryMerge` selector⟩ **No total selector is
+    computed into this model from a DAG.** Downstream
+    `FiniteHistory.searchCertified` performs proof-carrying search under an
+    explicit finite enumeration and computes all three concrete fixture cases.
+    It remains partial (`none` is not `unavailable`) and does not synthesize a
+    `HistoryMerge.select`, its `scope`, reconciliation kernel, or their laws;
+    `ccSelect*`/`lvSelect` here are still written down and proved sound.
+````
+
+### [`Uwueave/HistoryPolicy.lean:138`](../Uwueave/HistoryPolicy.lean#L138)
 
 ````text
   * ⟨UNDONE⟩ **`SelectorSymmetric` is proved sufficient for order-agreement, not
@@ -773,7 +850,7 @@ harmlessness are always anti-correlated. -/
     does.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:135`](../Uwueave/HistoryPolicy.lean#L135)
+### [`Uwueave/HistoryPolicy.lean:142`](../Uwueave/HistoryPolicy.lean#L142)
 
 ````text
   * ⟨UNDONE⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
@@ -829,6 +906,22 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     take.
 ````
 
+### [`Uwueave/Holes.lean:199`](../Uwueave/Holes.lean#L199)
+
+````text
+  * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE, and narrowed⟩ §6's
+    stability licence is abstract (`Stable Arriving P`), and
+    `stable_inputs_seal_the_result` proves the *mechanism* — stability of the
+    inputs transports to stability of the result, along the headline. What is
+    **not** built is the transport from `Era.final_view_immune` (finalised
+    prefixes of an event *list*, under an arbiter's cuts) into a `Stable`
+    hypothesis on a `GSet World`. ⚑ What *has* landed since is one rung of it:
+    `Evidence.closed_freezes` derives the freeze from the evidence a replica
+    actually holds — "this is what `Holes.lean` §6 assumed under the name
+    `Stable`", in its own words — so the remaining gap is Era's arbiter cut,
+    not the licence in general.
+````
+
 ### [`Uwueave/Holes.lean:217`](../Uwueave/Holes.lean#L217)
 
 ````text
@@ -858,22 +951,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     theorem below assumes it.
 ````
 
-### [`Uwueave/HonestRender.lean:135`](../Uwueave/HonestRender.lean#L135)
-
-````text
-  * **The eliminator is five-way, and the sixth cell is a sibling's.** ⟨UNDONE⟩
-    `ResultStatus.sixth_cell_is_distinguishable` proves that
-    `Evidence.View.vacuous` folds two states with *opposite* stability —
-    "nothing observed yet" and "definitive absence". `dispatch` and
-    `Carrier.elim` are over `Evidence.View` because `Evidence.SoundEvaluator`
-    and `exact_sound` — §4's seed — are stated there. So a consumer of this
-    carrier handles five statuses, not six, and a surface built on it cannot
-    tell a spinner from "there is no answer". The repair is a `Carrier` over
-    `ResultStatus.Status` with a soundness contract proved for `statusOf`;
-    neither exists, and nothing below pretends the fold is faithful.
-````
-
-### [`Uwueave/HonestRender.lean:145`](../Uwueave/HonestRender.lean#L145)
+### [`Uwueave/HonestRender.lean:147`](../Uwueave/HonestRender.lean#L147)
 
 ````text
   * **The eliminator is `Type 0`-valued.** ⟨UNDONE⟩ `Carrier.elim` eliminates
@@ -883,7 +961,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     function can *mean* — and never the absence of one.
 ````
 
-### [`Uwueave/HonestRender.lean:150`](../Uwueave/HonestRender.lean#L150)
+### [`Uwueave/HonestRender.lean:152`](../Uwueave/HonestRender.lean#L152)
 
 ````text
   * **The future index is phantom in the data.** ⟨UNDONE⟩ `Result F α` mentions
@@ -893,7 +971,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     discipline the theorems reward, not one the kernel enforces.
 ````
 
-### [`Uwueave/HonestRender.lean:155`](../Uwueave/HonestRender.lean#L155)
+### [`Uwueave/HonestRender.lean:157`](../Uwueave/HonestRender.lean#L157)
 
 ````text
   * **The site index is carried, not checked.** ⟨UNDONE⟩ `Carrier.site` puts the
@@ -904,7 +982,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     as an argument and believes it.
 ````
 
-### [`Uwueave/HonestRender.lean:161`](../Uwueave/HonestRender.lean#L161)
+### [`Uwueave/HonestRender.lean:163`](../Uwueave/HonestRender.lean#L163)
 
 ````text
   * **Disclosure is recorded, not decided.** ⟨UNDONE⟩ The alternatives survive a
@@ -915,7 +993,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     retained, the decision is not typed.
 ````
 
-### [`Uwueave/HonestRender.lean:167`](../Uwueave/HonestRender.lean#L167)
+### [`Uwueave/HonestRender.lean:169`](../Uwueave/HonestRender.lean#L169)
 
 ````text
   * **Obligations are not affordances here.** ⟨UNDONE⟩ §8's actionable
@@ -924,7 +1002,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     "waiting on `bob`" is a `Source` in a `GSet` and nothing more.
 ````
 
-### [`Uwueave/HonestRender.lean:171`](../Uwueave/HonestRender.lean#L171)
+### [`Uwueave/HonestRender.lean:173`](../Uwueave/HonestRender.lean#L173)
 
 ````text
   * **The empirical claim of §8 is untouched.** ⟨UNDONE⟩ *That a recurring class
@@ -1037,6 +1115,21 @@ the missing signature,
 that ⟨UNDONE⟩ — synthesising a quota partition — is untouched here and survives.
 ````
 
+### [`Uwueave/MenuTotality.lean:27`](../Uwueave/MenuTotality.lean#L27)
+
+````text
+`Exits.lean:101-105` — ⟨UNDONE in `Exits`, TERMINAL here for the explicitly
+finite seam row⟩ **"The menu is not proved exhaustive."** §2 and §3 make the
+greedy row decidable; §7 closes the finite seam-search case. Availability of
+the greedy seam row becomes **decidable**
+(`decidableSeamApplies`, and `pin_seam_row_decided` discharges by `decide` what
+`Cost.seamFalse_segmented` spends thirty-five lines on), so a row that is
+available is now *found* rather than waited for; and `seam_row_dichotomy` says
+the synthesiser either returns a certified row or reports a failure **located in
+the stability clause** — never in the colouring clause, which
+`greedySeamFor_properColoring` supplies unconditionally.
+````
+
 ### [`Uwueave/MenuTotality.lean:50`](../Uwueave/MenuTotality.lean#L50)
 
 ````text
@@ -1130,32 +1223,16 @@ clothes.
     is enough for selected/ambiguous/unavailable and no more.
 ````
 
-### [`Uwueave/MergeModel.lean:130`](../Uwueave/MergeModel.lean#L130)
+### [`Uwueave/MergeModel.lean:136`](../Uwueave/MergeModel.lean#L136)
 
 ````text
-  * ⟨UNDONE⟩ **Ambiguity is two distinct bases, not a refutation of a lowest
-    one.** §9's `BaseDecision.Valid` demands the pair, because uwueave has no
-    `LowestCommonBase` to refute against — minidregg's
-    `AmbiguousCommonBases.excludes_lowest` is that theorem, and it is next door,
-    not here. `ambiguous_inhabited` shows the situation is real regardless.
-````
-
-### [`Uwueave/MergeModel.lean:135`](../Uwueave/MergeModel.lean#L135)
-
-````text
-  * ⟨UNDONE⟩ **No repeated or criss-cross merging.** Like `Ancestral`, every
-    judgement here is about a single fork-and-join. Convergence on a version
-    DAG needs Kaki et al.'s further conditions and gets no verdict.
-````
-
-### [`Uwueave/MergeModel.lean:917`](../Uwueave/MergeModel.lean#L917)
-
-````text
-⟨UNDONE⟩ `ambiguous` demands two *distinct* common bases and not a proof that
-no lowest one exists: uwueave has no `LowestCommonBase`, and minidregg's
-`AmbiguousCommonBases.excludes_lowest` is that theorem, next door. Two distinct
-common bases is what a merge-base procedure can hand us here, and
-`ambiguous_inhabited` shows the situation is real. -/
+  * ⟨UNDONE, narrowed to operational convergence⟩ **Repeated and criss-cross
+    histories are modeled downstream.** `Histories.VersionDag` admits merge
+    nodes whose results feed later merges, exhibits the criss-cross ambiguity,
+    and checks invariant safety across finite histories; `HistoryPolicy` derives
+    views under explicit selectors. What remains absent is a network execution
+    proving replicas reach the same history and a convergence theorem for
+    repeated merging under stated delivery and selector hypotheses.
 ````
 
 ## `Uwueave/MinimalSummary.lean`
@@ -1215,6 +1292,18 @@ common bases is what a merge-base procedure can hand us here, and
     quotient's size is proved.
 ````
 
+## `Uwueave/Preo/ArtifactDurable.lean`
+
+### [`Uwueave/Preo/ArtifactDurable.lean:39`](../Uwueave/Preo/ArtifactDurable.lean#L39)
+
+````text
+  * ⟨UNDONE⟩ No deployment refinement proves that a host serializer agrees
+    byte-for-byte with `projectionBytes`, or that filesystem, flush,
+    atomic-sector, or power-loss observations satisfy `Durable.TornFrame` and
+    its prefix premise. `Durable` names rather than manufactures those
+    assumptions.
+````
+
 ## `Uwueave/Recoverable.lean`
 
 ### [`Uwueave/Recoverable.lean:106`](../Uwueave/Recoverable.lean#L106)
@@ -1260,34 +1349,25 @@ common bases is what a merge-base procedure can hand us here, and
 
 ## `Uwueave/RenderSix.lean`
 
-### [`Uwueave/RenderSix.lean:9`](../Uwueave/RenderSix.lean#L9)
-
-````text
-> **The eliminator is five-way, and the sixth cell is a sibling's.** ⟨UNDONE⟩ …
-> So a consumer of this carrier handles five statuses, not six, and a surface
-> built on it **cannot tell a spinner from "there is no answer"**. The repair is
-> a `Carrier` over `ResultStatus.Status` with a soundness contract proved for
-> `statusOf`; **neither exists**, and nothing below pretends the fold is
-> faithful.
-````
-
-### [`Uwueave/RenderSix.lean:78`](../Uwueave/RenderSix.lean#L78)
+### [`Uwueave/RenderSix.lean:79`](../Uwueave/RenderSix.lean#L79)
 
 ````text
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
 ````
 
-### [`Uwueave/RenderSix.lean:87`](../Uwueave/RenderSix.lean#L87)
+### [`Uwueave/RenderSix.lean:89`](../Uwueave/RenderSix.lean#L89)
 
 ````text
-  * **`pending_escapable` is the weakest honest liveness.** ⟨UNDONE⟩ It says
-    *some* permitted future is not `pending`, not that every path leaves it and
-    not that any path is taken. A renderer whose spinner stops only on a future
-    no replica reaches satisfies it. Strengthening this needs a notion of
-    eventuality, and this library has futures but no fairness.
+    ⟨UNDONE as temporal/all-path liveness⟩ It says *some* permitted future is
+    not `pending`, not that every path leaves it and not that any path is taken.
+    `RenderProgress.pending_progress_under_fair_delivery` now proves that a
+    finite fair schedule of genuine deliveries reaches a non-pending status
+    under its responsiveness premise. That theorem does not supply an infinite
+    trace semantics, prove that every execution is fair, or turn this existential
+    future property into temporal eventuality; those stronger claims remain open.
 ````
 
-### [`Uwueave/RenderSix.lean:103`](../Uwueave/RenderSix.lean#L103)
+### [`Uwueave/RenderSix.lean:107`](../Uwueave/RenderSix.lean#L107)
 
 ````text
   * **The contract constrains three of the six cells.** ⟨UNDONE⟩ `SoundEvaluator6`
@@ -1299,19 +1379,13 @@ common bases is what a merge-base procedure can hand us here, and
     a theorem of the model.
 ````
 
-### [`Uwueave/RenderSix.lean:113`](../Uwueave/RenderSix.lean#L113)
+### [`Uwueave/RenderSix.lean:117`](../Uwueave/RenderSix.lean#L117)
 
 ````text
   * **The site is carried, not checked.** ⟨UNDONE⟩ Inherited verbatim from
     `HonestRender.lean`: `report` takes the site as an argument and believes it.
     §4's separation is a statement about the *badge*; a consumer that reads
     `site` is reading the evidence, not the rendered result.
-````
-
-### [`Uwueave/RenderSix.lean:831`](../Uwueave/RenderSix.lean#L831)
-
-````text
-That is `HonestRender.lean`'s ⟨UNDONE⟩ boundary item, discharged. -/
 ````
 
 ## `Uwueave/Repair.lean`
@@ -1502,16 +1576,26 @@ clothes.
     wellformedness, and it is not answered there either.
 ````
 
+## `Uwueave/ScheduleSynthesis.lean`
+
+### [`Uwueave/ScheduleSynthesis.lean:38`](../Uwueave/ScheduleSynthesis.lean#L38)
+
+````text
+* ⟨UNDONE⟩ There is no catalog generator. A future generator needs a finite
+  action universe and a proved coverage search; neither `Scheduling` nor
+  `Protocol` currently supplies arbitrary schedule enumeration.
+````
+
 ## `Uwueave/Scheduling.lean`
 
-### [`Uwueave/Scheduling.lean:74`](../Uwueave/Scheduling.lean#L74)
+### [`Uwueave/Scheduling.lean:75`](../Uwueave/Scheduling.lean#L75)
 
 ````text
   * ⟨UNDONE⟩ Participants are declared, not proved online; there is no
     liveness, deadlock-freedom, message loss, elapsed time, or schedule search.
 ````
 
-### [`Uwueave/Scheduling.lean:79`](../Uwueave/Scheduling.lean#L79)
+### [`Uwueave/Scheduling.lean:80`](../Uwueave/Scheduling.lean#L80)
 
 ````text
     typed `Protocol.Term`s. ⟨UNDONE⟩ There is still no custom user protocol
@@ -1708,6 +1792,24 @@ clothes.
     inherits none of it. The separation in §3 is about what a future *may* be,
     which is exactly the question codex asked; when it will *occur* is not
     asked and not answered.
+````
+
+### [`Uwueave/WorldFuture.lean:160`](../Uwueave/WorldFuture.lean#L160)
+
+````text
+    ⟨UNDONE at the remaining boundary⟩ The context is supplied rather than
+    authenticated, and `origin`/`versionOf` attribution is still external;
+    `ResultEvidence` carries neither id automatically.
+````
+
+### [`Uwueave/WorldFuture.lean:166`](../Uwueave/WorldFuture.lean#L166)
+
+````text
+    settled worlds to stability of `Evidence.values`. ⟨UNDONE for this carrier
+    and deployment⟩ `World.frontier` remains a `GSet Source`, timestamps are not
+    stored in `ResultEvidence`, progress is not authenticated or generated, and
+    full `render` stability is not claimed. `roster` bounds accepted membership,
+    but a roster is not an antichain.
 ````
 
 ### [`Uwueave/WorldFuture.lean:171`](../Uwueave/WorldFuture.lean#L171)

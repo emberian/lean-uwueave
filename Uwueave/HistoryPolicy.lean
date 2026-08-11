@@ -120,14 +120,21 @@ its witness.
     `any_selector_has_a_sound_policy` proves *every* selector has a
     `selectSound` policy — declare the empty scope. Each witness therefore proves
     its scope contains the pair its judgement is asked at.
-  * ⟨UNDONE⟩ **The judgements are asked at a pair, not swept over a history.**
-    `BaseRobust`/`SelectorSafe` quantify over the policy's declared `scope`, and
-    every scope here is one pair (in both orders). Sweeping a whole DAG needs a
-    decidable `Reaches`, which `Histories`' `Prop`-valued `Ancestry` does not
-    carry — the same ⟨UNDONE⟩ `Histories.lean` records for "no merge-base
-    *procedure*".
-  * ⟨UNDONE⟩ **No selector is *computed* from a DAG.** `ccSelect*`/`lvSelect` are
-    written down and then proved sound; nothing searches. Same reason.
+  * ⟨UNDONE, narrowed to semantic whole-history judgements⟩ **The judgements are
+    asked at a pair, not swept over a history.** `BaseRobust`/`SelectorSafe`
+    quantify over the policy's declared `scope`, and every scope here is one
+    pair (in both orders). Downstream `FiniteHistory.sweepEntries_complete` and
+    `FiniteHistory.checkPolicy` do sweep every ordered pair of an explicitly
+    enumerated finite DAG, but only for exact version-level base-decision
+    admission. They do not sweep `BaseRobust`, `SelectorSafe`, or
+    `HistoryConvergent` over a `History`, and make no delivery/convergence claim.
+  * ⟨UNDONE, narrowed to a total `HistoryMerge` selector⟩ **No total selector is
+    computed into this model from a DAG.** Downstream
+    `FiniteHistory.searchCertified` performs proof-carrying search under an
+    explicit finite enumeration and computes all three concrete fixture cases.
+    It remains partial (`none` is not `unavailable`) and does not synthesize a
+    `HistoryMerge.select`, its `scope`, reconciliation kernel, or their laws;
+    `ccSelect*`/`lvSelect` here are still written down and proved sound.
   * ⟨UNDONE⟩ **`SelectorSymmetric` is proved sufficient for order-agreement, not
     necessary.** `replicas_agree_on_order` uses it; no theorem here says an
     asymmetric selector must diverge — `swap_never_converges` exhibits one that

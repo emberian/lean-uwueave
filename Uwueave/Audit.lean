@@ -108,6 +108,7 @@ import Uwueave.ResultStatus
 import Uwueave.Recoverable
 import Uwueave.HonestRender
 import Uwueave.Histories
+import Uwueave.FiniteHistory
 import Uwueave.TextSummary
 import Uwueave.LiveBudget
 import Uwueave.EraCertificate
@@ -125,6 +126,7 @@ import Uwueave.Bounds
 import Uwueave.MenuTotality
 import Uwueave.Preo.Demo
 import Uwueave.Scheduling
+import Uwueave.ScheduleSynthesis
 import Uwueave.Protocol
 import Uwueave.ChoreoRec
 import Uwueave.Specification
@@ -132,11 +134,16 @@ import Uwueave.Frontier
 import Uwueave.WorldContext
 import Uwueave.Authenticity
 import Uwueave.Byzantine
+import Uwueave.AuthenticatedAdmission
 import Uwueave.Durable
 import Uwueave.EvidenceGraph
 import Uwueave.Preo.Future
 import Uwueave.Preo.Artifact
 import Uwueave.Preo.Export
+import Uwueave.Preo.Expr
+import Uwueave.Preo.ArtifactDurable
+import Uwueave.Preo.ProjectionV1
+import Uwueave.RepairSynthesis
 import Uwueave.Tactics
 
 open Lean Elab Command in

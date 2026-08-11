@@ -4,8 +4,10 @@
 This module separates two things which must not be confused:
 
 * the **checked source**, indexed by the Lean term that gives it meaning; and
-* the **artifact**, a closed first-order projection suitable for an FFI,
-  generated file, content-addressed manifest, or downstream adapter.
+* the **artifact**, a closed structural first-order projection suitable as the
+  input to an FFI, generated-file, content-addressed-manifest, or downstream
+  adapter. `Preo.ArtifactDurable` supplies its canonical byte serialization;
+  `ArtifactEncoding` here is not itself a byte format.
 
 In particular, an invariant artifact is produced by eliminating a
 `Spec.Verdict`.  No function in this module accepts a Boolean or wire verdict
@@ -15,11 +17,12 @@ tag, because its proof is authority rather than wire data.  Likewise a plan
 artifact is projected from `Scheduling.Plan`, so its actions come from a
 schedule whose coverage obligation Lean already checked.
 
-The decoder below is deliberately only a decoder for the first-order artifact.
-It is not a verifier and has no map into `Spec.Verdict`, `FreeTermination`, or
-`Scheduling.Plan`.  Downstream code may transport or authenticate the decoded
-data, but only the checked constructors in this file can originate semantic
-entries.
+The structural decoder below is deliberately only a decoder for the first-order
+artifact. It is not a verifier and has no map into `Spec.Verdict`,
+`FreeTermination`, or `Scheduling.Plan`. `Preo.ArtifactDurable` adds canonical
+bytes and logical torn-tail recovery without changing that one-way boundary.
+Downstream code may transport or authenticate the decoded data, but only the
+checked constructors in this file can originate semantic entries.
 
 The shape is intentionally independent of minidregg (and especially of its
 unrelated `Loom` proof-system model).  A future minidregg adapter should import

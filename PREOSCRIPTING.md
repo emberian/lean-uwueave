@@ -122,11 +122,13 @@ evidence and rounds. `Uwueave/Scheduling.lean` now builds that interpretation:
 proof-carrying obligations compose pointwise under one shared strategy, a
 schedule witnesses coverage, and five currencies remain separate. Its exact
 2-crossings→1-meeting, 0→1, and 1→2 examples prove there is no scalar
-conversion in either direction. What remains unbuilt is the surface protocol
-budget block and schedule search—not the protocol AST, its proof-carrying
-elaboration, or the scheduling judgement. `Protocol.Term` now carries the
-bounded operation/sequence/parallel/choice/repeat/sync language, and the Preo
-surface accepts typed terms in that AST.
+conversion in either direction. The standalone `preo_budget` command now
+accepts an existing five-currency `ProfileUpperBound` for an exact generated
+session. What remains unbuilt is schedule search and the prettier inline budget
+block—not witnessed budget acceptance, the protocol AST, its proof-carrying
+elaboration, or the scheduling judgement. `Protocol.Term` carries the bounded
+operation/sequence/parallel/choice/repeat/sync language, and the Preo surface
+accepts typed terms in that AST.
 
 ### 4.4 Prices are records, not numbers
 
@@ -277,8 +279,10 @@ preo Swarm where
 
 Note what the session result carries that our first sketch did not: a checked
 **schedule/plan**, a **multi-currency cost profile**, and an actual **protocol
-shape**. The current surface does **not** yet accept a budget block; it exposes
-the witnessed upper bound against which one can be checked. An `allows` list
+shape**. The standalone `preo_budget` surface now accepts a limit only by
+consuming a `Scheduling.ProfileUpperBound` — one real plan satisfying all five
+currency coordinates for the exact named session. It performs no schedule
+search. An `allows` list
 naming an operation vocabulary is not a workload — if `reallocate` may repeat
 without bound, no finite worst-case bound follows from membership in a list.
 The field, invariant, future, derive, protocol and session forms shown here are
@@ -288,8 +292,21 @@ state alone. A protocol body is currently a typed Lean term of
 `Protocol.Term TeamStrategy`; this is the deliberate opaque escape hatch into
 the six-constructor deep AST, not a second parser that might drift from its
 semantics. The session calls `Protocol.elaborate`/`elaborateProfilePlan` once
-and exposes their checked schedule and upper bound. The pretty budget block
-from the earlier sketch remains unbuilt.
+and exposes their checked schedule and upper bound. Certificates and budgets
+remain parser-safe standalone commands whose dependent types are ordinary Lean
+terms:
+
+```
+preo_certificate Quiesced :
+  Future.CheckedCertificate Swarm.Delivered answer key accepts exactWorld := proof
+
+preo_budget WaveLimit for Swarm.Wave : fiveCurrencyLimits := checkedProfileBound
+```
+
+`preo_certificate` requires its written type to reduce to
+`Future.CheckedCertificate`; it never infers an index from materialized state.
+`preo_budget` pins `checkedProfileBound` to `Swarm.Wave.session`. The earlier
+pretty in-declaration budget block and schedule synthesis remain unbuilt.
 
 ### 7.1 Deep only where analysis requires it
 
@@ -377,19 +394,20 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | summary synthesis | `MinimalSummary`, `TextSummary` | **proved semantically** through contextual quotients; the fixed text window now has an exact iff, while executable quotient construction for arbitrary evaluators remains open |
 | arbitrary refined outcomes | `Specification` | **proved semantically**: under totality, coordination-freedom is exactly history monotonicity plus fiber directedness, and `IConfluent` is the singleton-outcome instance |
 | classification → `Verdict` term | `Tactics.classifyFinite` | proved |
-| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built**: fields/invariants/derives plus keyed fields, named world futures, typed protocols and proof-carrying sessions |
+| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built**: built-in and explicit-seed application carriers, invariants/derives, keyed fields, named world futures/certificates, typed protocols, proof-carrying sessions and five-currency budgets |
 | classification ACCUMULATES facets | `Preo/Classification` | **built**: `Classification` holds `global`/`seams`/`mergeability`/`obligations` as *lists*; rules add, never replace |
 | route-order invariance | `Preo.run_answer_congr` | **proved**: two registries with the same rules in any order certify the same answer. Bottoms out in `Preo.verdict_agree` (two verdicts for one invariant cannot disagree — the pair is uninhabitable), not in bookkeeping. `run_answer_of_perm` is the permutation corollary. |
 | ✅ seam verdicts in the surface | `Preo.budgetSeam`, `Preo.seamAlong`, `Segmented.budget_segmented` | **CLOSED** (was "inexpressible"). A globally clashing invariant now carries a `SegVerdict` facet *alongside* its clash — `Preo.seam_forces_clash` proves a seam is not a third alternative but forces the ESCALATES column. `Demo`'s `LoomDoc2.in_budget.seam` **is** `WeaveState.quotaVerdict`, by `rfl`. `seamAlong` lifts it to the whole declared document, using the emitted section (`<field>.plant`) that fragment 1 said the elaborator could not synthesize. |
 | ✅ cross-field invariants in the surface | `Spec.Verdict.cross`, `Spec.pointsAtExisting_iconfluent` | **CLOSED** (was refused by name). A two-field invariant is classified against the *product* state; `LoomDoc2.fk` **is** `Spec.refIntVerdict` by `rfl`. The keyed form is also live: `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Three or more fields is still refused: `Verdict.cross` is binary. |
 | ✅ `derive` + mergeability verdict | `JoinHom.Fourth`, `summaryFold_iff_joinHom`, `Preo.mergeability_comp` | **CLOSED**. `derive n : T = <expr>` emits the computation plus a `Fourth` facet with its `Fourth.Correct` proof. Registry: ∃-read, filtered view, high-water mark, set image (`fromResults`) and count (`needsEvidence`, via `no_count_merge_without_provenance`) — each *attempted by typechecking*, so an unknown shape is an obligation, never a guess. ⚠ the `needsEvidence` transport to document scale needs the projection **surjective**, not merely a hom; the elaborator emits `<field>.surj` for exactly that. |
-| ✅ **seam composition in the surface** | `SegVerdict.selfSeam`, `liftFst`/`liftSnd`, `andSeams`, `absorbFree`, `prependFree` | **CLOSED at the general surface/combinator layer.** `TwinQuota.documentSeam` is the existing product seam by `rfl`; `NestedSurface` finds two seam rows through eight right-nested fields and absorbs six checked FREE rows; the general algebra reconstructs `WeaveState.weaveDocSeamVerdict` as the same value. The exact hand carrier is still not one surface declaration because flat fields cannot name grouped `WeaveCore`, and FREE verdicts cannot manufacture its legal planting witness `core₀`. |
+| ✅ **seam composition in the surface** | `SegVerdict.selfSeam`, `liftFst`/`liftSnd`, `andSeams`, `absorbFree`, `prependFree` | **CLOSED at the general surface/combinator layer.** `TwinQuota.documentSeam` is the existing product seam by `rfl`; `NestedSurface` finds two seam rows through eight right-nested fields and absorbs six checked FREE rows; the general algebra reconstructs `WeaveState.weaveDocSeamVerdict` as the same value. `GroupedCarrierSurface.State` now **is** `WeaveDoc` by `rfl`, with the explicit `core₀` seed. The remaining exact full-surface obstruction is narrower: built-in `Quota` plants structural zero, which is not `BudgetInv 10`; the surface cannot silently substitute the invariant-specific `quota₀`. |
 | ✅ **`per` / keyed families in the surface** | `Confluence.keyed_cross_iconfluent`, pointwise `MergeState` | **CLOSED for field carriers and keyed referential integrity.** `field bookmarks per Bool : GrowSet Nat` emits `Bool → GSet Nat`; `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Unsupported keyed relations remain obligations, and automatic keyed clash seams still require a concrete key/default witness. |
-| ✅ **named world futures in the surface** | `Preo.Future.FutureDecl`, `WorldIndex`, `CheckedStability`, `CheckedCertificate` | **CLOSED.** `future N on M := D` checks `D : FutureDecl M`; evidence and ERA declarations are whole-value `rfl` acceptances. The same-state/different-world certificate refusal and one-way delivery⊆extension variance remain theorem-visible in `Demo`. |
-| ✅ **protocol/session surface** | `Protocol.Term`, `Protocol.Elaboration`, `elaborateProfilePlan`, `elaborateComposedProfilePlan` | **CLOSED with a typed opaque protocol body.** Sessions expose checked plans/upper bounds and composed profiles select one global strategy. Reports name semantic artifacts and deliberately contain no invented verdict bit or meeting scalar. A dedicated pretty parser and budget blocks remain optional future UI. |
+| ✅ **named world futures in the surface** | `Preo.Future.FutureDecl`, `WorldIndex`, `CheckedStability`, `CheckedCertificate` | **CLOSED.** `future N on M := D` checks `D : FutureDecl M`; `preo_certificate N : CheckedCertificate ... := proof` retains the complete world index and is whole-value `rfl` to the hand certificate. Same-state/different-world refusal and one-way delivery⊆extension variance remain theorem-visible in `Demo`. |
+| ✅ **protocol/session surface** | `Protocol.Term`, `Protocol.Elaboration`, `elaborateProfilePlan`, `elaborateComposedProfilePlan` | **CLOSED with a typed opaque protocol body.** Sessions expose checked plans/upper bounds and composed profiles select one global strategy. Reports name semantic artifacts and deliberately contain no invented verdict bit or meeting scalar. A dedicated pretty protocol parser remains optional UI. |
+| ✅ **five-currency budget surface** | `Scheduling.ProfileUpperBound`, `preo_budget` | **CLOSED for witnessed acceptance.** A standalone command consumes one real plan satisfying `Currency → Nat` pointwise at the exact generated session. `Demo` rediscovers `coalescedProfileUpperBound` by `rfl`; separate theorems refute acceptance from crossings or a peer-meeting floor. **Unbuilt:** schedule synthesis and a pretty inline budget block. |
 | ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export` | **BUILT.** Private proof-indexed builders project verdict witnesses, world futures/certificates and protocol sessions/plans into one canonical first-order artifact with a proved decoder left inverse. Stable IDs/codecs are explicit; decoded wire tags have no path back to semantic proof constructors. |
 | **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
-| ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `Protocol.Term` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed bounds, bounded protocol semantics, shared-strategy composition, and exact crossing/meeting non-function refutations. **Unbuilt:** schedule synthesis and the pretty multi-currency budget block. |
+| ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, and exact crossing/meeting non-function refutations. **Unbuilt:** schedule synthesis and the pretty inline budget block. |
 | recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |
 | durable artifacts | `Durable` | **proved logical codec/journal rung** with canonical roundtrip and torn-tail recovery; no filesystem, flush or crash-atomicity guarantee is claimed |
 

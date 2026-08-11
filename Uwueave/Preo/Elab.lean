@@ -40,6 +40,7 @@ separate statement about reordering.
 For fields `f₁ : k₁ … fₙ : kₙ`, invariants `i₁ … iₘ` and derives `d₁ … d_p`:
 
 ```
+abbrev  N.fⱼ.Carrier                   := cⱼ                         -- predictable type name
 abbrev  N.State                          := c₁ × (c₂ × … cₙ)      -- right-nested
 abbrev  N.fⱼ (s : N.State)               := s.2…2.1               -- the projection
 example : MergeState N.State             := inferInstance         -- CHECKED, not assumed
@@ -139,7 +140,9 @@ exists** — a `sorry`-backed `Verdict` prints exactly like a real one.
 
 ## What it refuses, loudly
 
-  * an unknown field kind — the six are named in the error;
+  * an unknown built-in field kind — the six are named in the error;
+  * a `custom` field without its explicit planting seed or without an existing
+    `MergeState` instance;
   * a field kind with a missing or surplus argument;
   * an invariant mentioning **no** field (it would have no carrier);
   * an invariant mentioning **three or more** fields — the cross machinery is
@@ -176,6 +179,20 @@ private def canSynth (tyStx : Term) : CommandElabM Bool :=
       match ← Meta.trySynthInstance ty with
       | .some _ => pure true
       | _ => pure false
+    catch _ => pure false
+
+/-- Does a fully written type reduce to the checked-certificate family? This
+recognises reducible aliases but deliberately does not infer a certificate
+from state, a future name, or the proof term's result type. -/
+private def isCheckedCertificateType (tyStx : Term) : CommandElabM Bool :=
+  liftTermElabM do
+    try
+      let ty ← Term.elabType tyStx
+      Term.synthesizeSyntheticMVarsNoPostponing
+      let ty ← instantiateMVars ty
+      let ty ← withDefault <| whnf ty
+      pure (ty.getAppFn.constName? ==
+        some ``Uwueave.Preo.Future.CheckedCertificate)
     catch _ => pure false
 
 /-- Reduce a `Classification`'s **accumulated answer**. This is how the report
@@ -271,8 +288,9 @@ private def floorCheck (at? : Syntax) (what : String) (c : Name) : CommandElabM 
       printed off either would be exactly the failure this table exists to make \
       impossible. No row is recorded."
 
-/-- The carrier type of a field kind. Six kinds, each an existing catalog or
-`Segmented` type with a proved `MergeState`; nothing new is minted here. -/
+/-- The carrier type of a built-in field kind. Six kinds, each an existing
+catalog or `Segmented` type with a proved `MergeState`; custom carriers are
+handled separately because their type is the author's term. -/
 private def carrierOf (kind : Ident) (arg? : Option Term) : CommandElabM Term := do
   let k := kind.getId.toString
   match k, arg? with
@@ -295,19 +313,21 @@ private def carrierOf (kind : Ident) (arg? : Option Term) : CommandElabM Term :=
         concrete (timestamp, value) register. Put the key before the colon: \
         `field <name> per <Key> : LWW`."
   | _, _ =>
-      throwErrorAt kind "preo: unknown field kind `{k}`. The fragment has six: \
+      throwErrorAt kind "preo: unknown built-in field kind `{k}`. Use one of six: \
         `GrowSet α` (grow-only set), `Slot α` (a grow-only set carrying a \
         uniqueness ceiling), `Escrow ι` (per-replica quota spend), `Quota ι` \
         (allocation PLUS spend — the carrier the seam lives on), `Counter` \
         (`Nat` under max), `LWW` (last-writer-wins register). Each supplies a \
         carrier and a proved `MergeState` from `Uwueave.Catalog` or \
-        `Uwueave.Segmented`."
+        `Uwueave.Segmented`. For an application carrier write \
+        `field <name> : (custom <Carrier>) := <seed>`; its `MergeState` must \
+        already exist and its seed is never inferred."
 
-/-- A legal value of each field kind — the *other* fields' contents when the
-elaborator plants a field-scale state in a document. This is what fragment 1
-said it could not synthesize ("transporting a clash needs a legal value for
-every other field"); it is a closed term per kind, and it is why fragment 2 can
-lift a seam and a `needsEvidence` verdict to document scale. -/
+/-- A canonical planting value for each built-in kind — the *other* fields'
+contents when the elaborator plants a field-scale state in a document. This is
+a well-typed structural seed, not a proof of an arbitrary invariant (the zero
+quota, importantly, is not legal at budget 10). Custom carriers never enter
+this function: their author must supply the corresponding value explicitly. -/
 private def defaultOf (kind : Ident) (arg? : Option Term) : CommandElabM Term := do
   let k := kind.getId.toString
   match k, arg? with
@@ -410,6 +430,18 @@ private structure InvariantResult where
   freeOnState? : Option Ident
   deriving Inhabited
 
+/-- The two field spellings erase to the same checked ingredients before state
+construction. `custom` is retained only so its explicit seed and merge
+instance can receive named, floor-checked constants. -/
+private structure ParsedField where
+  name : Ident
+  key? : Option Term
+  baseCarrier : Term
+  baseDefault : Term
+  kindLabel : String
+  custom : Bool
+  deriving Inhabited
+
 @[command_elab preoDecl]
 def elabPreoDecl : CommandElab := fun stx => do
   let `(command| preo $declId:ident where
@@ -428,28 +460,64 @@ def elabPreoDecl : CommandElab := fun stx => do
   let mut fieldKeys : Array (Option Term) := #[]
   let mut carriers : Array Term := #[]
   let mut defaults : Array Term := #[]
+  let mut customFields : Array Bool := #[]
   for f in fs do
-    let `(preoField| field $nm $[per $key]? : $k $[$a]?) := f
+    let `(preoField| field $nm:ident $[per $key:term]? : $body:preoFieldBody) := f
       | throwErrorAt f "preo: malformed field"
+    let parsed : ParsedField ← match body with
+      | `(preoFieldBody| (custom $carrierTy:term) := $seed:term) =>
+        pure (⟨nm, key, carrierTy, seed, "custom " ++ pp carrierTy, true⟩ :
+          ParsedField)
+      | `(preoFieldBody| $k:ident $[$a:term]?) =>
+        pure (⟨nm, key, ← carrierOf k a, ← defaultOf k a,
+          pp k ++ (a.map (fun t => " " ++ pp t)).getD "", false⟩ : ParsedField)
+      | _ => throwErrorAt body "preo: malformed field body"
+    let nm := parsed.name
+    let key := parsed.key?
     if fieldIdents.any (·.getId == nm.getId) then
       throwErrorAt nm "preo: duplicate field `{nm.getId}`"
-    let baseCarrier ← carrierOf k a
-    let baseDefault ← defaultOf k a
     let carrier : Term ← match key with
-      | none => pure baseCarrier
-      | some key => `($key → $baseCarrier)
+      | none => pure parsed.baseCarrier
+      | some key => `($key → $(parsed.baseCarrier))
     let default : Term ← match key with
-      | none => pure baseDefault
-      | some key => `(fun (_ : $key) => $baseDefault)
+      | none => pure parsed.baseDefault
+      | some key => `(fun (_ : $key) => $(parsed.baseDefault))
+    unless ← canSynth (← `(Uwueave.MergeState $carrier)) do
+      throwErrorAt f "preo: field `{nm.getId}` has carrier `{pp carrier}`, but \
+        no `MergeState` instance is available. A custom carrier reuses an \
+        application merge model; the seed supplies a planting value, not a \
+        merge operation. Define and prove the instance before this declaration."
     fieldIdents := fieldIdents.push nm
     fieldKinds := fieldKinds.push
       ((key.map (fun key => "per " ++ pp key ++ " : ")).getD ""
-        ++ pp k ++ (a.map (fun t => " " ++ pp t)).getD "")
+        ++ parsed.kindLabel)
     fieldKeys := fieldKeys.push key
     carriers := carriers.push carrier
     defaults := defaults.push default
+    customFields := customFields.push parsed.custom
   let n := carriers.size
   let fieldNames := fieldIdents.map (·.getId)
+  -- Every field receives a stable type path. Custom fields additionally expose
+  -- the mandatory seed and the reused merge instance as named checked terms.
+  for i in [0:n] do
+    let fname := fieldIdents[i]!.getId
+    let carrierId := mkIdent (declName ++ (fname ++ `Carrier))
+    elabCommand (← `(command|
+      /-- The checked carrier of this field, named for manifests and adapters. -/
+      abbrev $carrierId : Type := $(carriers[i]!)))
+    if customFields[i]! then
+      let seedId := mkIdent (declName ++ (fname ++ `seed))
+      elabCommand (← `(command|
+        /-- The author-supplied planting seed for this application carrier. -/
+        def $seedId : $carrierId := $(defaults[i]!)))
+      floorCheck (fieldIdents[i]!) "custom field seed" (fullDecl ++ (fname ++ `seed))
+      defaults := defaults.set! i seedId
+      let mergeId := mkIdent (declName ++ (fname ++ `mergeState))
+      elabCommand (← `(command|
+        /-- The application's existing merge model, checked and retained. -/
+        abbrev $mergeId : Uwueave.MergeState $carrierId := inferInstance))
+      floorCheck (fieldIdents[i]!) "custom field MergeState"
+        (fullDecl ++ (fname ++ `mergeState))
   -- §3.2 The state type: carriers, right-nested.
   let mut stateTy : Term := carriers[n - 1]!
   for i in [0:n-1] do
@@ -475,9 +543,10 @@ def elabPreoDecl : CommandElab := fun stx => do
     let plantId := mkIdent (declName ++ (fname ++ `plant))
     let pfn ← plantFn i n defaults
     elabCommand (← `(command|
-      /-- A document holding the given field value, and a legal default in
-      every other field — the section the seam and mergeability transports
-      need. -/
+      /-- A document holding the given field value, and the declared planting
+      seed in every other field — the section the seam and mergeability
+      transports need. Invariant legality is checked where a transport uses it,
+      never inferred from the seed. -/
       def $plantId : $(carriers[i]!) → $stateId := $pfn))
     elabCommand (← `(command|
       theorem $(mkIdent (declName ++ (fname ++ `plant_proj)))
@@ -1140,6 +1209,60 @@ def elabPreoDecl : CommandElab := fun stx => do
     {futures.size} future(s), {ders.size} derive(s), {protocols.size} protocol(s), \
     {sessions.size} session(s) — \
     `#preo_report {declName}` for the table"
+
+/-! §3.9 Named future certificates. This is intentionally a separate command:
+its fully dependent type is ordinary Lean syntax, and no additional repeated
+item family can interfere with the declaration parser. -/
+
+@[command_elab preoCertificate]
+def elabPreoCertificate : CommandElab := fun stx => do
+  let `(command| preo_certificate $nm : $ty := $proof) := stx
+    | throwError "preo_certificate: malformed declaration"
+  unless ← isCheckedCertificateType ty do
+    throwErrorAt ty "preo_certificate: the declared type must reduce to \
+      `Uwueave.Preo.Future.CheckedCertificate ...`. Write the complete future, \
+      answer, key, certificate predicate, and exact `WorldIndex`; this command \
+      does not infer any of them from materialized state or from the proof."
+  elabCommand (← `(command|
+    /-- A named, proof-carrying certificate at its explicitly written world. -/
+    def $nm : $ty := $proof))
+  let ns ← getCurrNamespace
+  floorCheck nm "named future certificate" (ns ++ nm.getId)
+
+/-! §3.10 Five-currency budgets. Like certificates, these remain standalone so
+their proof term has a punctuation-delimited end and the main declaration does
+not acquire another ambiguous repeated item family. -/
+
+@[command_elab preoBudget]
+def elabPreoBudget : CommandElab := fun stx => do
+  let `(command| preo_budget $nm for $session : $limits := $proof) := stx
+    | throwError "preo_budget: malformed declaration"
+  let limitsId := mkIdent (nm.getId ++ `Limits)
+  let sessionId := mkIdent (nm.getId ++ `Session)
+  let planId := mkIdent (nm.getId ++ `Plan)
+  let peerId := mkIdent (nm.getId ++ `PeerUpperBound)
+  elabCommand (← `(command|
+    /-- The five explicit currency limits; no total or crossing conversion. -/
+    abbrev $limitsId : Uwueave.Scheduling.Currency → Nat := $limits))
+  elabCommand (← `(command|
+    /-- The exact semantic session selected by the named elaboration. -/
+    abbrev $sessionId : Uwueave.Scheduling.Session :=
+      Uwueave.Protocol.Elaboration.session $session))
+  elabCommand (← `(command|
+    /-- One checked plan satisfying every currency coordinate. -/
+    def $nm : Uwueave.Scheduling.ProfileUpperBound $sessionId $limitsId :=
+      $proof))
+  elabCommand (← `(command|
+    /-- The exhibited plan carried by this profile acceptance. -/
+    def $planId : Uwueave.Scheduling.Plan $sessionId :=
+      Uwueave.Scheduling.ProfileUpperBound.plan $nm))
+  elabCommand (← `(command|
+    /-- Compatibility projection for the peer-barrier coordinate only. -/
+    def $peerId : Uwueave.Scheduling.UpperBound $sessionId
+        ($limitsId .peerBarrier) :=
+      Uwueave.Scheduling.ProfileUpperBound.toUpperBound $nm))
+  let ns ← getCurrNamespace
+  floorCheck nm "five-currency budget" (ns ++ nm.getId)
 
 /-! ## §4. The report -/
 

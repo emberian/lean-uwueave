@@ -18,10 +18,10 @@ it. Counts move; the mechanisms are what to check.*
 
 This is the delta audit after the execution encoder, durability, authenticity,
 Byzantine, recursive-choreography, structured-evidence, frontier, outcome-spec,
-protocol, world-context, and preoscript artifact work landed in the working
-tree. The twelve new modules, their root/gate wiring, and their MAP and
-TRANSPORTS entries are one checkpoint: a clean checkout cannot receive only
-one side of that assembly.
+protocol, world-context, and preoscript artifact work landed, followed by the
+Cycle-20 authoring/export foundations. The new modules, their root/gate wiring,
+and their MAP and TRANSPORTS entries are checkpointed together: a clean checkout
+cannot receive only one side of that assembly.
 
 ### Current headline
 
@@ -31,13 +31,18 @@ was repaired during this audit and is now complete in the live working tree.
 | Surface | Live evidence | Current verdict |
 |---|---|---|
 | Root → gate | `#gate_covers_root` at `Uwueave/Audit.lean:175-191` checks every direct root import is in the gate environment; `Choreo` is in both (`Uwueave.lean:71`, `Uwueave/Audit.lean:62`). | **The original A.1 defect is closed.** |
-| Disk → root → gate | There are **91** Lean module files under `Uwueave/`; both the `Uwueave.lean` and `Uwueave/Audit.lean` transitive closures reach **91/91**. `lake env lean Uwueave.lean` passed after the imports landed. | **The current-wave assembly defect is closed.** |
-| Checkpoint → disk | This wave adds twelve Lean modules and the matching root, audit, MAP and TRANSPORTS changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
-| MAP → disk → gate | The module table has **91 rows for 91 files**, its coverage prose says 91 (`docs/MAP.md:11-28`), and all of those modules are now inside the root and audit closures. The keystone ledger says **349 rows** (`:168`). | **The former 34-row exposure is closed in the live tree.** The table remains a reading aid, not a per-name trust gate. |
-| TRANSPORTS | The ledger has **87/87** rows, including exact `WorldContext` projection/lift, recursive-choreography approximation, authenticated ERA finality (`docs/TRANSPORTS.md:497`), and the Lean-owned request encoder (`:801`). | **The current-wave crossings are paid and their failure boundaries are recorded.** |
+| Disk → root → gate | There are **98** Lean module files under `Uwueave/`; both the `Uwueave.lean` and `Uwueave/Audit.lean` transitive closures reach **98/98**. The live gate reports **92** direct root modules (excluding `Audit`) and audits **15,903** constants. `lake build` passed after the imports landed. | **The current-wave assembly defect is closed.** |
+| Checkpoint → disk | Cycle 20 adds seven Lean modules and the matching root, audit, MAP and TRANSPORTS changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
+| MAP → disk → gate | The module table has **98 rows for 98 files**, and every module is now inside the root and audit closures. The keystone ledger says **403 rows**. | **The former 34-row exposure is closed in the live tree.** The table remains a reading aid, not a per-name trust gate. |
+| TRANSPORTS | The ledger has **98/98** rows, including authenticated admission, witnessed five-currency budgets, finite schedule/repair/history search, canonical artifact bytes, projection validation, and data-only Rust rendering. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
 | Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest` (`Uwueave/Exec.lean:763-781`); Rust supplies typed records (`rust/src/ffi.rs:31-50,82-113`) and no longer owns FORMAT-v3 bytes. | The wire-encoder decision is closed; ABI, shim, runtime, codegen and host storage remain open. |
 
-The twelve modules added by this checkpoint are:
+Cycle 20 adds:
+
+`AuthenticatedAdmission` · `FiniteHistory` · `Preo.ArtifactDurable` ·
+`Preo.Expr` · `Preo.ProjectionV1` · `RepairSynthesis` · `ScheduleSynthesis`.
+
+The previous checkpoint's twelve modules were:
 
 `Authenticity` · `Byzantine` · `ChoreoRec` · `Durable` · `EvidenceGraph` ·
 `Frontier` · `Preo.Artifact` · `Preo.Export` · `Preo.Future` · `Protocol` ·
@@ -61,8 +66,9 @@ root/gate closure:
 `Preo.Artifact` and `Preo.Export` also had module and TRANSPORTS rows outside
 the root, while `Protocol` and `Preo.Future` account for the other two
 then-untracked modules. Root imports at `Uwueave.lean:73-84` and matching audit
-imports at `Uwueave/Audit.lean:128-139` now put every one of the 91 modules in
-both closures. The table is retained as exact evidence of what the wiring
+imports at `Uwueave/Audit.lean:128-139` put those modules in both closures; the
+Cycle-20 imports extend the same checked perimeter to all 98 current modules.
+The table is retained as exact evidence of what the wiring
 repair closed; it is no longer a live exposure.
 
 ### Closed findings from the original audit
@@ -71,10 +77,9 @@ These are genuinely closed in source, not merely marked closed here:
 
 - **A.1, root module outside the gate:** `Choreo` is imported by both root and
   gate, and `#gate_covers_root` makes that particular mismatch refutable.
-- **Current-wave disk modules outside root/gate:** the twelve new modules are
-  imported at `Uwueave.lean:73-84` and `Uwueave/Audit.lean:128-139`; both
-  transitive closures now cover 91/91 modules, and the aggregate Lean check
-  passes.
+- **Current-wave disk modules outside root/gate:** the previous twelve and the
+  seven Cycle-20 modules are imported by both root and audit; both transitive
+  closures now cover 98/98 modules, and the aggregate Lean check passes.
 - **B.2, untracked retraction index:** `FORCODEX.md` and `CODEXHELP.md` are now
   tracked; `.gitignore:4-10` records why they must remain so.
 - **B.5, ORMap reachability contradiction:** `Uwueave/ORMap.lean:53-56` now says
@@ -83,7 +88,7 @@ These are genuinely closed in source, not merely marked closed here:
 - **B.6, LoRe retraction:** `Uwueave/Holes.lean:92-99,278-292,607-610` now carries
   the correction where the novelty claim lived.
 - **C.1–C.3, MAP breadth and the two namespace misfilings:** the module table is
-  now complete at 91/91, and `kernel_gate_agrees_gatedOps` / `applied_set_not_antitone`
+  now complete at 98/98, and `kernel_gate_agrees_gatedOps` / `applied_set_not_antitone`
   are filed under `Gated` / `ExecRefine`. The table briefly outran the root
   during this wave; that wiring gap is now closed too.
 - **D.1, successor pointers:** the predecessor headers now point to the landed
@@ -110,9 +115,9 @@ headers now say so, without declaring the deployment half closed.
 | `DerivedDocument.lean:89-95` formerly said internal evidence edges were not built. | `EvidenceGraph.lean:4-23`, `wellFormed_iconfluent`, `flat_encodeEvidence_is_projection`. | Typed nodes/edges and endpoint integrity landed and refine the flat document. Cryptographic/content-addressed identity did not. |
 | `Evidence.lean:150-154` and `WorldFuture.lean:165-170` formerly stopped at a flat frontier. | `Frontier.lean:4-33`, `world_complete_values_stable`. | A genuine antichain model and a narrow values-stability bridge landed. Authenticated progress, timestamp storage in `ResultEvidence`, render stability and revelation of the issued pool did not. |
 | `WorldFuture.lean:156-164` formerly had no capabilities or known merge bases. | `WorldContext.lean:4-30`, `delivery_projects`, `delivery_lifts`, and the three independent hidden-axis witnesses. | The context model now carries active grants, a causal cut and version base/head. Authentication and automatic origin/version attribution remain explicitly UNDONE (`WorldContext.lean:42-51`). |
-| `Gated.lean:88-96` formerly pointed only to collision extractors as a future signature pattern. | `Authenticity.authenticity_violation_extracts_forgery`; `Byzantine.unauthenticated_submission_can_pass_the_gate`. | The constructive signature handoff and the exact gate attack landed. No theorem connects accepted `SignedRecord`s to shipping gate admission, and no concrete EUF-CMA proof exists. |
+| `Gated.lean:88-96` formerly pointed only to collision extractors as a future signature pattern. | `AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic`; `AuthenticatedGatedOp.ofAuthenticIssuer`; `Byzantine.unauthenticated_submission_can_pass_the_gate`. | Accepted signed events now derive the model-level attribution premise, and signed moves combine issuance, holder binding and `gatedOps`. FORMAT-v3/`Exec`/FFI authentication and a concrete EUF-CMA proof remain absent. |
 | `EraCertificate.lean:127-139` formerly left event-id finality entirely to plumbing. | `Byzantine.authentic_issuance_preserves_finality` and `finality_failure_refutes_id_authenticity`. | The conditional carrier theorem **has** landed under `Settled`, grounded announcements, `IdAuthentic`, and `Issuance`. Hash/signature binding, fraud-proof detection and announcement authentication remain deployment work. |
-| `Scheduling.lean:76-77` formerly said there was no surface syntax. | `Protocol.lean:1-24` supplies a deep semantic AST and checked elaboration; Preo accepts typed protocol terms and checked session forms. | Narrowed, not closed: the surface quotes typed terms; a custom nested protocol parser and a user budget block remain absent. |
+| `Scheduling.lean:76-77` formerly said there was no surface syntax. | `Protocol.lean:1-24` supplies a deep semantic AST and checked elaboration; Preo accepts typed protocol terms, checked session forms, and `preo_budget` consumes an actual five-currency `ProfileUpperBound`. | Witnessed budget acceptance is paid. A custom nested protocol parser, integrated pretty budget block, and arbitrary schedule generator remain absent. |
 
 The older `Evidence` → `WorldFuture` and `JoinHom` → `MinimalSummary` omissions
 are now repaired as well. A successor documenting its predecessor is not enough;

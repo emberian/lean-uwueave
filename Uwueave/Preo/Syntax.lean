@@ -19,9 +19,11 @@ one syntactic fact the classification carrier depends on, and it is the whole
 
 ## What lives here
 
-  * §1 `Slot` — one of the six field kinds; the other five are `Catalog` and
-    `Segmented` types verbatim (`Quota` lives in `Uwueave.Preo.Classification`,
-    next to the seam rule that reads it), and no new CRDT is invented anywhere;
+  * §1 `Slot` — one of the six built-in field kinds; the other five are
+    `Catalog` and `Segmented` types verbatim (`Quota` lives in
+    `Uwueave.Preo.Classification`, next to the seam rule that reads it). The
+    explicit-seed `custom` form reuses an application's existing carrier and
+    `MergeState`; it invents no CRDT or merge proof;
   * §2 `proj_iconfluent` — the confluence lift, and the way a field-scoped
     verdict reaches the declared state type. Its seam and mergeability
     counterparts (`seamAlong`, `mergeability_comp`) are in
@@ -44,6 +46,7 @@ one syntactic fact the classification carrier depends on, and it is the whole
 preo <Name> where
   field <name> : <kind>                       -- kind ∈ GrowSet α · Slot α · Escrow ι
                                               --      · Quota ι · Counter · LWW
+  field <name> : (custom <Carrier>) := <seed> -- application carrier; explicit seed
   field <name> per <Key> : <kind>             -- keyed family, merged pointwise
   invariant <name> : <predicate>              -- ONE field, or TWO (a cross-field
                                               -- invariant, over the product state)
@@ -56,6 +59,9 @@ preo <Name> where
   session <name> under <admissible> runs <protocol> at <strategy> := <membership proof>
   session <name> under <admissible> composes <left> with <right>
     at <strategy> := <membership proof>
+
+preo_certificate <name> : <Future.CheckedCertificate ...> := <proof>
+preo_budget <name> for <session> : <Currency → Nat limits> := <ProfileUpperBound>
 ```
 
 Fragment 2 closed three of fragment 1's refusals — **seam facets** (a globally
@@ -66,7 +72,10 @@ structurally is in `Uwueave.Preo.Classification`: a row accumulates *facets*
 instead of a winner, and the answer it certifies is proved independent of the
 route order (`Preo.run_answer_congr`).
 
-The future form is explicitly indexed by a `Preo.Future.WorldModel`; it cannot
+The custom field form requires an existing `MergeState` for the carrier and an
+explicit planting seed; the elaborator never guesses an inhabitant of an
+application type. The future form is explicitly indexed by a
+`Preo.Future.WorldModel`; it cannot
 silently fall back to a relation on materialized state. Protocol bodies are
 typed `Protocol.Term` values: the six-constructor semantic AST is deep, while
 the first surface deliberately keeps its body as an ordinary checked Lean term.
@@ -74,10 +83,16 @@ Sessions call `Protocol.elaborate`, `elaborateProfilePlan`, or
 `elaborateComposedProfilePlan` once and expose their proof-carrying results.
 
 *Still* not in the fragment: a custom parser for protocol expressions, budget
-block syntax, invariants over three or more fields, derives reading more than
-one field, and general declaration composition. The typed Lean-term escape
-hatch reaches every current protocol constructor without duplicating its
-semantics in the parser.
+search or a pretty in-declaration budget block, invariants over three or more
+fields, derives reading more than one field, and general declaration
+composition. `preo_certificate` keeps its full dependent type as an ordinary
+Lean term: the command checks that its reduced head is
+`Future.CheckedCertificate` but does not invent a state-indexed shorthand.
+`preo_budget` is equally thin: it consumes a real five-currency
+`Scheduling.ProfileUpperBound` at one emitted session and does no synthesis.
+The typed Lean-term escape hatches reach every current protocol constructor,
+certificate index and schedule plan without duplicating their semantics in the
+parser.
 -/
 import Uwueave.Tactics
 
@@ -89,11 +104,13 @@ universe u v
 
 /-! ## §1. Field kinds
 
-Six, all backed. Four are `Catalog` types verbatim (`GrowSet`, `Escrow`,
-`Counter`, `LWW`); `Quota` is `Segmented.QuotaState` and lives in
-`Uwueave.Preo.Classification` §1, beside the seam rule that is the whole reason
-it exists; and `Slot` — below — is a grow-only set under the name of the shape
-it is *expected* to carry, which is a label and not a shortcut. -/
+Six built-ins, all backed, plus one explicit application escape hatch. Four
+are `Catalog` types verbatim (`GrowSet`, `Escrow`, `Counter`, `LWW`); `Quota`
+is `Segmented.QuotaState` and lives in `Uwueave.Preo.Classification` §1,
+beside the seam rule that is the whole reason it exists; and `Slot` — below —
+is a grow-only set under the name of the shape it is *expected* to carry, which
+is a label and not a shortcut. `(custom T) := seed` accepts `T` only with an
+already-proved `MergeState T` and retains the seed as a named checked value. -/
 
 /-- **A slot: a grow-only set carrying a uniqueness ceiling.** The carrier is
 `Catalog.GSet` — the same type `GrowSet` gives — and the name records the
@@ -275,12 +292,21 @@ Three points of grammar worth stating, because each was a real failure first:
     there is no way to supply a verdict without supplying its proof, and the
     report marks the row `supplied` rather than `derived` regardless. -/
 
-/-- A field of the declared state, either scalar or keyed. The keyed spelling
-`field <name> per <Key> : <kind>` elaborates to `Key → <carrier>` and inherits
-the pointwise `MergeState`; `per` is non-reserved, like `field` itself. -/
+/-- A built-in field of the declared state, either scalar or keyed. The keyed
+spelling `field <name> per <Key> : <kind>` elaborates to `Key → <carrier>` and
+inherits the pointwise `MergeState`; `per` is non-reserved, like `field`
+itself. -/
+declare_syntax_cat preoFieldBody
+syntax "(" &"custom" ppSpace colGt term ")" " := " colGt term : preoFieldBody
+
+/-- An application-defined carrier. `:=` is the parser-hard boundary after the
+carrier term, and the seed is mandatory: plants of the other fields need an
+actual value, which the elaborator may not infer for an arbitrary type. A
+keyed custom field uses the seed pointwise. -/
+syntax ident (ppSpace colGt term:max)? : preoFieldBody
+
 syntax preoField := withPosition(&"field" ident
-  (ppSpace &"per" ppSpace colGt term:51)?
-  " : " ident (ppSpace colGt term:max)?)
+  (ppSpace &"per" ppSpace colGt term:51)? " : " preoFieldBody)
 
 /-- `invariant <name> : <predicate> [:= <verdict term>]` — one invariant, over
 **one or two** fields, optionally with its evidence supplied by the author. A
@@ -347,6 +373,23 @@ syntax (name := preoDecl) "preo " ident " where "
   (ppLine colGe preoDerive)*
   (ppLine colGe preoProtocol)*
   (ppLine colGe preoSession)* : command
+
+/-- Name a checked future certificate without parsing or inferring any of its
+dependent indices. The elaborator requires the supplied type to reduce to
+`Future.CheckedCertificate ...`, checks the proof at exactly that type, and
+applies the same axiom-floor gate as reportable `preo` evidence. Kept as a
+standalone command so another adjacent repeated item family cannot make the
+declaration grammar ambiguous. -/
+syntax (name := preoCertificate) "preo_certificate " ident " : " colGt term:51
+  " := " colGt term : command
+
+/-- Accept a five-currency limit only from one exhibited plan for the exact
+session carried by a named `Protocol.Elaboration`. The limit is an ordinary
+`Currency → Nat` term terminated by `:=`; the evidence must inhabit
+`Scheduling.ProfileUpperBound`. No crossing count, meeting floor, scalar upper
+bound, or independently selected coordinate plans fit the generated type. -/
+syntax (name := preoBudget) "preo_budget " ident ppSpace &"for" ppSpace ident
+  " : " colGt term:51 " := " colGt term : command
 
 /-- Print the verdict table of a `preo` declaration: every field with its kind
 and carrier, every invariant with the field it reads, its verdict, the route

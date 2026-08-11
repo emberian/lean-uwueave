@@ -46,9 +46,13 @@ premise that real storage produces such an image.
     version; it must not silently reinterpret this format.
   * ⟨TERMINAL⟩ The format detects truncation, bad framing, and tag mismatch.
     It has no checksum and does not claim to detect arbitrary bit corruption.
-  * ⟨UNDONE⟩ No refinement connects `List UInt8` here to a host serializer,
-    file descriptor, database transaction, flush primitive, or filesystem
-    crash model.  `DeploymentAssumptions` names that missing boundary.
+  * The logical layer is paid for artifact projections:
+    `Preo.ArtifactDurable` supplies canonical `List UInt8`, version/domain
+    separation, and logical torn-tail recovery.
+  * ⟨UNDONE⟩ No refinement proves that a host serializer emits those bytes
+    byte-for-byte, or connects a file descriptor, database transaction, flush
+    primitive, or filesystem crash observation to the required prefix shape.
+    `DeploymentAssumptions` names that missing boundary.
 -/
 import Std
 

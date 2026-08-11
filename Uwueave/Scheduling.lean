@@ -66,11 +66,12 @@ numbers.
     barriers, and user prompts need not be caused by a seam crossing. Removing
     it would make `crossings = 0 → meetings = 0` true by construction rather
     than by the system.
-  * ⚠ ⟨CORRECTION⟩ `CoordEffect.lean`'s header says pointwise-added
-    crossings are an upper bound on any coalescing model. This file refutes the
-    unconditional wording: `one_crossing_can_need_two_rounds` has one crossing
-    and two forced meetings. The upper-bound reading needs an **at-most-one
-    demand per crossing** interpretation; pure coalescing alone is not enough.
+  * ⚠ ⟨CONSISTENT BOUNDARY⟩ `CoordEffect.lean` now states the same qualified
+    boundary this file proves: pointwise-added crossings are not a generic upper
+    bound on schedule actions. `one_crossing_can_need_two_rounds` is the exact
+    witness — one crossing, two forced peer meetings. An upper-bound reading
+    needs an **at-most-one demand per crossing** interpretation; pure coalescing
+    alone is not enough.
   * ⟨UNDONE⟩ Participants are declared, not proved online; there is no
     liveness, deadlock-freedom, message loss, elapsed time, or schedule search.
   * **The syntax debt is narrowed.** `Uwueave.Protocol` now supplies the deep
@@ -375,10 +376,97 @@ structure UpperBound (s : Session) (budget : Nat) where
   plan : Plan s
   fits : plan.meetings ≤ budget
 
+/-- A five-currency acceptance witness. One real schedule plan must satisfy
+every coordinate; no scalar crossing count, peer-meeting floor, or independently
+chosen per-currency plans can inhabit this structure. -/
+structure ProfileUpperBound (s : Session) (limits : Currency → Nat) where
+  plan : Plan s
+  fits : ∀ c, plan.profile c ≤ limits c
+
+/-- Construct a profile bound from an exhibited plan and pointwise evidence. -/
+def Plan.profileUpperBound {s : Session} (plan : Plan s)
+    (limits : Currency → Nat) (fits : ∀ c, plan.profile c ≤ limits c) :
+    ProfileUpperBound s limits :=
+  ⟨plan, fits⟩
+
+/-- Every real plan witnesses its exact achieved currency profile. -/
+def Plan.exactProfileUpperBound {s : Session} (plan : Plan s) :
+    ProfileUpperBound s plan.profile :=
+  plan.profileUpperBound plan.profile (fun _ => Nat.le_refl _)
+
+/-- Recover the checked schedule carried by a profile acceptance. -/
+def ProfileUpperBound.schedule {s : Session} {limits : Currency → Nat}
+    (bound : ProfileUpperBound s limits) : Schedule s :=
+  bound.plan.schedule
+
+/-- Compatibility projection: a full profile acceptance implies the existing
+peer-only upper bound. The reverse direction is intentionally absent because a
+peer limit says nothing about the other four currencies. -/
+def ProfileUpperBound.toUpperBound {s : Session} {limits : Currency → Nat}
+    (bound : ProfileUpperBound s limits) : UpperBound s (limits .peerBarrier) where
+  plan := bound.plan
+  fits := bound.fits .peerBarrier
+
+/-! ### Sound witnessed composition -/
+
+/-- Append two real schedules for a composed session. This may miss possible
+cross-session coalescing, but it is always a sound exhibited schedule. -/
+def Schedule.comp {left right : Session} (p : Schedule left) (q : Schedule right) :
+    Schedule (left.comp right) where
+  actions := p.actions ++ q.actions
+  covers := by
+    intro o ho
+    rcases List.mem_append.mp ho with ho | ho
+    · obtain ⟨original, horiginal, rfl⟩ := List.mem_map.mp ho
+      obtain ⟨a, ha, hcompat⟩ := p.covers original horiginal
+      exact ⟨a, List.mem_append.mpr (Or.inl ha), by simpa using hcompat⟩
+    · obtain ⟨original, horiginal, rfl⟩ := List.mem_map.mp ho
+      obtain ⟨a, ha, hcompat⟩ := q.covers original horiginal
+      exact ⟨a, List.mem_append.mpr (Or.inr ha), by simpa using hcompat⟩
+
+/-- Appended schedules add every currency coordinate exactly. -/
+theorem Schedule.profile_comp {left right : Session} (p : Schedule left)
+    (q : Schedule right) (currency : Currency) :
+    (p.comp q).profile currency = p.profile currency + q.profile currency := by
+  simp [Schedule.comp, Schedule.profile, Schedule.actionsFor, List.filter_append]
+
+def Plan.comp {left right : Session} (p : Plan left) (q : Plan right) :
+    Plan (left.comp right) :=
+  ⟨p.schedule.comp q.schedule⟩
+
+theorem Plan.profile_comp {left right : Session} (p : Plan left) (q : Plan right)
+    (currency : Currency) :
+    (p.comp q).profile currency = p.profile currency + q.profile currency :=
+  Schedule.profile_comp p.schedule q.schedule currency
+
+/-- Pointwise limits compose only through the one appended real plan. This is
+an achieved upper bound, not a claim that optimal profiles distribute. -/
+def ProfileUpperBound.comp {left right : Session}
+    {leftLimits rightLimits : Currency → Nat}
+    (p : ProfileUpperBound left leftLimits)
+    (q : ProfileUpperBound right rightLimits) :
+    ProfileUpperBound (left.comp right) (fun c => leftLimits c + rightLimits c) where
+  plan := p.plan.comp q.plan
+  fits := by
+    intro c
+    rw [Plan.profile_comp]
+    exact Nat.add_le_add (p.fits c) (q.fits c)
+
+/-- The conservative one-action-per-obligation plan, exposed independently of
+either scalar or profile bounds. -/
+def identityPlan (s : Session) : Plan s :=
+  ⟨identitySchedule s⟩
+
+/-- Every session has an exact profile acceptance for the profile actually
+spent by its conservative identity plan. -/
+def identityProfileUpperBound (s : Session) :
+    ProfileUpperBound s (identityPlan s).profile :=
+  (identityPlan s).exactProfileUpperBound
+
 /-- Every session has a witnessed, conservative upper bound: one peer meeting
 per obligation. -/
 def identityUpperBound (s : Session) : UpperBound s s.obligations.length where
-  plan := ⟨identitySchedule s⟩
+  plan := identityPlan s
   fits := identity_meeting_upper s
 
 /-- A least meeting count is both achieved and a lower bound on every schedule.
@@ -455,14 +543,23 @@ theorem composed_plan_uses_one_strategy {X : Type} {A : CoordEffect.Admissible X
 
 /-! ### Coverage lemmas used by the exact examples. -/
 
+/-- Coverage of an obligation forces an action in that obligation's currency.
+This is the pointwise lower-bound fact used below; it does not collapse the
+five coordinates to a scalar. -/
+theorem Schedule.currency_action_of_covers {s : Session} (p : Schedule s)
+    {o : Obligation s.crossings} (ho : o ∈ s.obligations) (currency : Currency)
+    (hc : o.demand.currency = currency) :
+    ∃ a ∈ p.actionsFor currency, Compatible a o.demand := by
+  obtain ⟨a, ha, hcompat⟩ := p.covers o ho
+  refine ⟨a, List.mem_filter.mpr ⟨ha, ?_⟩, hcompat⟩
+  have hcurrency : a.currency = currency := hcompat.1.trans hc
+  simp [hcurrency]
+
 theorem Schedule.peer_action_of_covers {s : Session} (p : Schedule s)
     {o : Obligation s.crossings} (ho : o ∈ s.obligations)
     (hc : o.demand.currency = .peerBarrier) :
     ∃ a ∈ p.actionsFor .peerBarrier, Compatible a o.demand := by
-  obtain ⟨a, ha, hcompat⟩ := p.covers o ho
-  refine ⟨a, List.mem_filter.mpr ⟨ha, ?_⟩, hcompat⟩
-  have hcurrency : a.currency = .peerBarrier := hcompat.1.trans hc
-  simp [hcurrency]
+  exact p.currency_action_of_covers ho .peerBarrier hc
 
 private theorem two_le_length_of_distinct_mem {A : Type} {xs : List A} {a b : A}
     (ha : a ∈ xs) (hb : b ∈ xs) (hne : a ≠ b) : 2 ≤ xs.length := by
@@ -491,6 +588,14 @@ theorem one_peer_obligation_forces_one {s : Session}
   obtain ⟨a, ha, -⟩ := p.schedule.peer_action_of_covers ho hc
   exact List.length_pos_of_mem ha
 
+/-- The corresponding lower bound for any of the five currencies. -/
+theorem one_currency_obligation_forces_one {s : Session}
+    {o : Obligation s.crossings} (ho : o ∈ s.obligations)
+    (currency : Currency) (hc : o.demand.currency = currency) (p : Plan s) :
+    1 ≤ p.profile currency := by
+  obtain ⟨a, ha, -⟩ := p.schedule.currency_action_of_covers ho currency hc
+  exact List.length_pos_of_mem ha
+
 theorem two_incompatible_peer_obligations_force_two {s : Session}
     {o₁ o₂ : Obligation s.crossings}
     (h₁ : o₁ ∈ s.obligations) (h₂ : o₂ ∈ s.obligations)
@@ -516,6 +621,12 @@ def sharedDemand : Demand := baseDemand
 def secondRoundDemand : Demand := { baseDemand with round := 1 }
 
 def networkDemand : Demand := { baseDemand with currency := .networkRound }
+
+def arbiterDemand : Demand := { baseDemand with currency := .arbiterCut }
+
+def promptDemand : Demand := { baseDemand with currency := .userPrompt }
+
+def rollbackDemand : Demand := { baseDemand with currency := .rollback }
 
 def sharedNeed₀ : Obligation 2 where
   origin := .crossing ⟨0, by decide⟩
@@ -753,5 +864,184 @@ theorem meetings_cannot_erase_currency :
       ∧ oneCrossingPeerPlan.profile .networkRound = 0
       ∧ mixedCurrencyPlan.profile .networkRound = 1 :=
   ⟨rfl, rfl, rfl, rfl⟩
+
+/-! ## §6. Five-currency acceptance and its non-constructibility bars. -/
+
+/-- Merely asserting that a profile bound exists, while keeping its real plan
+available through `Nonempty`. -/
+def HasProfileUpperBound (s : Session) (limits : Currency → Nat) : Prop :=
+  Nonempty (ProfileUpperBound s limits)
+
+/-- A zero allowance in every currency. -/
+def zeroLimits : Currency → Nat := fun _ => 0
+
+/-- One peer barrier, and no expenditure in the other four currencies. -/
+def peerOnlyLimits : Currency → Nat
+  | .peerBarrier => 1
+  | _ => 0
+
+/-- Two peer barriers, and no expenditure in the other four currencies. -/
+def twoPeerLimits : Currency → Nat
+  | .peerBarrier => 2
+  | _ => 0
+
+/-- One action in each of the five currencies. -/
+def oneEachLimits : Currency → Nat := fun _ => 1
+
+def arbiterNeed : Obligation 0 where
+  origin := .ambient
+  demand := arbiterDemand
+
+def networkAmbientNeed : Obligation 0 where
+  origin := .ambient
+  demand := networkDemand
+
+def promptNeed : Obligation 0 where
+  origin := .ambient
+  demand := promptDemand
+
+def rollbackNeed : Obligation 0 where
+  origin := .ambient
+  demand := rollbackDemand
+
+/-- A single session which requires all five currencies. -/
+def allCurrenciesSession : Session where
+  crossings := 0
+  obligations := [ambientNeed, arbiterNeed, networkAmbientNeed, promptNeed, rollbackNeed]
+
+def allCurrenciesPlan : Plan allCurrenciesSession :=
+  identityPlan allCurrenciesSession
+
+/-- The all-currency example is accepted by one real plan, checked pointwise. -/
+def allCurrenciesProfileUpperBound :
+    ProfileUpperBound allCurrenciesSession oneEachLimits :=
+  allCurrenciesPlan.profileUpperBound oneEachLimits (by
+    intro currency
+    cases currency <;> decide)
+
+/-- All five coordinates of the checked plan are observable and exactly one. -/
+theorem allCurrenciesProfileUpperBound_exercises_every_currency :
+    allCurrenciesProfileUpperBound.plan.profile .peerBarrier = 1
+      ∧ allCurrenciesProfileUpperBound.plan.profile .arbiterCut = 1
+      ∧ allCurrenciesProfileUpperBound.plan.profile .networkRound = 1
+      ∧ allCurrenciesProfileUpperBound.plan.profile .userPrompt = 1
+      ∧ allCurrenciesProfileUpperBound.plan.profile .rollback = 1 := by
+  decide
+
+/-- The historical two-crossings-to-one-meeting example has a full profile
+acceptance, not merely a scalar peer bound. -/
+def coalescedProfileUpperBound :
+    ProfileUpperBound coalescingSession peerOnlyLimits :=
+  coalescedPlan.profileUpperBound peerOnlyLimits (by
+    intro currency
+    cases currency <;> decide)
+
+/-- The historical one-crossing-to-two-rounds example likewise carries one
+real plan whose peer coordinate is exactly two. -/
+def twoRoundProfileUpperBound :
+    ProfileUpperBound twoRoundSession twoPeerLimits :=
+  twoRoundPlan.profileUpperBound twoPeerLimits (by
+    intro currency
+    cases currency <;> decide)
+
+theorem crossing_meeting_examples_have_profile_bounds :
+    coalescingSession.crossings = 2
+      ∧ LeastMeetings coalescingSession 1
+      ∧ coalescedProfileUpperBound.plan.profile .peerBarrier = 1
+      ∧ twoRoundSession.crossings = 1
+      ∧ LeastMeetings twoRoundSession 2
+      ∧ twoRoundProfileUpperBound.plan.profile .peerBarrier = 2 :=
+  ⟨rfl, coalescing_least_is_one, rfl, rfl, one_crossing_two_rounds_least, rfl⟩
+
+def emptyZeroProfileUpperBound :
+    ProfileUpperBound emptySession zeroLimits :=
+  emptyPlan.profileUpperBound zeroLimits (by
+    intro currency
+    cases currency <;> decide)
+
+/-- A zero-crossing session may fail the zero profile budget: the ambient peer
+obligation forces a real peer action. -/
+theorem ambient_has_no_zero_profile_bound :
+    ¬ HasProfileUpperBound ambientBarrierSession zeroLimits := by
+  rintro ⟨bound⟩
+  have hlower : 1 ≤ bound.plan.profile .peerBarrier :=
+    one_currency_obligation_forces_one (o := ambientNeed)
+      List.mem_cons_self .peerBarrier rfl bound.plan
+  have hupper := bound.fits .peerBarrier
+  simp only [zeroLimits] at hupper
+  omega
+
+/-- **Crossings cannot construct profile acceptance.** Two sessions with the
+same crossing count disagree on acceptance at the same five-currency limit. -/
+theorem no_crossing_count_decides_profile_acceptance :
+    ¬ ∃ accepts : Nat → Bool, ∀ s : Session,
+      accepts s.crossings = true ↔ HasProfileUpperBound s zeroLimits := by
+  rintro ⟨accepts, haccepts⟩
+  have hempty : accepts emptySession.crossings = true :=
+    (haccepts emptySession).2 ⟨emptyZeroProfileUpperBound⟩
+  have hambient : accepts ambientBarrierSession.crossings = true := by
+    simpa using hempty
+  exact ambient_has_no_zero_profile_bound ((haccepts ambientBarrierSession).1 hambient)
+
+theorem oneCrossingPeer_least_is_one :
+    LeastMeetings oneCrossingPeerSession 1 := by
+  constructor
+  · exact ⟨oneCrossingPeerPlan, rfl⟩
+  · intro plan
+    exact one_peer_obligation_forces_one (o := roundNeed₀)
+      List.mem_cons_self rfl plan
+
+theorem mixedCurrency_least_is_one :
+    LeastMeetings mixedCurrencySession 1 := by
+  constructor
+  · exact ⟨mixedCurrencyPlan, rfl⟩
+  · intro plan
+    exact one_peer_obligation_forces_one (o := roundNeed₀)
+      List.mem_cons_self rfl plan
+
+def oneCrossingPeerProfileUpperBound :
+    ProfileUpperBound oneCrossingPeerSession peerOnlyLimits :=
+  oneCrossingPeerPlan.profileUpperBound peerOnlyLimits (by
+    intro currency
+    cases currency <;> decide)
+
+/-- A peer-only allowance cannot hide the required network action. -/
+theorem mixedCurrency_has_no_peerOnly_profile_bound :
+    ¬ HasProfileUpperBound mixedCurrencySession peerOnlyLimits := by
+  rintro ⟨bound⟩
+  have hlower : 1 ≤ bound.plan.profile .networkRound :=
+    one_currency_obligation_forces_one (o := networkNeed)
+      (List.mem_cons_of_mem _ List.mem_cons_self) .networkRound rfl bound.plan
+  have hupper := bound.fits .networkRound
+  simp only [peerOnlyLimits] at hupper
+  omega
+
+/-- **Least peer meetings cannot construct profile acceptance.** Both sessions
+have exact least peer count one; only the first fits the same full profile. -/
+theorem least_meetings_do_not_decide_profile_acceptance :
+    LeastMeetings oneCrossingPeerSession 1
+      ∧ LeastMeetings mixedCurrencySession 1
+      ∧ HasProfileUpperBound oneCrossingPeerSession peerOnlyLimits
+      ∧ ¬ HasProfileUpperBound mixedCurrencySession peerOnlyLimits :=
+  ⟨oneCrossingPeer_least_is_one, mixedCurrency_least_is_one,
+    ⟨oneCrossingPeerProfileUpperBound⟩, mixedCurrency_has_no_peerOnly_profile_bound⟩
+
+/-- A peer-meeting floor is universal lower-bound evidence only. -/
+def MeetingFloor (s : Session) (floor : Nat) : Prop :=
+  ∀ plan : Plan s, floor ≤ plan.meetings
+
+theorem LeastMeetings.toMeetingFloor {s : Session} {least : Nat}
+    (h : LeastMeetings s least) : MeetingFloor s least :=
+  h.2
+
+/-- **A floor cannot construct profile acceptance.** This session has a proved
+peer floor fitting the peer allowance, but fails the full allowance because of
+its independently checked network coordinate. -/
+theorem meeting_floor_does_not_entail_profile_acceptance :
+    MeetingFloor mixedCurrencySession 1
+      ∧ 1 ≤ peerOnlyLimits .peerBarrier
+      ∧ ¬ HasProfileUpperBound mixedCurrencySession peerOnlyLimits :=
+  ⟨mixedCurrency_least_is_one.toMeetingFloor, by decide,
+    mixedCurrency_has_no_peerOnly_profile_bound⟩
 
 end Uwueave.Scheduling

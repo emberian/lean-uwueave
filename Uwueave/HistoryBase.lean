@@ -119,8 +119,13 @@ prize:
 
   * ⟨TERMINAL⟩ **`ValidInHistory` is not a procedure.** It is what a merge-base
     procedure's output must *prove*, exactly as `Histories.BaseSelection` is.
-    Nothing here computes a base from a DAG; `Histories.lean`'s own ⟨UNDONE⟩ on
-    that point stands unchanged.
+    Nothing in this file computes a base from a DAG. Downstream
+    `FiniteHistory.Enumeration` does supply decidable reachability and partial
+    proof-carrying `BaseSelection` search for explicitly covered finite DAGs,
+    and `FiniteHistory.toDecision_valid` erases such a selection to the exact
+    version-level raw-decision obligation. That finite utility does not change
+    this definition's transport hypotheses, decide arbitrary/infinite DAGs, or
+    construct a total `HistoryPolicy.HistoryMerge` selector.
   * ⟨TERMINAL⟩ **The transport needs `RunRealized`, and merges destroy it.**
     §2's two transport theorems carry a `RunRealized` hypothesis and
     `ccHistory_not_runRealized` says no merge-bearing history that leaves the

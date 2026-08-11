@@ -3,7 +3,7 @@
 
 `Authority.UniqueGrant` and `Sequence.UniqueAnchor` turn a uniqueness failure
 into a concrete hash-collision witness. ERA's finality boundary needs the
-signature analogue: if a replica accepts a grant or event attributed to an
+signature analogue: if a replica accepts a grant, event, or move attributed to an
 issuer, but that issuer did not issue it, the bad state must hand a
 cryptographic reduction a concrete forgery candidate rather than merely carry
 the word "authentic" as a premise.
@@ -15,7 +15,7 @@ primitive and proves no hardness claim.
     verification, and honest-signature correctness. Security is deliberately
     not a field: putting "unforgeable" in a structure would not prove it.
   * `Payload` and `signingMessage` bind a protocol/version prefix, a distinct
-    grant/event domain tag, the issuer, the key epoch, and every payload field.
+    grant/event/move domain tag, the issuer, the key epoch, and every payload field.
     `grant_event_domain_separated` makes the cross-domain separation a theorem.
   * `AuthenticIssuer` is the safety property over records that actually reached
     a deployment trace. `EUFStylePremise` says that trace contains no accepted,
@@ -40,19 +40,32 @@ and the domain-separated `signingMessage` · *without it*
 `attack_not_authentic` and `attack_extracts_forgery` exhibit an accepted grant
 the named issuer never issued.
 
+**Authentic issuer → authenticated admission** · *transports*
+`AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic` derives
+Byzantine triple authenticity from accepted signed event records through an
+explicit event-triple codec;
+`AuthenticatedAdmission.AuthenticatedGatedOp.ofAuthenticIssuer` derives genuine
+issuance for a received, accepted signed move before conjoining explicit grant
+holder binding and the ordinary gate. Both consume `AuthenticIssuer`; neither
+manufactures it.
+
 ## Honest boundary
 
 ⟨TERMINAL⟩ The extractor, domain separation, honest-signature correctness
 transport, revocation antitonicity, and key-epoch rejection are theorems of the
 model below.
 
-⟨UNDONE⟩ A deployment must instantiate `SignatureScheme`, its key registry,
-key rotation, and its issuance log, then justify `EUFStylePremise` by an actual
-EUF-CMA-style reduction for the chosen signature scheme. This file has no
-security parameter, probabilistic adversary, query bound, side-channel model,
-key-generation entropy, byte codec, or theorem about Ed25519/ML-DSA/another
-concrete primitive. The deterministic trace predicate is the *conclusion* a
-computational proof must supply, not that proof wearing a new name.
+⟨UNDONE at the deployment-cryptography boundary⟩ A deployment must instantiate
+`SignatureScheme`, its key registry, key rotation, and its issuance log, then
+justify `EUFStylePremise` by an actual EUF-CMA-style reduction for the chosen
+signature scheme. `AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic`
+and `AuthenticatedGatedOp.ofAuthenticIssuer` now close the model-level admission
+transports once `AuthenticIssuer` is supplied; they do not supply it. This file
+has no security parameter, probabilistic adversary, query bound, side-channel
+model, key-generation entropy, byte codec, or theorem about
+Ed25519/ML-DSA/another concrete primitive. The deterministic trace predicate is
+the *conclusion* a computational proof must supply, not that proof wearing a new
+name.
 -/
 
 import Uwueave.Authority
@@ -79,12 +92,28 @@ def grantDomain : Nat := 0x4752414e54
 /-- ASCII `EVENT`, separating ERA events from every other payload. -/
 def eventDomain : Nat := 0x4556454e54
 
-/-- The two authenticated objects this bridge currently carries. The grant is
+/-- ASCII `MOVE`, separating signed move submissions from grants and ERA
+events. -/
+def moveDomain : Nat := 0x4d4f5645
+
+/-- The neutral move payload signed at the admission boundary.  It repeats the
+four semantic fields of `Gated.GOp` without importing the gate (and therefore
+without creating an authentication/authorization import cycle).  The outer
+`SignedRecord.issuer` is the submitter identity. -/
+structure MoveClaim where
+  t : Nat
+  node : Nat
+  dest : Option Nat
+  cite : Nat
+  deriving DecidableEq, Repr
+
+/-- The authenticated objects this bridge currently carries. The grant is
 `(id, parent, scope)` from `Authority`; the event is ERA's complete five-field
-group-management event. -/
+group-management event; and a move binds every field later read by `Gated`. -/
 inductive Payload where
   | grant (value : Authority.Grant)
   | event (value : Era.Event)
+  | move (value : MoveClaim)
   deriving DecidableEq, Repr
 
 /-- Canonical field-level encoding with a protocol prefix, encoding version,
@@ -95,6 +124,10 @@ def encodePayload : Payload → Message
   | .event e =>
       [protocolTag, encodingVersion, eventDomain,
        e.eid, e.kind, e.actor, e.target, e.role]
+  | .move op =>
+      [protocolTag, encodingVersion, moveDomain, op.t, op.node,
+       match op.dest with | none => 0 | some _ => 1,
+       op.dest.getD 0, op.cite]
 
 /-- The signature covers attribution and rotation metadata as well as the
 payload. An envelope cannot change issuer or key epoch while retaining the
@@ -141,6 +174,27 @@ theorem signingMessage_event_injective
   simp [signingMessage, encodePayload] at h ⊢
   exact h
 
+/-- Move submissions occupy neither the grant nor the event signing domain. -/
+theorem move_domain_separated (op : MoveClaim) (g : Authority.Grant)
+    (e : Era.Event) :
+    encodePayload (.move op) ≠ encodePayload (.grant g)
+      ∧ encodePayload (.move op) ≠ encodePayload (.event e) := by
+  constructor <;> simp [encodePayload, moveDomain, grantDomain, eventDomain]
+
+/-- Equality of signed move messages pins the submitter, key epoch, and all
+four operation fields.  In particular, `cite` is signed data rather than
+unsigned routing metadata. -/
+theorem signingMessage_move_injective
+    {issuer keyEpoch issuer' keyEpoch' : Nat}
+    {op op' : MoveClaim}
+    (h : signingMessage issuer keyEpoch (.move op) =
+      signingMessage issuer' keyEpoch' (.move op')) :
+    issuer = issuer' ∧ keyEpoch = keyEpoch' ∧ op = op' := by
+  rcases op with ⟨t, node, dest, cite⟩
+  rcases op' with ⟨t', node', dest', cite'⟩
+  cases dest <;> cases dest' <;>
+    simp [signingMessage, encodePayload] at h ⊢ <;> exact h
+
 /-! ## §2. A named signature scheme, without a hardness theorem -/
 
 /-- An abstract signature scheme with the one algebraic fact honest operation
@@ -169,7 +223,7 @@ structure SignedRecord (scheme : SignatureScheme) where
   issuer : Nat
   /-- Version of the issuer's verification key. -/
   keyEpoch : Nat
-  /-- Grant or event being authenticated. -/
+  /-- Grant, event, or move being authenticated. -/
   payload : Payload
   /-- Signature over `signingMessage issuer keyEpoch payload`. -/
   signature : scheme.Signature
