@@ -202,23 +202,64 @@ fragment license; refutation-of-spec acceptable.
 **Delivery:** `Uwueave/CausalReach.lean` + `## JOB 2 RESULT` here. The swarm
 wires and re-tags the ledger from your theorems.
 
-# JOB 3 — Red-team by construction (open, standing)
+# JOB 3 — WITHDRAWN (operator veto, before any work began)
 
-*You reviewed twice in prose. This is the upgrade: findings as Lean, or
-silence.*
+*The operator's call, 2026-08-10: cycles spent adversarially constructing
+counterexamples are cycles not spent improving. The passive defenses stand —
+the total gate, the falsifiability bars, the CLI truth-lock — and findings
+that arrive incidentally are always welcome. But no standing red-team job.
+Build forward.*
 
-**The job.** Attempt to CONSTRUCT, anywhere in the tree, any of: (a) a
-vacuous theorem (hypothesis uninhabited, conclusion unreachable, or carrier
-trivial — the `Identity Carrier` class); (b) a docstring claiming more than
-its statement; (c) a ledger tag that's wrong (a `Live` that isn't, a
-generality label above the statement's real quantifiers); (d) a gate escape
-(any way to get a floor-violating constant past `#audit_floor` — elaboration
-tricks, namespace games, `partial`/`opaque` corners). Each finding must be an
-*exhibit*: a compiling `.lean` scrap or exact source citation demonstrating
-the defect, not an impression. Null results are reportable ("attacked X via
-Y, held").
+# JOB 4 — Convergence liveness: the other half of SEC (open)
 
-**Delivery:** `## JOB 3 RESULT` here, exhibits inline or as
-`Uwueave/RedTeam*.lean` scraps (clearly marked, NOT wired to root). Standing:
-re-runnable after any wave.
+Everything in this tree is safety. The liveness half: a fair-delivery /
+anti-entropy model — replicas gossip states or deltas, every pair exchanges
+infinitely often (or a round-based fairness you prefer) — and the theorem
+that all replicas reach the least upper bound of everything issued
+(`Delta.joinAll` and `merge_le_iff` are your algebra; the lub-ness is
+already proved, the *attainment* is the job). May share a delivery
+substrate with JOB 2 if one model serves both — say so if so.
+Falsifiability bar: a fair execution that converges (satisfiable), an
+unfair one that doesn't (refutable — starvation witness), honest scope
+(no real networks, no clocks, no Byzantine). Delivery:
+`Uwueave/Liveness.lean` + `## JOB 4 RESULT` here.
 
+# JOB 5 — One dependent pair: the honest Zielonka step (open)
+
+`Automata.lean` §2 proves commuting-batch replay for globally-independent
+alphabets and says plainly that real trace theory starts where dependence
+does. Take the smallest honest step: a three-letter alphabet with exactly
+one dependent pair — the trace monoid quotient, replay well-defined up to
+trace equivalence (equal on all letter sequences related by swapping
+independent adjacent letters), and the negative: reordering the dependent
+pair genuinely changes the run (witness). Connect to `Automata.exec_perm`
+as the degenerate all-independent case. No full Zielonka; the docstring
+measures the distance as always. Delivery: `Uwueave/Traces.lean` +
+`## JOB 5 RESULT` here.
+
+# JOB 6 — The n-ary tails: general carriers for the Bool demos (open)
+
+The classification results hard-coded to two replicas/devices, generalized
+in a NEW file (`Uwueave/Nary.lean`, importing Catalog/Segmented — do not
+edit them): PN-counter net over `ι` with finite support (a `List ι`
+enumeration or your cleaner choice), the balance refutation at general `ι`;
+escrow's global bound as a sum over an enumeration; `Segmented.BudgetInv`
+n-ary. Each existing Bool theorem should fall out as an instance —
+zero-new-merge-proofs discipline. This is the least glamorous open job and
+the one a schema author hits first when they have three devices. Delivery:
+`Uwueave/Nary.lean` + `## JOB 6 RESULT` here.
+
+# JOB 7 — Your model, our kernel (open)
+
+Instantiate JOB 1's own `Impl` with the move kernel: the move system as an
+`Impl` (ops = MoveOps, tryApply = the grounded-insert/replay discipline —
+design the faithful embedding), and the theorem that it is CFCS for the
+acyclicity invariant, riding `absReplay_acyclic` and
+`kernel_derived_view_sec` (ExecRefine). This closes the last conceptual
+loop: the executable kernel certified as an inhabitant of the necessity
+model — the shipping system living inside the theorem that says when
+shipping systems can exist. Delivery: `Uwueave/KernelCFCS.lean` +
+`## JOB 7 RESULT` here.
+
+*(Queued behind wave 6: Fugue non-interleaving for the sequence kernel —
+posted once `Uwueave/SeqKernel.lean` lands so the target defs exist.)*
