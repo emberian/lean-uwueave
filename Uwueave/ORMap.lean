@@ -135,11 +135,10 @@ holds the key, the merge holds a tombstone for every tag. Registers play no
 part — trivial everywhere — which is the point: no value layer can rescue a
 presence layer.
 
-Honesty note on reachability, as in `ORSet.lean`: under *causal delivery* of
-operations this state pair may not be jointly reachable (each remove's causal
-past pulls in the other's tombstone). The scoped conditional
-`ormap_get_survives` is the guarantee that survives that narrowing; bare
-presence-stability is not, and this theorem is why. -/
+Reachability: same as `ORSet` — under tag-scoped rem-after-add the projected
+clash is jointly causally reachable (`CausalReach.ormap_clash_joint`); **Live**
+for that reading. Scoped `ormap_get_survives` remains the operational guarantee;
+bare presence stability is not. -/
 theorem ormap_present_not_iconfluent :
     ¬ IConfluent (S := ORMap Nat Nat) (fun s => Present s 0) := by
   intro h

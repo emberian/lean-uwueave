@@ -653,10 +653,11 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
                  both tombstones, and the element is gone.",
             ),
             note: Some(
-                "honesty note from the Lean: under causal delivery of operations \
-                 this witness pair may not be jointly reachable; op-based OR-Sets \
-                 narrow the state space and state their guarantee in the scoped, \
-                 conditional form (orset_present_survives).",
+                "reachability depends on remove shape (CausalReach): under \
+                 tag-scoped rem-after-add the clash is jointly causally Live \
+                 (orset_clash_joint); under element-wide rem after both adds it \
+                 is unreachable (ew_clashL_unreachable). Operational guarantee \
+                 remains the scoped conditional orset_present_survives.",
             ),
             exits: &[EXIT_ORSET_SCOPED, EXIT_CLSET],
         }),

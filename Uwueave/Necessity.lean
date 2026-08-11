@@ -39,12 +39,13 @@ implementation's reachable set — and under lattice `IConfluent` it holds for
 ## Reachability is load-bearing
 
 A bare `¬ IConfluent I` yields *some* clashing pair via `escalation_witness`,
-but that pair may be a lattice ghost (see `ORSet.orset_present_not_iconfluent`
-— LatticeOnly in `docs/MAP.md`). Necessity of coordination for *causally
-delivered, locally committed* systems requires a **reachable clash**: two
-successful local runs from a common ancestor whose join is illegal. That is
-the hypothesis of `reachable_clash_refutes_cfcs` and of the packaged
-`necessity`.
+but causal reachability of that pair depends on the protocol (see
+`CausalReach.orset_reachability_depends_on_remove_shape`: tag-scoped rem ⇒
+Live; element-wide rem after full observation ⇒ unreachable). Necessity of
+coordination for *locally committed join-sync* systems requires a
+**reachable clash**: two successful local runs from a common ancestor whose
+join is illegal. That is the hypothesis of `reachable_clash_refutes_cfcs`
+and of the packaged `necessity`.
 
 ## What this model does NOT capture
 
@@ -405,19 +406,64 @@ theorem atMostOneBit_locally_safe_but_not_merge_safe :
     (hmerge emptyBit onlyTrue onlyFalse [true] [false]
       emptyBit_ok runs_onlyTrue runs_onlyFalse)
 
-/-! ## §7. Serializing systems sit outside `Impl`
+/-! ## §7. Coordination is not vacuous: serial repair vs CF clash
 
-`Impl` admits only coordination-free `tryApply`. A system that *serializes*
-across replicas (global lock, atomic commit, primary) is intentionally not an
-`Impl`: its step function would need a shared scheduler or peer state. That
-exclusion is the model's account of "coordination" — to repair a reachable
-clash you must leave this model (coordinate, arbitrate, or compensate), which
-is the catalog's priced-exit story with a formal boundary underneath.
+`Impl` admits only coordination-free `tryApply` (local state only). A system
+that *serializes* ops across replicas is intentionally outside that type —
+its step function needs a shared schedule. This section makes that boundary
+**computational**, not just a comment: the same insert-or-abort rule, run
+**serially** on one site, preserves `AtMostOneBit` for every finite word,
+while the CF two-partition run of those same two inserts is the clash above.
 -/
 
-/-- Every commit decision is a function of `(op, local state)` alone — the
-type of `tryApply`. Stated so the coordination-freedom content is a theorem
-about the model, not only a comment. -/
+/-- One serial step: apply if local check passes, else keep state (coordinator
+refuses). Defined by the same predicate as `bitAtMostOneImpl`, inlined so
+preservation is by construction of the `if`. -/
+def serialStep (e : Bool) (s : BitSet) : BitSet :=
+  let s' : BitSet := fun b => s b || decide (b = e)
+  if (s' true && s' false) = false then s' else s
+
+/-- **Serial (coordinated) execution** of a word: one site, one total order,
+no peer merge mid-word. -/
+def serialRun (ops : List Bool) : BitSet :=
+  ops.foldl (fun s e => serialStep e s) emptyBit
+
+@[simp] theorem serialRun_nil : serialRun [] = emptyBit := rfl
+
+theorem serialStep_preserves (e : Bool) (s : BitSet) (hs : AtMostOneBit s) :
+    AtMostOneBit (serialStep e s) := by
+  simp only [serialStep, AtMostOneBit]
+  split
+  · next hok => exact hok
+  · exact hs
+
+theorem serialRun_preserves (ops : List Bool) : AtMostOneBit (serialRun ops) := by
+  have go : ∀ (acc : BitSet) (l : List Bool), AtMostOneBit acc →
+      AtMostOneBit (l.foldl (fun s e => serialStep e s) acc) := by
+    intro acc l hacc
+    induction l generalizing acc with
+    | nil => exact hacc
+    | cons x xs ih =>
+      exact ih (serialStep x acc) (serialStep_preserves x acc hacc)
+  exact go emptyBit ops emptyBit_ok
+
+/-- Serial execution of either order of the two inserts stays legal. -/
+theorem serial_both_orders_ok :
+    AtMostOneBit (serialRun [true, false]) ∧ AtMostOneBit (serialRun [false, true]) :=
+  ⟨serialRun_preserves _, serialRun_preserves _⟩
+
+/-- **The residual job-spec criterion, discharged:** the same op alphabet and
+local rule admit a **coordinating** strategy (serial fold) that always
+preserves the invariant, while the **coordination-free** `Impl` strategy is
+refuted by `atMostOneBit_impl_not_cfcs`. Coordination is not a vacuous
+category — it is what you buy to escape the partition clash. -/
+theorem coordination_repairs_what_cf_breaks :
+    (∀ ops : List Bool, AtMostOneBit (serialRun ops)) ∧
+      ¬ IsCFCS bitAtMostOneImpl AtMostOneBit :=
+  ⟨serialRun_preserves, atMostOneBit_impl_not_cfcs⟩
+
+/-- Every commit decision of a pure `Impl` is a function of `(op, local state)`
+alone. -/
 theorem tryApply_exhaustive {S : Type u} {Op : Type v} (impl : Impl S Op)
     (op : Op) (s : S) :
     (∃ s', impl.tryApply op s = some s') ∨ impl.tryApply op s = none := by

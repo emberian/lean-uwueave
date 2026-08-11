@@ -52,6 +52,11 @@ records whether `Uwueave/Audit.lean` pins the theorem's axiom footprint
 | `Uwueave/SeqKernel.lean` | The sequence CRDT, **implemented** the house way: RGA-with-tombstones order decision authored in Lean, exported as `uwueave_seq_kernel` beside the move kernel. Proved: every visible element appears (`linearizeK_mem`), exactly once (`linearizeK_nodup` — groundedness alone), ancestors precede (`linearizeK_ancestor_precedes`), and deletes filter without reordering (`linearizeK_sublist_emitAll`). The brief's index-ordered hypothesis was refuted by the lane as vacuous-for-real-inputs and replaced by rank-groundedness. Non-claims: `interleaving_anomaly` still governs (reproduced through the shipping kernel in a Rust test); Fugue cited, not implemented. |
 | `Uwueave/Era.lean` | The ERA protocol core, **implemented** from the paper (cuts, epochs, the four-op grammar, authorised execution, sorted-insert canonicalisation): delivery-independence by the set-function route (`resolve_same_sets`), rollback-immunity of the finalised prefix (`final_view_immune`), and the payoff — `duelling_admins_resolved`: one deterministic survivor at every replica, where `Authority.duelling_admins_annihilate` killed both. Corrects four guesses in `Seams.lean` (headline: the arbiter never names a winner, only orders events — and nobody coordinates; the epoch boundary is a trusted announcement priced in rollback). |
 | `Uwueave/Necessity.lean` | **Bailis necessity, modeled** (delivered by grok via `GROKJOB.md`): an execution model where coordination-freedom is definitional (`Impl.tryApply` sees local state only), and the theorem the library previously only cited — a *reachable* clash refutes coordination-free-convergent-safety (`necessity`, axiom-free core), with sufficiency back (`iconfluent_implies_cfcs`). Satisfiable (`gset_true_is_cfcs`) and refutable (`atMostOneBit_necessity`) per the job's falsifiability bar; the MAP's Live/LatticeOnly axis is now a formal hypothesis (`ReachableClash`). |
+| `Uwueave/CausalReach.lean` | **Op-based causal cuts** (JOB 2 + residuals): `FinHistory` / `Cut` / `Joint`; clash states are definitionally cut interpretations. Tag-scoped rem-after-add ⇒ OR-Set presence clash **Live** (`orset_clash_joint`); **element-wide rem after both adds** ⇒ same lattice pair **unreachable** (`ew_clashL_unreachable` / `orset_reachability_depends_on_remove_shape` — protocol dichotomy). Concurrent miniatures Live; free-id dup fragments Live; illegal cuts rejected. Content-addressing out of band. |
+| `Uwueave/Liveness.lean` | **SEC liveness half** (JOB 4): finite-covering fairness `FairOn` + `fair_converges` lands every listed replica at `joinAll base issued` (rides `Delta.same_deltas_same_state`); G-Set `unfair_starvation` witness; two-replica `pair_exchange_converges`. Not coinductive ∞-often delivery — header says so. |
+| `Uwueave/Traces.lean` | **One dependent pair** (JOB 5): 3-letter alphabet, independence `a∥b`, `a∥c`, not `b∥c`; `TraceEq`; `exec_traceEq`; negative `dependent_pair_reordering_changes_exec`; real bridge `exec_perm_of_fullIndep` (fullIndep → TraceEq → exec, not a dead hypothesis). Not full Zielonka. |
+| `Uwueave/Nary.lean` | **n-ary tails** (JOB 6): `net_enum`, PN nonneg refutation over any two distinct keys, escrow sum bound over enum, `BudgetInvN` / `budget_segmented_enum`; Catalog/Segmented Bool results recover as instances; zero new `MergeState` proofs. |
+| `Uwueave/KernelCFCS.lean` | **Move kernel as `Necessity.Impl`** (JOB 7): honest that under `GroundedBase` the derived-acyclicity invariant is true of every log (embedding package, not new confluence); real content is materialization ↔ membership and view determination via `absReplay_ext_mem`; `move_kernel_cfcs` + `move_kernel_view_sec`. |
 | `Uwueave/Ceiling.lean` | The four uniqueness refutations proved to be **one theorem**: `uniqueness_ceiling` — an invariant entailing "at most one element per selector key" over a grow-only set is never I-confluent — with the generic witness constructor `merge_breaks_uniqueOn` (two distinct same-key elements, one per replica, produce the clash). `ceiling_atMostOne` / `ceiling_uniqueAnchor` / `ceiling_uniqueGrant` / `ceiling_determinism` re-derive the Catalog, Sequence, Authority and Automata refutations verbatim as one-line instances, at the originals' own witnesses; the originals stay in their home files with their narratives and pins. The mutex-shaped ceilings (`or_breaks_iconfluence`, sole-admin) are the same trap but a different selector shape — they cap occupied *keys*, not elements per key — and keep their own refutations. |
 
 ## Keystone ledger
@@ -70,8 +75,8 @@ verified by grepping `Uwueave/Audit.lean`.
 | `pi_iconfluent` | Confluence | ∀-general | — | yes |
 | `gset_mem_iconfluent` | Catalog | ∀-general | — | no |
 | `gset_monotone_iconfluent` | Catalog | ∀-general | — | no |
-| `gset_atMostOne_not_iconfluent` | Catalog | finite-story | Unknown | yes |
-| `or_breaks_iconfluence` | Catalog | finite-story | Unknown | yes |
+| `gset_atMostOne_not_iconfluent` | Catalog | finite-story | Live | total gate |
+| `or_breaks_iconfluence` | Catalog | finite-story | Live | total gate |
 | `pncounter_nonneg_not_iconfluent` | Catalog | finite-story | Live | yes |
 | `lww_every_invariant_iconfluent` | Catalog | ∀-general | — | yes |
 | `lww_cross_field_not_iconfluent` | Catalog | finite-story | Live | yes |
@@ -84,7 +89,7 @@ verified by grepping `Uwueave/Audit.lean`.
 | `view_not_stable` | Move | finite-story | Live | yes |
 | `miniInterp_acyclic` | Move | finite-story | — | yes |
 | `orset_present_survives` | ORSet | ∀-general | — | yes |
-| `orset_present_not_iconfluent` | ORSet | finite-story | LatticeOnly | yes |
+| `orset_present_not_iconfluent` | ORSet | finite-story | Live | total gate |
 | `clset_present_iconfluent` | ORSet | ∀-general | — | yes |
 | `vclock_leq_iff` | Causality | ∀-general | — | yes |
 | `fork_evidence_iconfluent` | Causality | parametric | — | yes |
@@ -103,7 +108,7 @@ verified by grepping `Uwueave/Audit.lean`.
 | `wf_unique_anchor_not_iconfluent` | Sequence | finite-story | Unknown | yes |
 | `interleaving_anomaly` | Sequence | finite-story | Live | yes |
 | `iconfluent_iff_trivially_segmented` | Segmented | ∀-general | — | yes |
-| `budget_not_iconfluent` | Segmented | finite-story | Unknown | yes |
+| `budget_not_iconfluent` | Segmented | finite-story | Live | total gate |
 | `budget_segmented` | Segmented | parametric | — | yes |
 | `Verdict.keyedClash` (def) | Spec | ∀-general | — | yes |
 | `active_path_not_iconfluent` | Weave | finite-story | Live | yes |
@@ -121,6 +126,22 @@ verified by grepping `Uwueave/Audit.lean`.
 | `reachable_clash_refutes_cfcs` | Necessity | ∀-general | — | total gate |
 | `iconfluent_implies_cfcs` | Necessity | ∀-general | — | total gate |
 | `atMostOneBit_necessity` | Necessity | finite-story | Live | total gate |
+| `orset_clash_joint` | CausalReach | finite-story | Live | total gate |
+| `orset_clash_present` | CausalReach | finite-story | Live | total gate |
+| `ew_clashL_unreachable` | CausalReach | finite-story | LatticeOnly | total gate |
+| `orset_reachability_depends_on_remove_shape` | CausalReach | finite-story | — | total gate |
+| `rem_without_add_not_a_cut` | CausalReach | finite-story | — | total gate |
+| `atMostOne_joint` | CausalReach | finite-story | Live | total gate |
+| `coordination_repairs_what_cf_breaks` | Necessity | finite-story | — | total gate |
+| `fair_converges` | Liveness | ∀-general | — | total gate |
+| `unfair_starvation` | Liveness | finite-story | — | total gate |
+| `exec_traceEq` | Traces | ∀-general | — | total gate |
+| `dependent_pair_reordering_changes_exec` | Traces | finite-story | — | total gate |
+| `pncounter_nonneg_not_iconfluent_enum` | Nary | ∀-general | Live | total gate |
+| `budget_segmented_enum` | Nary | parametric | — | total gate |
+| `move_kernel_cfcs` | KernelCFCS | parametric | — | total gate |
+| `absReplay_eq_of_exactMaterializes` | KernelCFCS | ∀-general | — | total gate |
+| `acyclicity_cfcs_does_not_imply_view_stability` | KernelCFCS | finite-story | Live | total gate |
 | `absReplay_ext_mem` | ExecRefine | ∀-general | — | total gate |
 | `replay_encodeRequest` | ExecRefine | ∀-general | — | total gate |
 | `miniReplay_eq_miniInterp` | Move | finite-story | — | total gate |
@@ -128,7 +149,7 @@ verified by grepping `Uwueave/Audit.lean`.
 | `chainHits_decides` | ExecRefine | ∀-general | — | yes |
 | `decode_encode_id` | ExecRefine | ∀-general | — | yes |
 | `ormap_get_survives` | ORMap | ∀-general | — | yes |
-| `ormap_present_not_iconfluent` | ORMap | finite-story | LatticeOnly | yes |
+| `ormap_present_not_iconfluent` | ORMap | finite-story | Live | total gate |
 | `ormap_doomed_update` | ORMap | finite-story | Live | yes |
 | `ormap_policy_divergence` | ORMap | finite-story | Live | yes |
 | `exec_perm` | Automata | ∀-general | — | yes |
@@ -143,24 +164,20 @@ verified by grepping `Uwueave/Audit.lean`.
 | `duelling_revocations_not_iconfluent` | Authority | finite-story | Live | yes |
 | `uniqueness_ceiling` | Ceiling | ∀-general | — | no |
 
-77 rows: 32 ∀-general · 17 parametric · 28 finite-story. Of the 18 negative
-results tagged: 11 Live · 2 LatticeOnly · 5 Unknown. Reachability derivations,
-per module docstring: **Live** — `pncounter` ("each spends 10 on its own
-decrement key"), `lww_cross_field` (the two-writer timestamp story),
-`acyclicity` ("replica A adds `a → b`, replica B adds `b → a`"),
-`view_not_stable` ("when `o₂` arrives — older, so it sorts first"),
-`interleaving_anomaly` (two users typing; "contiguous on its own screen"),
-`active_path` ("two users activate sibling branches"), `ormap_doomed_update`
-(explicit: "causal delivery *cannot* rule this pair out"),
-`ormap_policy_divergence` (the same §4 race, read by two views),
-`determinism` ("two replicas each add a different `a`-transition"),
-`sole_admin` ("two partitions each mint their own admin"),
-`duelling_revocations` ("A revokes B while B revokes A"). **LatticeOnly** —
-both OR-Set/OR-Map presence refutations carry the explicit causal-delivery
-honesty note. **Unknown** — the two dup-pair refutations (Sequence,
-Authority) say only that under content addressing the pair is a hash-collision
-exhibit in a deployment (the modules' collision-extractor lemmas make that
-handoff formal), not whether ops reach it in the model; the at-most-one / mutex / budget
-clashes narrate states, not deliveries. Not pinned in `Audit.lean` (named
+Ledger rows grow with the tree; reachability is derived from module docstrings
+**and** from `CausalReach` theorems where those supersede older caution notes.
+**Live** (selection): `pncounter`, `lww_cross_field`, `acyclicity`,
+`view_not_stable`, `interleaving_anomaly`, `active_path`, `ormap_doomed_update`,
+`ormap_policy_divergence`, `determinism`, `sole_admin`, `duelling_revocations`,
+**and** (post–JOB 2) `orset_present_not_iconfluent` / `ormap_present_not_iconfluent`
+under tag-scoped rem-after-add (`CausalReach.orset_clash_joint`), plus
+at-most-one / mutex / budget concurrent-op shapes (`atMostOne_joint`,
+`budget_joint`). **Unknown / CA-blocked** — Sequence and Authority dup-pair
+refutations: free-id fragments are Live (`sequence_dup_frag_joint`); full
+uniqueness under content addressing is a collision-extraction premise, not a
+cut theorem. **LatticeOnly** — none remaining for the OR-Set/OR-Map presence
+clashes under the tag-scoped reading; element-wide remove-all-observed is still
+unmodeled. Audit column "total gate" means covered by `#audit_floor`, not a
+per-name pin. Not pinned as a separate ritual (named
 work): `gset_mem_iconfluent`, `gset_monotone_iconfluent`, `causal_dag_free`,
 and the new `Ceiling` names.

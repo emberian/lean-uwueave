@@ -18,8 +18,9 @@ they land on opposite sides in an instructive way:
 
   * OR-Set presence is **not** I-confluent (`orset_present_not_iconfluent`):
     two replicas can each hold the element alive through a different tag while
-    tombstoning the other's — the merge is dead. The *scoped* guarantee that
-    is actually true (and is what "add-wins" means) is
+    tombstoning the other's — the merge is dead. Under tag-scoped rem-after-add
+    that clash is causally Live (`CausalReach.orset_clash_joint`). The *scoped*
+    guarantee that is actually true (and is what "add-wins" means) is
     `orset_present_survives`: presence through a tag the other side has not
     tombstoned survives.
   * CL-Set presence **is** I-confluent (`clset_present_iconfluent`) — because
@@ -71,13 +72,13 @@ adds `{t₁, t₂}`; replica `x` has tombstoned `t₂` (alive through `t₁`), r
 `y` has tombstoned `t₁` (alive through `t₂`). Each is present; the merge
 tombstones both tags and the element is gone.
 
-Honesty note on reachability: under *causal delivery* of operations this pair
-of states may not be jointly reachable (each remove's causal past pulls in the
-other's tombstone). The judgement here is state-based, as is this library's
-merge; op-based OR-Set implementations with causal delivery narrow the state
-space and their presence guarantees are stated as `orset_present_survives`-
-style conditionals — never as merge-stability of bare presence. This theorem
-is why. -/
+Reachability (settled): under **tag-scoped rem-after-add** the clash pair *is*
+jointly causally reachable — `CausalReach.orset_clash_joint` / `orset_clash_present`.
+So this refutation is **Live** for that protocol reading, not LatticeOnly. An
+element-wide "remove all observed tags" protocol is a different op shape and is
+not modeled here; its causal story may differ. The judgement is still
+state-based; op-based add-wins guarantees remain the scoped form
+`orset_present_survives`, never bare presence stability. -/
 theorem orset_present_not_iconfluent :
     ¬ IConfluent (S := ORSet Nat Nat) (fun s => Present s 0) := by
   intro h

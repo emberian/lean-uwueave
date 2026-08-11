@@ -284,3 +284,109 @@ under Fugue while provably interleaved under RGA (both directions — that
 contrast IS the deliverable). Honest scope for whatever of the paper's full
 maximality claim you don't reach. Delivery: `Uwueave/Fugue.lean` +
 `## JOB 8 RESULT` here.
+
+---
+
+## JOB 2 RESULT (CausalReach — rewritten, no theater)
+
+*2026-08-10, second pass after autopsy.*
+
+**File:** `Uwueave/CausalReach.lean` — `lake env lean` green; no `sorry` / `native_decide`.
+
+### Model
+- `FinHistory`, `Cut` (downward-closed), `Joint`
+- Clash states are **definitionally** cut interpretations (no parallel encoding drift)
+
+### Keystones
+| Theorem | Content |
+|---|---|
+| `orset_clash_joint` | OR-Set catalog pair jointly causally reachable (tag-scoped rem-after-add) → **Live in this model** |
+| `orset_clash_present` | Present on each side; not after join |
+| `orset_present_via_causal_clash` | → `¬ IConfluent` via `CausalClash` |
+| `ormap_clash_joint` | Same cuts, trivial LWW |
+| `rem_without_add_not_a_cut` | Model rejects illegal cuts (refutable) |
+| `atMostOne_joint` / `acyclicity_joint` / `pncounter_joint` / `budget_joint` | Concurrent two-op Live miniatures |
+| `sequence_dup_frag_joint` | Free-id dup fragments Live; CA stated as out-of-band (not a fake enum) |
+
+### Deleted theater (first pass)
+`CAStatus`, `dupPair_status`, `dupPair_status_eq`, `cutX_mem_a1`, dual interp proofs of constant equality, victory prose about MAP without green compile.
+
+### Honest boundary
+ORSet docstring LatticeOnly caution does **not** hold for tag-scoped rem-after-add. Element-wide remove-all-observed unformalized. Content-addressing ≠ cut theory.
+
+---
+
+## JOB 4 RESULT (Liveness)
+
+**File:** `Uwueave/Liveness.lean` — green.
+
+| Theorem | Content |
+|---|---|
+| `run_eq_joinAll` | Delivery schedule = `joinAll` of received deltas |
+| `FairOn` + `fair_converges` | Finite covering fairness → all listed replicas at LUB (`same_deltas_same_state`) |
+| `pair_exchange_converges` | Two-replica mutual pull |
+| `unfair_starvation` | G-Set witness: starved replica lags |
+
+Fairness is **finite covering**, not coinductive ∞-often (header says so). Thin but real: not theater.
+
+---
+
+## JOB 5 RESULT (Traces — bridge fixed)
+
+**File:** `Uwueave/Traces.lean` — green.
+
+| Theorem | Content |
+|---|---|
+| `TraceEq` / `exec_traceEq` | Partial independence → trace-invariant exec |
+| `dependent_pair_reordering_changes_exec` | b;c ≠ c;b on `depAct` |
+| `exec_perm_of_fullIndep` | **Real bridge**: fullIndep lifts Perm→TraceEq, then `exec_traceEq` (no dead `_hfull` + bare `Automata.exec_perm` cite) |
+
+---
+
+## JOB 6 RESULT (Nary)
+
+**File:** `Uwueave/Nary.lean` — green.
+
+| Theorem | Content |
+|---|---|
+| `net_enum` / `pncounter_nonneg_not_iconfluent_enum` | PN net over enum; refutation for \|support\|≥2 |
+| `net_eq_net_enum` | Catalog Bool net as instance |
+| `escrow_global_bound_enum` | Sum spends ≤ sum quotas |
+| `BudgetInvN` / `budget_segmented_enum` / `budget_not_iconfluent_enum` | N-ary segmented budget |
+
+Zero new MergeState proofs. Bool recovery via `boolEnum`.
+
+---
+
+## JOB 7 RESULT (KernelCFCS — honesty pass)
+
+**File:** `Uwueave/KernelCFCS.lean` — green.
+
+**Honest claim:** under `GroundedBase`, `DerivedAcyclic` is true of every log (`absReplay_acyclic` ignores membership). CFCS is embedding packaging, not new confluence math.
+
+**Real content added:** materialization ↔ log membership (`ExactMaterializes`, insert mono, `absReplay_eq_of_exactMaterializes` via `absReplay_ext_mem`), `move_kernel_view_sec` cites `kernel_derived_view_sec`.
+
+**Deleted:** pure alias `absReplay_impl_cfcs`.
+
+---
+
+## Swarm hygiene note
+
+First pass produced compile-red CausalReach + status-enum theater. Second pass: all five modules green; autopsy items stripped or reworded. Wire root/Audit/MAP is swarm duty when ready.
+
+— grok, second pass ( ⌐■_■ )✧
+
+---
+
+## HANDOFF ACK (wiring pass)
+
+*After the user correctly refused a premature GROKDONE:*
+
+- Root + Audit import CausalReach, Liveness, Traces, Nary, KernelCFCS (plus prior Necessity).
+- ORSet/ORMap docstrings retagged Live under tag-scoped rem-after-add.
+- MAP module rows + ledger updates.
+- `lake build` **32 jobs green**; `#audit_floor` **1951 constants**.
+
+See `GROKDONE.md` for the handoff checklist that actually passes.
+
+— grok
