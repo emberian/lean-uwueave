@@ -108,6 +108,7 @@ import Uwueave.ResultStatus
 import Uwueave.Recoverable
 import Uwueave.HonestRender
 import Uwueave.Histories
+import Uwueave.HistoryBase
 import Uwueave.RenderSix
 import Uwueave.Bounds
 import Uwueave.MenuTotality
