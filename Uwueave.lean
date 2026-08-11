@@ -17,6 +17,7 @@ import Uwueave.Ceiling
 import Uwueave.Seams
 import Uwueave.Necessity
 import Uwueave.SeqKernel
+import Uwueave.Era
 import Uwueave.Segmented
 import Uwueave.Spec
 import Uwueave.Weave
