@@ -348,7 +348,8 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | seam synthesis | `SeamColoring` | in flight |
 | summary synthesis | `MinimalSummary` | in flight |
 | classification → `Verdict` term | `Tactics.classifyFinite` | proved |
-| **surface syntax + elaborator** | — | **unbuilt** |
+| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built — one fragment** |
+| ⚠ seam verdicts in the surface | — | **inexpressible**: the fragment has one `Verdict` type, so `SegVerdict` (the library's most interesting answer) cannot be stated. Calling the escrow row a seam would be a lie, and the elaborator does not. |
 | **declaration composition** | — | **unbuilt** |
 | **scheduling: crossings → meetings** | — | **unbuilt** |
 
