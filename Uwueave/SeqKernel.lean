@@ -129,22 +129,273 @@ ranges over `anchor.size`). -/
 def anchorAt (anchor : Array Int) (i : Nat) : Int :=
   anchor.getD i (-1)
 
+/-- Direct child-list specification, retained as the proof-facing semantics
+and as the total fallback for a public call at a junk anchor. -/
+private def childrenKScan (anchor : Array Int) (p : Int) : List Nat :=
+  ((List.range anchor.size).reverse).filter (fun i => anchorAt anchor i == p)
+
+/-- Dense slot for an anchor whose children can be reached from the root:
+slot `0` is the root and slot `i + 1` is element `i`. Junk anchors have no
+slot, exactly matching the traversal's junk-degradation rule. -/
+private def bucketSlot (n : Nat) (p : Int) : Option Nat :=
+  if p = -1 then some 0
+  else if 0 ≤ p ∧ p.toNat < n then some (p.toNat + 1)
+  else none
+
+/-- Add one dense element index to its parent's bucket. `List.range` visits
+indices in ascending order and cons therefore builds every bucket in the
+required descending arbitration order without a reversal pass. -/
+private def addChild (anchor : Array Int) (buckets : Array (List Nat))
+    (i : Nat) : Array (List Nat) :=
+  match bucketSlot anchor.size (anchorAt anchor i) with
+  | some k => buckets.modify k (i :: ·)
+  | none => buckets
+
+/-- The whole child adjacency table, built once in one pass over the anchor
+array. Its `n + 1` slots cover the root and every in-range element anchor. -/
+private def childrenBuckets (anchor : Array Int) : Array (List Nat) :=
+  (List.range anchor.size).foldl (addChild anchor)
+    (Array.replicate (anchor.size + 1) [])
+
+/-- Read a prebuilt bucket. The fallback preserves `childrenK` for arbitrary
+public calls starting from a junk anchor; root traversal and every recursive
+call use dense slots and never take it. -/
+private def bucketedChildren (anchor : Array Int)
+    (buckets : Array (List Nat)) (p : Int) : List Nat :=
+  match bucketSlot anchor.size p with
+  | some k => buckets.getD k []
+  | none => childrenKScan anchor p
+
+private theorem bucketSlot_some_lt {n : Nat} {p : Int} {k : Nat}
+    (h : bucketSlot n p = some k) : k < n + 1 := by
+  by_cases hroot : p = -1
+  · subst p
+    simp [bucketSlot] at h
+    omega
+  · by_cases hs : 0 ≤ p ∧ p.toNat < n
+    · simp [bucketSlot, hroot, hs] at h
+      omega
+    · simp [bucketSlot, hroot, hs] at h
+
+private theorem bucketSlot_inj {n : Nat} {a p : Int} {k : Nat}
+    (ha : bucketSlot n a = some k) (hp : bucketSlot n p = some k) : a = p := by
+  by_cases haroot : a = -1
+  · subst a
+    by_cases hproot : p = -1
+    · exact hproot.symm
+    · by_cases hps : 0 ≤ p ∧ p.toNat < n
+      · simp [bucketSlot] at ha
+        simp [bucketSlot, hproot, hps] at hp
+        omega
+      · simp [bucketSlot, hproot, hps] at hp
+  · by_cases has : 0 ≤ a ∧ a.toNat < n
+    · by_cases hproot : p = -1
+      · subst p
+        simp [bucketSlot, haroot, has] at ha
+        simp [bucketSlot] at hp
+        omega
+      · by_cases hps : 0 ≤ p ∧ p.toNat < n
+        · simp [bucketSlot, haroot, has] at ha
+          simp [bucketSlot, hproot, hps] at hp
+          have hnat : a.toNat = p.toNat := by omega
+          calc
+            a = (a.toNat : Int) := (Int.toNat_of_nonneg has.1).symm
+            _ = (p.toNat : Int) := by rw [hnat]
+            _ = p := Int.toNat_of_nonneg hps.1
+        · simp [bucketSlot, hproot, hps] at hp
+    · simp [bucketSlot, haroot, has] at ha
+
+private theorem size_addChild (anchor : Array Int)
+    (buckets : Array (List Nat)) (i : Nat) :
+    (addChild anchor buckets i).size = buckets.size := by
+  simp [addChild]
+  split <;> simp
+
+private theorem getD_modify_of_lt {buckets : Array (List Nat)} {j k : Nat}
+    {f : List Nat → List Nat} (hj : j < buckets.size) :
+    (buckets.modify j f).getD k [] =
+      if j = k then f (buckets.getD k []) else buckets.getD k [] := by
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_modify]
+  split
+  · subst k
+    simp [hj]
+  · rfl
+
+/-- Accumulator invariant for the one-pass builder: a slot contains exactly
+the matching indices seen so far, in descending order. -/
+private theorem fold_get {anchor : Array Int} {p : Int} {k : Nat}
+    (hp : bucketSlot anchor.size p = some k) :
+    ∀ (l : List Nat) (buckets : Array (List Nat)),
+      buckets.size = anchor.size + 1 →
+      (l.foldl (addChild anchor) buckets).getD k [] =
+      (l.filter (fun i => anchorAt anchor i == p)).reverse ++
+        buckets.getD k [] := by
+  intro l
+  induction l with
+  | nil =>
+      intro buckets _
+      simp
+  | cons i l ih =>
+      intro buckets hb
+      simp only [List.foldl_cons]
+      rw [ih (addChild anchor buckets i) (by rw [size_addChild, hb])]
+      unfold addChild
+      generalize hs : bucketSlot anchor.size (anchorAt anchor i) = s
+      cases s with
+      | none =>
+          have hne : anchorAt anchor i ≠ p := by
+            intro h
+            rw [h, hp] at hs
+            contradiction
+          simp [hne]
+      | some j =>
+          have hjlt : j < buckets.size := by
+            rw [hb]
+            exact bucketSlot_some_lt hs
+          rw [getD_modify_of_lt hjlt]
+          by_cases h : anchorAt anchor i = p
+          · have hjk : j = k := by
+              apply Option.some.inj
+              rw [← hs, h, hp]
+            simp [h, hjk]
+          · have hjk : j ≠ k := by
+              intro e
+              subst j
+              exact h (bucketSlot_inj hs hp)
+            simp [h, hjk]
+
+/-- The one-pass buckets implement the direct child-list specification for
+every anchor value, including junk values via the explicit fallback. -/
+private theorem bucketedChildren_eq_scan (anchor : Array Int)
+    (p : Int) :
+    bucketedChildren anchor (childrenBuckets anchor) p =
+      childrenKScan anchor p := by
+  unfold bucketedChildren
+  generalize hs : bucketSlot anchor.size p = s
+  cases s with
+  | none => rfl
+  | some k =>
+      simp only
+      unfold childrenBuckets
+      rw [fold_get hs (List.range anchor.size)
+        (Array.replicate (anchor.size + 1) []) (by simp)]
+      have hk := bucketSlot_some_lt hs
+      simp [childrenKScan, List.filter_reverse,
+        Array.getD_eq_getD_getElem?, hk]
+
+/-- Executable implementation of one public `childrenK` query. `emitKImpl`
+uses the stronger hot-path form that constructs this table only once for the
+whole traversal. -/
+private def childrenKImpl (anchor : Array Int) (p : Int) : List Nat :=
+  bucketedChildren anchor (childrenBuckets anchor) p
+
 /-- The children of anchor value `p` (`-1` = root, otherwise an element
 index), in **descending index order** — the RGA rule with the id order as the
 tie-break: the highest id sits closest to its anchor. Pure arbitration
-(`Uwueave.Sequence.run_order_by_id`), not recency. -/
+(`Uwueave.Sequence.run_order_by_id`), not recency. Code generation uses the
+proved-equal one-pass bucket implementation. -/
 def childrenK (anchor : Array Int) (p : Int) : List Nat :=
   ((List.range anchor.size).reverse).filter (fun i => anchorAt anchor i == p)
 
+/-- Bucketing preserves the public `childrenK` decision for every input. -/
+@[simp] private theorem bucketedChildren_correct (anchor : Array Int)
+    (p : Int) :
+    bucketedChildren anchor (childrenBuckets anchor) p = childrenK anchor p := by
+  rw [bucketedChildren_eq_scan]
+  rfl
+
+/-- Proved compiler simplification for direct child queries. -/
+@[csimp] theorem childrenK_eq_impl : childrenK = childrenKImpl := by
+  funext anchor p
+  exact (bucketedChildren_correct anchor p).symm
+
+/-- Bucket-threaded depth-first emission. The table is an explicit argument
+so recursive calls perform constant-time child lookup instead of rebuilding
+and filtering the full index list. -/
+private def emitKB (anchor : Array Int) (buckets : Array (List Nat)) :
+    Nat → Int → List Nat
+  | 0, _ => []
+  | fuel + 1, p =>
+    (bucketedChildren anchor buckets p).flatMap
+      (fun c => c :: emitKB anchor buckets fuel (c : Int))
+
+@[simp] private theorem emitKB_zero (anchor : Array Int)
+    (buckets : Array (List Nat)) (p : Int) :
+    emitKB anchor buckets 0 p = [] := rfl
+
+@[simp] private theorem emitKB_succ (anchor : Array Int)
+    (buckets : Array (List Nat)) (fuel : Nat) (p : Int) :
+    emitKB anchor buckets (fuel + 1) p =
+      (bucketedChildren anchor buckets p).flatMap
+        (fun c => c :: emitKB anchor buckets fuel (c : Int)) := rfl
+
+/-- Difference-list implementation of the same walk. Threading the tail
+through a tail-recursive `reverse`/`foldl` avoids copying each emitted subtree
+again at every ancestor; the hot path therefore performs one bucket lookup
+and one output cons per visited element. -/
+private def emitKAcc (anchor : Array Int) (buckets : Array (List Nat)) :
+    Nat → Int → List Nat → List Nat
+  | 0, _, tail => tail
+  | fuel + 1, p, tail =>
+    (bucketedChildren anchor buckets p).reverse.foldl
+      (fun tail c => c :: emitKAcc anchor buckets fuel (c : Int) tail) tail
+
+/-- The accumulator walk is the bucketed specification followed by its tail.
+This is the no-subtree-copying proof bridge. -/
+private theorem emitKAcc_eq_emitKB_append (anchor : Array Int)
+    (buckets : Array (List Nat)) (fuel : Nat) (p : Int) (tail : List Nat) :
+    emitKAcc anchor buckets fuel p tail = emitKB anchor buckets fuel p ++ tail := by
+  induction fuel generalizing p tail with
+  | zero => rfl
+  | succ fuel ih =>
+      simp only [emitKAcc, emitKB, List.foldl_reverse]
+      generalize bucketedChildren anchor buckets p = cs
+      induction cs with
+      | nil => rfl
+      | cons c cs ihcs =>
+          simp only [List.foldr_cons, List.flatMap_cons]
+          rw [ih, ihcs]
+          simp [List.append_assoc]
+
+/-- Executable implementation: construct the dense table once, then share it
+through the accumulator walk. -/
+private def emitKImpl (anchor : Array Int) (fuel : Nat) (p : Int) : List Nat :=
+  emitKAcc anchor (childrenBuckets anchor) fuel p []
+
 /-- Depth-first emission below one anchor value, fuel-totalized (the
 `Exec.chainHits` discipline): for each child, highest index first, emit the
-child and then its whole subtree. Tombstones are invisible here **by
+child and then its whole subtree. The defining equations remain the simple
+executable specification used by the proofs; code generation uses the
+extensionally equal `emitKImpl`, which builds one dense child table and shares
+it through every recursive call. Tombstones are invisible here **by
 construction** — this function does not take the tombstone array — which is
 what keeps deleted elements anchorable. -/
 def emitK (anchor : Array Int) : Nat → Int → List Nat
   | 0, _ => []
   | fuel + 1, p =>
-    (childrenK anchor p).flatMap (fun c => c :: emitK anchor fuel ((c : Int)))
+    (childrenK anchor p).flatMap
+      (fun c => c :: emitK anchor fuel (c : Int))
+
+/-- The code-generation replacement computes the defining `emitK` semantics
+for every input and fuel. Thus bucketing changes performance shape, not the
+decision function. -/
+private theorem emitKImpl_eq_emitK (anchor : Array Int) (fuel : Nat)
+    (p : Int) : emitKImpl anchor fuel p = emitK anchor fuel p := by
+  rw [emitKImpl, emitKAcc_eq_emitKB_append]
+  simp only [List.append_nil]
+  induction fuel generalizing p with
+  | zero => rfl
+  | succ fuel ih =>
+      simp only [emitKB_succ, bucketedChildren_correct, emitK]
+      congr
+      funext c
+      rw [ih]
+
+/-- Proved compiler simplification for the bucketed, accumulator-threaded hot
+traversal. -/
+@[csimp] theorem emitK_eq_impl : emitK = emitKImpl := by
+  funext anchor fuel p
+  exact (emitKImpl_eq_emitK anchor fuel p).symm
 
 /-- The full document order (tombstones included): depth-first from the root
 with fuel `n`. Fuel `n` is adequate for every root-reachable element under

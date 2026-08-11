@@ -1447,6 +1447,13 @@ mod tests {
     fn unclassified_pair_is_honest() {
         assert!(classify(Shape::PnCounter, Kind::Ceiling).is_none());
         assert!(classify(Shape::OrSet, Kind::Acyclic).is_none());
+        // This token pair cannot honestly inherit the bookmark theorem. Lean
+        // settles one relation over two GSets as FREE
+        // (`Spec.pointsAtExisting_iconfluent`) and another as a clash
+        // (`Spec.censusClash`). The schema language does not name which
+        // relation was meant, so choosing either verdict here would invent
+        // semantics that are absent from the input.
+        assert!(classify(Shape::GSet, Kind::CrossField).is_none());
         // ... and the rendered report says the exact honest sentence.
         let schema = parse_schema("field w: pncounter\ninvariant w: ceiling\n").unwrap();
         let report = render("test.schema", &schema);

@@ -50,9 +50,10 @@
 //! and the kernel's theorems would not cover the input, so refusing loudly
 //! is the theorem's precondition speaking.
 
-use crate::causal::NodeId;
+use crate::causal::{NodeId, NodeIdDisplay};
 use crate::ffi;
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// One element of the sequence. Anchor and contents are fixed at creation
 /// (they are the id's preimage); `deleted` is the one mutable bit, and it
@@ -112,6 +113,54 @@ pub enum SeqMergeError {
     /// it was not anchor-closed, i.e. not produced by this API.
     NotAnchorClosed { element: NodeId, missing_anchor: NodeId },
 }
+
+impl fmt::Display for SeqInsertError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingAnchor(anchor) => {
+                write!(f, "missing sequence anchor {}", NodeIdDisplay::new(anchor))
+            }
+        }
+    }
+}
+
+impl std::error::Error for SeqInsertError {}
+
+impl fmt::Display for SeqDeleteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownElement(element) => {
+                write!(
+                    f,
+                    "unknown sequence element {}",
+                    NodeIdDisplay::new(element)
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for SeqDeleteError {}
+
+impl fmt::Display for SeqMergeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IdCollision(id) => write!(
+                f,
+                "sequence element id collision at {}: the same content address resolves to different elements",
+                NodeIdDisplay::new(id)
+            ),
+            Self::NotAnchorClosed { element, missing_anchor } => write!(
+                f,
+                "incoming sequence element {} is not anchor-closed: anchor {} is missing",
+                NodeIdDisplay::new(element),
+                NodeIdDisplay::new(missing_anchor)
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SeqMergeError {}
 
 /// Statistics from a merge, mostly for tests and telemetry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

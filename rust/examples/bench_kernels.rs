@@ -351,8 +351,8 @@ fn era_group(ne: usize, users: u64, nc: usize) -> EraGroup {
 }
 
 /// `era_group`'s event set, recorded backwards. `Era.resolve_same_sets` makes
-/// this the *same* resolution; `execOrder`'s ordered insertion meets it as the
-/// worst case instead of the best.
+/// this the *same* resolution; the benchmark checks that the compiled merge
+/// sort has also removed arrival-order sensitivity from the cost.
 fn era_group_reversed(ne: usize, users: u64) -> EraGroup {
     let forward = era_group(ne, users, 0);
     let mut evs: Vec<EraEvent> = Vec::with_capacity(ne);
@@ -538,11 +538,11 @@ fn bench_replay(max: usize) {
     }
 
     {
-        // Same workload, same wire size, ops citing the LAST grant: now every
-        // `findGrant` walks the whole array. The difference between this table
-        // and 1e IS the linear scan, wire cost cancelled out.
+        // Same workload and wire size, ops citing the LAST grant. F7's balanced
+        // index should erase position sensitivity; the pair of tables checks
+        // that claim while retaining index-construction cost in both.
         let mut t = Table::new(
-            "1e'. the same, ops citing grant ng = LAST (findGrant scans the whole array)",
+            "1e'. the same, ops citing grant ng = LAST (indexed position check)",
             "ng grants",
         );
         let (w, ids) = flat_weave(100);
@@ -900,12 +900,11 @@ fn bench_era(max: usize) {
     }
 
     {
-        // 4a's events are joins and writes: `Era.applyEvent` leaves the role map
-        // untouched for a write, so the role closure never deepens. Promotes and
-        // demotes DO deepen it — `role := fun u => if u = e.target then … else
-        // v.role u` — and every authorisation check evaluates that closure.
+        // 4a's events are joins and writes. Promotes and demotes stress role
+        // updates; F3's compiled path carries them in a balanced index rather
+        // than deepening the proof-facing closure chain.
         let mut t = Table::new(
-            "4e. an all-authorised PROMOTE/DEMOTE stream (the role map is a closure chain)",
+            "4e. an all-authorised PROMOTE/DEMOTE stream (indexed role churn)",
             "ne events",
         );
         for &ne in &[10usize, 100, 500, 1000, 2000] {
@@ -929,10 +928,11 @@ fn bench_era(max: usize) {
     }
 
     {
-        // Same event SET as 4a, delivered backwards. `Era.resolve_same_sets` says
-        // the ANSWER cannot notice; `execOrder`'s insertion sort very much does.
+        // Same event SET as 4a, delivered backwards. `Era.resolve_same_sets`
+        // says the answer cannot notice; F2's merge-sort path should keep the
+        // cost in the same band too.
         let mut t = Table::new(
-            "4f. 4a's event SET delivered in REVERSE arrival order (same answer, different cost)",
+            "4f. 4a's event SET delivered in REVERSE arrival order (same answer and cost check)",
             "ne events",
         );
         for &ne in &[10usize, 100, 500, 1000, 2000] {

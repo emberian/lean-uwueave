@@ -200,6 +200,16 @@ impl MoveLog {
         self.ops.is_empty()
     }
 
+    /// The recorded move operations, in replay's deterministic set order.
+    ///
+    /// This enumerates the replicated receipt substrate without invoking the
+    /// Lean replay kernel. Whether each operation applies is still decided by
+    /// [`MoveLog::replay_traced`]; an operation returned here may be gated out,
+    /// cycle-skipped, or name a node this replica has not received yet.
+    pub fn ops(&self) -> impl Iterator<Item = &MoveOp> {
+        self.ops.iter()
+    }
+
     /// The grant substrate, in wire (ascending) order.
     pub fn grants(&self) -> impl Iterator<Item = &Grant> {
         self.grants.iter()

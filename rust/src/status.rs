@@ -99,6 +99,7 @@
 //! absent answer, and "no results" flashed while a peer is still owed.
 
 use std::collections::BTreeSet;
+use std::fmt;
 
 // ---------------------------------------------------------------------------
 // §1. The evidence — three grow-only components (Uwueave/Evidence.lean §1)
@@ -677,6 +678,22 @@ pub enum HonestWidgetViolation {
     PendingNotZero,
 }
 
+impl fmt::Display for HonestWidgetViolation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::AbsentNotTerminal => "an absent result must be terminal",
+            Self::PendingNotOpen => "a pending result must remain open",
+            Self::AbsentHasButton => {
+                "an absent result cannot offer an action that waits for more evidence"
+            }
+            Self::AbsentNotZero => "an absent result must report zero candidates",
+            Self::PendingNotZero => "a pending result must report zero candidates",
+        })
+    }
+}
+
+impl std::error::Error for HonestWidgetViolation {}
+
 /// **The interface obligation**, as a runtime check.
 ///
 /// Lean: `RenderProgress.HonestWidget` — a `Prop` with five clauses, which see
@@ -733,6 +750,17 @@ pub enum WidgetSoundViolation {
     SettlesAtPending,
 }
 
+impl fmt::Display for WidgetSoundViolation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::LoadsAtAbsent => "the surface renders a definitively absent result as loading",
+            Self::SettlesAtPending => "the surface renders an open pending result as settled",
+        })
+    }
+}
+
+impl std::error::Error for WidgetSoundViolation {}
+
 /// **A widget-sound surface**: it reads the evidence, and its finality agrees
 /// with [`status_of`] at the two zero-candidate cells.
 ///
@@ -780,6 +808,21 @@ pub enum PendingSoundViolation {
     /// state itself, with no reasoning about futures.
     PendingWhileSettled,
 }
+
+impl fmt::Display for PendingSoundViolation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::PendingWithCandidates => {
+                "the renderer reports pending after candidates are known"
+            }
+            Self::PendingWhileSettled => {
+                "the renderer reports pending after the evidence is settled"
+            }
+        })
+    }
+}
+
+impl std::error::Error for PendingSoundViolation {}
 
 /// **The epistemic honesty condition for a spinner.** A `Pending` badge is
 /// honest at the state where it is shown exactly when there is no candidate and

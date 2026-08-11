@@ -13,7 +13,26 @@ fn main() {
 
     // Re-emit the C whenever the Lean sources change.
     println!("cargo:rerun-if-changed={}", repo.join("Uwueave").display());
-    println!("cargo:rerun-if-changed={}", manifest.join("shim.c").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo.join("Uwueave.lean").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo.join("lakefile.toml").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo.join("lean-toolchain").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo.join("lake-manifest.json").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest.join("shim.c").display()
+    );
 
     // 1. Ask lake to (re)build the Lean library → .lake/build/ir/**/*.c
     let lake_ok = Command::new("lake")

@@ -137,6 +137,7 @@ invitation is a new event kind and the admission rule that reads it is a
 second, parallel authorisation predicate — §3's is never touched.
 -/
 import Uwueave.Catalog
+import Std.Data.TreeMap
 
 namespace Uwueave.Era
 
@@ -221,6 +222,39 @@ def epochOf : List Cut → Nat → Option Nat
       | none => some c.1
       | some m => some (Nat.min c.1 m)
     else epochOf cs eid
+
+/-- Balanced eid-keyed index of the least announced epoch. `TreeMap` is a
+self-balancing binary search tree, so lookup is logarithmic in the number of
+distinct announced ids rather than linear in the cut-list length. -/
+abbrev EpochIndex := Std.TreeMap Nat Nat
+
+/-- Build the epoch index once. Processing the tail first mirrors `epochOf`'s
+least-epoch fold exactly; `alter` combines repeated ids with `Nat.min`. -/
+def epochIndex : List Cut → EpochIndex
+  | [] => ∅
+  | c :: cs =>
+    (epochIndex cs).alter c.2 fun
+      | none => some c.1
+      | some m => some (Nat.min c.1 m)
+
+/-- Logarithmic lookup in a preprocessed epoch index. -/
+def epochLookup (idx : EpochIndex) (eid : Nat) : Option Nat :=
+  idx[eid]?
+
+/-- The balanced index is extensionally exact: every lookup returns the same
+least epoch (or `none`) as the original list scan. -/
+theorem epochLookup_epochIndex (cuts : List Cut) (eid : Nat) :
+    epochLookup (epochIndex cuts) eid = epochOf cuts eid := by
+  induction cuts with
+  | nil => simp [epochIndex, epochLookup, epochOf]
+  | cons c cs ih =>
+    unfold epochLookup at ih
+    by_cases h : c.2 = eid
+    · subst eid
+      simp [epochIndex, epochLookup, epochOf, ih]
+    · rw [epochLookup, epochIndex, Std.TreeMap.getElem?_alter]
+      rw [if_neg (fun hc => h (Nat.compare_eq_eq.mp hc)), ih]
+      simp [epochOf, h]
 
 /-- Unfolding equation for `epochOf` at a record that names the queried
 event: the answer folds the record's epoch into the tail's by `Nat.min`. -/
@@ -369,9 +403,11 @@ theorem epochOf_mono {cuts cuts' : List Cut} (hsub : ∀ c ∈ cuts, c ∈ cuts'
 eventually agree upon."* §4.1: epoch first, pending last; within an epoch a
 deterministic tiebreak (Fig. 7) — here the event id, then the remaining
 fields so the order is total on all distinct events. The order is realised
-as a sorted-insertion canonicalisation: `execOrder` turns any delivery log
-into THE execution order, and `sorted_unique` proves that order a function
-of the event set — which is what §3.2's "all peers agree" needs. -/
+by a reducible sorted-insertion specification and a proved compiled
+implementation that indexes cuts once, merge-sorts, then deduplicates:
+`execOrder` turns any delivery log into THE execution order, and
+`sorted_unique` proves that order a function of the event set — which is what
+§3.2's "all peers agree" needs. -/
 
 /-- Epoch priority class of an event: `0` if the arbiter has placed it in an
 epoch, `1` if it is pending — §4.1's "events not in any epoch are in a
@@ -464,9 +500,11 @@ theorem elt_final_pending {cuts : List Cut} {a b : Event} {j : Nat}
   unfold elt; omega
 
 /-- Ordered insertion into an execution order, skipping an exact duplicate —
-the canonicalisation step. At-least-once delivery is thereby exactly as good
-as exactly-once (the paper's DAG gives this by construction; the list
-transport must earn it). -/
+the reducible reference canonicalisation step. Compiled uses of `execOrder`
+are replaced by the proved indexed merge sort below; this definition and its
+proofs retain the direct specification that at-least-once delivery must be
+exactly as good as exactly-once (the paper's DAG gives this by construction;
+the list transport must earn it). -/
 def insertE (cuts : List Cut) (e : Event) : List Event → List Event
   | [] => [e]
   | a :: l =>
@@ -474,10 +512,104 @@ def insertE (cuts : List Cut) (e : Event) : List Event → List Event
     else if elt cuts e a then e :: a :: l
     else a :: insertE cuts e l
 
-/-- **The execution order** of a delivery log: canonicalise into the
-arbitration order (§3.2/§4.1) by repeated ordered insertion. Everything the
-protocol decides — who wins a duel included — is decided by folding
-`applyEvent` over THIS list. -/
+/-- Reflexive closure of the strict arbitration order: the non-strict
+comparison consumed by `List.mergeSort`. -/
+def ele (cuts : List Cut) (a b : Event) : Prop :=
+  a = b ∨ elt cuts a b
+
+/-- Executable spelling of `ele`. Keeping the disjunction at `Bool` avoids an
+opaque synthesized `Decidable (ele ...)` in concrete `by decide` examples. -/
+def eleb (cuts : List Cut) (a b : Event) : Bool :=
+  decide (a = b) || decide (elt cuts a b)
+
+theorem eleb_eq_true_iff {cuts : List Cut} {a b : Event} :
+    eleb cuts a b = true ↔ ele cuts a b := by
+  simp [eleb, ele, Bool.or_eq_true, decide_eq_true_eq]
+
+/-- Epoch priority read from the preprocessed balanced index. -/
+def indexedEpri (idx : EpochIndex) (e : Event) : Nat :=
+  match epochLookup idx e.eid with
+  | some _ => 0
+  | none => 1
+
+/-- Epoch number read from the preprocessed balanced index. -/
+def indexedEpnum (idx : EpochIndex) (e : Event) : Nat :=
+  (epochLookup idx e.eid).getD 0
+
+/-- Arbitration order using logarithmic epoch-index lookups. -/
+def indexedElt (idx : EpochIndex) (a b : Event) : Prop :=
+  indexedEpri idx a < indexedEpri idx b ∨ (indexedEpri idx a = indexedEpri idx b ∧
+  (indexedEpnum idx a < indexedEpnum idx b ∨ (indexedEpnum idx a = indexedEpnum idx b ∧
+  (a.eid < b.eid ∨ (a.eid = b.eid ∧
+  (a.kind < b.kind ∨ (a.kind = b.kind ∧
+  (a.actor < b.actor ∨ (a.actor = b.actor ∧
+  (a.target < b.target ∨ (a.target = b.target ∧
+  a.role < b.role)))))))))))
+
+instance (idx : EpochIndex) (a b : Event) : Decidable (indexedElt idx a b) := by
+  unfold indexedElt
+  infer_instance
+
+/-- Executable non-strict indexed comparator consumed by merge sort. -/
+def indexedEleb (idx : EpochIndex) (a b : Event) : Bool :=
+  decide (a = b) || decide (indexedElt idx a b)
+
+theorem indexedEpri_epochIndex (cuts : List Cut) (e : Event) :
+    indexedEpri (epochIndex cuts) e = epri cuts e := by
+  unfold indexedEpri epri
+  rw [epochLookup_epochIndex]
+
+theorem indexedEpnum_epochIndex (cuts : List Cut) (e : Event) :
+    indexedEpnum (epochIndex cuts) e = epnum cuts e := by
+  unfold indexedEpnum epnum
+  rw [epochLookup_epochIndex]
+
+/-- Indexed and list-scanning arbitration comparisons are extensionally
+identical. -/
+theorem indexedElt_epochIndex (cuts : List Cut) (a b : Event) :
+    indexedElt (epochIndex cuts) a b ↔ elt cuts a b := by
+  unfold indexedElt elt
+  rw [indexedEpri_epochIndex cuts a, indexedEpri_epochIndex cuts b,
+    indexedEpnum_epochIndex cuts a, indexedEpnum_epochIndex cuts b]
+
+theorem indexedEleb_epochIndex (cuts : List Cut) (a b : Event) :
+    indexedEleb (epochIndex cuts) a b = eleb cuts a b := by
+  unfold indexedEleb eleb
+  rw [decide_eq_decide.mpr (indexedElt_epochIndex cuts a b)]
+
+theorem indexedEleb_eq_true_iff {cuts : List Cut} {a b : Event} :
+    indexedEleb (epochIndex cuts) a b = true ↔ ele cuts a b := by
+  rw [indexedEleb_epochIndex]
+  exact eleb_eq_true_iff
+
+/-- Tail of a consecutive-duplicate pass, remembering the last event emitted. -/
+def dedupSortedFrom (prev : Event) : List Event → List Event
+  | [] => []
+  | a :: rest =>
+    if prev = a then dedupSortedFrom prev rest
+    else a :: dedupSortedFrom a rest
+
+/-- Remove consecutive duplicate events. Merge sort puts equal events in one
+run, so this linear pass is enough to canonicalise at-least-once delivery. -/
+def dedupSorted : List Event → List Event
+  | [] => []
+  | a :: rest => a :: dedupSortedFrom a rest
+
+/-- Merge-sort implementation of the execution order: first index `c` cuts in
+a balanced tree, sort `n` events with logarithmic index lookups, then remove
+each run of exact duplicates. Worst-case time is
+`O(c log(c+1) + n log n log(c+1) + n)` and auxiliary space is `O(c+n)`;
+the repeated linear cut scan is gone. -/
+def execOrderMerge (cuts : List Cut) (log : List Event) : List Event :=
+  let idx := epochIndex cuts
+  dedupSorted (log.mergeSort (indexedEleb idx))
+
+/-- **The execution order** of a delivery log, as the reducible specification
+used by proofs and concrete `by decide` regression theorems. The proved
+`execOrder_eq_execOrderMerge` compiler substitution below replaces this
+quadratic specification with `execOrderMerge` in executable kernels.
+Everything the protocol decides — who wins a duel included — is decided by
+folding `applyEvent` over THIS canonical list. -/
 def execOrder (cuts : List Cut) (log : List Event) : List Event :=
   log.foldr (insertE cuts) []
 
@@ -517,6 +649,31 @@ theorem mem_insertE {cuts : List Cut} {e b : Event} :
           · rcases List.mem_cons.mp hmem with rfl | h'
             · exact List.Mem.head _
             · exact List.Mem.tail _ (ih.mpr (Or.inr h'))
+
+theorem mem_cons_dedupSortedFrom {b : Event} :
+    ∀ (prev : Event) (l : List Event),
+      b ∈ prev :: dedupSortedFrom prev l ↔ b ∈ prev :: l := by
+  intro prev l
+  induction l generalizing prev with
+  | nil => simp [dedupSortedFrom]
+  | cons a t ih =>
+    by_cases h : prev = a
+    · subst a
+      simpa [dedupSortedFrom] using ih prev
+    · simp only [dedupSortedFrom, if_neg h]
+      simp only [List.mem_cons]
+      exact or_congr Iff.rfl (by simpa only [List.mem_cons] using ih a)
+
+theorem mem_dedupSorted {b : Event} {l : List Event} :
+    b ∈ dedupSorted l ↔ b ∈ l := by
+  cases l with
+  | nil => simp [dedupSorted]
+  | cons a t =>
+    exact mem_cons_dedupSortedFrom a t
+
+theorem mem_execOrderMerge {cuts : List Cut} {b : Event} {log : List Event} :
+    b ∈ execOrderMerge cuts log ↔ b ∈ log := by
+  simp [execOrderMerge, mem_dedupSorted]
 
 theorem mem_execOrder {cuts : List Cut} {b : Event} :
     ∀ {log : List Event}, b ∈ execOrder cuts log ↔ b ∈ log := by
@@ -559,11 +716,88 @@ theorem pairwise_insertE {cuts : List Cut} {e : Event} :
             · exact h
           · exact ha b hbt
 
-/-- Every computed execution order is sorted by the arbitration order. -/
+/-- Every specification execution order is sorted by the arbitration order. -/
 theorem pairwise_execOrder (cuts : List Cut) :
     ∀ log : List Event, (execOrder cuts log).Pairwise (elt cuts)
   | [] => List.Pairwise.nil
   | _ :: t => pairwise_insertE (pairwise_execOrder cuts t)
+
+theorem ele_trans {cuts : List Cut} {a b c : Event}
+    (hab : ele cuts a b) (hbc : ele cuts b c) : ele cuts a c := by
+  rcases hab with rfl | hab
+  · exact hbc
+  rcases hbc with rfl | hbc
+  · exact Or.inr hab
+  · exact Or.inr (elt_trans hab hbc)
+
+theorem ele_total (cuts : List Cut) (a b : Event) :
+    ele cuts a b ∨ ele cuts b a := by
+  by_cases h : a = b
+  · exact Or.inl (Or.inl h)
+  · rcases elt_connex cuts h with hab | hba
+    · exact Or.inl (Or.inr hab)
+    · exact Or.inr (Or.inr hba)
+
+/-- Removing runs from a non-strictly sorted list yields a strictly sorted
+list. Totality of `elt` on distinct events makes equal events contiguous. -/
+theorem pairwise_cons_dedupSortedFrom {cuts : List Cut} :
+    ∀ (prev : Event) (l : List Event), (prev :: l).Pairwise (ele cuts) →
+      (prev :: dedupSortedFrom prev l).Pairwise (elt cuts) := by
+  intro prev l
+  induction l generalizing prev with
+  | nil => intro _; exact List.Pairwise.cons (fun b hb => by cases hb) List.Pairwise.nil
+  | cons a t ih =>
+    intro hp
+    cases hp with
+    | cons hprev htail =>
+      by_cases h : prev = a
+      · subst a
+        rw [dedupSortedFrom, if_pos rfl]
+        exact ih prev htail
+      · rw [dedupSortedFrom, if_neg h]
+        refine List.Pairwise.cons ?_ (ih a htail)
+        intro b hb
+        have hb' : b ∈ a :: t := (mem_cons_dedupSortedFrom a t).mp hb
+        have hpa : elt cuts prev a :=
+          (hprev a (List.Mem.head t)).resolve_left h
+        have hne : prev ≠ b := by
+          intro hpb
+          subst b
+          rcases List.mem_cons.mp hb' with hpa' | hpt
+          · exact h hpa'
+          · have haprev : ele cuts a prev := by
+              cases htail with
+              | cons ha _ => exact ha prev hpt
+            rcases haprev with haprev | haprev
+            · exact h haprev.symm
+            · exact (elt_asymm hpa haprev).elim
+        exact (hprev b hb').resolve_left hne
+
+theorem pairwise_dedupSorted {cuts : List Cut} {l : List Event}
+    (h : l.Pairwise (ele cuts)) :
+    (dedupSorted l).Pairwise (elt cuts) := by
+  cases l with
+  | nil => exact List.Pairwise.nil
+  | cons a t => exact pairwise_cons_dedupSortedFrom a t h
+
+/-- Every merge-sort implementation order is sorted by the arbitration order. -/
+theorem pairwise_execOrderMerge (cuts : List Cut) (log : List Event) :
+    (execOrderMerge cuts log).Pairwise (elt cuts) := by
+  unfold execOrderMerge
+  apply pairwise_dedupSorted
+  apply (List.pairwise_mergeSort
+    (le := indexedEleb (epochIndex cuts)) ?_ ?_ log).imp
+  · intro a b h
+    exact indexedEleb_eq_true_iff.mp h
+  · intro a b c hab hbc
+    exact indexedEleb_eq_true_iff.mpr
+      (ele_trans (indexedEleb_eq_true_iff.mp hab)
+        (indexedEleb_eq_true_iff.mp hbc))
+  · intro a b
+    rw [Bool.or_eq_true]
+    rcases ele_total cuts a b with hab | hba
+    · exact Or.inl (indexedEleb_eq_true_iff.mpr hab)
+    · exact Or.inr (indexedEleb_eq_true_iff.mpr hba)
 
 theorem pairwise_mono {R S : Event → Event → Prop}
     (h : ∀ a b, R a b → S a b) :
@@ -639,6 +873,23 @@ theorem sorted_unique {cuts : List Cut} :
               · exact h
           rw [ih ht ht' hmem']
 
+/-- The merge-sort implementation computes exactly the canonical execution
+order specification: both are strictly sorted and have exactly the log's
+members. -/
+theorem execOrder_eq_execOrderMerge_apply (cuts : List Cut) (log : List Event) :
+    execOrder cuts log = execOrderMerge cuts log := by
+  refine sorted_unique (pairwise_execOrder cuts log)
+    (pairwise_execOrderMerge cuts log) ?_
+  intro b
+  rw [mem_execOrder, mem_execOrderMerge]
+
+/-- Compile every `execOrder` call to the proved `O(n log n)` merge-sort
+implementation. This is the same proof-carrying compiler-substitution pattern
+Lean core uses for `List.mergeSort`'s own efficient runtime implementation. -/
+@[csimp] theorem execOrder_eq_execOrderMerge : @execOrder = @execOrderMerge := by
+  funext cuts log
+  exact execOrder_eq_execOrderMerge_apply cuts log
+
 /-- The execution order is a function of the two SETS — cut records and
 events — with delivery order, duplication and multiplicity all invisible.
 `sorted_unique` on the two computed orders, with the cut side carried
@@ -712,12 +963,154 @@ theorem applyEvent_unauthorised {v : GroupView} {e : Event}
     (h : authorised v e = false) : applyEvent v e = v := by
   simp [applyEvent, h]
 
+/-! ### Indexed execution
+
+`GroupView.role` is the public mathematical interface, but repeated updates to
+that function form a closure chain. The executable fold below instead keeps a
+balanced finite map and materialises the same role function only at its
+boundary. -/
+
+/-- Balanced finite role map used only while executing an event order. Missing
+users have the public default role `outsider`. -/
+abbrev RoleIndex := Std.TreeMap Nat Nat
+
+/-- Execution-side group view with logarithmic role reads and writes. -/
+structure IndexedGroupView where
+  started : Bool
+  roles : RoleIndex
+
+/-- Read a role from the indexed view, defaulting to `outsider`. -/
+def indexedRole (v : IndexedGroupView) (u : Nat) : Nat :=
+  v.roles[u]?.getD outsider
+
+/-- Materialise the public proof-facing view from an indexed execution view. -/
+def materializeIndexed (v : IndexedGroupView) : GroupView :=
+  ⟨v.started, indexedRole v⟩
+
+/-- Empty indexed view. -/
+def initIndexedView : IndexedGroupView := ⟨false, ∅⟩
+
+/-- Update one role in logarithmic time. -/
+def setIndexedRole (v : IndexedGroupView) (u r : Nat) : IndexedGroupView :=
+  { v with roles := v.roles.insert u r }
+
+theorem indexedRole_set (v : IndexedGroupView) (u r x : Nat) :
+    indexedRole (setIndexedRole v u r) x =
+      if x = u then r else indexedRole v x := by
+  unfold indexedRole setIndexedRole
+  rw [Std.TreeMap.getElem?_insert]
+  by_cases h : x = u
+  · subst u
+    simp
+  · have hc : compare u x ≠ Ordering.eq := by
+      intro heq
+      exact h (Nat.compare_eq_eq.mp heq).symm
+    simp [h, hc]
+
+theorem materialize_initIndexedView :
+    materializeIndexed initIndexedView = initView := by
+  unfold materializeIndexed initIndexedView initView
+  congr
+
+theorem materialize_setIndexedRole (v : IndexedGroupView) (u r : Nat) :
+    materializeIndexed (setIndexedRole v u r) =
+      { materializeIndexed v with
+        role := fun x => if x = u then r else (materializeIndexed v).role x } := by
+  cases v
+  unfold materializeIndexed
+  congr
+  funext x
+  exact indexedRole_set _ u r x
+
+theorem materialize_setIndexedStarted (v : IndexedGroupView) (b : Bool) :
+    materializeIndexed { v with started := b } =
+      { materializeIndexed v with started := b } := by
+  rfl
+
+/-- Authorisation against the indexed role map; branch-for-branch identical
+to public `authorised`. -/
+def indexedAuthorised (v : IndexedGroupView) (e : Event) : Bool :=
+  match e.kind with
+  | 0 => decide (indexedRole v e.actor = outsider)
+  | 1 => decide (writer ≤ indexedRole v e.actor)
+  | 2 => decide (indexedRole v e.actor = admin) &&
+      decide (indexedRole v e.target < e.role) && decide (e.role ≤ admin)
+  | 3 => decide (indexedRole v e.actor = admin) &&
+      decide (e.role < indexedRole v e.target)
+  | _ => false
+
+theorem indexedAuthorised_eq (v : IndexedGroupView) (e : Event) :
+    indexedAuthorised v e = authorised (materializeIndexed v) e := by
+  rfl
+
+/-- One indexed execution step. Role updates are balanced-tree inserts rather
+than one more function-closure frame. -/
+def applyEventIndexed (v : IndexedGroupView) (e : Event) : IndexedGroupView :=
+  if indexedAuthorised v e then
+    match e.kind with
+    | 0 => { setIndexedRole v e.actor (if v.started then reader else admin) with
+             started := true }
+    | 2 => setIndexedRole v e.target e.role
+    | 3 => setIndexedRole v e.target e.role
+    | _ => v
+  else v
+
+/-- One indexed step materialises to exactly the public closure-based step. -/
+theorem materialize_applyEventIndexed (v : IndexedGroupView) (e : Event) :
+    materializeIndexed (applyEventIndexed v e) =
+      applyEvent (materializeIndexed v) e := by
+  unfold applyEventIndexed applyEvent
+  rw [indexedAuthorised_eq]
+  by_cases h : authorised (materializeIndexed v) e
+  · rw [if_pos h, if_pos h]
+    split
+    · rw [materialize_setIndexedStarted, materialize_setIndexedRole]
+      simp [materializeIndexed]
+      funext x
+      rfl
+    · exact materialize_setIndexedRole v e.target e.role
+    · exact materialize_setIndexedRole v e.target e.role
+    · rfl
+  · rw [if_neg h, if_neg h]
+
 /-- **The arbitration function**: resolve a delivery log against the
 arbiter's announcements — canonicalise into the execution order, then
 execute with authorisation checking. This composition IS ERA (§3.2 + §4.1):
 the epoch layer orders, the guarded fold arbitrates. -/
 def resolve (cuts : List Cut) (log : List Event) : GroupView :=
   (execOrder cuts log).foldl applyEvent initView
+
+/-- Materialising after an indexed fold is exactly the existing public fold. -/
+theorem materialize_foldl_applyEventIndexed :
+    ∀ (l : List Event) (v : IndexedGroupView),
+      materializeIndexed (l.foldl applyEventIndexed v) =
+        l.foldl applyEvent (materializeIndexed v) := by
+  intro l
+  induction l with
+  | nil => intro v; rfl
+  | cons e t ih =>
+    intro v
+    simp only [List.foldl_cons]
+    rw [ih, materialize_applyEventIndexed]
+
+/-- Execution-side implementation of `resolve`: the same order and guarded
+semantics, with a balanced role map throughout the fold. -/
+def resolveIndexed (cuts : List Cut) (log : List Event) : GroupView :=
+  materializeIndexed
+    ((execOrder cuts log).foldl applyEventIndexed initIndexedView)
+
+/-- The indexed execution computes exactly the public arbitration function. -/
+theorem resolveIndexed_eq_resolve (cuts : List Cut) (log : List Event) :
+    resolveIndexed cuts log = resolve cuts log := by
+  unfold resolveIndexed resolve
+  rw [materialize_foldl_applyEventIndexed, materialize_initIndexedView]
+
+/-- Compile `resolve` to the proved balanced-map fold. For `n` executed events
+and `u` users, role reads and writes are `O(log(u+1))` rather than traversing
+an update-closure chain of depth `O(n)`. -/
+@[csimp] theorem resolve_eq_resolveIndexed : @resolve = @resolveIndexed := by
+  funext cuts log
+  exact (resolveIndexed_eq_resolve cuts log).symm
 
 /-! ## §5. Delivery-independence and the CRDT join
 

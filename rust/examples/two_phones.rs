@@ -273,7 +273,8 @@ fn priced_exit() {
     );
 
     // And now the part the type system makes honest: re-dividing the budget
-    // is a meeting, and a replica that skipped it cannot merge.
+    // crosses the seam, and a replica that skipped the agreed change cannot
+    // merge. Any meeting schedule is a separate deployment witness.
     let redivide = SeamChange::Reallocate(BTreeMap::from([(ALICE, 45), (BOB, 55)]));
     let mut phone_a = merged.clone();
     phone_a.apply_seam_change(&redivide).expect("sum is unchanged and nobody drops below spend");

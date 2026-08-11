@@ -56,6 +56,7 @@
 
 use crate::ffi;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 /// Role codes, `Era.lean` §1: `outsider` (not a member) plus the paper's
 /// Reader < Writer < Admin.
@@ -142,6 +143,32 @@ pub enum EraMergeError {
     /// holds, so the whole merge is refused rather than half-applied.
     IdCollision(u64),
 }
+
+impl fmt::Display for EraRecordError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IdCollision(eid) => write!(
+                f,
+                "event id collision at {eid}: the id is already recorded with different content"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EraRecordError {}
+
+impl fmt::Display for EraMergeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IdCollision(eid) => write!(
+                f,
+                "event id collision at {eid}: the same id resolves to different events"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EraMergeError {}
 
 /// Statistics from a merge, mostly for tests and telemetry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

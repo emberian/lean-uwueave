@@ -110,6 +110,17 @@ ungated `absReplay` stands in the same relation to `absReplayFull`, so every
 theorem stated about either is a theorem about the shipping kernel's view
 block.
 
+**Proved execution refinements, in this file.** Code generation replaces the
+proof-facing list codecs with `getWordUnrolled` / `pushWordUnrolled`, and
+replaces `gatedReplayFull` with `gatedReplayFullIndex`. The latter builds one
+balanced grant-id map per request and reuses it through both gate passes and
+every parent-grant walk. `grantLookup_grantIndex` preserves even malformed
+duplicate-id first-match behavior; `activeFromIndex_grantIndex` and
+`permittedOpIndex_grantIndex` transport that equality through authorization;
+`gatedReplayFull_eq_indexed` proves the final overrides and statuses equal.
+All three replacements use proved `@[csimp]` equalities, not unproved runtime
+overrides.
+
 **Proved, in `Uwueave/ExecRefine.lean`** (axioms ⊆ `{propext, Classical.choice,
 Quot.sound}`; no `sorry`/`native_decide`/`#guard`):
 
@@ -206,6 +217,7 @@ refuses and the cycle rule bounds) but it can be made to allocate. That is a
 property of a length-prefixed wire format read by a total decoder, was
 equally true of v2, and belongs to whoever admits bytes to the kernel.
 -/
+import Std.Data.TreeMap
 
 namespace Uwueave.Exec
 
@@ -214,12 +226,43 @@ output, never to unsoundness or a crash). -/
 def byteAt (b : ByteArray) (i : Nat) : UInt8 :=
   if h : i < b.size then b.get i h else 0
 
-/-- Little-endian 64-bit word at word-index `i`. -/
+/-- Allocation-free implementation of `getWord`, with its eight byte loads
+written out instead of constructing a fresh `List.range 8`. -/
+def getWordUnrolled (b : ByteArray) (i : Nat) : UInt64 :=
+  let o := i * 8
+  let acc := (0 : UInt64) |||
+    ((UInt64.ofNat (byteAt b (o + 0)).toNat) <<< (UInt64.ofNat 0))
+  let acc := acc |||
+    ((UInt64.ofNat (byteAt b (o + 1)).toNat) <<< (UInt64.ofNat 8))
+  let acc := acc |||
+    ((UInt64.ofNat (byteAt b (o + 2)).toNat) <<< (UInt64.ofNat 16))
+  let acc := acc |||
+    ((UInt64.ofNat (byteAt b (o + 3)).toNat) <<< (UInt64.ofNat 24))
+  let acc := acc |||
+    ((UInt64.ofNat (byteAt b (o + 4)).toNat) <<< (UInt64.ofNat 32))
+  let acc := acc |||
+    ((UInt64.ofNat (byteAt b (o + 5)).toNat) <<< (UInt64.ofNat 40))
+  let acc := acc |||
+    ((UInt64.ofNat (byteAt b (o + 6)).toNat) <<< (UInt64.ofNat 48))
+  acc ||| ((UInt64.ofNat (byteAt b (o + 7)).toNat) <<< (UInt64.ofNat 56))
+
+/-- Little-endian 64-bit word at word-index `i`.
+
+The list fold is the proof-facing specification. The proved compiler
+simplification immediately below replaces every executable call with the
+allocation-free, eight-load `getWordUnrolled`. -/
 def getWord (b : ByteArray) (i : Nat) : UInt64 :=
   let o := i * 8
   (List.range 8).foldl
     (fun acc k => acc ||| (UInt64.ofNat (byteAt b (o + k)).toNat) <<< (UInt64.ofNat (8 * k)))
     0
+
+/-- The compiler-safe replacement proof: executable `getWord` calls use the
+unrolled implementation, while theorem unfolding still sees the list spec. -/
+@[csimp] theorem getWord_eq_unrolled : getWord = getWordUnrolled := by
+  funext b i
+  unfold getWord getWordUnrolled
+  simp only [show List.range 8 = [0, 1, 2, 3, 4, 5, 6, 7] from rfl, List.foldl]
 
 /-- Two's-complement read of a word as a mathematical integer. -/
 def toI (u : UInt64) : Int :=
@@ -229,11 +272,32 @@ def toI (u : UInt64) : Int :=
 def ofI (i : Int) : UInt64 :=
   UInt64.ofNat (((i + 2 ^ 64) % 2 ^ 64).toNat)
 
-/-- Append a word, little-endian. -/
+/-- Allocation-free implementation of `pushWord`, with eight explicit pushes
+instead of a temporary eight-cell list. -/
+def pushWordUnrolled (b : ByteArray) (u : UInt64) : ByteArray :=
+  let b := b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 0)).toNat % 256))
+  let b := b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 8)).toNat % 256))
+  let b := b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 16)).toNat % 256))
+  let b := b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 24)).toNat % 256))
+  let b := b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 32)).toNat % 256))
+  let b := b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 40)).toNat % 256))
+  let b := b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 48)).toNat % 256))
+  b.push (UInt8.ofNat ((u >>> (UInt64.ofNat 56)).toNat % 256))
+
+/-- Append a word, little-endian.
+
+The list fold remains as the proof-facing specification; `pushWord_eq_unrolled`
+proves the compiler may replace it with the explicit eight-push implementation. -/
 def pushWord (b : ByteArray) (u : UInt64) : ByteArray :=
   (List.range 8).foldl
     (fun ba k => ba.push (UInt8.ofNat ((u >>> (UInt64.ofNat (8 * k))).toNat % 256)))
     b
+
+/-- The compiler-safe replacement proof for the allocation-free encoder. -/
+@[csimp] theorem pushWord_eq_unrolled : pushWord = pushWordUnrolled := by
+  funext b u
+  unfold pushWord pushWordUnrolled
+  simp only [show List.range 8 = [0, 1, 2, 3, 4, 5, 6, 7] from rfl, List.foldl]
 
 /-- One decoded move op. `cite` (format v3) is the id of the grant whose
 authority this op exercises — `Gated.GOp.cite`, in the kernel's carrier. The
@@ -395,6 +459,49 @@ in a deployment. -/
 def findGrant (gs : Array Grant) (i : Nat) : Option Grant :=
   gs.find? (fun g => g.id == i)
 
+/-- Balanced grant-id index used by the compiled request-level gate. The
+public `findGrant` scan remains the proof-facing first-match specification. -/
+abbrev GrantIndex := Std.TreeMap Nat Grant
+
+/-- Build the balanced index tail-first, so an earlier array record overwrites
+a later duplicate and `findGrant`'s **first match** behavior is preserved. -/
+def grantIndexList : List Grant → GrantIndex
+  | [] => ∅
+  | g :: gs => (grantIndexList gs).insert g.id g
+
+/-- Build the grant-id index once for a request. -/
+def grantIndex (gs : Array Grant) : GrantIndex :=
+  grantIndexList gs.toList
+
+/-- Logarithmic grant lookup in a prebuilt request index. -/
+def grantLookup (idx : GrantIndex) (i : Nat) : Option Grant :=
+  idx[i]?
+
+private theorem grantLookup_grantIndexList (gs : List Grant) (i : Nat) :
+    grantLookup (grantIndexList gs) i = gs.find? (fun g => g.id == i) := by
+  induction gs with
+  | nil => simp [grantLookup, grantIndexList]
+  | cons g gs ih =>
+      rw [grantLookup, grantIndexList, Std.TreeMap.getElem?_insert]
+      by_cases h : g.id = i
+      · subst i
+        simp
+      · have hc : compare g.id i ≠ Ordering.eq := by
+          intro heq
+          exact h (Nat.compare_eq_eq.mp heq)
+        simp only [hc, if_false]
+        change grantLookup (grantIndexList gs) i = _
+        have hb : (g.id == i) = false := beq_eq_false_iff_ne.mpr h
+        rw [List.find?, hb]
+        exact ih
+
+/-- The balanced index implements `findGrant` exactly, including first-match
+selection on malformed duplicate-id arrays. -/
+theorem grantLookup_grantIndex (gs : Array Grant) (i : Nat) :
+    grantLookup (grantIndex gs) i = findGrant gs i := by
+  rw [grantIndex, grantLookup_grantIndexList]
+  exact Array.find?_toList
+
 /-- Is grant id `i` revoked? Revocations are a flat id list — grow-only on
 the wire, exactly `Authority.Revoked`. -/
 def isRevoked (rs : Array Nat) (i : Nat) : Bool :=
@@ -419,6 +526,39 @@ def activeFrom (gs : Array Grant) (rs : Array Nat) (i : Nat) : Bool :=
 termination_by i
 decreasing_by exact _h
 
+/-- Indexed execution of `activeFrom`. Every recursive parent lookup is
+logarithmic in the request's distinct grant count. -/
+def activeFromIndex (idx : GrantIndex) (rs : Array Nat) (i : Nat) : Bool :=
+  match grantLookup idx i with
+  | none => false
+  | some g =>
+    if isRevoked rs i then false
+    else if g.parent == 0 then true
+    else if _h : g.parent < i then activeFromIndex idx rs g.parent
+    else false
+termination_by i
+decreasing_by exact _h
+
+/-- Indexed activity is extensionally the original first-match array
+semantics for every substrate, including ill-formed duplicate ids. -/
+theorem activeFromIndex_grantIndex (gs : Array Grant) (rs : Array Nat)
+    (i : Nat) :
+    activeFromIndex (grantIndex gs) rs i = activeFrom gs rs i := by
+  induction i using Nat.strongRecOn with
+  | ind i ih =>
+      rw [activeFromIndex, activeFrom, grantLookup_grantIndex]
+      cases hf : findGrant gs i with
+      | none => rfl
+      | some g =>
+          by_cases hr : isRevoked rs i = true
+          · simp [hr]
+          · by_cases hp : g.parent == 0
+            · simp [hr, hp]
+            · by_cases hlt : g.parent < i
+              · simp only [hr, Bool.false_eq_true, ↓reduceIte, hp, hlt]
+                exact ih g.parent hlt
+              · simp [hr, hp, hlt]
+
 /-- **The gate**: op `o` is permitted when its cited grant is active and that
 grant's scope covers the moved node (`o.child < scope` — `Gated.covers`,
 which is why `σ = 0` is the fully-attenuated dead token). Only the moved node
@@ -428,6 +568,23 @@ def permittedOp (gs : Array Grant) (rs : Array Nat) (op : Op) : Bool :=
   match findGrant gs op.cite with
   | none => false
   | some g => activeFrom gs rs op.cite && decide (op.child < g.scope)
+
+/-- Indexed execution of `permittedOp`, sharing the same request-level map
+with every other authorization decision in the replay. -/
+def permittedOpIndex (idx : GrantIndex) (rs : Array Nat) (op : Op) : Bool :=
+  match grantLookup idx op.cite with
+  | none => false
+  | some g =>
+    activeFromIndex idx rs op.cite && decide (op.child < g.scope)
+
+/-- Indexed permission is exactly the public gate predicate. -/
+theorem permittedOpIndex_grantIndex (gs : Array Grant) (rs : Array Nat)
+    (op : Op) :
+    permittedOpIndex (grantIndex gs) rs op = permittedOp gs rs op := by
+  rw [permittedOpIndex, permittedOp, grantLookup_grantIndex]
+  cases findGrant gs op.cite with
+  | none => rfl
+  | some g => rw [activeFromIndex_grantIndex]
 
 /-- **The feed**: the sub-log the gate admits to the replay — `Gated.gatedOps`
 in the kernel's carrier, and the object `kernel_gated_antitone` is about. -/
@@ -441,6 +598,11 @@ initial value the fold overwrites for every admitted op. -/
 def initStatuses (gs : Array Grant) (rs : Array Nat) (ops : Array Op) : Array Int :=
   ops.map (fun op => if permittedOp gs rs op then 2 else 3)
 
+/-- Status initialization using a prebuilt grant index. -/
+def initStatusesIndex (idx : GrantIndex) (rs : Array Nat)
+    (ops : Array Op) : Array Int :=
+  ops.map (fun op => if permittedOpIndex idx rs op then 2 else 3)
+
 /-- **The gated decision layer**: filter by the gate, *then* sort, then fold —
 the same traced fold as `absReplayFull`, over the survivors only, with the
 refused ops' request slots pre-set to `3`. Pairing with the request index
@@ -453,6 +615,30 @@ def gatedReplayFull (gs : Array Grant) (rs : Array Nat)
       (List.zipIdxLE opLe)).foldl
     (applyOpFull firstParent n)
     ⟨Array.replicate n (-2), initStatuses gs rs ops⟩
+
+/-- Request-indexed execution of `gatedReplayFull`. The balanced grant map is
+built exactly once, then shared by status initialization, admission filtering,
+and every recursive parent-grant lookup. -/
+def gatedReplayFullIndex (gs : Array Grant) (rs : Array Nat)
+    (firstParent : Array Int) (ops : Array Op) : ReplayFull :=
+  let n := firstParent.size
+  let idx := grantIndex gs
+  (((ops.toList.zipIdx).filter
+      (fun p => permittedOpIndex idx rs p.1)).mergeSort
+      (List.zipIdxLE opLe)).foldl
+    (applyOpFull firstParent n)
+    ⟨Array.replicate n (-2), initStatusesIndex idx rs ops⟩
+
+/-- Compiler-safe F7 replacement: request-level indexing computes the exact
+same overrides and request-order statuses as the scan-based specification. -/
+@[csimp] theorem gatedReplayFull_eq_indexed :
+    gatedReplayFull = gatedReplayFullIndex := by
+  funext gs rs fp ops
+  unfold gatedReplayFull gatedReplayFullIndex initStatusesIndex initStatuses
+  have hp : permittedOpIndex (grantIndex gs) rs = permittedOp gs rs := by
+    funext op
+    exact permittedOpIndex_grantIndex gs rs op
+  simp only [hp]
 
 /-- The gated view — definitionally the override block of `gatedReplayFull`
 (a projection, so `rfl`), exactly as `absReplay` is of `absReplayFull`. -/

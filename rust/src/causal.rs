@@ -17,9 +17,75 @@
 //! silently.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 /// Content address of a node.
 pub type NodeId = [u8; 32];
+
+/// Allocation-free hexadecimal display adapter for a [`NodeId`].
+///
+/// `NodeId` remains an array alias for API compatibility, which means Rust's
+/// orphan rules do not let this crate implement [`fmt::Display`] on the array
+/// itself. This adapter is the display affordance: [`NodeIdDisplay::new`]
+/// renders all 64 hexadecimal characters, while [`NodeIdDisplay::short`] is
+/// the six-character label used in compact UIs and examples.
+///
+/// A short or custom prefix is only a label, not a unique identity. Use the
+/// full form in errors, logs that must identify corrupt data, and protocols.
+#[derive(Clone, Copy)]
+pub struct NodeIdDisplay<'a> {
+    id: &'a NodeId,
+    bytes: usize,
+}
+
+impl<'a> NodeIdDisplay<'a> {
+    /// Display the complete 32-byte id as 64 lowercase hexadecimal characters.
+    pub fn new(id: &'a NodeId) -> Self {
+        Self {
+            id,
+            bytes: id.len(),
+        }
+    }
+
+    /// Display the first three bytes as six lowercase hexadecimal characters.
+    ///
+    /// This is intended only as a compact human label; collisions are possible.
+    pub fn short(id: &'a NodeId) -> Self {
+        Self::prefix(id, 3)
+    }
+
+    /// Display the first `bytes` bytes, clamped to the id's 32-byte length.
+    ///
+    /// A prefix is intended only as a compact human label; collisions are
+    /// possible. Passing 32 or more is equivalent to [`NodeIdDisplay::new`].
+    pub fn prefix(id: &'a NodeId, bytes: usize) -> Self {
+        Self {
+            id,
+            bytes: bytes.min(id.len()),
+        }
+    }
+}
+
+impl<'a> From<&'a NodeId> for NodeIdDisplay<'a> {
+    fn from(id: &'a NodeId) -> Self {
+        Self::new(id)
+    }
+}
+
+impl fmt::Display for NodeIdDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in &self.id[..self.bytes] {
+            write!(f, "{byte:02x}")?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for NodeIdDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
 
 /// One node of the weave. Parents are fixed at creation — this is what keeps
 /// the structure on the free side of the dichotomy. Reparenting is *not* a
@@ -79,6 +145,41 @@ pub enum MergeError {
     /// it was not causally closed, i.e. not produced by this API.
     NotCausallyClosed { node: NodeId, missing_parent: NodeId },
 }
+
+impl fmt::Display for InsertError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingParent(parent) => {
+                write!(f, "missing parent node {}", NodeIdDisplay::new(parent))
+            }
+        }
+    }
+}
+
+impl std::error::Error for InsertError {}
+
+impl fmt::Display for MergeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IdCollision(id) => write!(
+                f,
+                "node id collision at {}: the same content address resolves to different nodes",
+                NodeIdDisplay::new(id)
+            ),
+            Self::NotCausallyClosed {
+                node,
+                missing_parent,
+            } => write!(
+                f,
+                "incoming node {} is not causally closed: parent {} is missing",
+                NodeIdDisplay::new(node),
+                NodeIdDisplay::new(missing_parent)
+            ),
+        }
+    }
+}
+
+impl std::error::Error for MergeError {}
 
 /// Statistics from a merge, mostly for tests and telemetry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -217,6 +318,35 @@ mod tests {
             parent = vec![id];
         }
         (w, ids)
+    }
+
+    #[test]
+    fn node_id_display_has_full_and_compact_forms() {
+        let id = [0xabu8; 32];
+        assert_eq!(NodeIdDisplay::new(&id).to_string(), "ab".repeat(32));
+        assert_eq!(NodeIdDisplay::short(&id).to_string(), "ababab");
+        assert_eq!(NodeIdDisplay::prefix(&id, 2).to_string(), "abab");
+        assert_eq!(
+            NodeIdDisplay::prefix(&id, usize::MAX).to_string(),
+            "ab".repeat(32)
+        );
+    }
+
+    #[test]
+    fn causal_refusals_have_user_facing_errors() {
+        let id = [0xabu8; 32];
+        let missing = InsertError::MissingParent(id);
+        assert_eq!(
+            missing.to_string(),
+            format!("missing parent node {}", "ab".repeat(32))
+        );
+
+        let collision = MergeError::IdCollision(id);
+        assert!(collision.to_string().contains(&"ab".repeat(32)));
+
+        fn accepts_std_error(_: &dyn std::error::Error) {}
+        accepts_std_error(&missing);
+        accepts_std_error(&collision);
     }
 
     /// Mirror of `acyclicity_not_iconfluent`'s clashing pair — here the pair

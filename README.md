@@ -207,6 +207,15 @@ not something you crash on.
 - **[The map](docs/MAP.md)** — every module, what it settles, and a ledger of
   keystone theorems tagged by how general each is and whether its counterexample
   is actually reachable in practice.
+- **[The transports](docs/TRANSPORTS.md)** — every judgement crossing, the
+  hypothesis that makes it valid, and the witness showing what fails without it.
+- **[The preoscript design](PREOSCRIPTING.md)** — the language contract: retain
+  futures, strategies, coeffects, witnesses, and promise changes instead of
+  collapsing them into badges or scalar costs.
+- **[Performance](docs/PERFORMANCE.md)** — measured baselines, source-level
+  complexity diagnoses, and the proved-equivalent optimized execution paths.
+- **[The generated UNDONE ledger](docs/UNDONE.md)** — every live `⟨UNDONE⟩`
+  marker with a source location; `scripts/undone-census.sh --check` gates drift.
 - **[The website](https://emberian.github.io/lean-uwueave/)** — the same material
   with diagrams, for people who like diagrams.
 - **[Trust](docs/TRUST.md)** — three separate ledgers of what this rests on:

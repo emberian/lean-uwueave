@@ -382,6 +382,65 @@ theorem length_statusesFrom (v : GroupView) :
     simp only [statusesFrom, List.length_cons]
     rw [length_statusesFrom (applyEvent v e) rest]
 
+/-! ### Indexed status execution
+
+The public trace above deliberately mirrors the proof-facing `GroupView`
+semantics. Executing it literally would rebuild the same role-update closure
+chain as `resolve`, then repeatedly traverse that chain while authorising
+later events. The compiled response instead walks the order once with
+`Era.IndexedGroupView`, accumulating both the final indexed view and the
+status list. The equality proofs below keep this an implementation change,
+not a second semantics. -/
+
+/-- Status against an indexed execution view. -/
+def indexedStatusOf (v : IndexedGroupView) (e : Event) : Nat :=
+  if indexedAuthorised v e then 0
+  else if e.kind ≤ 3 then 1 else 2
+
+/-- Indexed and public status judgements agree exactly. -/
+theorem indexedStatusOf_eq (v : IndexedGroupView) (e : Event) :
+    indexedStatusOf v e = statusOf (materializeIndexed v) e := by
+  unfold indexedStatusOf statusOf
+  rw [indexedAuthorised_eq]
+
+/-- Result of one indexed walk: the final view and one status per input
+event. Keeping them together avoids replaying the order a second time. -/
+structure IndexedTrace where
+  view : IndexedGroupView
+  statuses : List Nat
+
+/-- Walk an execution order once using balanced-map role reads and writes. -/
+def traceIndexed (v : IndexedGroupView) : List Event → IndexedTrace
+  | [] => ⟨v, []⟩
+  | e :: rest =>
+    let status := indexedStatusOf v e
+    let tail := traceIndexed (applyEventIndexed v e) rest
+    ⟨tail.view, status :: tail.statuses⟩
+
+/-- The indexed trace's final view is exactly the existing public fold. -/
+theorem traceIndexed_view : ∀ (l : List Event) (v : IndexedGroupView),
+    materializeIndexed (traceIndexed v l).view =
+      l.foldl applyEvent (materializeIndexed v) := by
+  intro l
+  induction l with
+  | nil => intro v; rfl
+  | cons e rest ih =>
+    intro v
+    simp only [traceIndexed, List.foldl_cons]
+    rw [ih, materialize_applyEventIndexed]
+
+/-- The indexed trace's statuses are exactly the existing public status
+walker, entry for entry. -/
+theorem traceIndexed_statuses : ∀ (l : List Event) (v : IndexedGroupView),
+    (traceIndexed v l).statuses = statusesFrom (materializeIndexed v) l := by
+  intro l
+  induction l with
+  | nil => intro v; rfl
+  | cons e rest ih =>
+    intro v
+    simp only [traceIndexed, statusesFrom]
+    rw [ih, indexedStatusOf_eq, materialize_applyEventIndexed]
+
 /-! ## §4. The response, and the entry point -/
 
 /-- The user block: `(user, role)` word pairs, roles read from the resolved
@@ -435,6 +494,41 @@ theorem length_responseWords (cuts : List Cut) (log : List Event) :
     length_roleWords,
     length_statusWords _ _ (length_statusesFrom initView _).symm]
   omega
+
+/-- Compiled implementation of the full response. Ordering is shared with
+the public specification, while view resolution and status production share
+one balanced-map execution walk. -/
+def responseWordsIndexed (cuts : List Cut) (log : List Event) : List UInt64 :=
+  let users := usersOf log
+  let order := execOrder cuts log
+  let trace := traceIndexed initIndexedView order
+  let v := materializeIndexed trace.view
+  (if v.started then 1 else 0)
+    :: UInt64.ofNat users.length
+    :: UInt64.ofNat order.length
+    :: (roleWords v users ++ statusWords order trace.statuses)
+
+/-- The one-pass indexed response is byte-for-byte identical at word level to
+the public `resolve`/`statusesFrom` specification. -/
+theorem responseWordsIndexed_eq_responseWords (cuts : List Cut)
+    (log : List Event) :
+    responseWordsIndexed cuts log = responseWords cuts log := by
+  unfold responseWordsIndexed responseWords
+  have hv := traceIndexed_view (execOrder cuts log) initIndexedView
+  have hs := traceIndexed_statuses (execOrder cuts log) initIndexedView
+  rw [materialize_initIndexedView] at hv hs
+  simp only
+  rw [show materializeIndexed
+        (traceIndexed initIndexedView (execOrder cuts log)).view = resolve cuts log by
+      simpa only [resolve] using hv]
+  rw [hs]
+
+/-- Compile the response to its proved one-pass balanced-map implementation.
+The proof-facing API and every theorem about `responseWords` remain unchanged. -/
+@[csimp] theorem responseWords_eq_responseWordsIndexed :
+    @responseWords = @responseWordsIndexed := by
+  funext cuts log
+  exact (responseWordsIndexed_eq_responseWords cuts log).symm
 
 /-- Encode a word list, little-endian, via `Exec.pushWord`. -/
 def encodeWords (ws : List UInt64) : ByteArray :=
@@ -604,4 +698,3 @@ theorem duel_response_words :
   decide
 
 end Uwueave.EraKernel
-

@@ -3,21 +3,39 @@
 *First measurement pass, 2026-08-11. Before this file, nothing in this crate had
 ever been timed.*
 
+> **Historical-baseline note.** Sections 1–7 preserve the measurements from
+> repo `31aac2b`, before the F1–F8 optimization pass. All eight fixes described
+> in §9 are now implemented. Section 10 records a post-fix
+> `BENCH_MAX=1000` rerun made on 2026-08-11; it is deliberately separate from
+> the baseline and does not replace the original full-range sweep. Current
+> complexity statements come from proved equivalence where applicable, source
+> inspection, successful builds, and generated-C inspection; only the rows in
+> §10 are new timings.
+
 Every decision this crate makes crosses an FFI boundary into Lean-compiled C:
 move replay (`Uwueave/Exec.lean`), sequence linearization
 (`Uwueave/SeqKernel.lean`), ERA arbitration (`Uwueave/EraKernel.lean`). The open
 question was whether that architecture costs microseconds or seconds — whether
 this is deployable or a lab piece.
 
-**The answer, in one line: the architecture is fine and four of its algorithms
-are not.** One crossing into Lean-compiled C costs **1.44 µs**. Everything
-slower than that measured here is ordinary algorithmic debt inside functions that
-happen to be written in Lean — quadratics we wrote, in code we can change,
-without touching the shape of the design.
+**The baseline answer, in one line: the architecture was fine and four of its
+algorithms were not.** One crossing into Lean-compiled C measured **1.44 µs**.
+Everything slower in that pass was ordinary algorithmic debt inside functions
+that happened to be written in Lean — quadratics that could be changed without
+touching the shape of the design.
 
 ---
 
-## How to reproduce
+## How the baseline was measured, and how to rerun it
+
+To reproduce the historical numbers exactly, check out repo `31aac2b` first.
+The bounded post-fix rerun recorded in §10 used:
+
+```
+cd rust && BENCH_MAX=1000 cargo run --release --example bench_kernels
+```
+
+The original full-range baseline command was:
 
 ```
 cd rust && cargo run --release --example bench_kernels
@@ -488,129 +506,210 @@ work dominates. It is a good trade and should stay on.
 
 ---
 
-## 8. Inherent vs our fault
+## 8. Inherent vs our fault — baseline diagnosis and current status
 
 This is the part worth arguing about, so it is stated flatly.
 
-| cost | inherent to proofs-compiled-to-C? | evidence |
+| baseline cost | inherent to proofs-compiled-to-C? | baseline evidence | current source-level status |
+|---|---|---|---|
+| 1.44 µs per crossing | **Yes.** Lean object allocation, `memcpy` in and out, runtime dispatch. Irreducible without inlining Lean into Rust, which is the whole architecture. | §1 | The bounded rerun measured 1.94 µs; no full-range rerun or attribution of that difference. |
+| 21.2 ms process startup | **Yes.** Lean runtime + module initializers, paid once. | header | The bounded rerun measured 43.92 ms; startup is noisy and the difference is not attributed. |
+| Re-serializing the whole state per call | **Yes, structurally** — the kernels are pure functions of their input, which is what makes `kernel_derived_view_sec` and `resolve_same_sets` statements about the shipping object rather than about a cache. It cost 3–13% on the Rust side in the baseline. | §2.2 | The wire contract remains pure; F6 caches only the derived ERA result at the `Weave` layer. |
+| Wire codec at ~100 ns/word | **No — ours.** `List.range 8` allocated per word in `getWord`/`pushWord`. | §2.2 | **F4 implemented:** eight operations are unrolled; the old timing is historical. |
+| `O(n²)` sequence linearization | **No — ours.** `childrenK` rescanned every index per visited node. | §3 | **F1 implemented:** one-pass buckets plus difference-list emission give structural `O(n)`. |
+| `O(ne²)` on adversarial delivery order | **No — ours.** `execOrder` was insertion sort. | §4f | **F2 implemented:** proved sort/dedup equivalence and compiled merge sort. |
+| `O(ne²)` on role changes | **No — ours.** `GroupView.role` was an update-closure chain. | §4e | **F3 implemented:** one indexed execution/status trace; `usersOf` remains `O(N·r)` and worst-case `O(N²)`. |
+| `O(ne·nc)` on arbiter cuts | **No — ours.** `epochOf` linear-scanned the cut list per comparison. | §4b | **F5 implemented:** cuts are preprocessed into a balanced `TreeMap`; comparator lookups are logarithmic. |
+| `O(m·ng)` grant lookup | **No — ours.** `findGrant` was a linear scan, four passes per op. | §2.3 | **F7 implemented:** grant lookup uses a `TreeMap`. Revocation checks remain linear; authorisation is still evaluated twice; `activeFrom` remains tail-recursive. |
+| One ERA resolve per `Weave` mutation | **No — ours.** `check` → `role` → `resolution()`, uncached, per call. | §6 | **F6 implemented:** a derived `OnceLock` cache is invalidated on membership/cut changes and merge. |
+| `view()` replaying the log twice | **No — ours.** | §6 | **F8 implemented:** `view()` consumes one replay. |
+| Linear-time merges | Neither — they were correct and fast. | §5 | Unchanged. |
+
+The baseline diagnosis still stands: the proof/FFI architecture was not the
+source of the large costs. F1–F8 changed implementations while retaining the
+semantic interfaces. That is now established structurally; the magnitude of
+the full-range wall-clock improvement is not yet established. The bounded
+measurements are in §10.
+
+---
+
+## 9. F1–F8 implementation record
+
+All eight planned fixes are implemented. This section records what changed and
+what is established without turning the baseline's predictions into fictional
+results. Section 10 supplies a bounded post-fix snapshot; it is not a full
+benchmark pass.
+
+**F1 — `SeqKernel.childrenK`: implemented.**
+Children are bucketed in one pass and emitted with difference-list accumulation,
+eliminating both the per-node full rescan and append-shaped rebuilding. The
+structural traversal cost is now `O(n)`, with the executable substitution tied
+back to the original ordering semantics.
+
+**F2 — `Era.execOrder`: implemented.**
+The proof-facing insertion-sort specification remains, while compiled callers
+use `List.mergeSort` followed by consecutive deduplication. Strict sortedness and
+membership prove the two orders equal. With comparator cost separated out, sort
+and dedup are `O(N log N)` and `O(N)` respectively.
+
+**F3 — `Era.GroupView.role`: implemented, with one explicit residual.**
+Execution uses a balanced role `TreeMap`; the ERA kernel walks the order once to
+produce both the final indexed view and the status trace. The compiled response
+is proved word-for-word equal to the public closure-based specification. For `n`
+executed events, `u` indexed role keys, and `r` roster users, this portion is
+`O((n+r) log(u+1) + n+r)` instead of worst-case `Θ(n²+n·r)`. However,
+`usersOf` still uses sorted insertion: `O(N·r)`, worst-case `O(N²)`. F3 does
+not remove that separate roster-construction residual.
+
+**F4 — `Exec.getWord` / `Exec.pushWord`: implemented.**
+The eight byte loads/stores are explicit and unrolled; the per-word
+`List.range 8` allocation is gone. Existing codec proofs remain the semantic
+check, and generated code was inspected. The baseline's 87–134 ns/word is not a
+post-fix measurement.
+
+**F5 — `Era.epochOf`: implemented.**
+Cuts are preprocessed once into an eid-keyed balanced `TreeMap`, combining
+duplicates with `Nat.min`; lookup is proved equal to the old least-epoch scan.
+Together F2 and F5 give ordering time
+`O(c log(c+1) + N log N log(c+2) + N)` and `O(c+N)` auxiliary space, rather than
+scanning all `c` cuts inside every sort comparison. The `c+2` spelling includes
+the comparator's constant cost when there are no cuts.
+
+**F6 — derived `EraResolution` cache: implemented.**
+`Weave` holds the derived result in a `OnceLock` and invalidates it when
+membership events or cuts change and when merge changes the relevant substrate.
+The cache is still derived state; it does not replace the replicated facts or
+the Lean decision function.
+
+**F7 — `Exec.findGrant`: implemented, with remaining execution costs.**
+Grants are indexed once in a `TreeMap`, replacing repeated linear grant lookup
+with logarithmic lookup. Revocation checks are still linear, authorisation is
+still evaluated twice (status and application), and `activeFrom` remains
+tail-recursive through the delegation chain. Those residuals must not be
+silently attributed to the now-indexed grant lookup.
+
+**F8 — one move replay in `Weave::view`: implemented.**
+The view path now consumes one replay rather than asking the move kernel for the
+same decision twice. This removes the duplicate computation without retaining a
+second copy of the operation log.
+
+Not on the list, deliberately: **the Rust marshaller.** It measured at 3–13% in
+the baseline. "Re-encodes the whole log every call" is true and remains a design
+choice, but the measurements did not identify it as the bottleneck. That
+priority judgment should be revisited only after a broader post-fix sweep with
+the codec breakdown measured again.
+
+---
+
+## 10. Bounded post-fix rerun — 2026-08-11
+
+One release invocation was run on aarch64/macOS with `BENCH_MAX=1000`. These are
+the means printed by that invocation, not extrapolations. The run is bounded at
+1000 for the main size sweeps and does not re-establish the baseline's machine
+fingerprint or its results above that bound, so no cross-run speedup ratios are
+claimed here.
+
+### Sequence visibility
+
+| n | chain | flat |
 |---|---|---|
-| 1.44 µs per crossing | **Yes.** Lean object allocation, `memcpy` in and out, runtime dispatch. Irreducible without inlining Lean into Rust, which is the whole architecture. | §1 |
-| 21.2 ms process startup | **Yes.** Lean runtime + module initializers, paid once. | header |
-| Re-serializing the whole state per call | **Yes, structurally** — the kernels are pure functions of their input, which is what makes `kernel_derived_view_sec` and `resolve_same_sets` statements about the shipping object rather than about a cache. It costs 3–13% on the Rust side. | §2.2 |
-| Wire codec at ~100 ns/word | **No — ours.** `List.range 8` allocated per word in `getWord`/`pushWord`. | §2.2 |
-| `O(n²)` sequence linearization | **No — ours.** `childrenK` rescans every index per visited node. | §3 |
-| `O(ne²)` on adversarial delivery order | **No — ours.** `execOrder` is an insertion sort where a merge sort would do; `Exec.absReplayFull` in the *same repo* already uses `List.mergeSort`. | §4f |
-| `O(ne²)` on role changes | **No — ours.** `GroupView.role` is a closure chain instead of a map. | §4e |
-| `O(ne·nc)` on arbiter cuts | **No — ours.** `epochOf` linear-scans the cut list per comparison. | §4b |
-| `O(m·ng)` grant lookup | **No — ours.** `findGrant` is a linear scan, four passes per op. 18.6× at ng = 10000. | §2.3 |
-| One ERA resolve per `Weave` mutation | **No — ours.** `check` → `role` → `resolution()`, uncached, per call. | §6 |
-| `view()` replaying the log twice | **No — ours**, and the code comment already admits it. | §6 |
-| Linear-time merges | Neither — they are correct and fast. | §5 |
+| 10 | 3.44 µs | 10.34 µs |
+| 100 | 35.63 µs | 76.45 µs |
+| 500 | 155.46 µs | 353.64 µs |
+| 1000 | 323.36 µs | 588.01 µs |
 
-The honest summary: **one architectural cost (1.4 µs, negligible) and nine
-implementation costs, six of them asymptotic.** The proofs are not making this
-slow. We are.
+Both shapes scale approximately linearly across this bounded sweep, consistent
+with F1's source-level `O(n)` buckets/difference-list traversal. This is a
+bounded observation, not a claim about sizes above 1000.
 
-None of the nine is a cost of *being* verified. Every one lives inside a function
-whose *statement* would not change if it were rewritten — `childrenK` would still
-be "the children of an anchor in descending index order", `execOrder` would still
-be "the arbitration order of a delivery log". What changes is the proof script,
-not the theorem.
+### ERA resolution
 
----
+| ne | joins/writes, ordered (4a) | cuts grow with events (4b) | role-change stream (4e) | reverse delivery (4f) |
+|---|---|---|---|---|
+| 10 | 10.98 µs | 15.65 µs | 9.19 µs | 8.40 µs |
+| 100 | 139.06 µs | 188.02 µs | 91.80 µs | 85.19 µs |
+| 500 | 532.47 µs | 1.38 ms | 514.07 µs | 603.66 µs |
+| 1000 | 909.47 µs | 2.47 ms | 1.04 ms | 879.31 µs |
 
-## 9. The fixes, in the order a next pass should do them
+Within this run, reverse delivery stays in the same band as ordered delivery,
+and the role-change stream is approximately linear through 1000. Growing cuts
+remain visibly more expensive, as expected from building and consulting the
+epoch `TreeMap`; the old full-cut scan is absent structurally, but this bounded
+table is not a complexity proof.
 
-Expected effects are derived from the measured breakdown and are labelled as
-such: they are predictions, not results.
+### Grant position after F7
 
-**F1 — bucket `SeqKernel.childrenK`. Biggest win available anywhere.**
-One pass over the anchor array bucketing each index under its anchor, each bucket
-reversed once, then `emitK` indexes the bucket array instead of rescanning.
-`O(n²) → O(n)`.
-*Expected:* 17.1 ms → tens of µs at n = 1000; 2.09 s → single-digit ms at
-n = 10000. It also removes the dominant term from `Weave::view` with text (§6).
-*Proof obligation:* every downstream theorem in `SeqKernel.lean` reaches
-`childrenK` only through `mem_childrenK` and `childrenK_nodup` — checked: those
-two lemmas are the only places the definition is unfolded. Proving
-`bucketedChildren anchor p = childrenK anchor p` once transports all of them by
-rewriting.
+`m = 1000` in every row:
 
-**F2 — `Era.execOrder`: insertion sort → merge sort.**
-`List.mergeSort` on the existing decidable `elt`, with `insertE`'s duplicate-skip
-becoming a dedup pass. `resolve_same_sets` is a statement about the event *set*,
-so sort-then-dedup computes the same function.
-*Expected:* removes the 147× delivery-order penalty; ERA resolve becomes
-`O(ne log ne)` regardless of arrival order — 179 ms → low single-digit ms at
-ne = 2000.
-*Note:* `Exec.absReplayFull` already does exactly this, so the pattern and its
-proof idioms exist in-tree.
+| ng | cites first grant | cites last grant |
+|---|---|---|
+| 1 | 1.93 ms | 1.51 ms |
+| 10 | 2.22 ms | 1.39 ms |
+| 100 | 2.10 ms | 1.40 ms |
+| 1000 | 2.38 ms | 2.81 ms |
+| 10000 | 10.38 ms | 8.29 ms |
 
-**F3 — `Era.GroupView.role`: closure chain → finite map.**
-An assoc list keyed by user, or an array indexed by roster position.
-*Expected:* removes 4e's quadratic — 108 ms → linear at ne = 2000 — and 4d's
-roster-width multiplier with it.
+The former first-versus-last position gap has collapsed: neither position is a
+consistently slower lookup path. Total time still rises at large `ng`, because
+each replay must decode and construct the grant index; F7 removes position-
+sensitive linear lookup, not input/index construction. Linear revocation scans,
+double authorisation, and delegation traversal also remain as listed in §9.
 
-**F4 — `Exec.getWord` / `Exec.pushWord`: drop `List.range 8`.**
-Eight explicit shift-and-or steps, no list.
-*Expected:* the codec is 87–134 ns/word today; eight unboxed byte loads should
-land in the 5–15 ns/word range, so **5–15× on the codec**. Since the codec is
-over half of an ops-free move replay and a smaller share as ops grow, expect
-roughly **1.5–2×** on `MoveLog::replay` at low `m`, and a proportional win on
-every kernel in the repo — all three share these two functions.
+### Other bounded points
 
-**F5 — `Era.epochOf`: decode cuts into an eid-keyed map once.**
-*Expected:* removes the `O(ne·nc)` term; with F2, 78.8 ms → low single-digit ms
-at ne = nc = 2000.
+| workload | post-fix result |
+|---|---|
+| process startup | 43.92 ms |
+| fixed smallest crossing | 1.94 µs |
+| move replay, `n = m = 1000` | 4.49 ms |
+| `Weave::view()`, `n = 10` | 28.37 µs |
+| `Weave::view()`, `n = 100` | 272.15 µs |
+| `Weave::view()`, `n = 1000` | 2.69 ms |
 
-**F6 — cache the `EraResolution` inside `Weave`.**
-`Weave::check` pays a full ERA round trip per mutation (§6). The resolution is a
-pure function of the two substrates, so it can be memoized and invalidated on
-`record_membership` / `record_cut` / `merge` — one shape of the fact, still
-derived, just not re-derived per call.
-*Expected:* `add_node` becomes independent of membership-log length — 559 µs →
-~5 µs at 1000 events. This is the one fix that argues against a stated design
-position (`resolution()`'s doc comment declines to cache); the position is
-defensible, the price is now known, and the price is a hundredfold.
+The view points are approximately linear over this range. They do not isolate
+F8's denied-operation path, so they are evidence about the whole bounded view
+workload, not a measurement of the one-replay change by itself.
 
-**F7 — index `Exec.findGrant`.**
-Four linear passes over the grant array per op (§2.3). A single decode-time pass
-into an id-keyed structure removes all four.
-*Expected:* 61.8 ms → ~3.3 ms at ng = 10000, m = 1000 — i.e. the citing-last case
-collapses onto the citing-first case. Promoted above F8 because the 18.6× only
-became visible once the control was run; a sweep that cites the first grant hides
-it completely.
+### F6 cache caveat: 5e is a cold-clone benchmark
 
-**F8 — add `MoveLog::ops()` so `Weave::view` replays once, not twice.**
-The comment at `rust/src/weave.rs:947` names this trade and chose against it to
-avoid holding a second copy of the log. An iterator accessor is not a second copy.
-*Expected:* −50% of the move-replay component of `view()` on any document with a
-denied op.
+The post-fix 5e `add_node` row still rises from **15.85 µs at one membership
+event** to **1.23 ms at 1000 membership events**. That does **not** measure F6's
+intended warm-cache reuse. The harness clones `Weave` for each timed iteration,
+and `Weave`'s custom `Clone` intentionally starts the derived `OnceLock` empty.
+Every iteration therefore pays a cold ERA resolution before the mutation.
 
-Not on the list, deliberately: **the Rust marshaller.** It measured at 3–13% and
-there is nothing there worth the risk. "Re-encodes the whole log every call" is
-true, is a design choice, and is *not* the bottleneck — the codec it feeds is.
+A needed **warm-cache mutation benchmark** should construct one `Weave`, load a
+fixed membership/cut history, call `resolution()` once to populate the cache,
+then time a batch of `add_node` operations on that same value without changing
+membership or cuts, excluding the initial fill. A companion case should mutate
+membership or cuts and measure the intentional invalidation/refill separately.
 
 ---
 
-## 10. What this pass did not measure
+## 11. What the baseline and bounded optimization pass did not measure
 
 Named so nobody mistakes silence for a green light.
 
-* **Memory.** Not instrumented at all. The quadratics in §3 and §4 are quadratic
-  in *allocations* as well as time (`childrenK` allocates `2n` list cells per
-  visited node), so peak RSS under a large linearization is unknown.
-* **The doubled `view()` replay path** (§6) — derived from the source, not timed.
+* **A full-range post-fix sweep.** The new run stops at `BENCH_MAX=1000`; the
+  baseline's larger sizes have not been rerun on the optimized tree.
+* **Memory.** Not instrumented in either pass. The baseline quadratics in §3 and
+  §4 were allocation-heavy; current bucket, merge-sort, and `TreeMap` peak RSS
+  is also unknown.
+* **F8's one-replay effect.** The doubled baseline path was derived from source,
+  not isolated as its own timing, and the fixed path has not been timed either.
+* **F6 warm-cache reuse.** Existing 5e clones start cold. The warm-cache mutation
+  benchmark specified in §10 has not yet been run.
 * **Concurrency.** Everything is single-threaded. The Lean runtime is initialized
   once behind a `std::sync::Once` and nothing here tests two threads calling a
   kernel at the same time.
 * **`Weave::merge` under conflict** — only the clean and all-already-present
   paths were timed. The refusal paths validate-then-abort and should be cheaper,
   but that is an inference.
-* **Revocations.** `Exec.isRevoked` is another linear scan (`rs.any`), on a path
-  every `activeFrom` step takes. The benchmark never revokes anything, so its
-  cost is unmeasured and its shape — `O(m · chain · nr)` — is read off the source
-  only.
+* **Revocations.** F7 indexes grants, not revocations. `Exec.isRevoked` remains a
+  linear scan (`rs.any`) on every `activeFrom` step. The benchmark never revokes
+  anything, so its cost is unmeasured and its shape — `O(m · chain · nr)` — is
+  read off the source only. Authorisation also still runs once for status and
+  once for application, and delegation traversal remains tail-recursive.
 * **Delegation chains.** `activeFrom` recurses to the root of the grant DAG; all
   grants here are root-issued, so chain depth is 1 throughout.
 * **Real-world shapes.** The bases here are a pure chain and a pure star. A

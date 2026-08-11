@@ -25,9 +25,9 @@
 //! | [`Weave::record_membership`] / [`WeaveView::roles`] | `Era.duelling_admins_resolved` (one deterministic survivor), `Era.resolve_same_sets` (a function of the two sets, not of delivery) |
 //! | [`WeaveView::gate`], move ops gated by role | `GatedEra.geGatedOps` — `ge_deterministic` (every replica reads the same feed), `ge_merge_only_adds_ops` (**the gate is a view, never a filter on storage**), `ge_antitone_req` (tightening a requirement can only shrink a feed), `ge_duel_resolved` (the duel keeps a survivor where `Authority.duelling_admins_annihilate` kills both) |
 //! | [`Weave::merge`] refusing wholesale on collision | `causal.rs`'s discipline, itself the `Sequence`/`Authority` collision-extractor seam: a same-id-different-bytes encounter voids every convergence statement, so it is corruption, not a merge |
-//! | [`Weave::apply_seam_change`] — the two meetings | `WeaveState.weaveDocSeamVerdict`: `weaveDoc_segmented` (same-seam merges preserve the whole invariant set *and the seam*) plus `escalatesGlobally` (global freedom is refuted, with the two-document witness) |
+//! | [`Weave::apply_seam_change`] — the two seam-changing operations | `WeaveState.weaveDocSeamVerdict`: `weaveDoc_segmented` (same-seam merges preserve the whole invariant set *and the seam*) plus `escalatesGlobally` (global freedom is refuted, with the two-document witness) |
 //! | pin, as `Option` rather than a set | `WeaveState.pinsVerdict` = `Spec.atMostOneClash`, and its three named exits; this is exit three (coordinate the pin event), with the type making two pins unrepresentable |
-//! | [`Weave::spent`] never waiting | `Segmented.budget_segmented` — spends are free inside an allocation; `budget_not_iconfluent` is why re-allocation is a meeting |
+//! | [`Weave::spent`] never waiting | `Segmented.budget_segmented` — spends are free inside an allocation; `budget_not_iconfluent` is why re-allocation crosses the seam |
 //!
 //! ## The two coordination points, and the fact that the API says so
 //!
@@ -41,10 +41,11 @@
 //! two seams differ ([`WeaveMergeError::SeamDisagreement`]) instead of
 //! unioning two pins and calling the result a document. Changing a seam is
 //! [`Weave::apply_seam_change`], which every participating replica applies
-//! identically — that application *is* the coordination event the theorem
-//! prices. How agreement is reached and ordered is the meeting itself and is
-//! out of this crate's scope; what the crate refuses to do is pretend the
-//! meeting happened.
+//! identically. The theorem prices the seam crossing; it does not determine a
+//! meeting count. `Scheduling.no_crossing_count_determines_least_meetings`
+//! proves that conversion needs explicit demands. How agreement is reached and
+//! ordered is out of this crate's scope; what the crate refuses to do is
+//! pretend agreement happened.
 //!
 //! ## What is deliberately not here
 //!
@@ -72,13 +73,17 @@
 
 #![deny(missing_docs)]
 
-use crate::causal::{CausalNode, CausalWeave, InsertError, MergeError, MergeStats, NodeId};
+use crate::causal::{
+    CausalNode, CausalWeave, InsertError, MergeError, MergeStats, NodeId, NodeIdDisplay,
+};
 use crate::era::{
     EraEvent, EraGroup, EraMergeError, EraMergeStats, EraRecordError, EraResolution, EraRole,
 };
 use crate::movelog::{MoveLog, MoveOp, OpOutcome};
 use crate::seq::{SeqCrdt, SeqDeleteError, SeqInsertError, SeqMergeError, SeqMergeStats};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
+use std::sync::OnceLock;
 
 /// A participant. A bare integer, as in `Era.lean`'s miniature — and, per the
 /// module docs, an unauthenticated one: authenticity is a premise this crate
@@ -137,7 +142,8 @@ impl ActivationFlag {
 /// `weaveDoc_segmented` proves that merges of legal documents agreeing on
 /// this projection preserve the whole invariant set *and* leave the
 /// projection where it was. Replicas therefore run free between changes to
-/// it, and every change to it is a meeting.
+/// it; every change crosses the seam, while its meeting schedule is a separate
+/// deployment witness.
 ///
 /// The pin is an `Option`, not a set. `WeaveState.pinsVerdict` keeps the
 /// "at most one pinned node" ceiling as a `GSet` on purpose — the library's
@@ -215,6 +221,28 @@ pub enum SeamError {
         spent: u64,
     },
 }
+
+impl fmt::Display for SeamError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownNode(node) => write!(
+                f,
+                "cannot pin unknown node {}; sync the node before changing the seam",
+                NodeIdDisplay::new(node)
+            ),
+            Self::BudgetChanged { expected, got } => write!(
+                f,
+                "reallocation changes the fixed document budget: expected {expected} bytes, got {got}"
+            ),
+            Self::AllocationBelowSpend { user, allocated, spent } => write!(
+                f,
+                "cannot allocate user {user} only {allocated} bytes after they have spent {spent}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SeamError {}
 
 // ---------------------------------------------------------------------------
 // Capabilities — the gate, which is a view
@@ -394,6 +422,104 @@ pub enum WeaveMergeError {
     },
 }
 
+impl fmt::Display for WeaveOpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PermissionDenied {
+                actor,
+                capability,
+                required,
+                actual,
+            } => write!(
+                f,
+                "user {actor} cannot perform {capability:?}: role {actual:?} does not meet the required role {required:?}"
+            ),
+            Self::UnknownNode(node) => {
+                write!(f, "unknown node {}", NodeIdDisplay::new(node))
+            }
+            Self::QuotaExceeded {
+                user,
+                allocated,
+                spent,
+                requested,
+            } => write!(
+                f,
+                "user {user} exceeds their local quota: {spent} bytes spent + {requested} requested > {allocated} allocated"
+            ),
+            Self::Insert(source) => write!(f, "node insertion refused: {source}"),
+            Self::TextInsert(source) => write!(f, "text insertion refused: {source}"),
+            Self::TextDelete(source) => write!(f, "text deletion refused: {source}"),
+            Self::Membership(source) => write!(f, "membership event refused: {source}"),
+        }
+    }
+}
+
+impl std::error::Error for WeaveOpError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Insert(source) => Some(source),
+            Self::TextInsert(source) => Some(source),
+            Self::TextDelete(source) => Some(source),
+            Self::Membership(source) => Some(source),
+            Self::PermissionDenied { .. } | Self::UnknownNode(_) | Self::QuotaExceeded { .. } => {
+                None
+            }
+        }
+    }
+}
+
+impl fmt::Display for WeaveMergeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SeamDisagreement { mine, theirs } => write!(
+                f,
+                "document seams disagree (local budget {}, remote budget {}): pin and allocation must match before merge",
+                mine.budget(),
+                theirs.budget()
+            ),
+            Self::Nodes(source) => write!(f, "node merge refused: {source}"),
+            Self::Text { node, source } => write!(
+                f,
+                "text merge for node {} refused: {source}",
+                NodeIdDisplay::new(node)
+            ),
+            Self::Membership(source) => write!(f, "membership merge refused: {source}"),
+            Self::TextForUnknownNode(node) => write!(
+                f,
+                "incoming text belongs to unknown node {}",
+                NodeIdDisplay::new(node)
+            ),
+            Self::DanglingBookmark { user, node } => write!(
+                f,
+                "incoming bookmark by user {user} dangles: node {} is absent",
+                NodeIdDisplay::new(node)
+            ),
+            Self::SpendOverAllocation {
+                user,
+                allocated,
+                spent,
+            } => write!(
+                f,
+                "merged spend for user {user} exceeds their allocation: {spent} spent > {allocated} allocated"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for WeaveMergeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Nodes(source) => Some(source),
+            Self::Text { source, .. } => Some(source),
+            Self::Membership(source) => Some(source),
+            Self::SeamDisagreement { .. }
+            | Self::TextForUnknownNode(_)
+            | Self::DanglingBookmark { .. }
+            | Self::SpendOverAllocation { .. } => None,
+        }
+    }
+}
+
 /// What a merge did, for tests and telemetry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MergeReport {
@@ -440,7 +566,6 @@ pub struct MergeReport {
 ///
 /// Everything but the seam merges without asking anyone. See the module docs
 /// for the full citation table.
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Weave<T> {
     nodes: CausalWeave<T>,
     text: BTreeMap<NodeId, SeqCrdt>,
@@ -450,7 +575,56 @@ pub struct Weave<T> {
     bookmarks: BTreeMap<UserId, BTreeSet<NodeId>>,
     seam: Seam,
     spend: BTreeMap<UserId, u64>,
+    // Derived and non-authoritative: it must never participate in document
+    // identity, cloning, merging, or serialization. Only `group` is state.
+    resolution_cache: OnceLock<EraResolution>,
 }
+
+impl<T: fmt::Debug> fmt::Debug for Weave<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Weave")
+            .field("nodes", &self.nodes)
+            .field("text", &self.text)
+            .field("moves", &self.moves)
+            .field("group", &self.group)
+            .field("activation", &self.activation)
+            .field("bookmarks", &self.bookmarks)
+            .field("seam", &self.seam)
+            .field("spend", &self.spend)
+            .finish()
+    }
+}
+
+impl<T: Clone> Clone for Weave<T> {
+    fn clone(&self) -> Self {
+        Self {
+            nodes: self.nodes.clone(),
+            text: self.text.clone(),
+            moves: self.moves.clone(),
+            group: self.group.clone(),
+            activation: self.activation.clone(),
+            bookmarks: self.bookmarks.clone(),
+            seam: self.seam.clone(),
+            spend: self.spend.clone(),
+            resolution_cache: OnceLock::new(),
+        }
+    }
+}
+
+impl<T: PartialEq> PartialEq for Weave<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.nodes == other.nodes
+            && self.text == other.text
+            && self.moves == other.moves
+            && self.group == other.group
+            && self.activation == other.activation
+            && self.bookmarks == other.bookmarks
+            && self.seam == other.seam
+            && self.spend == other.spend
+    }
+}
+
+impl<T: Eq> Eq for Weave<T> {}
 
 impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     /// A fresh document with an agreed genesis allocation. The budget is the
@@ -479,6 +653,7 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
                 allocation: allocation.into_iter().filter(|(_, q)| *q > 0).collect(),
             },
             spend: BTreeMap::new(),
+            resolution_cache: OnceLock::new(),
         }
     }
 
@@ -511,8 +686,9 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     pub fn text(&self, node: &NodeId) -> Option<Vec<u8>> {
         self.text.get(node).map(|s| s.text())
     }
-    /// The seam — pin and allocation. Changing it is
-    /// [`Weave::apply_seam_change`], and it is a meeting.
+    /// The seam — pin and allocation. Changing it through
+    /// [`Weave::apply_seam_change`] is a seam crossing; scheduling agreement is
+    /// deliberately outside this storage API.
     pub fn seam(&self) -> &Seam {
         &self.seam
     }
@@ -541,7 +717,12 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     /// deterministic arbitration with a replica-local one and break
     /// `ge_deterministic`.
     pub fn record_membership(&mut self, event: EraEvent) -> Result<(), WeaveOpError> {
-        self.group.record(event).map_err(WeaveOpError::Membership)
+        let before = self.group.events_len();
+        self.group.record(event).map_err(WeaveOpError::Membership)?;
+        if self.group.events_len() != before {
+            self.invalidate_resolution();
+        }
+        Ok(())
     }
 
     /// Record an arbiter announcement: event `eid` lies in epoch `epoch`'s
@@ -549,24 +730,28 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     /// equivocating arbiter only re-orders deterministically (the least-epoch
     /// rule), never diverges.
     pub fn record_cut(&mut self, epoch: u64, eid: u64) {
+        let before = self.group.cuts_len();
         self.group.record_cut(epoch, eid);
+        if self.group.cuts_len() != before {
+            self.invalidate_resolution();
+        }
     }
 
     /// The arbitrated group state: roles, the started flag, and each event's
     /// ✗ or ✓ in execution order.
     ///
-    /// A pure function of the two substrates (`Era.resolve_same_sets`), so it
-    /// is recomputed rather than cached — a cache would be a second shape of
-    /// the same fact, and this crate keeps one shape. Callers that need it
-    /// per-frame should hold the [`EraResolution`] themselves.
+    /// A pure function of the two substrates (`Era.resolve_same_sets`). The
+    /// owned result is cloned from a derived, non-authoritative cache that is
+    /// invalidated whenever those substrates grow; [`EraGroup`] remains the
+    /// only source of truth.
     pub fn resolution(&self) -> EraResolution {
-        self.group.resolve()
+        self.cached_resolution().clone()
     }
 
     /// A user's arbitrated role — [`EraRole::Outsider`] for anyone the group
     /// never admitted.
     pub fn role(&self, user: UserId) -> EraRole {
-        role_in(&self.resolution(), user)
+        role_in(self.cached_resolution(), user)
     }
 
     /// May this user do this, right now, on this replica's view of the group?
@@ -737,7 +922,7 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         Ok(())
     }
 
-    // -- the two meetings ---------------------------------------------------
+    // -- the two seam-changing operations ----------------------------------
 
     /// ⚠ **Apply an agreed seam change — a coordination event.**
     ///
@@ -752,8 +937,8 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     /// Note what this method does *not* take: an actor. Gating an agreed
     /// outcome on a locally-resolved role would make its acceptance
     /// replica-dependent, which is the very divergence the seam exists to
-    /// close. Who may call the meeting, and in what order meetings happen, is
-    /// the meeting's business.
+    /// close. Who may authorize the change, which participants attend, and how
+    /// many rounds it takes belong to the explicit scheduling layer.
     pub fn apply_seam_change(&mut self, change: &SeamChange) -> Result<(), SeamError> {
         match change {
             SeamChange::SetPin(None) => {
@@ -893,6 +1078,7 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
             }
         }
 
+        next.invalidate_resolution();
         *self = next;
         Ok(MergeReport {
             nodes,
@@ -928,11 +1114,9 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     /// deterministic arbitration, the same choice `SeqKernel` makes for text
     /// (`run_order_by_id`), and equally not anyone's intention.
     ///
-    /// Cost: two kernel calls for moves (one to enumerate the log through its
-    /// trace, one to replay the gated feed — collapsed to one when the gate
-    /// denies nothing, which `kernel_derived_view_sec` licenses since the feed
-    /// is then the same op *set*), one for the group, and one per node that
-    /// has text. Nothing is cached; [`Weave::text`] is the single-node read.
+    /// Cost: one kernel call for the gated move feed and one per node that has
+    /// text. Group resolution is memoized until membership or cuts change;
+    /// [`Weave::text`] is the single-node read.
     ///
     /// # Panics
     ///
@@ -942,19 +1126,23 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     /// the same "refuse rather than reinterpret" the other kernels' decoders
     /// take: a lying tree is worse than a stopped one.
     pub fn view(&self) -> WeaveView<'_, T> {
-        let resolution = self.group.resolve();
+        let resolution = self.cached_resolution();
 
-        // Enumerate the log: the traced replay reports exactly one outcome
-        // per stored op, which is this crate's only public enumeration of a
-        // `MoveLog` (a `MoveLog::ops()` accessor would save this call; keeping
-        // a second copy of the log here to avoid it would be two shapes of one
-        // fact, which is worse).
-        let all = self.moves.replay_traced(&self.nodes);
+        // Build the ERA-gated feed directly from the receipt set, preserving
+        // the move kernel's own authority substrate. The kernel still decides
+        // its fail-closed grant/revocation gate; this layer decides only the
+        // actor-role gate described above. Exactly one replay follows.
         let mut feed = MoveLog::new();
-        let mut gate = Vec::with_capacity(all.outcomes.len());
-        for (op, _) in &all.outcomes {
+        for grant in self.moves.grants() {
+            feed.issue(*grant);
+        }
+        for grant_id in self.moves.revocations() {
+            feed.revoke(*grant_id);
+        }
+        let mut gate = Vec::with_capacity(self.moves.len());
+        for op in self.moves.ops() {
             let required = move_capability(op.dest).required_role();
-            let actual = role_in(&resolution, op.replica);
+            let actual = role_in(resolution, op.replica);
             if actual >= required {
                 feed.record(*op);
                 gate.push((*op, GateOutcome::Permitted));
@@ -962,8 +1150,7 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
                 gate.push((*op, GateOutcome::Denied { required, actual }));
             }
         }
-        let traced =
-            if feed.len() == all.outcomes.len() { all } else { feed.replay_traced(&self.nodes) };
+        let traced = feed.replay_traced(&self.nodes);
 
         // Effective parents, then the forest they induce.
         let mut effective: BTreeMap<NodeId, Option<NodeId>> = BTreeMap::new();
@@ -1040,7 +1227,7 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
 
         WeaveView {
             nodes: rows,
-            roles: resolution.roles,
+            roles: resolution.roles.clone(),
             started: resolution.started,
             gate,
             replay: traced.outcomes,
@@ -1051,6 +1238,14 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     }
 
     // -- internals ----------------------------------------------------------
+
+    fn cached_resolution(&self) -> &EraResolution {
+        self.resolution_cache.get_or_init(|| self.group.resolve())
+    }
+
+    fn invalidate_resolution(&mut self) {
+        let _ = self.resolution_cache.take();
+    }
 
     /// The local half of the gate: op-validation, which `Weave.lean` names as
     /// the application's job. It never runs at merge.
@@ -1214,6 +1409,150 @@ mod tests {
         (w, root, n1, n2)
     }
 
+    fn warm_resolution(w: &Doc) -> *const EraResolution {
+        w.cached_resolution() as *const EraResolution
+    }
+
+    fn assert_resolution_cache_is(w: &Doc, expected: *const EraResolution) {
+        let actual = w
+            .resolution_cache
+            .get()
+            .expect("the unrelated mutation must leave the ERA cache warm");
+        assert_eq!(actual as *const EraResolution, expected);
+    }
+
+    #[test]
+    fn resolution_cache_is_derived_for_clone_equality_and_debug() {
+        let fresh: Doc = Weave::new([(ALICE, 4096)]);
+        assert!(
+            fresh.resolution_cache.get().is_none(),
+            "construction starts cold"
+        );
+
+        let (w, _root, _n1, _n2) = base();
+        let original_resolution = w.resolution();
+        assert!(w.resolution_cache.get().is_some());
+
+        let cloned = w.clone();
+        assert!(
+            cloned.resolution_cache.get().is_none(),
+            "a clone does not copy derived state"
+        );
+        assert_eq!(cloned, w, "cache warmth is not document identity");
+        assert_eq!(
+            format!("{cloned:?}"),
+            format!("{w:?}"),
+            "debug output is authoritative state"
+        );
+        assert_eq!(cloned.resolution(), original_resolution);
+        assert_eq!(cloned, w, "warming either cache cannot change equality");
+    }
+
+    #[test]
+    fn non_era_mutations_reuse_the_warm_resolution() {
+        let (mut w, root, n1, n2) = base();
+        let cached = warm_resolution(&w);
+
+        let leaf = w.add_node(ALICE, vec![root], b"leaf".to_vec()).unwrap();
+        assert_resolution_cache_is(&w, cached);
+
+        let element = w.insert_text(ALICE, n1, None, b"text").unwrap();
+        assert_resolution_cache_is(&w, cached);
+        w.delete_text(ALICE, n1, element).unwrap();
+        assert_resolution_cache_is(&w, cached);
+
+        w.move_node(ALICE, 20, n2, Some(leaf)).unwrap();
+        assert_resolution_cache_is(&w, cached);
+        w.bookmark(BOB, n1).unwrap();
+        assert_resolution_cache_is(&w, cached);
+        w.set_activation(BOB, n2, 20, true).unwrap();
+        assert_resolution_cache_is(&w, cached);
+
+        w.apply_seam_change(&SeamChange::SetPin(Some(n1))).unwrap();
+        assert_resolution_cache_is(&w, cached);
+        let allocation = w.seam.allocation.clone();
+        w.apply_seam_change(&SeamChange::Reallocate(allocation))
+            .unwrap();
+        assert_resolution_cache_is(&w, cached);
+    }
+
+    #[test]
+    fn membership_and_cut_growth_invalidate_but_redelivery_does_not() {
+        let (mut w, _root, _n1, _n2) = base();
+        let event = EraEvent::join(10, CAROL);
+
+        warm_resolution(&w);
+        w.record_membership(event).unwrap();
+        assert!(
+            w.resolution_cache.get().is_none(),
+            "a new event invalidates the cache"
+        );
+        assert_eq!(
+            w.role(CAROL),
+            EraRole::Reader,
+            "the next read sees the new event"
+        );
+
+        let after_membership = warm_resolution(&w);
+        w.record_membership(event).unwrap();
+        assert_resolution_cache_is(&w, after_membership);
+        assert_eq!(
+            w.record_membership(EraEvent::join(10, DAVE)),
+            Err(WeaveOpError::Membership(EraRecordError::IdCollision(10)))
+        );
+        assert_resolution_cache_is(&w, after_membership);
+
+        w.record_cut(2, 10);
+        assert!(
+            w.resolution_cache.get().is_none(),
+            "a new cut invalidates the cache"
+        );
+        let after_cut = warm_resolution(&w);
+        w.record_cut(2, 10);
+        assert_resolution_cache_is(&w, after_cut);
+    }
+
+    #[test]
+    fn every_successful_merge_invalidates_and_a_refusal_preserves_the_cache() {
+        let (mut target, _root, n1, _n2) = base();
+        let mut non_era_peer = target.clone();
+        non_era_peer.bookmark(BOB, n1).unwrap();
+
+        warm_resolution(&target);
+        let report = target.merge(&non_era_peer).unwrap();
+        assert_eq!(report.membership.events_inserted, 0);
+        assert_eq!(report.membership.cuts_inserted, 0);
+        assert!(
+            target.resolution_cache.get().is_none(),
+            "merge is an explicit cache boundary even when only non-ERA state arrives"
+        );
+
+        let mut era_peer = target.clone();
+        era_peer
+            .record_membership(EraEvent::join(10, CAROL))
+            .unwrap();
+        warm_resolution(&target);
+        let report = target.merge(&era_peer).unwrap();
+        assert_eq!(report.membership.events_inserted, 1);
+        assert!(target.resolution_cache.get().is_none());
+        assert_eq!(target.role(CAROL), EraRole::Reader);
+
+        let mut corrupt_peer = target.clone();
+        corrupt_peer.group = EraGroup::new();
+        corrupt_peer.group.record(EraEvent::join(1, BOB)).unwrap();
+        let snapshot = target.clone();
+        let cached = warm_resolution(&target);
+        assert_eq!(
+            target.merge(&corrupt_peer),
+            Err(WeaveMergeError::Membership(EraMergeError::IdCollision(1)))
+        );
+        assert_eq!(
+            target, snapshot,
+            "the failed scratch merge changed no document state"
+        );
+        assert_resolution_cache_is(&target, cached);
+    }
+
     /// **The convergence test.** Two replicas go offline and diverge on every
     /// substrate at once — nodes, text, moves, membership, bookmarks,
     /// activation, spends — then merge in both directions and agree on
@@ -1356,6 +1695,31 @@ mod tests {
         assert!(merged.set_activation(BOB, n1, 2, true).is_ok());
     }
 
+    /// A mixed ERA gate replays the surviving feed once and retains the move
+    /// kernel's founding authority grant. This is the regression for the old
+    /// double-replay path: rebuilding a feed without its grant would make the
+    /// otherwise-permitted move fail closed as `SkippedUnauthorised`.
+    #[test]
+    fn mixed_gate_replays_permitted_ops_with_their_authority() {
+        let (mut w, _root, n1, n2) = base();
+        let denied = w.move_node(BOB, 1, n2, Some(n1)).unwrap();
+        let permitted = w.move_node(ALICE, 2, n1, Some(n2)).unwrap();
+        w.record_membership(EraEvent::demote(4, ALICE, BOB, EraRole::Reader))
+            .unwrap();
+
+        let view = w.view();
+        assert_eq!(
+            view.denied_moves().collect::<Vec<_>>(),
+            vec![(&denied, EraRole::Writer, EraRole::Reader)]
+        );
+        assert_eq!(
+            view.replay,
+            vec![(permitted, OpOutcome::Applied)],
+            "the permitted feed retains the founding grant and reaches replay"
+        );
+        assert_eq!(view.node(&n1).unwrap().effective_parent, Some(n2));
+    }
+
     /// A move to the ROOT needs Admin, not Writer (`GatedEra.moveReq`): the
     /// same op, from the same user, differs only in destination.
     #[test]
@@ -1389,7 +1753,7 @@ mod tests {
         }
         assert_eq!(a, snapshot, "refused wholesale, nothing half-applied");
 
-        // The meeting: both apply the same change.
+        // The agreed seam change: both replicas apply the same result.
         a.apply_seam_change(&SeamChange::SetPin(Some(n2))).unwrap();
         a.merge(&b).unwrap();
         assert_eq!(a.seam().pin, Some(n2));
@@ -1401,7 +1765,7 @@ mod tests {
     /// coordination the budget needs — with both of the refusals that keep
     /// `BudgetInv` true across it.
     #[test]
-    fn spends_are_free_reallocation_is_a_meeting() {
+    fn spends_are_free_reallocation_crosses_the_seam() {
         let (shared, root, _n1, _n2) = base();
         let mut a = shared.clone();
         let mut b = shared.clone();
@@ -1448,7 +1812,8 @@ mod tests {
         let agreed = SeamChange::Reallocate(BTreeMap::from([(ALICE, 7000), (BOB, 1192)]));
         a.apply_seam_change(&agreed).unwrap();
         b.apply_seam_change(&agreed).unwrap();
-        // A replica that missed the meeting cannot merge; one that made it can.
+        // A replica that missed the agreed seam change cannot merge; one that
+        // applied it can.
         assert!(matches!(
             a.clone().merge(&shared),
             Err(WeaveMergeError::SeamDisagreement { .. })

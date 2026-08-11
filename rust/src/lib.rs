@@ -97,7 +97,7 @@ pub mod seq;
 pub mod status;
 pub mod weave;
 
-pub use causal::{CausalWeave, InsertError, MergeError, NodeId};
+pub use causal::{CausalWeave, InsertError, MergeError, NodeId, NodeIdDisplay};
 pub use era::{
     EraEvent, EraEventStatus, EraGroup, EraMergeError, EraMergeStats, EraRecordError,
     EraResolution, EraRole,
