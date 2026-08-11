@@ -30,17 +30,52 @@ one buys coordination-freedom with something else:
 | exit               | what it spends                                            |
 |--------------------|-----------------------------------------------------------|
 | `escrow`           | some state that was legal stops being reachable            |
-| `seam`             | meetings, but only at `σ`-changes                          |
+| `seam`             | seam crossings, but only at `σ`-changes                    |
 | `arbitration`      | the merge stops being a join (an exogenous verdict lands)  |
 | `strongerMetadata` | states become unrepresentable in the richer carrier        |
 | `weakenedInvariant`| the invariant stops saying what you wanted                 |
 | `exposedFork`      | the result type — plurality becomes the caller's problem   |
 | `rollback`         | at least one replica's contribution is dropped             |
-| `fullCoordination` | meetings, one per op                                       |
+| `fullCoordination` | seam crossings, one per op                                 |
 
 Each price is a **theorem**, named at the constructor and again at the exit's
 price. A number with no theorem would be a lie here: `Exit.price` is a `Nat`
 and the theorems in §4 are what make the `Nat` mean something.
+
+⚠ **The unit is a seam crossing, not a meeting.** This file used to price
+exits "in meetings", and that was wrong in print: `Cost.crossings` counts
+**σ-changes along one replica's stream**, and `Cost.lean`'s own non-claims
+list says it models no attendance, no coalescing of two replicas crossing
+"the same" boundary, no barriers and no elapsed time. `Repair.lean` §2 carries
+the same correction structurally — it has seven price fields and deliberately
+**no** `meetings` field, because no such quantity has a floor theorem here.
+Every "meetings" below has been replaced by the honest word; where a docstring
+still says a replica "needs no meeting", read it as the *negative* claim it
+is — no inter-replica agreement step — and not as a `0` in a currency this
+tree quantifies. (The one theorem name that kept the old word,
+`arbitration_needs_no_meeting`, is left alone: renaming it would break every
+citer for a word.)
+
+## Read this file with its successor — `Uwueave/Repair.lean`
+
+⚑ **A forward pointer, because every other pointer in this tree runs one way.**
+`Repair.lean` landed after this file and is the **typed successor** to it: an
+exit becomes a morphism `Repair P Q` between two promises, the `Nat` price
+becomes a seven-field `Price` record with one field per non-converting
+currency, and the effect on the promise becomes a five-axis `PromiseRelation`
+that composes. `Repair.lean:25-37` states the relation from its side, names the
+theorem that separates the two designs (`crossings_cannot_see_the_difference`),
+and closes "Nothing here imports `Exits.lean`." Neither file subsumes the
+other — a menu is what a report shows a schema author, a `Repair` is what a
+chain of them composes as — but a reader who enters *here* should know the
+later reading exists before taking this file's `Nat` prices as the last word.
+
+⚠ One thing `Repair.lean:30-33` gets wrong about this file while pointing at
+it: it says the menu "prices `arbitration` and `fork` both at `0` and warns
+that the two zeroes are not the same zero". The ⟨scope⟩ note below distinguishes
+**`arbitration`/`rollback`** from `seam`/`fullCoordination`; `exposedFork`'s
+zero is in the *same* currency as escrow's — both are `zero_price_of_iconfluent`
+(`fork_price_zero`, `escrow_price_zero`).
 
 ## What a menu does NOT do — ⟨UNDONE⟩, and it is the biggest gap
 
@@ -74,12 +109,16 @@ Four further non-claims, labelled:
     discharges it separately (`ceiling_seam_floor_is_zero`). Nothing in the type
     forces that discharge, and that is a hole in the type, not in the proofs.
   * ⟨scope⟩ **Two prices are in different currencies.** `seam` and
-    `fullCoordination` are priced in `Cost.crossings` — meetings, with a floor
-    theorem. `arbitration` and `rollback` are priced `0` because no *meeting
-    between replicas* is needed (the verdict is computed locally from the merged
-    state), and their real price is paid in §4's two price theorems and in
-    `GatedEra.ge_not_antitone`, not in crossings. Reading the two `0`s as the
-    same `0` is the mistake this note exists to prevent.
+    `fullCoordination` are priced in `Cost.crossings` — seam crossings, the one
+    coordination quantity in this tree with a floor theorem
+    (`Cost.coordination_forced`). `arbitration` and `rollback` are priced `0`
+    because no *agreement step between replicas* is needed (the verdict is
+    computed locally from the merged state), and their real price is paid in
+    §4's two price theorems and in `GatedEra.ge_not_antitone`, not in crossings.
+    Reading the two `0`s as the same `0` is the mistake this note exists to
+    prevent — and `Repair.lean` is where the two stop sharing a type at all:
+    it makes them different *values* of a seven-field `Price` record and proves
+    the menu cannot see the difference (`crossings_cannot_see_the_difference`).
   * ⟨scope⟩ **Everything is at `Type`.** Every carrier in this tree is `Type 0`
     (`GSet Nat`, `QuotaState`, `GrantSet`); universe-polymorphic exits would buy
     nothing and cost every statement a binder. `Cost.coordination_forced` is
@@ -93,7 +132,7 @@ Nothing in §1–§3 is new mathematics. The exits are:
     counter, as this tree states it).
   * `seam` — `Segmented.SegmentedIConfluent` (Whittaker–Hellerstein, VLDB'19),
     with `Seams.lean`'s three instances and `SeamAlgebra.linked_segmented` for
-    when two exits share one meeting.
+    when two exits collapse into one seam.
   * `arbitration` — `Era.lean` / `GatedEra.lean` (Dougal, PaPoC'26), whose
     price is `GatedEra.ge_not_antitone`: arbitration buys a live op feed and
     loses `Gated.gated_antitone`'s shrinkage.
@@ -118,12 +157,28 @@ docstring: the resurrection branch is where *the ancestor-reading merge* is the
 fix, and the accumulation branch is where "escrow or coordinate" is all that is
 left (`Ancestral.budget_defeats_every_faithful_merge` names escrow explicitly as
 what survives there). So escrow and stronger-metadata sit on **opposite** branches
-of the dichotomy, and `ancestral_exit_discriminates` below proves the
-stronger-metadata half in both directions. What escrow actually keys on is a
-second axis — **divisibility** — and the worked menus exhibit it: the balance
-clash and the pin ceiling are *both* accumulation, and escrow takes one and not
-the other, because a bound of 10 splits into 5+5 and a bound of 1 does not split
-at all without starving a slot (`pin_escrow_zero_quota`).
+of the dichotomy.
+
+⚠ **Read what `ancestral_exit_discriminates` below actually settles.** It
+discriminates in both directions over `Ancestral.AncestralConfluent` — the
+ancestor-reading merge — and that is *not* the same predicate as
+`Exit.strongerMetadata.Applies`, which demands a **join**-homomorphism into a
+richer carrier. Nothing in this tree connects the two, and
+`Ancestral.join_is_ancestral_merge_iff_trivial` is the reason to expect no easy
+bridge: an `AncestralMerge` is a join only on a one-point carrier. §4.8's test
+tells you whether the *ancestor* exit is live; the `strongerMetadata` row's
+availability is discharged separately, at each worked menu.
+
+What escrow actually keys on is a second axis — **divisibility** — and the
+worked menus exhibit it: the balance clash and the pin ceiling behave alike
+under the accumulation reading, and escrow takes one and not the other, because
+a bound of 10 splits into 5+5 and a bound of 1 does not split at all without
+starving a slot (`pin_escrow_zero_quota`). ⚠ That accumulation reading is
+**prose, not a theorem**: neither `Cost.pinInv` nor `balanceInv` is equipped
+with a `Guarded`, `AncestralMerge` or `Serializing` instance anywhere in this
+tree, so `clash_dichotomy` is not instantiable at either of them. The
+divisibility separation itself *is* proved — `the_menus_discriminate` — and it
+needs no dichotomy instance to hold.
 -/
 import Uwueave.Spec
 import Uwueave.Ceiling
@@ -150,7 +205,7 @@ its availability check needs, and nothing more:
   * `escrow ι q obs` — a per-replica split: an index type `ι`, a quota `q`, and
     the observation `obs` that reads each replica's charge off the state.
   * `seam Seg σ floor` — a projection `σ` replicas hold fixed between
-    coordination events, and the number of meetings the workload forces.
+    coordination events, and the number of seam crossings the workload forces.
     ⚠ `floor` is free data; `seam_price_is_forced` is what makes it honest.
   * `arbitration verdict` — an exogenous canonicalisation: whatever two legal
     replicas merged to, `verdict` maps it to something legal.
@@ -162,7 +217,7 @@ its availability check needs, and nothing more:
 inductive Exit (S : Type) [MergeState S] : Type 1 where
   /-- Pre-partition the bound: index type, quota, and the per-replica charge. -/
   | escrow (ι : Type) (q : ι → Nat) (obs : S → Escrow ι)
-  /-- Coordinate only where `σ` changes; `floor` is the forced meeting count. -/
+  /-- Coordinate only where `σ` changes; `floor` is the forced crossing count. -/
   | seam (Seg : Type) (σ : S → Seg) (floor : Nat)
   /-- An exogenous verdict repairs the merge. -/
   | arbitration (verdict : S → S)
@@ -223,16 +278,17 @@ def Exit.Applies {S : Type} [MergeState S] : Exit S → Invariant S → Prop
       (∀ s : S, keep s ⊑ s) ∧ (∀ x y : S, I x → I y → I (keep (x ⊔ y)))
   | .fullCoordination _, I => SegmentedIConfluent (fun s : S => s) I
 
-/-! ## §3. The price, in meetings
+/-! ## §3. The price, in seam crossings
 
-`Cost.crossings` counts the meetings a workload forces under a chosen seam. Six
+`Cost.crossings` counts the seam crossings a workload forces under a chosen seam.
+Six
 of the eight exits are priced `0`. Four of those six are justified by *the same*
 theorem — `zero_price_of_iconfluent`: an exit that restores global I-confluence
 leaves a one-point seam, and a one-point seam costs nothing — and the remaining
 two (`arbitration`, `rollback`) by a weaker statement in a different currency,
 which the module docstring flags. -/
 
-/-- **The price of an exit, in meetings.** ⚠ The two `0`s at `arbitration` and
+/-- **The price of an exit, in seam crossings.** ⚠ The two `0`s at `arbitration` and
 `rollback` are not the same `0` as the other four: see §4.5 and the module
 docstring's ⟨scope⟩ note. -/
 def Exit.price {S : Type} [MergeState S] : Exit S → Nat
@@ -289,7 +345,7 @@ theorem zero_price_of_iconfluent {S : Type} [MergeState S] (J : Invariant S)
 /-- **What an available escrow buys**: the per-quota invariant is I-confluent
 (`Catalog.escrow_local_bound_iconfluent`, transported along the homomorphism
 `obs`) and it entails `I`. So a replica that stays inside its share never needs
-a meeting, and never breaks the invariant. -/
+to coordinate, and never breaks the invariant. -/
 theorem escrow_strengthening_iconfluent {S : Type} [MergeState S] {I : Invariant S}
     {ι : Type} {q : ι → Nat} {obs : S → Escrow ι}
     (h : (Exit.escrow (S := S) ι q obs).Applies I) :
@@ -302,7 +358,7 @@ theorem escrow_strengthening_iconfluent {S : Type} [MergeState S] {I : Invariant
   rw [hxy]
   exact Nat.max_le.mpr ⟨hx i, hy i⟩
 
-/-- **The escrow exit costs zero meetings** — `zero_price_of_iconfluent` at the
+/-- **The escrow exit costs zero crossings** — `zero_price_of_iconfluent` at the
 per-quota invariant. This is the theorem the `0` in `Exit.price` cites. -/
 theorem escrow_price_zero {S : Type} [MergeState S] {I : Invariant S}
     {ι : Type} {q : ι → Nat} {obs : S → Escrow ι}
@@ -389,17 +445,22 @@ theorem fullCoordination_is_the_ceiling {S Op : Type} [MergeState S]
 
 /-! ### §4.5 arbitration and rollback — a zero in a different currency
 
-⚠ These two exits are priced `0` because **no meeting between replicas is
-needed**: the verdict is a function of the state a replica already holds, so a
-replica that has merged its peers' updates computes the answer alone. The
+⚠ These two exits are priced `0` because **no agreement step between replicas
+is needed**: the verdict is a function of the state a replica already holds, so
+a replica that has merged its peers' updates computes the answer alone. The
 deployed instance of that claim is `GatedEra.ge_deterministic` — replicas with
 the same event and cut *sets*, in any delivery order, with any duplication,
-compute the same op feed. What these exits spend is not meetings, and the two
-theorems below are the bill. -/
+compute the same op feed. What these exits spend is not seam crossings at all,
+and the two theorems below are the bill. Their `0` is therefore an *absence of
+a quantity*, not a zero of the one `Exit.price` otherwise counts; `Repair.lean`
+gives it a field of its own rather than a shared zero. -/
 
 /-- The `0`, stated: an available arbitration repairs the merge of **any** two
-legal replicas, with no hypothesis relating them — no meeting, no agreement
-protocol, no waiting. (Formally this is `Applies` re-read and nothing more; its
+legal replicas, with no hypothesis relating them — no agreement protocol, no
+waiting. (⚠ The name keeps this file's older "meetings" vocabulary and is left
+unrenamed on purpose; what the theorem exhibits is an *absent hypothesis*, not
+a count in `Cost.crossings`, which models no attendance. Formally this is
+`Applies` re-read and nothing more; its
 content is in the hypothesis that is *absent*, and its force is
 `GatedEra.ge_deterministic`, where replicas holding the same event and cut sets
 — any order, any duplication — provably compute the same feed. That theorem is
@@ -434,10 +495,12 @@ theorem arbitration_not_faithful_joinHom {S : Type} [MergeState S] {I : Invarian
   rw [hhom, hfaith x hx, hfaith y hy]
 
 /-- **The third price, cited rather than re-proved: arbitration spends
-antitonicity.** `Gated.lean` sells "late arrivals only ever remove moves from
-effect"; an arbiter that can turn a denial into a permission cannot have that
-sign (`GatedEra.antitone_forbids_enabling`), and ERA's promote does exactly
-that. The bundle is the price tag the menu prints: the general refutation, and
+antitonicity.** `Gated.lean` sells "late **revocations** only ever remove moves
+from effect" — and only in that channel: `Gated.gated_monotone_grants` proves
+the grants channel has the opposite sign, so "late arrivals shrink" is false as
+a claim about arrivals in general. An arbiter that can turn a denial into a
+permission cannot have even the revocation-channel sign
+(`GatedEra.antitone_forbids_enabling`), and ERA's promote does exactly that. The bundle is the price tag the menu prints: the general refutation, and
 the concrete pair of verdicts that refutes it. No new content — this is
 `GatedEra`'s own result, assembled where a menu can cite it. -/
 theorem arbitration_spends_antitonicity :
@@ -481,23 +544,27 @@ branch lattice is `S → Prop` under pointwise disjunction (`JoinHom`'s
 `instMergeStateProp` through the pointwise lift), and "every branch is legal" is
 I-confluent for **every** invariant — which is why this exit is unconditional.
 What it costs is the result type: after the merge there are two branches and
-the caller must say which, or keep both. Kleppmann's slogan for the stance is
-the title of a 2022 paper: *merge what you can, fork what you can't*. -/
+the caller must say which, or keep both. The slogan for the stance is the title
+of a 2022 paper by **Schiefer, Litt and Jackson** — *merge what you can, fork
+what you can't* — the same authors this file's header credits, and not
+Kleppmann's. -/
 
 /-- The branch carrier: a set of candidate states, merged by union. -/
 abbrev Branches (S : Type) := S → Prop
 
 /-- **Keeping both is always coordination-free.** "Every branch satisfies `I`"
 is I-confluent over the branch lattice for every `I` whatsoever — a branch of
-the union came from one side, and that side vouched for it. This is the content
-behind `Exit.Applies`'s `True` for `exposedFork`. -/
+the union came from one side, and that side vouched for it. This is the term
+`Exit.Applies`'s `exposedFork` row is *inhabited by* — and note that the row is
+not `True`: it is this theorem, which is exactly why §2's "neither is inhabited
+by `trivial`" argument holds. -/
 theorem branches_iconfluent {S : Type} (I : Invariant S) :
     IConfluent (S := Branches S) (fun bs => ∀ s, bs s → I s) := by
   intro x y hx hy s hs
   have hs' : x s ∨ y s := hs
   exact hs'.elim (hx s) (hy s)
 
-/-- **The fork exit costs zero meetings** — `zero_price_of_iconfluent` at the
+/-- **The fork exit costs zero crossings** — `zero_price_of_iconfluent` at the
 branch invariant. -/
 theorem fork_price_zero {S : Type} (I : Invariant S) :
     SegmentedIConfluent (S := Branches S) (fun _ => ()) (fun bs => ∀ s, bs s → I s)
@@ -537,7 +604,7 @@ theorem weakening_is_strict {S : Type} [MergeState S] {I J : Invariant S}
   obtain ⟨hJ, himp⟩ := h
   exact ⟨hJ x y (himp x hx) (himp y hy), hbad⟩
 
-/-- The weakening exit costs zero meetings — `zero_price_of_iconfluent` at `J`. -/
+/-- The weakening exit costs zero crossings — `zero_price_of_iconfluent` at `J`. -/
 theorem weakenedInvariant_price_zero {S : Type} [MergeState S] {I J : Invariant S}
     (h : (Exit.weakenedInvariant (S := S) J).Applies I) :
     SegmentedIConfluent (S := S) (fun _ => ()) J
@@ -575,7 +642,7 @@ theorem refinement_needs_unreachability {S : Type} [MergeState S] {I : Invariant
   rw [hhom] at hab
   exact hab
 
-/-- The stronger-metadata exit costs zero meetings — `zero_price_of_iconfluent`
+/-- The stronger-metadata exit costs zero crossings — `zero_price_of_iconfluent`
 upstairs, at the pulled-back invariant. -/
 theorem strongerMetadata_price_zero {S : Type} [MergeState S] {I : Invariant S}
     {T : Type} {instT : MergeState T} {π : T → S}
@@ -592,12 +659,18 @@ clash can have, and they send you to *different* exits — which is the whole
 reason a menu can discriminate at all rather than printing a constant list. -/
 
 /-- **The dichotomy, read as an exit test** (`Ancestral.clash_dichotomy`). Take
-an effect-faithful merge, a legal ancestor, and two locally-admitted operations
-each legal there. Either some serialization of the two is legal —
+an effect-faithful merge `M`, a legal ancestor, and two locally-admitted
+operations each legal there. Either some serialization of the two is legal —
 **resurrection**, and there is something for an ancestor-reading merge to
-choose, so the stronger-metadata exit is live — or no effect-faithful merge is
-ancestrally confluent at all — **accumulation**, and that exit is dead for every
-merge, not just for the one you tried. -/
+choose — or `M` is not ancestrally confluent: **accumulation**.
+
+⚠ Read the right disjunct at its own scope: it is about **the `M` you handed
+in**, not about every merge. The "dead for every merge" reading is one step
+further and is a *consequence*, not this statement — the left disjunct never
+mentions `M`, so if it fails, the right one holds for every effect-faithful
+`M`, and that packaged form is `Ancestral.serialization_clash_defeats_every_merge`
+(with `ancestral_exit_discriminates`'s second conjunct as the ∀-quantified
+instance on this tree's own budget fixture). -/
 theorem ancestral_exit_test {S Op : Type} (M : Ancestral.AncestralMerge S)
     (g : Ancestral.Guarded S Op) (I : Invariant S) (l : S) (a b : Op)
     (hser : Ancestral.Serializing M g) (hl : I l)
@@ -746,8 +819,10 @@ is absent from the third. `the_menus_discriminate` collects them.
 ### §6.1 The uniqueness ceiling — pins, at most one
 
 `Cost.pinInv` over `Cost.PinSet = GSet Bool`: at most one node pinned. The
-canonical clash of this library (`Ceiling.uniqueness_ceiling`, wearing four
-costumes across four files). -/
+canonical clash of this library (`Ceiling.uniqueness_ceiling`). ⚠ `Ceiling.lean`
+says "four costumes" and the four *instances* all live in its own §3; only their
+**originals** are spread across four files — and there is now a fifth,
+`Holes.determinacy_not_iconfluent`, at the `Partial` carrier. -/
 
 /-- One replica pins node `true`. -/
 def pinT : Cost.PinSet := fun b => b == true
@@ -1154,10 +1229,12 @@ refuted on another**, in both directions, for two different exits. -/
 on both the pin ceiling and the duel — a bound of 10 divides into 5+5, a bound
 of 1 does not divide at all. The seam takes the pin ceiling and is refuted on
 the shared bound's obvious projection. Rollback is available on the duel. Note
-what the escrow rows say about the dichotomy: the ceiling and the balance are
-*both* accumulation clashes in `Ancestral.clash_dichotomy`'s sense, and escrow
-separates them anyway — so divisibility is a second axis, not a restatement of
-the first. -/
+what the escrow rows say about the dichotomy: the ceiling and the balance read
+*alike* under the accumulation branch, and escrow separates them anyway — so
+divisibility is a second axis, not a restatement of the first. ⚠ That
+accumulation reading is prose: `Cost.pinInv` and `balanceInv` carry no
+`Guarded`/`AncestralMerge`/`Serializing` instance, so `clash_dichotomy` cannot
+be instantiated at either. The separation below does not rest on it. -/
 theorem the_menus_discriminate :
     -- escrow: ✓ on the shared bound …
     (Exit.escrow (S := Balance) Bool (fun _ => 5) id).Applies balanceInv

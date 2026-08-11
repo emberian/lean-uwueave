@@ -71,6 +71,20 @@ with "this gates the abstract op layer, not the shipping kernel", followed by
 the recipe for fixing that; the recipe was executed, and the item is gone
 rather than reworded.
 
+⚑ **A second item left the same way — read this as the forward pointer.** The
+list also carried *"conflicting grant issuance is not arbitrated ⟨UNDONE⟩ …
+composing that arbitration with this gate is real work, unstarted"*.
+`Uwueave/GatedEra.lean` **is that work, done** — it substitutes `Era.resolve`
+for `Authority.Active` at the authority substrate and delivers
+`ge_deterministic`, `ge_duel_resolved` (the survivor's op stands where
+fail-closed denied both) and `ge_finalised_stable`, plus the finding
+`antitone_forbids_enabling`. So the item is gone rather than reworded. What
+survives it is a theorem, not a caveat: fail-closed composes as advertised —
+after a duel this file's gate rejects **both** duellists' ops and every op
+citing grants delegated under them (`Authority.duelling_admins_annihilate`) —
+and arbitration's price is that it loses `gated_antitone`'s shrinkage
+(`GatedEra.ge_not_antitone`).
+
   * **Signatures are a premise, not a theorem.** ⟨TERMINAL, at this layer⟩ A
     grant here is a record in a grow-only set; that only a legitimate issuer
     could have produced it is unforgeability, discharged by a deployment's
@@ -114,17 +128,6 @@ rather than reworded.
     i.e. test evidence. Closing this means the request committing to the
     substrate it was built from — a digest the caller cannot vary per call —
     and that is unbuilt.
-  * **Conflicting grant issuance is not arbitrated.** ⟨UNDONE⟩ Two admins
-    issuing contradictory grants is the duelling-admins problem; this file's
-    merge is fail-closed (both survive as records, the gate takes the
-    intersection of what stays active), which is a *policy*, not a
-    resolution. `Era.lean` implements the resolution — one deterministic
-    survivor per replica (`Era.duelling_admins_resolved`) — and composing
-    that arbitration with this gate (its arbitrated view slotting in where
-    `Active` sits, leaving every theorem shape here intact) is real work,
-    unstarted. Fail-closed composes as advertised: after a duel the gate
-    rejects BOTH duellists' ops, and every op citing grants delegated under
-    them (`Authority.duelling_admins_annihilate`).
   * **Scope is a `Nat` ceiling on node ids — and in the kernel, on node
     INDICES.** ⟨UNDONE⟩ Enough to make covering decidable and the theorems
     honest, and now enough to make the kernel's coverage check one
@@ -147,10 +150,31 @@ rather than reworded.
     that decision sound for the `Prop`-valued gate with no hypotheses, and
     complete under `WF` + `UniqueGrant`. The undecidability is a fact about
     the abstraction, not a hole under the implementation.
-  * **Below the Lean, the usual TCB.** ⟨TERMINAL for this repo⟩ The Rust
-    marshaller's bytes (checked at runtime against the proven canonical
-    encoder, `Exec.requestCanonicalKernel` — a differential, not a proof) and
-    Lean's C backend. `Exec.lean`'s claim-discipline header is the ledger.
+  * **Below the Lean, the execution TCB — and it is NOT terminal.**
+    ⟨UNDONE, in nine named pieces⟩ This item used to read "⟨TERMINAL for this
+    repo⟩ … the Rust marshaller's bytes and Lean's C backend", which is exactly
+    the claim `docs/TRUST.md` exists to retract: an external reviewer (codex)
+    read "the C backend TCB is terminal" and demolished it, and Ledger 2 is the
+    replacement — **ten rows, zero PREMISE, nine OBLIGATION, one absent
+    component**, each with a named next step. *Nothing in the execution stack
+    is terminal.* Lean's C code generator, the C compiler and linker, the Lean
+    runtime, `shim.c`, the ABI/FFI boundary, Rust `unsafe`, the marshaller, the
+    storage glue and the build wiring are nine distinct boundaries, not one:
+    CakeML is the existence proof for a verified compiler of a functional
+    source language (the codegen half), and CompCert covers exactly one row —
+    the C compiler — because it *starts* at C and does not reach Lean's IR.
+    ⚠ And the marshaller's differential is weaker than "checked at runtime":
+    `Exec.requestCanonicalKernel` is invoked through a `debug_assert!`
+    (`rust/src/movelog.rs`), so it is **compiled out of release builds** —
+    `Exec.lean`'s own header says "asserted in debug builds", and it is test
+    evidence either way, since Rust has no formal semantics to prove against.
+    Read `docs/TRUST.md` Ledger 2, not this bullet, for the current shape;
+    `Exec.lean`'s claim-discipline header is the Lean-side ledger.
+
+    ⚑ The qualifier is the part that falls off in transit. `docs/TRUST.md`
+    cites *this section* as its seed, for writing "⟨TERMINAL, **at this
+    layer**⟩" where a summary wrote "terminal" — and this bullet is the one
+    place in the file that made the unqualified move anyway.
 
 ## The price, and why it points the safe direction
 

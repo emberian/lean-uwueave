@@ -51,10 +51,25 @@ observed adds, observed removes (tombstones), and one value register per
 
 ## Honesty notes
 
-  * **Causal delivery**: as in `ORSet.lean`, the presence refutation's state
-    pair may not be jointly reachable under causal delivery of operations. The
-    doomed-update pair, by contrast, IS reachable under causal delivery — the
-    update and the remove are genuinely concurrent, both causally after the
+  * **Causal delivery (settled)**: as in `ORSet.lean`, the presence
+    refutation's state pair **is** jointly causally reachable under
+    **tag-scoped rem-after-add** — `CausalReach.ormap_clash_joint` — so
+    `ormap_present_not_iconfluent` is **Live** for that protocol reading, not
+    LatticeOnly. ⚠ This note used to say the pair "may not be jointly
+    reachable"; that was written before `CausalReach.lean` existed and it
+    contradicted §3 of this same file. The retraction landed in `ORSet.lean`
+    and `CausalReach.lean` (which records it by name: "the ORSet docstring's
+    'may not under causal delivery' does not hold for that protocol reading")
+    and reached this header late. Read the *scope*, which is the surviving
+    content: this is a theorem about the **tag-scoped** remove. On the
+    element-wide "remove all observed tags" protocol the same lattice pair is
+    *proved unreachable* — `CausalReach.ew_clashL_unreachable` /
+    `orset_reachability_depends_on_remove_shape`, at the OR-Set level, from
+    which this map's presence layer is inherited by projection. That op is not
+    modelled here (`ORSet.lean` §3 has it as `removeAll`; this file has no
+    map-level analogue).
+  * **The doomed-update pair is reachable too**, and for a different reason:
+    the update and the remove are genuinely concurrent, both causally after the
     add — which is why that one is a policy fork and not a delivery artifact.
   * **One level only.** The nested value is a single LWW register. Real
     documents nest maps in maps; that needs an inductive state whose merge is

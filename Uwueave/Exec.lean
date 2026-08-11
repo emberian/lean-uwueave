@@ -17,7 +17,11 @@ an op whose cited grant is not active-and-covering never reaches the sort, and
 says so in the trace as status `3`. Every v2 request must be re-encoded; every
 v2 response reader must learn the fourth code. The break is **loud in both
 directions**: the request carries a magic word, and a request without it gets
-an EMPTY response (see `replay`), which no length check accepts.
+an EMPTY response (see `replay`), which no length check accepts — ⚠ with one
+degenerate exception, stated rather than papered over: a *canonical v3*
+request with `n = 0` and `m = 0` also has an `n + m = 0`-word response, so at
+that one shape a refusal and an answer are byte-identical. A caller that can
+issue empty requests must distinguish them out of band.
 
 Input `ByteArray`, little-endian 64-bit words:
 
@@ -63,9 +67,13 @@ Semantics, in kernel order:
      executable carrier of `Authority.Active`) — and that grant's scope
      covers the moved node (`o.child < scope`, `Gated.covers`). Refused ops
      are not replayed at all; their status slot is `3`.
-  2. **Sort**: the survivors, in total `(lamport, replica, child, dest)`
-     order (the request index breaks ties, which only identical duplicate ops
-     can produce — the sort is stable).
+  2. **Sort**: the survivors, in total `(lamport, replica, child, dest,
+     cite)` order — **five** keys, not four. `cite` became a field of `Op` in
+     v3 and is a sort key, not decoration: an order that ignored it would tie
+     two *distinct* ops (same move, different grant cited), which is what
+     `opLe_antisymm` and therefore SEC ride on (see `opLt`). The request index
+     breaks the remaining ties, which only identical duplicate ops can produce
+     — the sort is stable.
   3. **Fold**: an op whose destination's effective-ancestor chain passes
      through its child is **skipped** (the Kleppmann cycle rule —
      `Uwueave/Move.lean` §2 is the abstract account of exactly this rule,
@@ -157,20 +165,38 @@ presentations, machine-checked. ⚠ Scope: the 2-node universe only — this is
 a bridge for the miniature, **not** a general refinement of `absReplay` to an
 abstract derived view.
 
-**Still open**, and not claimed — the list is now exactly the TCB, no undone
-proof work hiding in its clothes: (a) the Rust marshaller's byte-for-byte
-agreement with `encodeRequest` — differentially checked at runtime against
-the proven canonical encoder (`requestCanonicalKernel`, asserted in debug
-builds on every request the crate sends, hence on every property-suite
-case), which is the strongest closure available: test evidence by nature,
-since Rust has no formal semantics to prove against; (b) everything
-downstream of the C backend, as above. The former open items — the
+**Still open**, and not claimed — two items, and neither of them is terminal:
+(a) the Rust marshaller's byte-for-byte agreement with `encodeRequest` —
+differentially checked against the proven canonical encoder
+(`requestCanonicalKernel`), but through a `debug_assert!`
+(`rust/src/movelog.rs`), so the check is **compiled out of release builds**;
+it is test evidence either way, since Rust has no formal semantics to prove
+against. ⚠ `docs/TRUST.md` Ledger 2 names the better next step and it is not
+"strengthen the differential": *delete the marshaller* — `encodeRequest` is
+already Lean and already proved to round-trip through all four decoders, so
+exporting it removes the row instead of testing it harder. (b) Everything
+downstream of the C backend, as above — which is **not one boundary**. This
+paragraph used to close "the list is now exactly the TCB, no undone proof
+work hiding in its clothes"; that is retracted. `docs/TRUST.md` Ledger 2
+decomposes (b) into **ten rows: zero PREMISE, nine OBLIGATION, one absent
+component**, every one with a named next step — Lean's C code generator, the
+C compiler and linker, the Lean runtime, `shim.c`, the ABI/FFI boundary,
+Rust `unsafe`, the marshaller, the storage glue, the build wiring, and
+persistence (absent, not trusted). CakeML is the existence proof for the
+codegen half; CompCert covers exactly one row, the C compiler, and does not
+reach Lean's IR. The former open items — the
 Prop-level connection of `absReplay` to the derived-view abstraction, and
 the input-side codec — are **closed**: `kernel_derived_view_sec` /
 `absReplay_ext_mem` and `replay_encodeRequest` in `ExecRefine`, plus the
 2-node symbol bridge in `Move.lean` §3. The gate's own abstract/executable
-gap is closed by theorem in `Gated.lean` §5
-(`kernel_gate_agrees_gatedOps`).
+gap is closed by theorem in `Gated.lean` §5 — and the two halves have
+different scopes, which is the half that gets dropped in citation:
+`Gated.kernel_admits_only_authorised` is the **hypothesis-free** one (every op
+this kernel replays is in the abstract gated feed — the direction that matters
+for safety), while `Gated.kernel_gate_agrees_gatedOps` gives the two feeds as
+an *iff* only under `Authority.WF ρ` **and** `UniqueGrant`, for ops the request
+actually carries. Without those the kernel can only admit FEWER ops than the
+abstraction, never more.
 
 ⚠ **Total is not resource-safe.** Every decoder sizes its block from a count
 word, so a request that carries the magic but a garbage count allocates by
@@ -274,7 +300,10 @@ def effParent (firstParent ov : Array Int) (n : Nat) : Int :=
 /-- Does the effective-ancestor chain from `start` pass through `needle`?
 Fuel-totalized; the view being replayed is acyclic by construction of this
 very check, so fuel `n+1` suffices and exhaustion (defensive) answers `false`
-— the same answer the visited-set guard gives. -/
+— the same answer a walk that ran out of graph would give. (⚠ There is no
+"visited-set guard" in this kernel, and this docstring used to name one:
+`chainHits` is pure fuel, and `chainHits_decides` is what makes exhaustion
+unreachable on the view the kernel maintains.) -/
 def chainHits (firstParent ov : Array Int) (start needle : Nat) : Nat → Bool
   | 0 => false
   | fuel + 1 =>
@@ -352,8 +381,10 @@ def absReplay (firstParent : Array Int) (ops : Array Op) : Array Int :=
 `Uwueave/Gated.lean` gates the abstract op feed by `Authority.Active`; these
 four definitions are that gate in the shipping kernel's carrier — arrays of
 records instead of `GSet`s, `Bool` instead of `Prop`. `Gated.lean` §5 proves
-the two agree on encoded states (`kernel_gate_agrees`), so this is a port,
-not a second design. -/
+the two agree on encoded states — `kernel_gate_agrees`, an iff under
+`Authority.WF ρ` **and** `UniqueGrant`; unconditionally, only the safe-side
+half (`kernel_admits_only_authorised`). So this is a port, not a second
+design. -/
 
 /-- The grant carrying id `i`, if the substrate holds one. **First match**:
 on a substrate violating `Authority.UniqueGrant` two records share an id and
@@ -532,9 +563,11 @@ preserves both blocks' sizes: `size_gatedReplay` and
 The magic guard is the flag day made mechanical: bytes that are not a v3
 request get an **empty** response. A v2 caller therefore fails its own length
 check instead of reading override words out of a status block, and no reader
-can mistake a refusal for an answer — there is no `n + m` for which the empty
-response is a valid one, since `n + m = 0` requests are themselves refused
-only by not carrying the magic. -/
+can mistake a refusal for an answer at any nonempty shape. ⚠ At `n = 0, m = 0`
+it can: such a request passes the magic guard and this function returns
+`ByteArray.empty`, byte-identical to the refusal — `rust/src/movelog.rs`
+accepts it. That is the one shape where the flag day is silent, and it is a
+property of a length-prefixed format whose valid response length can be zero. -/
 def replay (input : ByteArray) : ByteArray :=
   if getWord input 0 == magicV3 then
     let out := gatedReplayFull (decodeGrants input) (decodeRevs input)

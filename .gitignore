@@ -1,4 +1,11 @@
 /.lake/
 /rust/target/
-FORCODEX.md
-CODEXHELP.md
+
+# `FORCODEX.md` and `CODEXHELP.md` used to be listed here. They are the codex
+# correspondence, and 29 references in 12 tracked files point into them —
+# including `docs/MAP.md`'s index of all eight retracted novelty claims
+# (`FORCODEX.md` §0.5), `Uwueave/Choreo.lean`'s retraction source (§4.7), and
+# the errata that killed the scalar coordination grade and the "meetings"
+# currency (`CODEXHELP.md` §0.1). Ignoring them pointed the retraction ledger
+# outside the repository, while the grok correspondence was tracked in full
+# (`docs/grok/`). Do not re-add them.

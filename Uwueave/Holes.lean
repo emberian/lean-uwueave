@@ -89,10 +89,13 @@ CRDT because its carrier *is* the substrate's (`derived_is_a_CRDT` — that part
 is the abbreviation, not the theorem); what the homomorphism adds is that
 computing commutes with that merge, and the rest of §3 is one line each on top
 of it: `evalSet` is monotone (`evalSet_mono`); any schedule agrees
-(`evalSet_fold`); and — the piece §4.3 of the design memo said nobody has —
-**any I-confluent invariant on the result pulls back to an I-confluent
-invariant on the inputs** (`result_invariant_transfers`, inhabited by
-`answer_includes_iconfluent`).
+(`evalSet_fold`); and **any I-confluent invariant on the result pulls back to
+an I-confluent invariant on the inputs** (`result_invariant_transfers`,
+inhabited by `answer_includes_iconfluent`). ⚠ That last one used to be
+advertised as "the piece §4.3 of the design memo said nobody has". It is not:
+**LoRe** has essentially that combination and shipped three years earlier — see
+retraction 4 below and `docs/BIBLIOGRAPHY.md`. The theorem is unaffected; the
+size of the claim around it is not.
 
 The proof is short and is *supposed* to be. The content is that ∃ distributes
 over ∨; the value is the statement and the corollaries.
@@ -117,6 +120,33 @@ Getting one answer anyway costs a stability licence (§6).
 deterministic function; taking the image is a join-homomorphism, so every
 derived value is a CRDT for free — and the only thing coordination buys is the
 right to throw candidates away.**
+
+## ⚑ Read this file with its successors — the forward pointers
+
+Every other pointer in this tree runs upward: the later file cites the earlier
+one and the earlier one never learns it was superseded. So, from this side:
+
+  * **`Uwueave/Evidence.lean` corrects this file's carrier.** `Partial α :=
+    GSet α` (§2 below) conflates two independent facts — *observed incompatible
+    candidates* and *unseen admissible future information* — and Evidence says
+    so in those words at its own §"Correction 1", replacing the carrier with a
+    three-component `ResultEvidence α` (`candidates`, `obligations`,
+    `certificates`) that can distinguish a **closed fork** ("waiting will not
+    fix it") from an open one. That distinction is the difference between a
+    spinner and a prompt, and this file cannot state it. Everything below is
+    true as written about `GSet α`; it is simply a coarser carrier than the one
+    the library now has. `Evidence.closed_freezes` also *derives* §6's `Stable`
+    licence rather than assuming it.
+  * **`Uwueave/Choreo.lean` is the choreography item in the boundary below**,
+    landed — see that entry.
+  * `Uwueave/WorldFuture.lean` re-indexes Evidence's futures by a **world**
+    rather than a state — and its `World` is *not* this file's `World`
+    (`abbrev World := List Val`, §2). WorldFuture states the disambiguation from
+    its side and reads no `Holes.World`; this sentence is the other half of it.
+  * ⚑ `Uwueave/Gluing.lean` also speaks of "holes" — guarded holes with
+    delta-shaped fills — and it is **unrelated machinery**: it imports `Spec`
+    and `Delta`, never this file, and contains no reference to `Holes`. Two
+    vocabularies, one word.
 
 ## Honest boundary
 
@@ -157,17 +187,26 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     delta touched) is precisely what the homomorphism licenses and precisely
     what is not built. `Delta.lean`'s delta discipline is the shape it would
     take.
-  * **Choreography and endpoint projection.** ⟨UNDONE⟩ *choreography :
-    computation :: CRDT : data* — one global program, projected per replica,
-    with I-confluence deciding which projections need a coordination event.
-    Not here; a sibling lane builds beside this one.
-  * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE⟩ §6's stability licence
-    is abstract (`Stable Arriving P`), and `stable_inputs_seal_the_result`
-    proves the *mechanism* — stability of the inputs transports to stability
-    of the result, along the headline. What is **not** built is the transport
-    from `Era.final_view_immune` (finalised prefixes of an event *list*, under
-    an arbiter's cuts) into a `Stable` hypothesis on a `GSet World`. Era is
-    the implementing instance in the design, and only in the design.
+  * **Choreography and endpoint projection.** ⟨DONE — see `Uwueave/Choreo.lean`⟩
+    *choreography : computation :: CRDT : data* — one global program, projected
+    per replica, with I-confluence deciding which projections need a
+    coordination event. This item used to read "not here; a sibling lane builds
+    beside this one". That lane landed: `Choreo.lean` opens with this slogan
+    verbatim and carries `projection_sound`,
+    `coordination_free_iff_iconfluent` and the seam refinement
+    `seam_coordination_free`. It is kept in this list rather than deleted only
+    because the sentence is the one Choreo quotes.
+  * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE, and narrowed⟩ §6's
+    stability licence is abstract (`Stable Arriving P`), and
+    `stable_inputs_seal_the_result` proves the *mechanism* — stability of the
+    inputs transports to stability of the result, along the headline. What is
+    **not** built is the transport from `Era.final_view_immune` (finalised
+    prefixes of an event *list*, under an arbiter's cuts) into a `Stable`
+    hypothesis on a `GSet World`. ⚑ What *has* landed since is one rung of it:
+    `Evidence.closed_freezes` derives the freeze from the evidence a replica
+    actually holds — "this is what `Holes.lean` §6 assumed under the name
+    `Stable`", in its own words — so the remaining gap is Era's arbiter cut,
+    not the licence in general.
   * **Determinacy's refutation is not a new theorem.** ⟨TERMINAL, and said
     plainly⟩ `determinacy_not_iconfluent` is `Ceiling.uniqueness_ceiling` at
     the constant selector, i.e. `Ceiling.ceiling_atMostOne` read at a new
@@ -183,7 +222,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     memo's open question (attributed holes; "who do I need" as a computed
     value) is supported by the codomain and computed by nothing.
 
-## ⚠ Three retractions from the design memo this file was built from
+## ⚠ Four retractions from the design memo this file was built from
 
 `FORCODEX.md` §4 made claims the literature refutes. They are withdrawn there;
 they are recorded here because this is the file they were about.
@@ -234,6 +273,26 @@ they are recorded here because this is the file they were about.
      `Stable` is abstract in `Arriving` for exactly this reason: three ways to
      discharge one hypothesis, and the transport from `Era.final_view_immune`
      into a `Stable` hypothesis is named **unbuilt** in the boundary above.
+  4. **"Three verdicts on one program — deterministic? coordination-free? does
+     my invariant on the result survive? — and nobody currently offers all
+     three; the third is the piece nobody has."** ⚠ **WITHDRAWN.** **LoRe**
+     (Haas, Mogk, Yanakieva, Bieniusa, Mezini, *"LoRe: A Programming Model for
+     Verifiably Safe Local-First Software"*, arXiv:2304.07133v2) is essentially
+     that combination, shipping, three years earlier: invariants verified
+     statically against a dataflow, the interactions whose concurrency would
+     violate one identified precisely, and a coordination protocol generated
+     for exactly those. It targets peer-to-peer local-first, not geo-replicated
+     stores. `result_invariant_transfers` and `answer_includes_iconfluent` are
+     untouched — a theorem's truth and a project's priority are different
+     questions, and only the first is machine-checked here. What survives is
+     narrower and is what this library should be measured on: LoRe's verdict is
+     binary and per-interaction, discharged by SMT, with no *segmented* verdict,
+     no coordination-**frequency** quantity, no counterexample-as-deliverable,
+     and no proof terms under a total axiom gate. On the axis a user cares
+     about — *can I write my app in it* — LoRe is ahead, and nobody here has
+     measured against it. The full entry is `docs/BIBLIOGRAPHY.md`; this
+     retraction is recorded here because §3 is where the claim was made, and it
+     reached the bibliography before it reached this file.
 
 Literature, PDFs in `~/paperbin/uweave/`:
   * Kuper, Newton — "LVars: Lattice-based Data Structures for Deterministic
@@ -257,6 +316,10 @@ Literature, PDFs in `~/paperbin/uweave/`:
     × collaborative replicated editing is already occupied** — a CmRDT edit
     log with conflicts represented as holes in the typed term. Not archived
     locally; cited from an external review.
+  * Haas, Mogk, Yanakieva, Bieniusa, Mezini — "LoRe: A Programming Model for
+    Verifiably Safe Local-First Software", arXiv:2304.07133v2, 2023.
+    **Prior art for §3's three-verdict framing** — see retraction 4. Not
+    archived locally; relayed from an external review (codex).
   * Brun, Decova, Lattuada, Traytel — "Verified Progress Tracking for Timely
     Dataflow", ITP 2021. Frontiers as **antichains** bounding what may still
     arrive, verified in Isabelle/HOL — the shape an `Arriving` component of
@@ -534,11 +597,19 @@ theorem evalSet_fold {α : Type} (f : World → α) :
 I-confluent on the inputs — so the whole judgement of `Confluence.lean`
 transfers along any computation, for free, by the headline.
 
-This is the leg the design memo (§4.3) said nobody has: not "is my program
-deterministic" (LVars) and not "is my program monotone" (CALM), but *does my
-invariant on the answer survive the merge*. The transfer is not vacuous in
-either direction — §5 exhibits a result invariant that is **not** I-confluent
-and whose pullback therefore fails too, with the clash pair on the inputs. -/
+The leg: not "is my program deterministic" (LVars) and not "is my program
+monotone" (CALM), but *does my invariant on the answer survive the merge*. The
+transfer is not vacuous in either direction — §5 exhibits a result invariant
+that is **not** I-confluent and whose pullback therefore fails too, with the
+clash pair on the inputs.
+
+⚠ **Retracted, and the retraction belongs here.** This docstring used to say
+the design memo's §4.3 called this "the piece nobody has". That claim is gone:
+**LoRe** (Haas, Mogk, Yanakieva, Bieniusa, Mezini, arXiv:2304.07133) is
+essentially the same combination, shipping, three years earlier — static
+verification of invariants against a dataflow, with the coordination generated
+for exactly the interactions that need it. What survives is narrower and is
+stated in the header's fourth retraction and in `docs/BIBLIOGRAPHY.md`. -/
 theorem result_invariant_transfers {α : Type} (f : World → α)
     {J : Invariant (Partial α)} (hJ : IConfluent J) :
     IConfluent (S := GSet World) (fun W => J (evalSet f W)) := by
@@ -753,8 +824,9 @@ theorem monadic_exact_at_single {α : Type} [DecidableEq α] (g : Val → Val �
 
 §3 says computing is free. This says *wanting one answer* is not.
 
-"At most one candidate" is `Ceiling.lean`'s uniqueness ceiling wearing its
-fifth costume, and the file says so plainly: `determinacy_not_iconfluent` is
+"At most one candidate" is `Ceiling.lean`'s uniqueness ceiling wearing a fifth
+costume. ⚠ `Ceiling.lean` does **not** say so — its header counts four, and
+this is the instance that makes the count stale: `determinacy_not_iconfluent` is
 `Ceiling.uniqueness_ceiling` at the constant selector, the same theorem that
 refutes "at most one element", "one anchor per id", "one grant per id", "one
 DFA target per slot". The new content is the **pullback**: the clash pair
