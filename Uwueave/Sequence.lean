@@ -18,7 +18,7 @@ proved out, and then proves *both* sides of it:
     out **interleaved** (`interleaving_anomaly` — the anomaly of Kleppmann,
     Gomes, Mulligan & Beresford, "Interleaving anomalies in collaborative text
     editors", PaPoC 2019; PDF at
-    `/Users/ember/paperbin/uweave/kleppmann-interleaving-anomalies.pdf`).
+    Kleppmann et al., PaPoC'19 — see `docs/BIBLIOGRAPHY.md`).
 
 ## The construction
 
@@ -566,7 +566,7 @@ theorem linearize_anchor_precedes {n : Nat} {s : SeqState} (hwf : WF n s)
 
 Kleppmann–Gomes–Mulligan–Beresford, "Interleaving anomalies in collaborative
 text editors" (PaPoC 2019;
-`/Users/ember/paperbin/uweave/kleppmann-interleaving-anomalies.pdf`): a
+Kleppmann et al., PaPoC'19 — see `docs/BIBLIOGRAPHY.md`): a
 convergent sequence CRDT can converge to a text neither user wrote. Two shapes
 of it hold in this miniature, both proved by computing the actual merged
 linearizations. -/

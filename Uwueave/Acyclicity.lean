@@ -9,9 +9,10 @@ vanishes. Three theorems:
 
   1. `acyclicity_not_iconfluent` — over a graph with **arbitrary edge
      insertion**, acyclicity is not I-confluent: replica A adds `a → b`,
-     replica B adds `b → a`, each graph is a DAG, the union is not. By Bailis
-     necessity, *no* CRDT library can give you coordination-free arbitrary edge
-     insertion with a DAG guarantee. Anyone who claims otherwise is hiding
+     replica B adds `b → a`, each graph is a DAG, the union is not. What Lean
+     shows is `¬ IConfluent` with that witness; per Bailis et al.'s necessity
+     theorem (cited, not re-proved here) that means no coordination-free
+     convergent implementation maintains it — a claim otherwise is hiding
      either coordination or a repair policy.
 
   2. `grounded_iconfluent` — the invariant "every edge descends in rank" IS

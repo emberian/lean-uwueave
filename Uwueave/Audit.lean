@@ -7,9 +7,9 @@ future edit smuggles in `sorry` (the `sorryAx` axiom), `native_decide`
 gate, not a printout. The permitted floor is Lean's own three:
 `propext`, `Classical.choice`, `Quot.sound`.
 
-Two theorems are pinned axiom-FREE — the well-foundedness argument
-(`grounded_acyclic`) and the derived-view SEC theorem (`derived_view_sec`)
-are pure λ-calculus.
+Pins cover KEYSTONES — the theorems a reader would cite — not proof
+scaffolding. Many are pinned axiom-FREE (pure λ-calculus); count them with
+`grep -c "does not depend"` rather than trusting a number written here to rot.
 -/
 import Uwueave.Weave
 import Uwueave.ORSet
@@ -19,6 +19,10 @@ import Uwueave.Segmented
 import Uwueave.Undo
 import Uwueave.Delta
 import Uwueave.Sequence
+import Uwueave.ORMap
+import Uwueave.Automata
+import Uwueave.Authority
+import Uwueave.ExecRefine
 
 /--
 info: 'Uwueave.Acyclicity.grounded_acyclic' does not depend on any axioms
@@ -184,25 +188,9 @@ info: 'Uwueave.Segmented.budget_segmented' depends on axioms: [propext, Quot.sou
 
 /-! ### Wave 3 — undo/redo -/
 
-/--
-info: 'Uwueave.Undo.mem_s01' depends on axioms: [propext, Quot.sound]
--/
-#guard_msgs in #print axioms Uwueave.Undo.mem_s01
 
-/--
-info: 'Uwueave.Undo.mem_s01u' depends on axioms: [propext, Quot.sound]
--/
-#guard_msgs in #print axioms Uwueave.Undo.mem_s01u
 
-/--
-info: 'Uwueave.Undo.mem_s01ur' depends on axioms: [propext, Quot.sound]
--/
-#guard_msgs in #print axioms Uwueave.Undo.mem_s01ur
 
-/--
-info: 'Uwueave.Undo.mem_s01uC' depends on axioms: [propext, Quot.sound]
--/
-#guard_msgs in #print axioms Uwueave.Undo.mem_s01uC
 
 /--
 info: 'Uwueave.Undo.overwrite_supersedes' depends on axioms: [propext, Quot.sound]
@@ -372,3 +360,240 @@ info: 'Uwueave.Sequence.linearize_count_one' depends on axioms: [propext, Classi
 info: 'Uwueave.Sequence.merged_head_exactly_once' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms Uwueave.Sequence.merged_head_exactly_once
+
+/-! ### Wave 4 — OR-Map, automata, authority, DSL seams, kernel refinement -/
+
+/--
+info: 'Uwueave.ORMap.present_iff_orset' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.ORMap.present_iff_orset
+
+/--
+info: 'Uwueave.ORMap.ormap_policies_agree_without_removes' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.ORMap.ormap_policies_agree_without_removes
+
+/--
+info: 'Uwueave.Automata.exec_perm' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Automata.exec_perm
+
+/--
+info: 'Uwueave.Automata.exec_dup' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Automata.exec_dup
+
+/--
+info: 'Uwueave.Automata.exec_redeliver' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Automata.exec_redeliver
+
+/--
+info: 'Uwueave.Automata.run_is_exec' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Automata.run_is_exec
+
+/--
+info: 'Uwueave.Authority.scope_le_root' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Authority.scope_le_root
+
+/--
+info: 'Uwueave.Authority.chain_scope_descends' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Authority.chain_scope_descends
+
+/--
+info: 'Uwueave.Authority.active_monotone_grants' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Authority.active_monotone_grants
+
+/--
+info: 'Uwueave.Spec.SegVerdict.escalatesGlobally' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Spec.SegVerdict.escalatesGlobally
+
+/--
+info: 'Uwueave.Spec.SegVerdict.freeWithinSeam' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Spec.SegVerdict.freeWithinSeam
+
+/--
+info: 'Uwueave.Spec.SegVerdict.staysInSeam' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Spec.SegVerdict.staysInSeam
+
+/--
+info: 'Uwueave.Spec.SegVerdict.toClash' does not depend on any axioms
+-/
+#guard_msgs in #print axioms Uwueave.Spec.SegVerdict.toClash
+
+/--
+info: 'Uwueave.Automata.exec_same_letters' depends on axioms: [propext]
+-/
+#guard_msgs in #print axioms Uwueave.Automata.exec_same_letters
+
+/--
+info: 'Uwueave.Automata.run_append_merge' depends on axioms: [propext]
+-/
+#guard_msgs in #print axioms Uwueave.Automata.run_append_merge
+
+/--
+info: 'Uwueave.Authority.authority_view_antitone' depends on axioms: [propext]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.authority_view_antitone
+
+/--
+info: 'Uwueave.Authority.revocation_is_forever' depends on axioms: [propext]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.revocation_is_forever
+
+/--
+info: 'Uwueave.Authority.duelling_revocations_not_iconfluent' depends on axioms: [Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.duelling_revocations_not_iconfluent
+
+/--
+info: 'Uwueave.Authority.duelling_admins_annihilate' depends on axioms: [Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.duelling_admins_annihilate
+
+/--
+info: 'Uwueave.Spec.mutexClash' depends on axioms: [Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Spec.mutexClash
+
+/--
+info: 'Uwueave.Automata.run_same_inputs' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Automata.run_same_inputs
+
+/--
+info: 'Uwueave.Automata.determinism_not_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Automata.determinism_not_iconfluent
+
+/--
+info: 'Uwueave.Automata.token_firings_segmented' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Automata.token_firings_segmented
+
+/--
+info: 'Uwueave.Automata.token_reallocation_not_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Automata.token_reallocation_not_iconfluent
+
+/--
+info: 'Uwueave.Automata.concurrent_firings_merge_legal' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Automata.concurrent_firings_merge_legal
+
+/--
+info: 'Uwueave.Authority.wf_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.wf_iconfluent
+
+/--
+info: 'Uwueave.Authority.sole_admin_not_iconfluent' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.sole_admin_not_iconfluent
+
+/--
+info: 'Uwueave.Authority.merge_only_revokes' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.merge_only_revokes
+
+/--
+info: 'Uwueave.Spec.Verdict.keyedClash' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Spec.Verdict.keyedClash
+
+/--
+info: 'Uwueave.Spec.budgetSegVerdict' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Spec.budgetSegVerdict
+
+/--
+info: 'Uwueave.Spec.atMostOneClash' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Spec.atMostOneClash
+
+/--
+info: 'Uwueave.Exec.size_absReplay' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.size_absReplay
+
+/--
+info: 'Uwueave.Exec.getWord_pushWord' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.getWord_pushWord
+
+/--
+info: 'Uwueave.Exec.getWord_encodeView' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.getWord_encodeView
+
+/--
+info: 'Uwueave.Exec.toI_ofI' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.toI_ofI
+
+/--
+info: 'Uwueave.Exec.decode_encode_id' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.decode_encode_id
+
+/--
+info: 'Uwueave.Exec.replay' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.replay
+
+/--
+info: 'Uwueave.ORMap.proj_merge' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.ORMap.proj_merge
+
+/--
+info: 'Uwueave.ORMap.ormap_get_survives' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.ORMap.ormap_get_survives
+
+/--
+info: 'Uwueave.ORMap.ormap_present_not_iconfluent' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.ORMap.ormap_present_not_iconfluent
+
+/--
+info: 'Uwueave.ORMap.ormap_doomed_update' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.ORMap.ormap_doomed_update
+
+/--
+info: 'Uwueave.ORMap.ormap_policy_divergence' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.ORMap.ormap_policy_divergence
+
+/--
+info: 'Uwueave.Authority.wf_unique_not_iconfluent' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Authority.wf_unique_not_iconfluent
+
+/--
+info: 'Uwueave.Exec.absReplay_terminates' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.absReplay_terminates
+
+/--
+info: 'Uwueave.Exec.absReplay_acyclic' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.absReplay_acyclic
+
+/--
+info: 'Uwueave.Exec.absReplay_chain_nodup' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.absReplay_chain_nodup
+
+/--
+info: 'Uwueave.Exec.chainHits_decides' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms Uwueave.Exec.chainHits_decides

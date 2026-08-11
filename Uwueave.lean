@@ -9,6 +9,10 @@ import Uwueave.MVRegister
 import Uwueave.Undo
 import Uwueave.Delta
 import Uwueave.Sequence
+import Uwueave.ORMap
+import Uwueave.Automata
+import Uwueave.Authority
+import Uwueave.ExecRefine
 import Uwueave.Segmented
 import Uwueave.Spec
 import Uwueave.Weave

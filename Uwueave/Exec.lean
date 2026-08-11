@@ -31,12 +31,40 @@ abstract account of exactly this rule, including its proved price,
 ## Claim discipline
 
 This kernel is executable Lean, totalized by fuel, compiled by Lean's verified-
-nothing C backend and trusted like any compiler output. The *refinement
-theorem* connecting it to `Move.miniInterp`/`derived_view_sec` (that this
-replay is the abstract interpreter's derived view, for all inputs) is named
-open work, not a thing this comment gets to claim by adjacency. Until it
-lands, the honest statement is: the semantics are *authored* in Lean, in one
-place, next to their abstract model — no longer twinned across languages.
+nothing C backend and trusted like any compiler output. What is and is not
+proved about it, precisely:
+
+**By construction** (no proof debt): `replay` is *literally*
+`encodeView ∘ absReplay ∘ (decodeBase, decodeOps)` — a composition, not a
+re-implementation — so there is no fold-layer/byte-layer agreement left to
+prove. The decision layer is the named function `absReplay`.
+
+**Proved, in `Uwueave/ExecRefine.lean`** (axioms ⊆ `{propext, Classical.choice,
+Quot.sound}`; no `sorry`/`native_decide`/`#guard`):
+
+  * `absReplay_acyclic` / `absReplay_terminates` / `absReplay_chain_nodup` —
+    **the general acyclicity theorem**: if some rank strictly descends along
+    the structural first parents (`GroundedBase`, the shape content-addressing
+    provides), then after replaying *any* op array — order, duplication and
+    content unconstrained — the effective-parent relation has no cycle: every
+    override chain terminates at root without revisiting a node. This is
+    `Move.miniInterp_acyclic` generalized from the 2-op miniature to this
+    kernel, for all inputs.
+  * `chainHits_decides` — fuel adequacy: on the (inductively terminating) view
+    the kernel maintains, the literal fuel `n + 1` below *decides* chain
+    membership; exhaustion never reads as "misses".
+  * `getWord_pushWord`, `getWord_pushWord_lt`, `size_encodeView`,
+    `getWord_encodeView`, `toI_ofI`, `decode_encode_id` — output-codec round
+    trip at the word level: word `i` of `encodeView ov` decodes back to
+    `ov[i]` for i64-range values, and pushed words never disturb earlier ones.
+
+**Still open**, and not claimed: (a) the Prop-level connection of `absReplay`
+to `Move.miniInterp`/`derived_view_sec` — that this replay *is* the abstract
+derived view of the grow-only log, so SEC-for-the-real-kernel is still
+inherited informally from the log argument, not machine-checked; (b) the
+input-side codec (`decodeBase`/`decodeOps` have no in-kernel encoder to
+round-trip against — the Rust request encoder is unverified by construction);
+(c) everything downstream of the C backend, as above.
 -/
 
 namespace Uwueave.Exec

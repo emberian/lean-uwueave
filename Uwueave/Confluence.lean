@@ -129,16 +129,13 @@ below hands you the specific pair of legal states whose merge is illegal. -/
 def IConfluent {S : Type u} [MergeState S] (I : Invariant S) : Prop :=
   ∀ x y : S, I x → I y → I (x ⊔ y)
 
-/-- **The cost verdict.** A field/structure may run coordination-free exactly when
-its invariant is I-confluent. We keep the two names distinct because they answer
-different questions — `IConfluent` is a fact about a predicate, `CoordinationFree`
-is a licence to pick a replication strategy — but by Bailis Thm 3.1 they coincide,
-which is `coordination_free_iff` below. -/
-def CoordinationFree {S : Type u} [MergeState S] (I : Invariant S) : Prop :=
-  IConfluent I
-
-theorem coordination_free_iff {S : Type u} [MergeState S] (I : Invariant S) :
-    CoordinationFree I ↔ IConfluent I := Iff.rfl
+/- On "coordination-free": Bailis et al.'s Theorem 3.1 says I-confluence is
+necessary AND sufficient for a coordination-free convergent implementation to
+exist. That theorem quantifies over systems and lives in the paper, not in this
+Lean — so this library uses `IConfluent` directly and cites the equivalence
+rather than defining a synonym that would let `rw` manufacture a false sense of
+necessity. What a `¬ IConfluent` result here formally provides is the clash
+witness; the modal reading ("no implementation can...") is Bailis, cited. -/
 
 /-- **Failure is constructive.** When `I` is not I-confluent you do not merely
 lack a proof — there is an actual pair of replica states, each individually legal,

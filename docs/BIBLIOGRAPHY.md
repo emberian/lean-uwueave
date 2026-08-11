@@ -34,7 +34,7 @@ invariants pass) and demonstrate the throughput this unlocks.
 
 *What this repo takes.* The entire judgement. `Confluence.lean` is the
 necessary-and-sufficient result restated over bare join-semilattices:
-`IConfluent`, `CoordinationFree`, `coordination_free_iff` (their Theorem 3.1's
+`IConfluent` (their Theorem 3.1's
 coincidence, held as a definitional fact), and `escalation_witness` — failure
 is constructive, the clashing pair *is* the bug report. Their motivating
 non-negative-balance example is proved concretely as

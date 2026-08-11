@@ -76,7 +76,7 @@ attenuable proof-carrying token over owned state, leaving a receipt": this
 file is that token's attenuation lattice, replicated · ERA (Kegan Dougal,
 "ERA: Epoch-Resolved Arbitration for Duelling Admins in Group Management
 CRDTs", PaPoC 2026, arXiv:2601.22963; PDF at
-`/Users/ember/paperbin/uweave/era-epoch-resolved-arbitration.pdf`) · blocklace
+ERA, arXiv:2601.22963 — see `docs/BIBLIOGRAPHY.md`) · blocklace
 (Almeida–Shapiro 2024 — the grounded hash-DAG substrate; `Acyclicity.lean`).
 -/
 import Uwueave.Catalog

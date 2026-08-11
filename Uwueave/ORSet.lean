@@ -143,10 +143,9 @@ theorem clset_cross_element_not_iconfluent :
     ¬ IConfluent (S := CLSet Nat)
       (fun s => s 0 % 2 = 1 → s 1 % 2 = 1) := by
   intro h
-  -- x: {0 ↦ 1, 1 ↦ 1} — both present.   y: {0 ↦ 2, 1 ↦ 0} — 0 absent (removed).
-  -- merge: {0 ↦ 2 … wait, max(1,2) = 2 — 0 absent, invariant vacuous? No:
-  -- pick x's 0-count LONGER: x: {0 ↦ 3, 1 ↦ 1}, y: {0 ↦ 2, 1 ↦ 2}.
-  -- merge: {0 ↦ 3 (odd, present), 1 ↦ 2 (even, absent)} — violated.
+  -- x: {0 ↦ 3, 1 ↦ 1} — both present.  y: {0 ↦ 2, 1 ↦ 2} — both absent-or-even,
+  -- invariant vacuously fine. merge: {0 ↦ max(3,2)=3 (odd, PRESENT),
+  -- 1 ↦ max(1,2)=2 (even, absent)} — antecedent holds, consequent dies.
   have hbad := h (fun n => if n = 0 then 3 else 1) (fun n => if n = 0 then 2 else 2)
     (by intro _; decide) (by intro hc; simp at hc)
   have h0 : Nat.max 3 2 % 2 = 1 := by decide
