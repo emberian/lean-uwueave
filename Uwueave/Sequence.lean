@@ -31,8 +31,11 @@ makes that structural (an element's anchor is strictly smaller than its id, so
     `GSet (Nat × Nat)` — the pair `(i, a)` means "element `i` was inserted
     after anchor `a`" (`a = 0`: at the start of the document).
 
-Insertion only: the state is grow-only, and **deletion is not modeled** —
-tombstones are future work, not a hidden feature.
+Insertion only: the state is grow-only, and **deletion is not modeled in this
+module**. It is no longer future work for the library: `Uwueave/SeqKernel.lean`
+implements RGA tombstoned deletion in the shipping kernel and proves its law
+(`linearizeK_sublist_emitAll`: a delete filters the document order without
+reordering, duplicating, or revealing surviving elements).
 
 `WF n s` (the invariant): every present pair has `id < n`, `anchor < id`, and
 the anchor is the sentinel or itself a present element. `anchor < id` is the
@@ -40,6 +43,11 @@ creation-order discipline of `Acyclicity.lean`: ids are creation-stamped (in a
 content-addressed system, hash-derived), so an anchor is strictly older than
 the element anchored to it — the anchor graph is *grounded* with rank = id, and
 `wf_iconfluent` is the same per-element argument as `grounded_iconfluent`.
+(`SeqKernel.lean`'s `WFK` generalizes this index-order story to an arbitrary
+rank strictly descending along anchor edges — necessary because the shipping
+dense order is content-hash order, not creation order — and its
+`wfk_of_index_ordered` recovers exactly this module's `anchor < id` discipline
+as the rank = index special case.)
 
 `linearize n s`: depth-first from the root, children of each anchor in
 **descending id order** — the RGA rule, newest insertion closest to its anchor.
@@ -80,8 +88,11 @@ below `n`, so a chain has length at most `n` and fuel `n` suffices
     no model of "what the user meant" here, only of what the algorithm does;
     `run_order_by_id` shows the merged run order is decided by id comparison,
     which no user chose.
-  * **Deletion is not modeled.** Grow-only. Real sequence CRDTs spend most of
-    their complexity on tombstones and garbage collection.
+  * **Deletion is not modeled here.** This module is grow-only. Tombstoned
+    deletion is implemented and proved in `SeqKernel.lean` (excluded from the
+    output, kept in the traversal — the classic RGA rule, by construction);
+    garbage collection is implemented nowhere, and real sequence CRDTs spend
+    most of their complexity on exactly that.
   * **Exactly-once needs `UniqueAnchor`**, an assumption the lattice does not
     preserve (see above); membership and anchor-precedence do not.
   * **No `InjectiveHash` typeclass will be added — a design decision, not an
@@ -95,7 +106,10 @@ below `n`, so a chain has length at most `n` and fuel `n` suffices
     interleaving anomaly proved here) handle deletion, rich positions, byte
     efficiency, and stronger ordering guarantees. This file is a lens for the
     *judgement* — which invariants of anchored text are coordination-free —
-    not a competitor.
+    not a competitor. The house implementation is `SeqKernel.lean` (RGA with
+    tombstones, compiled into the Rust crate); the anomaly governs it too, and
+    is reproduced through the shipping kernel by a Rust test
+    (`seq.rs::interleaving_anomaly_through_the_kernel`), not just modeled here.
 -/
 import Uwueave.Move
 
@@ -604,7 +618,9 @@ text editors" (PaPoC 2019;
 Kleppmann et al., PaPoC'19 — see `docs/BIBLIOGRAPHY.md`): a
 convergent sequence CRDT can converge to a text neither user wrote. Two shapes
 of it hold in this miniature, both proved by computing the actual merged
-linearizations. -/
+linearizations. Not only a model fact: the same scenario replays through the
+compiled `uwueave_seq_kernel` and alternates there too
+(`rust/src/seq.rs::interleaving_anomaly_through_the_kernel`). -/
 
 /-- Replica X of the head-insert pair: elements 1 and 3, both anchored at the
 root — the "insert repeatedly at the top of the document" pattern (a bullet

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>uwueave — machine-checked CRDT verdicts for weaves and looms</title>
-<meta name="description" content="A Lean 4 development that classifies replicated-structure invariants by invariant confluence — proving which replicate with zero coordination, refuting the rest with concrete two-replica counterexamples, and pricing the escape routes — plus a Rust crate whose replay kernel is compiled from the Lean itself. Companion to universal-weave.">
+<meta name="description" content="A Lean 4 development that classifies replicated-structure invariants by invariant confluence — proving which replicate with zero coordination, refuting the rest with concrete two-replica counterexamples, and pricing the escape routes — plus a Rust crate whose move-replay and sequence kernels are compiled from the Lean itself. Companion to universal-weave.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='10' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='22' cy='8' r='5' fill='none' stroke='%2344509e' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='24' r='5' fill='none' stroke='%231d7a46' stroke-width='2.5'/%3E%3Cpath d='M12 13 L15 19 M20 13 L17 19' stroke='%2344509e' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -237,7 +237,8 @@
       <a href="#dichotomy">the dichotomy</a>
       <a href="#verdicts">verdicts</a>
       <a href="#pattern">the pattern</a>
-      <a href="#kernel">the kernel</a>
+      <a href="#kernel">the kernels</a>
+      <a href="#model">the model layer</a>
       <a href="#dsl">the DSL</a>
       <a href="#check">uwueave-check</a>
       <a href="#claims">claims</a>
@@ -256,24 +257,26 @@
     by whether they can survive merging with <strong>zero coordination</strong>: every safe one
     gets a proof, every impossible one a concrete two-replica counterexample, and every
     workaround a proved price. The companion Rust crate implements the blessed fragment, and
-    its trickiest decision &mdash; the move-replay kernel &mdash; is <em>compiled from the Lean
-    itself</em>, not re-implemented.</p>
+    its two trickiest decisions &mdash; move replay and sequence linearization &mdash; are
+    <em>compiled from the Lean itself</em>, not re-implemented.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">21</div><div class="l">Lean modules</div>
-        <div class="s">one judgement, <code>Confluence</code> to <code>Exec</code></div></div>
-      <div class="stat"><div class="n">1060</div><div class="l">constants audited, total</div>
-        <div class="s"><code>#audit_floor</code> walks the whole namespace &mdash; zero-lag, no list</div></div>
-      <div class="stat"><div class="n">65</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">29</div><div class="l">Lean modules</div>
+        <div class="s">one judgement, <code>Confluence</code> to <code>Era</code></div></div>
+      <div class="stat"><div class="n">1978</div><div class="l">constants audited, total</div>
+        <div class="s"><code>#audit_floor</code> walks the whole namespace &mdash; zero-lag, no list (count from the 2026-08-10 audit)</div></div>
+      <div class="stat"><div class="n">98</div><div class="l">keystones in the ledger</div>
         <div class="s">with generality &amp; reachability axes</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
-        <div class="s">Lean core only; <code>lake build</code> in ~30&nbsp;s cold</div></div>
-      <div class="stat"><div class="n">1</div><div class="l">replay kernel</div>
-        <div class="s">authored in Lean, compiled into the Rust crate</div></div>
+        <div class="s">Lean core only &mdash; nothing to vendor, nothing to pin</div></div>
+      <div class="stat"><div class="n">2</div><div class="l">compiled kernels</div>
+        <div class="s">move replay + sequence (RGA with tombstones), authored in Lean, linked into the Rust crate</div></div>
     </div>
     <p class="stats-foot">The counts are checkable, not decorative:
-    <code>grep -c "#guard_msgs" Uwueave/Audit.lean</code> and
-    <code>grep -c "does not depend" Uwueave/Audit.lean</code>.</p>
+    <code>ls Uwueave/*.lean | wc -l</code>; the ledger tally line in
+    <code>docs/MAP.md</code> (enforced against the table by
+    <code>cargo test --bin uwueave-check</code>); and every <code>lake build</code>
+    prints the audit count (<code>#audit_floor: &hellip; constants audited</code>).</p>
 
     <h2 style="margin-top:2.2rem">The three-sentence version</h2>
     <ol class="three">
@@ -658,7 +661,10 @@ theorem causal_dag_free (rank : Nat → Nat) :
           &mdash; two contiguous two-element runs merge to <code>[4, 3, 2, 1]</code>, strictly
           alternated; <code>run_order_by_id</code> shows merged order is id arbitration, not
           intention. No-interleaving is explicitly <em>not</em> claimed &mdash; that is what
-          real sequence CRDTs (Loro, Fugue) are for.</li>
+          Fugue is for (cited, not implemented). The sequence CRDT itself is now
+          <em>implemented</em> the house way &mdash; <code>SeqKernel.lean</code>, RGA with
+          tombstones, compiled into the crate (kernel section below) &mdash; and the anomaly
+          governs it too: a Rust test replays it through the compiled kernel.</li>
         </ul>
       </article>
 
@@ -703,7 +709,13 @@ theorem causal_dag_free (rank : Nat → Nat) :
           and <code>duelling_revocations_not_iconfluent</code> &mdash; &ldquo;one admin&rdquo; is mutual
           exclusion in authority clothes, and concurrent revocations annihilate both
           duellists (<code>duelling_admins_annihilate</code>). Keeping a survivor costs
-          exactly the arbitration ERA introduces &mdash; cited, priced, not hidden.</li>
+          exactly the arbitration ERA introduces &mdash; and ERA's protocol core is now
+          <em>implemented</em> in <code>Era.lean</code>: <code>duelling_admins_resolved</code>
+          gives one deterministic survivor at every replica, arbitration is
+          delivery-independent (<code>resolve_same_sets</code>), and the finalised prefix is
+          rollback-immune (<code>final_view_immune</code>). The arbiter never names a winner;
+          it only orders events &mdash; the price is trust in one announcing peer plus
+          rollback of the pending suffix.</li>
         </ul>
       </article>
 
@@ -718,6 +730,15 @@ theorem causal_dag_free (rank : Nat → Nat) :
           I-confluence is exactly the one-segment case
           (<code>iconfluent_iff_trivially_segmented</code>), and the DSL carries this
           verdict first-class &mdash; <code>SegVerdict</code>, below.</li>
+          <li><span class="badge seam">seam</span> Two more seams make it a recipe
+          (<code>Seams.lean</code>): the <strong>epoch seam</strong>
+          (<code>epoch_segmented</code> &mdash; duelling admins clash only across the epoch
+          boundary; read with <code>Era.lean</code>'s corrections: in ERA itself nobody
+          coordinates, the boundary is a trusted announcement) and the
+          <strong>schema-version seam</strong> (<code>schema_segmented</code> &mdash; a
+          <em>tightening</em> migration is a flag day, while
+          <code>schema_widening_iconfluent</code> proves the widening half of
+          expand/contract needs no seam at all).</li>
         </ul>
       </article>
 
@@ -776,7 +797,7 @@ theorem causal_dag_free (rank : Nat → Nat) :
 
   <section id="kernel">
     <p class="kicker">The implementation, without a twin</p>
-    <h2 class="prose">The Lean-compiled kernel</h2>
+    <h2 class="prose">The Lean-compiled kernels</h2>
     <div class="prose">
       <p>The op-log pattern&rsquo;s delicate part is the replay: the total order, the cycle
       rule, the skip. In most &ldquo;verified design&rdquo; projects that logic gets re-implemented
@@ -786,7 +807,8 @@ theorem causal_dag_free (rank : Nat → Nat) :
       <code>Uwueave/Exec.lean</code>, exported with <code>@[export uwueave_replay_kernel]</code>,
       compiled to C by lake alongside every other module, and linked into the Rust crate
       by <code>build.rs</code>. The Rust <code>movelog</code> module marshals bytes; it
-      contains no replay implementation to drift.</p>
+      contains no replay implementation to drift. Since wave 6 a <strong>second kernel</strong>
+      rides the same pipeline &mdash; the sequence CRDT&rsquo;s linearization, below.</p>
     </div>
 
     <figure class="flow">
@@ -881,6 +903,30 @@ def replayKernel (input : ByteArray) : ByteArray :=
       </ul>
     </div>
 
+    <div class="prose" style="margin-top:1.8rem">
+      <h3>The second kernel: sequences, with deletion</h3>
+      <p><code>Uwueave/SeqKernel.lean</code> (<code>@[export uwueave_seq_kernel]</code>)
+      implements the RGA-with-tombstones order decision the same way: authored in Lean,
+      compiled to C, linked by <code>build.rs</code>. <code>rust/src/seq.rs</code> does the
+      deliberately dumb parts &mdash; storage, blake3 content-addressing, tombstone flags,
+      IO &mdash; and holds no linearization logic. Proved about the function the crate
+      actually runs: every visible element appears (<code>linearizeK_mem</code>), exactly
+      once (<code>linearizeK_nodup</code>), visible ancestors precede
+      (<code>linearizeK_ancestor_precedes</code>), and a delete filters the document order
+      without reordering, duplicating, or revealing surviving elements
+      (<code>linearizeK_sublist_emitAll</code>). The interleaving anomaly governs this
+      kernel too &mdash; a Rust test replays <code>Sequence.lean</code>&rsquo;s witness through
+      the compiled artifact and watches the runs alternate. Honest edges, stated in the
+      kernel&rsquo;s header: no garbage collection, no Fugue-style no-interleaving (an open
+      job on the board), and the input codec is test evidence only &mdash; unlike the move
+      kernel, there is no Lean-side canonical request encoder yet.</p>
+      <p><code>Era.lean</code>&rsquo;s arbitration core is executable Lean at the model layer
+      &mdash; its verdicts are axiom-free kernel computations &mdash; and at the time of this
+      writing a <strong>third kernel is in flight</strong> in the same wave
+      (<code>EraKernel.lean</code>, exporting <code>uwueave_era_resolve</code>); the two
+      above are the ones landed.</p>
+    </div>
+
     <div class="opens prose">
       <p><strong>Still open, and said so in the kernel&rsquo;s own header</strong> &mdash; one
       seam, the terminal one:</p>
@@ -896,6 +942,100 @@ def replayKernel (input : ByteArray) : ByteArray :=
         proven canonical encoder (<code>replay_encodeRequest</code>), with a per-request
         canonicality differential (labeled test evidence) covering the Rust marshaller.</li>
       </ul>
+    </div>
+  </section>
+
+  <section id="model">
+    <p class="kicker">The theorem the library was built on, finally on the inside</p>
+    <h2 class="prose">The model layer</h2>
+    <div class="prose">
+      <p>For six waves every refutation here ended the same way: &ldquo;&hellip;and the modal
+      reading &mdash; <em>no coordination-free implementation can maintain this</em> &mdash; is
+      Bailis, cited.&rdquo; The grok arc built the model that sentence was missing. Six modules,
+      delivered against posted jobs and wired into the audit gate like everything else.</p>
+    </div>
+
+    <div class="cards">
+      <article class="card">
+        <h3>Necessity <span class="sub">Bailis Theorem 3.1, modeled</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">the theorem</span> An execution model where
+          coordination-freedom is <em>definitional</em> &mdash; <code>tryApply</code> sees the
+          op and local state only, convergence is join, safety is invariant-validity &mdash;
+          and in it: a <em>reachable</em> clash refutes every coordination-free convergent
+          safe implementation (<code>necessity</code>), with sufficiency back
+          (<code>iconfluent_implies_cfcs</code>), so the equivalence is complete for this
+          model. Satisfiable and refutable, per the job&rsquo;s falsifiability bar
+          (<code>gset_true_is_cfcs</code>, <code>atMostOneBit_necessity</code>) &mdash; and
+          coordination is provably not vacuous: the same local rule run <em>serially</em>
+          keeps the invariant a CF implementation cannot
+          (<code>coordination_repairs_what_cf_breaks</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>CausalReach <span class="sub">is the clash a scenario or a lattice artifact?</span></h3>
+        <ul class="vlist">
+          <li><span class="badge clash">the dichotomy</span> Cuts of finite histories make
+          the MAP&rsquo;s Live/LatticeOnly axis a formal hypothesis. The OR-Set presence clash
+          is jointly reachable under tag-scoped remove-after-add
+          (<code>orset_clash_joint</code> &mdash; it <em>will</em> happen) and provably
+          <em>unreachable</em> under element-wide remove after both adds
+          (<code>ew_clashL_unreachable</code>) &mdash; one lattice pair, opposite operational
+          verdicts, decided by the remove protocol&rsquo;s shape
+          (<code>orset_reachability_depends_on_remove_shape</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Liveness <span class="sub">the other half of SEC</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">free</span> <code>Delta.lean</code> proved what
+          arrives decides the state; this proves arrival. Under finite covering fairness
+          every listed replica lands exactly at the least upper bound
+          (<code>fair_converges</code>), and unfairness genuinely starves
+          (<code>unfair_starvation</code>, a constructive G-Set witness). Not claimed, said
+          in the header: no coinductive &ldquo;infinitely often&rdquo;, no lossy networks.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Traces <span class="sub">one honest Zielonka step</span></h3>
+        <ul class="vlist">
+          <li><span class="badge pattern">pattern</span> Three letters, independence on
+          exactly two pairs: trace-equivalent words run identically when the actions respect
+          independence (<code>exec_traceEq</code>), reordering the dependent pair changes
+          the run (<code>dependent_pair_reordering_changes_exec</code>), and the bridge to
+          <code>Automata.exec_perm</code> is a real theorem, not a remark
+          (<code>exec_perm_of_fullIndep</code>). Full Mazurkiewicz/Zielonka: not claimed.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Nary <span class="sub">past two replicas</span></h3>
+        <ul class="vlist">
+          <li><span class="badge free">generalized</span> The catalog&rsquo;s Bool-carrier
+          demos, re-proved over any finite enumeration of replicas &mdash; the PN-counter
+          refutation for any two distinct keys
+          (<code>pncounter_nonneg_not_iconfluent_enum</code>), the escrow bound and budget
+          seam n-ary (<code>budget_segmented_enum</code>) &mdash; with the two-replica
+          originals recovered as instances and <strong>zero new merge proofs</strong>.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>KernelCFCS <span class="sub">the shipping kernel meets the model</span></h3>
+        <ul class="vlist">
+          <li><span class="badge pattern">embedding</span> The move kernel&rsquo;s op
+          alphabet packaged as a <code>Necessity.Impl</code>
+          (<code>move_kernel_cfcs</code>), honest that under a grounded base the embedding
+          check is the content, not a new confluence argument; the real work is
+          materialization &harr; membership and view determination via
+          <code>absReplay_ext_mem</code>. And CFCS does not buy view stability:
+          <code>acyclicity_cfcs_does_not_imply_view_stability</code> keeps
+          <code>view_not_stable</code>&rsquo;s price visible at the model layer.</li>
+        </ul>
+      </article>
     </div>
   </section>
 
@@ -1049,12 +1189,22 @@ runnable two-replica repro (escalation_witness — Uwueave/Confluence.lean).
 ------------------------------------------------------------------------------
 Verdicts are lookups into machine-checked theorems (see Uwueave/), not a
 checker running here. The counterexamples are real states you can replay in
-tests.</code></pre>
+tests.
+Citations are cross-checked against docs/MAP.md's keystone ledger (enforced by
+tests); 9 cited theorem(s) are not on it and are marked [unlisted] —
+classification prose only.</code></pre>
     <p>Ten shapes (<code>gset</code>, <code>gcounter</code>, <code>pncounter</code>,
     <code>lww</code>, <code>mvreg</code>, <code>orset</code>, <code>clset</code>,
     <code>escrow</code>, <code>causal-dag</code>, <code>movelog</code>), eleven invariant
-    kinds, and a test that walks every citation and checks the named theorem exists in the
-    named file &mdash; so the tool&rsquo;s answers rot loudly, not quietly.</p>
+    kinds, and a test suite that resolves every citation through the cited file&rsquo;s real
+    namespace structure, cross-checks it against <code>docs/MAP.md</code>&rsquo;s keystone
+    ledger in both directions, and reads each cited statement&rsquo;s <em>polarity</em> from
+    the Lean source (a FREE row may not cite a <code>¬ IConfluent</code> theorem, a SEAM row
+    must cite both halves) &mdash; so the tool&rsquo;s answers rot loudly, not quietly. Where
+    the new model-layer results changed what a verdict <em>means</em> &mdash; reachability of
+    the OR-Set clash &mdash; the ruling&rsquo;s note cites the <code>CausalReach</code>
+    dichotomy; the verdicts themselves are unchanged, because those theorems are about the
+    model layer, not new (shape,&nbsp;kind) pairs.</p>
   </section>
 
   <section id="claims" class="prose">
@@ -1065,26 +1215,33 @@ tests.</code></pre>
       <code>MergeState</code> instance&rsquo;s merge laws (commutative, associative, idempotent
       &mdash; proved, not assumed), every classification above, and every refutation as a
       concrete two-replica counterexample you can replay as a test.</li>
-      <li><strong>Bailis necessity is cited, not re-proved.</strong> Theorem 3.1 of the
-      paper &mdash; I-confluence is necessary <em>and</em> sufficient for a coordination-free
-      convergent implementation to exist &mdash; quantifies over systems and lives in the
-      paper, not in this Lean. So the library uses <code>IConfluent</code> directly and
-      cites the equivalence, rather than defining a synonym that would let <code>rw</code>
-      manufacture a false sense of necessity. What a <code>¬ IConfluent</code> result here
-      formally provides is the clash witness; the modal reading (&ldquo;no implementation
-      can&hellip;&rdquo;) is Bailis, cited.</li>
-      <li><strong>The Lean verifies the design &mdash; and authors the kernel&rsquo;s
+      <li><strong>Bailis necessity is now modeled &mdash; for this substrate; the paper&rsquo;s
+      full generality is still the citation.</strong> For six waves the modal reading
+      (&ldquo;no implementation can&hellip;&rdquo;) was cited, never proved, because there was no
+      model of &ldquo;implementation&rdquo; to quantify over. <code>Necessity.lean</code> builds
+      one &mdash; local-only <code>tryApply</code>, join-sync convergence &mdash; and proves both
+      directions in it (<code>necessity</code>, <code>iconfluent_implies_cfcs</code>), with
+      reachability of the clash as an explicit hypothesis
+      (<code>ReachableClash</code>; <code>CausalReach.lean</code> decides it per protocol).
+      What stays with the paper: Theorem 3.1 quantifies over arbitrary real systems, not
+      join-semilattice miniatures &mdash; a <code>¬ IConfluent</code> verdict here formally
+      provides the clash witness plus the model-level refutation, and the full-generality
+      modal claim is still Bailis, cited.</li>
+      <li><strong>The Lean verifies the design &mdash; and authors both kernels&rsquo;
       semantics.</strong> The companion crate (<code>rust/</code>, one dependency: blake3)
       implements the blessed fragment: <code>causal::CausalWeave</code>, an append-only
       content-addressed DAG whose <code>merge</code> is skip-if-present union with <em>no
-      cycle check</em>, the theorems being why that&rsquo;s sound; and
-      <code>movelog::MoveLog</code>, whose replay is the compiled Lean kernel &mdash; no Rust
-      twin exists to drift. What remains unverified: the crate&rsquo;s storage/index/codec
-      glue, the C shim, Lean&rsquo;s C backend, and the kernel-to-<code>Move.lean</code>
-      refinement (named open work, above). The tests replay the Lean witness scenarios
-      through the real kernel &mdash; good tests, and <em>zero formal evidence</em>. No
-      &ldquo;translation validation&rdquo; is claimed, because there is no formal semantics of Rust
-      to state it in.</li>
+      cycle check</em>, the theorems being why that&rsquo;s sound;
+      <code>movelog::MoveLog</code>, whose replay is the compiled Lean kernel; and
+      <code>seq::SeqCrdt</code>, whose linearization is the compiled sequence kernel &mdash;
+      no Rust twin exists to drift. What remains unverified: the crate&rsquo;s
+      storage/index/codec glue, the C shim, Lean&rsquo;s C backend (the terminal TCB, named
+      in both kernels&rsquo; headers), and the sequence kernel&rsquo;s input codec (test
+      evidence only &mdash; it has no Lean-side canonical encoder yet, unlike the move
+      kernel&rsquo;s <code>replay_encodeRequest</code>). The tests replay the Lean witness
+      scenarios through the real kernels &mdash; good tests, and <em>zero formal
+      evidence</em>. No &ldquo;translation validation&rdquo; is claimed, because there is no formal
+      semantics of Rust to state it in.</li>
       <li><strong>The content-addressing step is a premise, not a theorem.</strong>
       &ldquo;A reference cycle would require a hash cycle&rdquo; is collision resistance &mdash; a
       cryptographic assumption stated out loud. Rank is modeled as an explicit function;
@@ -1101,19 +1258,20 @@ tests.</code></pre>
       (tombstones, op logs &mdash; engineering, not semantics).</li>
       <li><strong>The audit is total, not curated.</strong>
       <code>Audit.lean</code>&rsquo;s <code>#audit_floor</code> walks every constant in the
-      <code>Uwueave</code> namespace &mdash; 1060 at last count &mdash; and fails the build on any
-      axiom outside Lean&rsquo;s own floor (<code>propext</code>,
+      <code>Uwueave</code> namespace &mdash; 1978 at the 2026-08-10 audit &mdash; and fails the
+      build on any axiom outside Lean&rsquo;s own floor (<code>propext</code>,
       <code>Classical.choice</code>, <code>Quot.sound</code>): a <code>sorry</code>
       (<code>sorryAx</code>) or <code>native_decide</code> (<code>Lean.ofReduceBool</code>)
       anywhere goes red with zero lag and no list to maintain. Jewels like
       <code>grounded_acyclic</code>,
       <code>derived_view_sec</code>, <code>same_deltas_same_state</code> and
-      <code>exec_perm</code> among them. Both counts are grep-checkable against the ledger
-      itself rather than trusted to prose.</li>
+      <code>exec_perm</code> among them. The count is not trusted to prose either: every
+      <code>lake build</code> prints it, and a vacuity tripwire fails the gate if the walk
+      ever sees suspiciously few constants.</li>
     </ul>
     <p>Check it yourself:</p>
-<pre><code>lake build              # the proofs; Lean core only, no mathlib, ~30s cold
-cd rust &amp;&amp; cargo test   # compiles the Lean kernel to C and links it (needs elan)</code></pre>
+<pre><code>lake build              # the proofs; Lean core only, no mathlib — prints the audit count
+cd rust &amp;&amp; cargo test   # compiles both Lean kernels to C and links them (needs elan)</code></pre>
   </section>
 
 </main>

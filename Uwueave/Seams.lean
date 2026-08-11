@@ -20,7 +20,10 @@ application can hold fixed between explicit coordination events.
     §1 proves that reading on a miniature carrier — including, as a named dead
     end, that the epoch *alone* fixes nothing (`sole_unpinned_not_segmented`):
     it is the arbitration verdict the seam carries, not the seam itself, that
-    dissolves the duel. That is ERA's thesis, machine-checked at toy scale.
+    dissolves the duel. ⚠ That reading was written from the paper's abstract;
+    `Era.lean` has since implemented the protocol core and corrected it in
+    four places — see the section below before taking any §1 docstring as a
+    description of ERA's mechanism.
   * **The schema-version seam (§2)** — the flag day. A store whose
     well-formedness reads the schema version fails I-confluence globally when a
     migration *tightens* a constraint (an old-version replica's legal data
@@ -35,17 +38,49 @@ application can hold fixed between explicit coordination events.
     `schemaSegVerdict`), so the DSL's seam row now has three: budget, epoch,
     schema.
 
+## ⚠ §1 predates `Era.lean` — four corrections, recorded there, apply here
+
+This file's §1 guessed ERA's mechanism from the paper's abstract; the protocol
+core has since been implemented (`Uwueave/Era.lean`), and its header records
+four corrections from the paper. The miniature's THEOREMS all stand — they are
+about this file's own carrier (`EpochState`), and nothing in `Era.lean`
+contradicts a single statement below — but the §1 *docstrings* must no longer
+be read as describing ERA:
+
+  1. **The arbiter never names a winner.** The oracle `arb : Nat → Nat`
+     ("epoch e's admin is `arb e`") has no counterpart in ERA: the real
+     arbiter announces epoch cuts that only ORDER events, and the survivor is
+     *derived* by deterministic authorised execution (`Era.resolve`). "The
+     verdict rides the seam" refines to: the seam carries an ordering, and
+     the verdict falls out of it.
+  2. **There is no per-replica "current epoch".** This carrier's `s.1`
+     (merged by `max`, "a replica never returns to a settled epoch") models a
+     replica *being in* an epoch; in ERA every replica holds events of all
+     epochs plus a pending set, and epoch tags are per-event (the least cut
+     naming the event).
+  3. **Nobody coordinates to cross the boundary.** "Coordinate exactly to
+     change epoch" is Whittaker's lens on this carrier, not ERA's mechanism:
+     the boundary is announced unilaterally by one trusted peer, replicas
+     never wait, and the price is trust plus rollback of the still-pending
+     suffix — not an inter-replica coordination event.
+  4. **The miniature omits what the paper centers**: the pending epoch,
+     rollback of unfinalised events, and within-epoch order still mattering
+     (same-epoch admin events do not commute; a tiebreak, not a free merge,
+     handles them).
+
 ## What is claimed, and on what carrier
 
 Both carriers are miniatures in the house style (`Nat`-indexed, `GSet` fibers,
-`decide`-checked witnesses). ERA's actual protocol — how replicas *learn* an
-epoch's arbitration verdict, how an epoch change is proposed and settled — is
-not formalized; here the verdict stream is an oracle parameter `arb : Nat → Nat`
-and an epoch change is nothing but a change of σ. What IS proved: the coherence
+`decide`-checked witnesses). ERA's actual protocol is not formalized HERE —
+`Era.lean` now formalizes its core at miniature scale; in this file the verdict
+stream is an oracle parameter `arb : Nat → Nat` (correction 1 above) and an
+epoch change is nothing but a change of σ. What IS proved: the coherence
 invariants below fail I-confluence globally with duelling-shaped witnesses, and
 hold it within every fiber of their seam. The modal reading ("so coordination
-is needed exactly at the seam") is Bailis et al.'s necessity theorem, cited not
-re-proved — the discipline of `Confluence.lean` §2.
+is needed exactly at the seam") is Bailis et al.'s necessity theorem — now
+modeled in `Necessity.lean` for this library's substrate, and still Whittaker's
+lens rather than ERA's mechanism when applied to the epoch carrier
+(correction 3).
 -/
 import Uwueave.Spec
 import Uwueave.Authority
@@ -61,7 +96,11 @@ the grow-only set of admin claims recorded for it — `s.2 e a = true` reads
 "`a` is claimed as an admin of epoch `e`". The epoch merges by `max` (a replica
 never returns to a settled epoch), the claim fibers pointwise by union; both
 instances are inherited, nothing new is proved. The *current* epoch selects
-which claim-set is authoritative — claims parked at other epochs are latent. -/
+which claim-set is authoritative — claims parked at other epochs are latent.
+
+⚠ Divergence from ERA (`Era.lean` correction 2): the per-replica current
+epoch is this carrier's invention. ERA has no such component — every replica
+holds events of all epochs plus a pending set, and epoch tags are per-event. -/
 abbrev EpochState := Nat × (Nat → GSet Nat)
 
 example : MergeState EpochState := inferInstance
@@ -105,11 +144,15 @@ theorem pinned_everywhere_iconfluent (arb : Nat → Nat) :
 
 /-- **Epoch-sole authority, arbitrated**: every admin claim in the *current*
 epoch names the arbitrated survivor `arb s.1`. The verdict stream
-`arb : Nat → Nat` is ERA's external arbiter as an oracle parameter — how a
-replica learns it is protocol, outside this model (the same premise discipline
-as `Authority.UniqueGrant`). Claims at non-current epochs are deliberately
-unconstrained: they are authority not being exercised, and policing them is the
-question-begging dead end above. -/
+`arb : Nat → Nat` is an oracle parameter — how a replica learns it is outside
+this model (the same premise discipline as `Authority.UniqueGrant`). Claims at
+non-current epochs are deliberately unconstrained: they are authority not
+being exercised, and policing them is the question-begging dead end above.
+
+⚠ Divergence from ERA (`Era.lean` correction 1): ERA's arbiter never names an
+admin. It announces epoch cuts that only order events; the survivor is derived
+by authorised execution (`Era.resolve`). `arb` is this carrier's stand-in for
+that *derived* outcome, not a message any ERA peer sends. -/
 def EpochSole (arb : Nat → Nat) : Invariant EpochState := fun s =>
   ∀ a, s.2 s.1 a = true → a = arb s.1
 
@@ -148,9 +191,14 @@ theorem epoch_sole_not_iconfluent :
 /-- **Within an epoch, admin state merges freely** — `EpochSole` is segmented
 over σ = the epoch, for EVERY arbitration stream: same-epoch replicas share the
 current verdict, so their unions of claims stay pinned to it, and `max` of
-equal epochs cannot cross the seam. Operationally this is ERA's architecture
-through Whittaker's lens: run coordination-free inside an epoch; coordinate
-exactly to change epoch, and let the change carry the arbitrated survivor. -/
+equal epochs cannot cross the seam.
+
+⚠ The operational gloss this docstring used to carry — "coordinate exactly to
+change epoch" — is Whittaker's lens on this carrier, NOT ERA's mechanism
+(`Era.lean` correction 3): in ERA nobody coordinates. The boundary is a
+unilateral announcement by one trusted peer, replicas never wait, and the
+price is trust plus rollback of the pending suffix. The theorem itself is
+untouched: same-fiber merges preserve the invariant, on this carrier. -/
 theorem epoch_segmented (arb : Nat → Nat) :
     SegmentedIConfluent (S := EpochState) Prod.fst (EpochSole arb) := by
   intro x y hσ hx hy
@@ -272,9 +320,11 @@ theorem schema_segmented (bound : Nat → Nat) :
 
 /-- **The epoch seam, packaged**: the duelling-admins clash of
 `epoch_sole_not_iconfluent` (Alice-forever at epoch 1 vs Bob's arbitrated
-epoch 2) plus the seam of `epoch_segmented`. Reading: admin operations never
-wait inside an epoch; replicas coordinate exactly to cross an epoch boundary,
-and the crossing carries the arbitration verdict. -/
+epoch 2) plus the seam of `epoch_segmented`. Reading, on this carrier: admin
+operations never wait inside an epoch; crossing the boundary is where the
+verdict changes. (In ERA itself the crossing carries an *ordering* announced
+by one trusted peer, not a named verdict, and nobody coordinates —
+`Era.lean` corrections 1 and 3.) -/
 def epochSegVerdict : SegVerdict (EpochSole demoArb) Nat where
   σ := Prod.fst
   seamFree := epoch_segmented demoArb
