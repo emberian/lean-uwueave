@@ -111,6 +111,28 @@ into the total-state model buys **nothing**. The hypothesis has teeth only
 against a model that **refuses** transitions. The repair's content is that the
 model is now a declared parameter.
 
+**10a. Carrier-global verdict → live verdict** ⚠ **row 10 at the level the
+operator reads**
+*transport* `LiveBudget.carrierGlobal_promotes`, and
+`LiveBudget.LiveObligation.closedByReachability` at the verdict level · *needs*
+**`LiveBudget.ReachabilityComplete P awl`** — `LiveCost.Grounds P awl.step` plus a
+start world observing `awl.start` (the extra field is forced by `World` being
+permitted to be richer than the state) · *without it*
+`LiveBudget.carrier_global_rejection_is_not_live` refutes the unconditional claim
+outright at `ewModel` / `ewWorkloadOR4`: the source judgement holds
+(`ewOR4_forced_floor_one`), the hypothesis is refuted
+(`ew_not_reachabilityComplete`), and the target object **cannot exist** —
+`ew_no_live_realization`, whence `ew_verdicts_are_never_live`: no verdict for that
+deployment is a live rejection or an acceptance, at any budget.
+⚠ *and what the split buys*: `Bounds.ewRejectedAtZero` is a
+`BudgetVerdict.rejected` reading *no plan fits, in any universe*;
+`LiveBudget.ewCarrierGlobalAtZero` is a different constructor reading *the
+abstract lattice model charges this path; operational realizability not
+established* (`LiveBudget.claim_sound` proves each report's own claim, totally).
+⚠ *and the honest note*, inherited from row 10:
+`LiveBudget.totalModel_reachability_complete` — every workload is
+reachability-complete for its own total-state model, so promoting there is free.
+
 **11. Global seam → live seam** ⚠ **the second hole**
 *transport* `LiveSegmented.segmented_implies_liveSegmented` (one line) ·
 *strictly* stronger source · *without the converse*
