@@ -53,6 +53,10 @@ curiosity.)
 | `Uwueave/Automata.lean` | Replicated automata sorted by the same verdicts: semilattice-action runs converge as instances of the delta laws (`run_same_inputs`); commuting inputs may be replayed in any order (`exec_perm`, axiom-free — the seed of the Mazurkiewicz/Zielonka connection, cited not claimed); DFA determinism is the uniqueness ceiling (concrete clash), with LWW-arbitration vs accept-the-NFA priced as exits; token firing under escrow reads the segmented theorems as Petri nets. |
 | `Uwueave/Authority.lean` | Local-first permissions: delegation chains as a grounded CRDT — issuing narrowed grants is coordination-free (`wf_iconfluent`), authority provably only narrows (`scope_le_root`), sole-admin escalates (the duelling-admins clash), revocation's late arrivals only ever *shrink* authority (`authority_view_antitone`) — the derived view's instability points fail-closed, the security dual of `view_not_stable` — and the per-id uniqueness premise is priced like Sequence's: `uniqueGrant_violation_extracts_collision` turns any violation into a hash-collision exhibit (collision resistance, not injectivity, is what a deployment supplies). |
 | `Uwueave/SeqKernel.lean` | The sequence CRDT, **implemented** the house way: RGA-with-tombstones order decision authored in Lean, exported as `uwueave_seq_kernel` beside the move kernel. Proved: every visible element appears (`linearizeK_mem`), exactly once (`linearizeK_nodup` — groundedness alone), ancestors precede (`linearizeK_ancestor_precedes`), and deletes filter without reordering (`linearizeK_sublist_emitAll`). The brief's index-ordered hypothesis was refuted by the lane as vacuous-for-real-inputs and replaced by rank-groundedness. Non-claims: `interleaving_anomaly` still governs (reproduced through the shipping kernel in a Rust test); Fugue cited, not implemented. |
+| `Uwueave/Holes.lean` | **The hole calculus** — replicated computation with multi-candidate results. Worlds carry correlations (the set monad's phantom candidates proved both directions on one witness), and the headline `evalSet_hom` needs *no hypothesis on the program*: compute-then-merge = merge-then-compute, unconditionally — images are free; the whole price sits in wanting one answer (`determinate_result_not_iconfluent`, the ceiling pulled back through evaluation). `stable_inputs_seal_the_result` transports input stability to result stability along the hom in one rewrite; provenance rides by type into `MVReg`. |
+| `Uwueave/Gluing.lean` | **`guardGluing_iff_iconfluent`** — named four times in a sibling repo's design study and never built there (its kernel forbade partial cones). Guarded holes with delta-shaped fills; divergent fills glue iff the guard is I-confluent, under `Spanning` — and `stampedHole` proves the iff is *not a renaming* (`Glues` and `IConfluent` come apart exactly when `Spanning` fails). Consequences: the sheaf-shaped `glue_eq_merged_fill`, a hole verdict `Spec.Verdict` cannot express, partially-glueable holes via seams, and one-shot *sharpened*: gluing licenses local double-fill. |
+| `Uwueave/Cost.lean` | **Coordination frequency is real and has a floor**: `crossings` counts σ-changes along a workload, and `coordination_forced` shows clash blocks in the *spec* force the count for every seam in every universe. Tight instance: three budget re-divisions cost exactly 3. Self-correction included: linking seams did **not** lower the document's floor — it made the obvious seam optimal. The undercounting verdict is proved and stated as the measure's domain of validity. |
+| `Uwueave/Choreo.lean` | **The verdict moves onto the program**: choreographies over replica-owned CRDT state, endpoint projection with `projection_sound` as pointwise state equality (no bisimulation — the channel *is* the lattice), and `coordination_free_iff_iconfluent`, iff-shaped with neither direction `Iff.rfl`. The seam refinement the prior art never had: `seam_coordination_free` — barriers exactly at σ-changes, free within fibers, no global `IConfluent` hypothesis anywhere. |
 | `Uwueave/RALin.lean` | **Correctness ≠ safety**, against Sal (arXiv:2603.27202): `ra_linearizable_but_unsafe` — Sal's own Table-2 PN-counter, RA-linearizable for any fork and branches, every branch legal at every prefix, and the merge overdraws. Converse: the max-counter loses updates, making *every* invariant I-confluent while failing RA-lin — safety bought by data loss. `quadrants` inhabits all four cells; `ra_lin_preserves_inductive_invariants` (axiom-free) is what RA-lin *does* buy; `guarding_moves_the_bug` shows the verdicts entangled through op preconditions. |
 | `Uwueave/Ancestral.lean` | **The LCA question, answered: incomparable.** Two-way I-confluence can be bought by a join that drops a committed op (effect-faithfulness is the honesty condition); mutual exclusion under hand-off is free with an ancestor (`lock_ancestral_confluent`) and provably beyond every two-way join; the bounded counter is beyond every honest merge (`budget_defeats_every_faithful_merge`) — escrow stands. `clash_dichotomy` names the rule: **resurrection** clashes an LCA repairs; **accumulation** clashes nothing repairs. |
 | `Uwueave/SeamAlgebra.lean` | The calculus segmented confluence lacked: product/pi/and lifts hold; refinement REFUTED (a conjunctive observation over grow-only fields is not a seam); free-riding refuted with stability pinned necessary and sufficient; the dividing line as an iff (`left_only_seam_iff`); and the prize, `linked_segmented` — two seams collapse into one exactly where well-formedness makes one seam a function of the other. |
@@ -76,7 +80,7 @@ each `Live` / `LatticeOnly` tag cites nothing beyond the named module's own
 docstrings (upgraded by `CausalReach` theorems where those supersede them);
 `—` marks rows the axis does not apply to. Every row is covered by
 `#audit_floor`'s total gate — there is no per-row trust column to read. The
-table currently holds 111 rows:
+table currently holds 126 rows:
 
 | Theorem | Module | Generality | Reachability |
 |---|---|---|---|
@@ -129,6 +133,21 @@ table currently holds 111 rows:
 | `active_path_not_iconfluent` | Weave | finite-story | Live |
 | `absReplay_acyclic` | ExecRefine | ∀-general | — |
 | `kernel_derived_view_sec` | ExecRefine | ∀-general | — |
+| `evalSet_hom` | Holes | ∀-general | — |
+| `determinate_result_not_iconfluent` | Holes | finite-story | Live |
+| `stable_inputs_seal_the_result` | Holes | ∀-general | — |
+| `monadic_has_phantoms` | Holes | finite-story | — |
+| `guardGluing_iff_iconfluent` | Gluing | ∀-general | — |
+| `glues_is_not_iconfluent_renamed` | Gluing | finite-story | — |
+| `guardGluingSeam_iff_segmented` | Gluing | ∀-general | — |
+| `glue_eq_merged_fill` | Gluing | ∀-general | — |
+| `coordination_forced` | Cost | ∀-general | — |
+| `budget_cost_is_three` | Cost | finite-story | Live |
+| `no_seam_frees_both` | Cost | finite-story | — |
+| `projection_sound` | Choreo | ∀-general | — |
+| `coordination_free_iff_iconfluent` | Choreo | ∀-general | — |
+| `seam_coordination_free` | Choreo | ∀-general | — |
+| `atMostOne_sync_cannot_be_dropped` | Choreo | finite-story | Live |
 | `ra_linearizable_but_unsafe` | RALin | finite-story | Live |
 | `ra_lin_preserves_inductive_invariants` | RALin | ∀-general | — |
 | `maxctr_every_invariant_iconfluent` | RALin | ∀-general | — |

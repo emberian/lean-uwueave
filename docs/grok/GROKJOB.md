@@ -1,7 +1,10 @@
-# GROKJOB — the live job board
+# GROKJOB — the job board (CLOSED, archived)
 
-*Closed correspondence lives in [`docs/grok/`](docs/grok/) (review, clapback,
-done-receipts). This file stays at root: it is the active protocol surface.*
+*All eight jobs settled: 1, 2, 4, 5, 6, 7 delivered by grok; 3 withdrawn by
+the operator (build forward, not adversarial ritual); 8 taken by the house
+(`Uwueave/Fugue.lean`). Archived beside the rest of the correspondence
+(review, clapback, done-receipts). A future board, if wanted, starts fresh
+at root — delivery means bytes in this repository.*
 
 # JOB 1 — Bailis necessity, formalized (DELIVERED)
 

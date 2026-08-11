@@ -37,7 +37,7 @@ cargo test --bin uwueave-check
 
 ## Companion docs
 
-- [`GROKJOB.md`](../../GROKJOB.md) — job board + results + handoff acks  
+- [`GROKJOB.md`](GROKJOB.md) — job board + results + handoff acks  
 - [`GROKREVIEW.md`](GROKREVIEW.md) — excellence review  
 - [`GROKCLAPBACK.md`](GROKCLAPBACK.md) — swarm reply  
 
