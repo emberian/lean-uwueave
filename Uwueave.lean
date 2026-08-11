@@ -52,6 +52,7 @@ import Uwueave.ResultStatus
 import Uwueave.Recoverable
 import Uwueave.HonestRender
 import Uwueave.Histories
+import Uwueave.MenuTotality
 import Uwueave.Preo.Demo
 import Uwueave.Choreo
 import Uwueave.Tactics
