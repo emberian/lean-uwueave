@@ -52,6 +52,7 @@ import Uwueave.ResultStatus
 import Uwueave.Recoverable
 import Uwueave.HonestRender
 import Uwueave.Histories
+import Uwueave.RenderProgress
 import Uwueave.HistoryBase
 import Uwueave.RenderSix
 import Uwueave.Bounds
