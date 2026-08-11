@@ -67,6 +67,7 @@ import Uwueave.EraKernel
 import Uwueave.Gated
 import Uwueave.Fugue
 import Uwueave.WeaveState
+import Uwueave.GatedEra
 
 open Lean Elab Command in
 /-- Fail the build unless every constant in the `Uwueave` namespace stays
