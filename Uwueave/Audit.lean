@@ -97,6 +97,7 @@ import Uwueave.Evidence
 import Uwueave.Wellformed
 import Uwueave.Exits
 import Uwueave.CoordEffect
+import Uwueave.SeamColoring
 import Uwueave.Tactics
 
 open Lean Elab Command in
