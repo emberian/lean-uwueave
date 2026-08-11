@@ -8,7 +8,10 @@
 //! chain, falling back to the first weave parent when no override exists),
 //! which is the reading direction the kernel's output contract defines.
 
-use uwueave::{CausalWeave, EraEvent, EraGroup, EraRole, MoveLog, MoveOp, NodeId, OpOutcome, SeqCrdt};
+use uwueave::{
+    CausalWeave, EraEvent, EraGroup, EraRole, Grant, MoveLog, MoveOp, NodeId, OpOutcome, SeqCrdt,
+    TracedReplay,
+};
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 
@@ -108,7 +111,19 @@ fn resolve_op(spec: &OpSpec, ids: &[NodeId]) -> MoveOp {
         replica: spec.replica,
         child: resolve_sel(&spec.child, ids),
         dest: spec.dest.as_ref().map(|d| resolve_sel(d, ids)),
+        cite: 1,
     }
+}
+
+/// A log whose substrate holds one root-issued grant covering everything
+/// (id 1, the id `resolve_op` cites). Format v3 has no ungated path — an op
+/// citing no live grant does not replay — so every property that is not
+/// *about* the gate starts from a log that authorises its ops, and the
+/// gate-specific property below is the one that varies the substrate.
+fn authorised_log() -> MoveLog {
+    let mut log = MoveLog::new();
+    log.issue(Grant::universal(1));
+    log
 }
 
 // ---------------------------------------------------------------------------
@@ -208,11 +223,11 @@ proptest! {
         (specs, shuffled, dups) in specs_orders(12),
     ) {
         let (w, ids) = build_weave(&plans, &[]);
-        let mut log_a = MoveLog::new();
+        let mut log_a = authorised_log();
         for s in &specs {
             log_a.record(resolve_op(s, &ids));
         }
-        let mut log_b = MoveLog::new();
+        let mut log_b = authorised_log();
         for s in &shuffled {
             log_b.record(resolve_op(s, &ids));
         }
@@ -243,7 +258,7 @@ proptest! {
         specs in prop::collection::vec(op_spec(), 0..16),
     ) {
         let (w, ids) = build_weave(&plans, &[]);
-        let mut log = MoveLog::new();
+        let mut log = authorised_log();
         for s in &specs {
             log.record(resolve_op(s, &ids));
         }
@@ -270,7 +285,7 @@ proptest! {
 }
 
 // ---------------------------------------------------------------------------
-// (d2) trace completeness (Lean kernel v2 status block, via FFI)
+// (d2) trace completeness (Lean kernel v3 status block, via FFI)
 // ---------------------------------------------------------------------------
 
 proptest! {
@@ -285,7 +300,7 @@ proptest! {
         specs in prop::collection::vec(op_spec(), 0..16),
     ) {
         let (w, ids) = build_weave(&plans, &[]);
-        let mut log = MoveLog::new();
+        let mut log = authorised_log();
         for s in &specs {
             log.record(resolve_op(s, &ids));
         }
@@ -302,7 +317,90 @@ proptest! {
                     prop_assert!(!resolvable, "omitted ops are exactly the unresolvable ones"),
                 _ => prop_assert!(resolvable, "sent ops name known nodes"),
             }
+            // Anti-vacuity: every op here cites the universal grant this log
+            // issued, so NONE may come back unauthorised. Without this the
+            // suite would still pass if the gate refused everything.
+            prop_assert_ne!(
+                *outcome,
+                OpOutcome::SkippedUnauthorised,
+                "an op citing a live, covering grant must not be gated out"
+            );
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (d3) the gate: revocation monotonicity (Lean kernel v3, via FFI)
+// ---------------------------------------------------------------------------
+
+proptest! {
+    /// **Adding revocations never authorises anything** — the executable twin
+    /// of `Exec.kernel_gated_antitone` (itself the twin of
+    /// `Gated.gated_antitone`), exercised through the real kernel over a
+    /// three-link delegation chain so cascades actually fire: revoking grant
+    /// 1 kills 2 and 3 as well, though neither is named.
+    ///
+    /// ⚠ What is deliberately NOT asserted: that the *applied* set shrinks.
+    /// It does not — dropping an op can un-block one the cycle rule had been
+    /// skipping, which `Exec.applied_set_not_antitone` exhibits as a
+    /// two-node witness. Asserting it would be asserting a falsehood, and the
+    /// property that survives is the one about the gate's own feed: refusals
+    /// are forever, and the authorised set only shrinks.
+    #[test]
+    fn revocation_never_authorises(
+        plans in plan_seq(6),
+        specs in prop::collection::vec((op_spec(), 1u64..4), 0..12),
+        base_revs in prop::collection::vec(1u64..4, 0..2),
+        extra_revs in prop::collection::vec(1u64..4, 0..3),
+    ) {
+        let (w, ids) = build_weave(&plans, &[]);
+        let mut log = MoveLog::new();
+        log.issue(Grant::root(1, u64::MAX));
+        log.issue(Grant::delegate(2, 1, u64::MAX));
+        log.issue(Grant::delegate(3, 2, u64::MAX));
+        for (s, cite) in &specs {
+            let mut op = resolve_op(s, &ids);
+            op.cite = *cite;
+            log.record(op);
+        }
+        for r in &base_revs {
+            log.revoke(*r);
+        }
+        let before = log.replay_traced(&w);
+
+        let mut grown = log.clone();
+        for r in &extra_revs {
+            grown.revoke(*r);
+        }
+        let after = grown.replay_traced(&w);
+
+        prop_assert_eq!(before.outcomes.len(), after.outcomes.len());
+        for ((op_b, out_b), (op_a, out_a)) in before.outcomes.iter().zip(after.outcomes.iter()) {
+            prop_assert_eq!(op_b, op_a, "same op set, same log order");
+            if *out_b == OpOutcome::SkippedUnauthorised {
+                prop_assert_eq!(
+                    *out_a,
+                    OpOutcome::SkippedUnauthorised,
+                    "a refusal is forever: growing revocations cannot re-authorise"
+                );
+            }
+        }
+
+        let authorised = |t: &TracedReplay| {
+            t.outcomes
+                .iter()
+                .filter(|(_, o)| {
+                    !matches!(
+                        o,
+                        OpOutcome::SkippedUnauthorised | OpOutcome::OmittedUnknownNode
+                    )
+                })
+                .count()
+        };
+        prop_assert!(
+            authorised(&after) <= authorised(&before),
+            "the gate's feed only shrinks under more revocations"
+        );
     }
 }
 
@@ -323,8 +421,8 @@ proptest! {
     ) {
         let (mut wa, ids_a) = build_weave(&prefix, &sa);
         let (mut wb, ids_b) = build_weave(&prefix, &sb);
-        let mut la = MoveLog::new();
-        let mut lb = MoveLog::new();
+        let mut la = authorised_log();
+        let mut lb = authorised_log();
         for (s, side) in &specs {
             // Each replica records ops naming its own nodes; `2` = an op both
             // already saw (each resolving against its own view of the ids).

@@ -54,33 +54,103 @@ Four results:
      is gated out and Alice's own op stands — identically at every replica —
      and revoking the ISSUER instead kills Bob's move too, though his grant
      id sits in no revocation set (`demo_cascade_revoked` at the op layer).
+  5. **The bridge (§5): this gate IS the shipping kernel's gate.** Format v3
+     put the grant/revocation substrate in the request, a `permitted` filter
+     ahead of the kernel's sort, and status `3` in the response;
+     `kernel_admits_only_authorised` proves — with no hypotheses — that every
+     op `uwueave_replay_kernel` replays is in this file's `gatedOps`, and
+     `kernel_gate_agrees_gatedOps` proves the two coincide under `WF` +
+     `UniqueGrant`. The theorems above are therefore about what the kernel
+     does, not about a model beside it.
 
-## Non-claims — the honest boundary
+## The honest boundary
 
-  * **Signatures are a premise, not a theorem.** A grant here is a record in
-    a grow-only set; that only a legitimate issuer could have produced it is
-    unforgeability, discharged by a deployment's signature scheme and never
-    by anything in this file. `Authority.lean` states the same seam, and
+Each item is labelled **TERMINAL** (a theorem *of the model* — no work would
+remove it) or **UNDONE** (work, in a caveat's clothes). The list used to open
+with "this gates the abstract op layer, not the shipping kernel", followed by
+the recipe for fixing that; the recipe was executed, and the item is gone
+rather than reworded.
+
+  * **Signatures are a premise, not a theorem.** ⟨TERMINAL, at this layer⟩ A
+    grant here is a record in a grow-only set; that only a legitimate issuer
+    could have produced it is unforgeability, discharged by a deployment's
+    signature scheme and never by anything in this file — nor by the kernel,
+    which authenticates nothing and is not asked to. An op is data: anyone
+    may write any `cite` into the log, and the gate bounds what a cited grant
+    can DO, not who may cite it. `Authority.lean` states the same seam, and
     `Sequence`/`Authority`'s collision-extractor lemmas are the pattern for
     how such a premise is handed off rather than assumed away.
-  * **This gates the abstract op layer, not the shipping kernel.** The feed
-    modelled here is `Move.lean`'s; the executable path is
-    `Exec.absReplay` behind `uwueave_replay_kernel`. Gating there would mean:
-    a grant/revocation substrate in the request encoding, a permitted-filter
-    ahead of the sort, and a fourth status code (skipped-unauthorised —
-    exactly `EraKernel`'s ✗ mark) in the v2 response so a UI can *show* the
-    move that authority removed. That is an ordinary flag-day rebuild, listed
-    here rather than implied by adjacency.
-  * **Conflicting grant operations are not arbitrated.** Two admins issuing
-    contradictory grants is the duelling-admins problem; this file's merge is
-    fail-closed (both survive as records, the gate takes the intersection of
-    what stays active), which is a *policy*, not a resolution.
-    `Era.lean` implements the resolution — one deterministic survivor per
-    replica (`Era.duelling_admins_resolved`) — and composing that arbitration
-    with this gate is real work, unstarted.
-  * **Scope is a `Nat` ceiling on node ids.** Enough to make covering
-    decidable and the theorems honest; a real capability language wants a
-    lattice of scopes (the poset gap `Authority.lean` already names).
+  * **The kernel searches grants by FIRST match; `permitted` quantifies over
+    all of them.** ⟨TERMINAL under content addressing, else UNDONE⟩ On a
+    substrate satisfying `UniqueGrant` the two coincide, and that is exactly
+    the hypothesis `kernel_gate_agrees` carries. Without it the kernel can
+    only admit FEWER ops than the abstraction (`kernel_admits_only_authorised`
+    needs no hypothesis), so the seam is safe-side. Content-addressed grant
+    ids (`id = hash(parent, scope, …)`) discharge it globally;
+    `uniqueGrant_violation_extracts_collision` is the handoff.
+  * **The kernel refuses a grant chain that does not descend.**
+    ⟨TERMINAL, by design⟩ `Exec.activeFrom` recurses only when
+    `parent < id` — `Authority.WF`'s creation-order clause — which is what
+    makes it total without fuel. On a substrate violating `WF` it therefore
+    reports *less* authority than `Active` would, and `kernel_gate_agrees`'s
+    completeness direction carries `WF` for precisely this reason. Again
+    safe-side, and deliberately so.
+  * **⚠ The gate's antitonicity is about the FEED, not the applied set.**
+    ⟨TERMINAL, and proved⟩ `gated_antitone` and `kernel_gated_antitone` say
+    revocations only ever shrink the sub-log that reaches replay. They do NOT
+    say revoking makes fewer moves happen: the cycle rule is not monotone in
+    the log, so removing an op can un-block one it was shadowing.
+    `Exec.applied_set_not_antitone` is the two-node witness — a revocation
+    that ADDS an override. Any UI reading status `3` as "one fewer move
+    happened" is wrong; what holds is that no unauthorised op is replayed,
+    and that de-authorisation is forever (`Exec.gated_unauthorised_is_forever`).
+  * **The substrate travels in the request; the kernel neither fetches nor
+    audits it.** ⟨UNDONE — and the sharpest remaining seam⟩ The gate decides
+    against the grants and revocations *the caller marshalled*. A caller that
+    omits a revocation it has seen gets a more permissive answer, and nothing
+    in Lean can tell: `replay`'s theorems quantify over the decoded arrays,
+    not over what the replica knows. The Rust side sends its whole grow-only
+    substrate (`rust/src/movelog.rs`), which is a claim about a Rust program,
+    i.e. test evidence. Closing this means the request committing to the
+    substrate it was built from — a digest the caller cannot vary per call —
+    and that is unbuilt.
+  * **Conflicting grant issuance is not arbitrated.** ⟨UNDONE⟩ Two admins
+    issuing contradictory grants is the duelling-admins problem; this file's
+    merge is fail-closed (both survive as records, the gate takes the
+    intersection of what stays active), which is a *policy*, not a
+    resolution. `Era.lean` implements the resolution — one deterministic
+    survivor per replica (`Era.duelling_admins_resolved`) — and composing
+    that arbitration with this gate (its arbitrated view slotting in where
+    `Active` sits, leaving every theorem shape here intact) is real work,
+    unstarted. Fail-closed composes as advertised: after a duel the gate
+    rejects BOTH duellists' ops, and every op citing grants delegated under
+    them (`Authority.duelling_admins_annihilate`).
+  * **Scope is a `Nat` ceiling on node ids — and in the kernel, on node
+    INDICES.** ⟨UNDONE⟩ Enough to make covering decidable and the theorems
+    honest, and now enough to make the kernel's coverage check one
+    comparison. But note what the port made concrete: `GOp.node` is an id
+    here and `Exec.Op.child` is an index into the request's node block, so a
+    grant's meaning is relative to the indexing its request was built
+    against. `gopOf` is honest about this (`node := op.child`) and the bridge
+    is stated over the denoted state, so no theorem is wrong — but a
+    deployment wanting scopes that mean the same thing at every replica
+    either fixes a canonical indexing or uses the universal scope. A real
+    capability language wants a lattice of scopes anyway (the poset gap
+    `Authority.lean` already names), and that is where this gets fixed. Only
+    the MOVED node is gated; gating the destination too is a policy variant,
+    not taken.
+  * **`gatedOps` is `Prop`-valued and undecidable in general.**
+    ⟨TERMINAL — and no longer a gap⟩ `Active` over a function-backed
+    `GrantSet` is an unbounded certificate search. The kernel does not decide
+    it: it decides `Exec.activeFrom` over the grant ARRAY the request carries
+    — the macaroon move, the token travelling with its chain — and §5 proves
+    that decision sound for the `Prop`-valued gate with no hypotheses, and
+    complete under `WF` + `UniqueGrant`. The undecidability is a fact about
+    the abstraction, not a hole under the implementation.
+  * **Below the Lean, the usual TCB.** ⟨TERMINAL for this repo⟩ The Rust
+    marshaller's bytes (checked at runtime against the proven canonical
+    encoder, `Exec.requestCanonicalKernel` — a differential, not a proof) and
+    Lean's C backend. `Exec.lean`'s claim-discipline header is the ledger.
 
 ## The price, and why it points the safe direction
 
@@ -95,41 +165,6 @@ instability IS the feature, provided it points one way. `gated_antitone` and
 add authorized moves and delete de-authorized ones, never the reverse of
 either. Fail-closed, all the way through the composition.
 
-## Not modeled, honestly
-
-  * **Signatures.** That the actor issuing an op actually HOLDS the grant it
-    cites is authentication — a premise here, exactly as in Authority's
-    header. An op is data; anyone may write any `cite` into the log. The
-    gate bounds what a cited grant can DO, not who may cite it.
-  * **Citation by id.** `permitted` accepts ANY active grant triple carrying
-    the cited id; on a state violating `UniqueGrant` two triples share an id
-    and the op is permitted if either covers it. Content addressing
-    (`id = hash(parent, scope, …)`) discharges this globally — Authority's
-    `uniqueGrant_violation_extracts_collision` is the handoff.
-  * **Computability of the gate.** `gatedOps` is `Prop`-valued: `Active`
-    over a function-backed `GrantSet` is an unbounded certificate search,
-    not decidable in general. A deployment makes the gate computable the
-    macaroon way — the op CARRIES its delegation chain, and the check is
-    per-link presence + unrevokedness + narrowing, whose soundness is
-    precisely `Active`'s two constructors. On concrete states (§4)
-    everything decides.
-  * **The Exec-kernel boundary** (report-only note). `Exec.lean`'s kernel
-    takes `(base, op array)` and already reports per-op verdicts (v2 status
-    block: applied / cycle-skipped / invalid). Gating at that boundary means
-    either (a) the caller filters by `gatedOps` before `encodeRequest` — the
-    gate stays view-level, the kernel unchanged — or (b) the request format
-    grows the grant/revocation substrate and the status vocabulary grows a
-    verdict `3 = skipped (unauthorized)`, a format flag day. Neither is done
-    here; this file is the abstraction level (`Move.lean`'s) both would be
-    checked against.
-  * **Arbitration of grant conflicts.** Fail-closed composes: duelling
-    admins annihilate (`Authority.duelling_admins_annihilate`), so after a
-    duel the gate rejects BOTH duellists' ops — and every op citing grants
-    delegated under them. A system wanting a survivor buys ERA's
-    epoch-batched arbitration (`Era.lean`, `duelling_admins_resolved`); its
-    arbitrated view would slot in where `Active` sits, leaving every theorem
-    shape here intact.
-
 Lineage: `Authority.lean` (the token) · `Move.lean` (the op-log pattern and
 its price) · macaroons/biscuits (attenuate offline, verify locally) · the
 dregg through-line — "a turn is the exercise of an attenuable proof-carrying
@@ -138,6 +173,7 @@ itself: grow-only, nothing ever deleted, every gated-out op still on record.
 -/
 import Uwueave.Authority
 import Uwueave.Move
+import Uwueave.ExecRefine
 
 namespace Uwueave.Gated
 
@@ -398,5 +434,235 @@ theorem story_cascade : ¬ gatedOps (bobReplica ⊔ rootReplica) opBob := by
   · have h1 : revoked (bobReplica ⊔ rootReplica) 1 = false :=
       active_head_unrevoked hpar
     exact absurd h1 (by decide)
+
+/-! ## §5. The bridge: the shipping kernel's gate IS this gate
+
+Until format v3 this file gated `Move.lean`'s abstract feed while
+`Exec.absReplay` — the function behind `uwueave_replay_kernel` — replayed
+everything it was handed. The header used to list that as an honest boundary
+with a recipe attached. The recipe is executed: the request carries a
+grant/revocation substrate, ops carry a citation, `Exec.permittedOp` filters
+ahead of the sort, and status `3` reports the refusals
+(`ExecRefine` §9). What remains is to prove the two gates are the SAME gate,
+which is this section.
+
+The correspondence has one seam and it is the one `Authority.lean` already
+names: `Exec.findGrant` takes the FIRST record carrying a cited id, where
+`permitted` quantifies existentially over all of them. On a state satisfying
+`UniqueGrant` — the property content-addressed grant ids
+(`id = hash(parent, scope, …)`) supply, and whose violations
+`uniqueGrant_violation_extracts_collision` turns into collision witnesses —
+the two coincide. So:
+
+  * `kernel_admits_only_authorised` — **no hypotheses**: every op the kernel
+    replays is in this file's gated feed. The safety direction is
+    unconditional; a first-match search can only ever admit LESS.
+  * `kernel_gate_agrees` / `kernel_gate_agrees_gatedOps` — under `WF` and
+    `UniqueGrant`, the kernel's admitted sub-log is exactly `gatedOps`. -/
+
+/-- A kernel grant array, read as this file's `GrantSet`. -/
+def grantSetOf (gs : Array Exec.Grant) : GrantSet :=
+  fun g => gs.any (fun e => (e.id, e.parent, e.scope) == g)
+
+/-- A kernel revocation array, read as `Revoked` — *definitionally* the
+kernel's own `Exec.isRevoked`, so no translation happens here. -/
+def revokedOf (rs : Array Nat) : Revoked := Exec.isRevoked rs
+
+/-- A kernel op, read as a `GOp`: the Lamport stamp, the moved node's index,
+the destination (`-1` and every negative = root), and the citation. -/
+def gopOf (op : Exec.Op) : GOp :=
+  { t := op.lamport.toNat
+    node := op.child
+    dest := if op.dest < 0 then none else some op.dest.toNat
+    cite := op.cite }
+
+/-- A kernel op array, read as the move-op log. -/
+def oplogOf (ops : Array Exec.Op) : GSet GOp :=
+  fun o => ops.any (fun op => gopOf op == o)
+
+/-- The composed state an encoded request denotes. -/
+def stateOf (gs : Array Exec.Grant) (rs : Array Nat) (ops : Array Exec.Op) :
+    GatedState :=
+  (grantSetOf gs, revokedOf rs, oplogOf ops)
+
+/-- What a found grant record witnesses: its id is the one searched for, and
+its triple is present in the denoted grant set. -/
+theorem present_of_findGrant {gs : Array Exec.Grant} {i : Nat} {g : Exec.Grant}
+    (h : Exec.findGrant gs i = some g) :
+    g.id = i ∧ grantSetOf gs (i, g.parent, g.scope) = true := by
+  have hid : g.id = i := by
+    have := Array.find?_some h
+    simpa using this
+  refine ⟨hid, ?_⟩
+  have hmem : g ∈ gs := Array.mem_of_find?_eq_some h
+  show gs.any (fun e => (e.id, e.parent, e.scope) == (i, g.parent, g.scope)) = true
+  rw [Array.any_eq_true']
+  exact ⟨g, hmem, by simp [hid]⟩
+
+/-- A present triple guarantees the kernel's search finds *something* for its
+id (not necessarily that triple — that is `UniqueGrant`'s job). -/
+theorem findGrant_isSome {gs : Array Exec.Grant} {i p σ : Nat}
+    (h : grantSetOf gs (i, p, σ) = true) : ∃ g, Exec.findGrant gs i = some g := by
+  have hany : gs.any (fun e => (e.id, e.parent, e.scope) == (i, p, σ)) = true := h
+  rw [Array.any_eq_true'] at hany
+  obtain ⟨x, hx, hxe⟩ := hany
+  have hid : x.id = i := by
+    have := (beq_iff_eq (α := Nat × Nat × Nat) ..).mp hxe
+    exact congrArg Prod.fst this
+  have : (Exec.findGrant gs i).isSome := by
+    rw [Exec.findGrant, Array.find?_isSome]
+    exact ⟨x, hx, by simp [hid]⟩
+  exact Option.isSome_iff_exists.mp this
+
+/-- **Soundness of the executable carrier, with no hypotheses**: whenever the
+kernel calls grant `i` active, `Authority.Active` holds of the very record it
+found. The kernel's walk *is* an `Active` derivation — presence, unrevoked,
+and either root-issued or an active parent — read off in the same order. -/
+theorem kernel_active_sound {gs : Array Exec.Grant} {rs : Array Nat} :
+    ∀ i, Exec.activeFrom gs rs i = true →
+      ∃ g, Exec.findGrant gs i = some g
+        ∧ Active (grantSetOf gs) (revokedOf rs) (i, g.parent, g.scope) := by
+  intro i
+  induction i using Nat.strongRecOn with
+  | _ i ih =>
+    intro h
+    cases hf : Exec.findGrant gs i with
+    | none => rw [Exec.activeFrom, hf] at h; exact absurd h (by simp)
+    | some g =>
+      have hunfold : Exec.activeFrom gs rs i =
+          (if Exec.isRevoked rs i then false
+            else if g.parent == 0 then true
+            else if _h : g.parent < i then Exec.activeFrom gs rs g.parent
+              else false) := by
+        rw [Exec.activeFrom, hf]
+      rw [hunfold] at h
+      obtain ⟨hid, hpres⟩ := present_of_findGrant hf
+      by_cases hrev : Exec.isRevoked rs i = true
+      · rw [if_pos hrev] at h; exact absurd h (by simp)
+      · have hrev' : revokedOf rs i = false := by
+          show Exec.isRevoked rs i = false
+          simpa using hrev
+        rw [if_neg hrev] at h
+        by_cases hroot : (g.parent == 0) = true
+        · have hp0 : g.parent = 0 := by simpa using hroot
+          refine ⟨g, rfl, ?_⟩
+          rw [hp0] at hpres ⊢
+          exact .root hpres hrev'
+        · rw [if_neg hroot] at h
+          by_cases hlt : g.parent < i
+          · rw [dif_pos hlt] at h
+            obtain ⟨g', hf', hact'⟩ := ih g.parent hlt h
+            obtain ⟨hid', -⟩ := present_of_findGrant hf'
+            exact ⟨g, rfl, .step hpres hrev' hact'⟩
+          · rw [dif_neg hlt] at h; exact absurd h (by simp)
+
+/-- **Completeness of the executable carrier**, under the two premises
+`Authority.lean` already carries: `WF` (creation order — what makes the
+kernel's descending walk reach every ancestor the abstract chain does) and
+`UniqueGrant` (what makes the first match *the* match). Induction on the
+`Active` derivation. -/
+theorem kernel_active_complete {ρ : Nat} {gs : Array Exec.Grant} {rs : Array Nat}
+    (hwf : WF ρ (grantSetOf gs)) (huniq : UniqueGrant (grantSetOf gs))
+    {g : Grant} (h : Active (grantSetOf gs) (revokedOf rs) g) :
+    Exec.activeFrom gs rs g.1 = true := by
+  induction h with
+  | @root i σ hs hr =>
+    obtain ⟨e, he⟩ := findGrant_isSome hs
+    obtain ⟨hid, hpres⟩ := present_of_findGrant he
+    obtain ⟨hp, -⟩ := huniq i 0 σ e.parent e.scope hs hpres
+    rw [Exec.activeFrom, he]
+    have hrev : Exec.isRevoked rs i = false := hr
+    simp [hrev, ← hp]
+  | @step i p σ q σ' hs hr _ ih =>
+    obtain ⟨e, he⟩ := findGrant_isSome hs
+    obtain ⟨hid, hpres⟩ := present_of_findGrant he
+    obtain ⟨hp, -⟩ := huniq i p σ e.parent e.scope hs hpres
+    have hrev : Exec.isRevoked rs i = false := hr
+    have hunfold : Exec.activeFrom gs rs i =
+        (if Exec.isRevoked rs i then false
+          else if e.parent == 0 then true
+          else if _h : e.parent < i then Exec.activeFrom gs rs e.parent
+            else false) := by
+      rw [Exec.activeFrom, he]
+    rw [hunfold, if_neg (by simp [hrev])]
+    by_cases hp0 : (e.parent == 0) = true
+    · rw [if_pos hp0]
+    · rw [if_neg hp0]
+      have hlt : e.parent < i := by
+        have h1 := (hwf i p σ hs).1
+        omega
+      rw [dif_pos hlt, ← hp]
+      exact ih
+
+/-- **The gate agrees, safety direction — no hypotheses.** Every op the
+kernel admits is permitted by this file's gate, on the state the request
+denotes. A first-match grant search can only under-approximate the
+existential, so the shipping kernel never replays a move the abstraction
+would refuse. -/
+theorem kernel_permitted_sound {gs : Array Exec.Grant} {rs : Array Nat}
+    (ops : Array Exec.Op) {op : Exec.Op} (h : Exec.permittedOp gs rs op = true) :
+    permitted (stateOf gs rs ops) (gopOf op) := by
+  cases hf : Exec.findGrant gs op.cite with
+  | none => rw [Exec.permittedOp, hf] at h; exact absurd h (by simp)
+  | some g =>
+    rw [Exec.permittedOp, hf, Bool.and_eq_true] at h
+    obtain ⟨g', hf', hact⟩ := kernel_active_sound op.cite h.1
+    rw [hf] at hf'
+    rw [← Option.some.inj hf'] at hact
+    exact ⟨g.parent, g.scope, hact, by simpa [gopOf] using h.2⟩
+
+/-- **The gate agrees, completeness direction** — under `WF` + `UniqueGrant`,
+anything this file's gate permits, the kernel admits. -/
+theorem kernel_permitted_complete {ρ : Nat} {gs : Array Exec.Grant}
+    {rs : Array Nat} (hwf : WF ρ (grantSetOf gs))
+    (huniq : UniqueGrant (grantSetOf gs)) (ops : Array Exec.Op) {op : Exec.Op}
+    (h : permitted (stateOf gs rs ops) (gopOf op)) :
+    Exec.permittedOp gs rs op = true := by
+  obtain ⟨p, σ, hact, hcov⟩ := h
+  rw [show (gopOf op).cite = op.cite from rfl] at hact
+  have hchild : op.child < σ := hcov
+  obtain ⟨e, he⟩ := findGrant_isSome (active_present hact)
+  obtain ⟨hid, hpres⟩ := present_of_findGrant he
+  obtain ⟨-, hσ⟩ := huniq op.cite p σ e.parent e.scope (active_present hact) hpres
+  rw [Exec.permittedOp, he, Bool.and_eq_true]
+  exact ⟨kernel_active_complete hwf huniq hact, by simp [← hσ, hchild]⟩
+
+/-- **The abstract/executable gap, closed by theorem.** Under the premises
+`Authority.lean` states and a deployment discharges cryptographically, an op
+is in the shipping kernel's replayed sub-log **iff** it is in this file's
+gated feed on the state its request denotes. `gated_antitone`,
+`gated_monotone_grants` and `gated_node_lt_root` are therefore statements
+about what `uwueave_replay_kernel` does, not about a model beside it. -/
+theorem kernel_gate_agrees {ρ : Nat} {gs : Array Exec.Grant} {rs : Array Nat}
+    (hwf : WF ρ (grantSetOf gs)) (huniq : UniqueGrant (grantSetOf gs))
+    (ops : Array Exec.Op) (op : Exec.Op) :
+    Exec.permittedOp gs rs op = true ↔ permitted (stateOf gs rs ops) (gopOf op) :=
+  ⟨kernel_permitted_sound ops, kernel_permitted_complete hwf huniq ops⟩
+
+/-- **No hypotheses**: every op the kernel replays is in the gated feed. This
+is the half that matters for safety, and it needs neither `WF` nor
+`UniqueGrant` — an ill-formed or collision-bearing substrate can only make
+the kernel admit FEWER ops than the abstraction would, never more. -/
+theorem kernel_admits_only_authorised {gs : Array Exec.Grant} {rs : Array Nat}
+    {ops : Array Exec.Op} {op : Exec.Op} (h : op ∈ Exec.admittedOps gs rs ops) :
+    gatedOps (stateOf gs rs ops) (gopOf op) := by
+  rw [Exec.admittedOps, List.mem_filter] at h
+  refine ⟨?_, kernel_permitted_sound ops h.2⟩
+  show ops.any (fun o => gopOf o == gopOf op) = true
+  rw [Array.any_eq_true']
+  exact ⟨op, by simpa using h.1, by simp⟩
+
+/-- The bridge in the vocabulary the kernel ships: the admitted sub-log and
+`gatedOps` are the same set of ops (for ops the request actually carries). -/
+theorem kernel_gate_agrees_gatedOps {ρ : Nat} {gs : Array Exec.Grant}
+    {rs : Array Nat} (hwf : WF ρ (grantSetOf gs))
+    (huniq : UniqueGrant (grantSetOf gs)) {ops : Array Exec.Op} {op : Exec.Op}
+    (hmem : op ∈ ops.toList) :
+    op ∈ Exec.admittedOps gs rs ops ↔ gatedOps (stateOf gs rs ops) (gopOf op) := by
+  constructor
+  · exact kernel_admits_only_authorised
+  · intro h
+    rw [Exec.admittedOps, List.mem_filter]
+    exact ⟨hmem, kernel_permitted_complete hwf huniq ops h.2⟩
 
 end Uwueave.Gated

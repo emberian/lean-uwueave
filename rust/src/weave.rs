@@ -465,7 +465,12 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         Self {
             nodes: CausalWeave::new(),
             text: BTreeMap::new(),
-            moves: MoveLog::new(),
+            moves: {
+                // Founding universal grant (id 1): see move_node's cite note.
+                let mut m = MoveLog::new();
+                m.issue(crate::movelog::Grant::universal(1));
+                m
+            },
             group: EraGroup::new(),
             activation: BTreeMap::new(),
             bookmarks: BTreeMap::new(),
@@ -675,7 +680,14 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
                 return Err(WeaveOpError::UnknownNode(d));
             }
         }
-        let op = MoveOp { lamport, replica: actor, child, dest };
+        // v3 kernel gate: cite the founding universal grant (id 1, issued at
+        // construction). Inside `Weave` the operative permission system is the
+        // ERA role gate (`view().gate`); the kernel's grant gate is held
+        // permissive-by-construction here. Running BOTH gates with real grant
+        // wiring is a policy choice deliberately left open — see
+        // `GatedEra.lean` §"the trade" (fail-closed shrinks, arbitration
+        // agrees; opposite sign tables).
+        let op = MoveOp { lamport, replica: actor, child, dest, cite: 1 };
         self.moves.record(op);
         Ok(op)
     }

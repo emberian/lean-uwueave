@@ -25,7 +25,7 @@ that are *not* free:
      words are undisturbed, and the i64 two's-complement round trip is the
      identity on the range the kernel produces.
 
-  4. **The trace block** (format v2): `overrides_foldl_applyOpFull` — the
+  4. **The trace block** (the ungated layer's, format v2 through v3): `overrides_foldl_applyOpFull` — the
      traced fold's view component is the plain `applyOp` fold, so every view
      theorem transfers to the shipping kernel; `size_statuses_absReplayFull` —
      one status word per request op; `applyOp_skip_of_opStatus_ne_zero` — a
@@ -39,9 +39,26 @@ that are *not* free:
      about `absReplay`, not informal inheritance.
 
   6. **Input codec** (§8, `decodeBase_encodeRequest` /
-     `decodeOps_encodeRequest` / `replay_encodeRequest`): the canonical
-     request encoder round-trips through the decoders exactly, closing the
-     input side of the wire contract at the Lean level.
+     `decodeOps_encodeRequest` / `decodeGrants_encodeRequest` /
+     `decodeRevs_encodeRequest` / `replay_encodeRequest`): the canonical v3
+     request encoder round-trips through all four decoders exactly, closing
+     the input side of the wire contract at the Lean level — magic word
+     included, so `replay`'s refusal branch is discharged, not assumed away.
+
+  7. **The gate** (§9, format v3): `gatedReplay_eq_absReplay_admitted` —
+     **gating is pre-filtering**, the gated kernel is `absReplay` on the
+     admitted sub-log, which is why `gatedReplay_acyclic` /
+     `gatedReplay_terminates` / `gatedReplay_chain_nodup` / `size_gatedReplay`
+     are one line each; `activeFrom_antitone` → `permittedOp_antitone` →
+     **`kernel_gated_antitone`** (with `kernel_gated_merge_only_revokes`),
+     the executable twin of `Gated.gated_antitone`: growing the revocation
+     words never enlarges the replayed feed; `size_statuses_gatedReplayFull`,
+     `gated_status_mem_range` and **`gated_status_eq_three_iff`** — one word
+     per request op, from a four-code vocabulary, with `3` marking *exactly*
+     the ops the gate removed; `gated_unauthorised_is_forever`; and
+     ⚠ `applied_set_not_antitone`, the refutation that keeps the antitone
+     claim from being over-read (revoking can *add* an applied move, because
+     the cycle rule is not monotone in the log).
 
 No `sorry`, no `native_decide`, no `#guard`; axioms of every keystone are
 within `{propext, Classical.choice, Quot.sound}`.
@@ -651,57 +668,151 @@ row is replaying it once (`applyOp_applyOp` — no hypotheses: the second
 application meets a view on which its own verdict cannot change), so the
 duplicate runs a stable sort produces collapse in the fold. -/
 
-private theorem opLt_eq_true_iff {a b : Op} :
-    opLt a b = true ↔
-      a.lamport.toNat < b.lamport.toNat
-      ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat < b.replica.toNat)
-      ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
-          ∧ a.child < b.child)
-      ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
-          ∧ a.child = b.child ∧ a.dest < b.dest) := by
-  simp only [opLt, UInt64.lt_iff_toNat_lt]
+/-! The order's three laws, via a lexicographic key.
+
+`opLt` is lexicographic `<` on five keys, so the direct route — characterize
+it as a five-fold disjunction and hand that to `omega` — is a case split the
+solver stops finishing at this arity (measured: ~90s for transitivity alone,
+past the default heartbeat budget). Reducing the order to `lexLt` on the key
+LIST turns each law into a two-line induction whose per-step obligation is a
+single `Int` comparison. `opLt_eq_lexLt` pins the reduction to the shipping
+comparator; nothing below reasons about `opLt` again. -/
+
+private def opKey (a : Op) : List Int :=
+  [(a.lamport.toNat : Int), (a.replica.toNat : Int), (a.child : Int), a.dest,
+   (a.cite : Int)]
+
+private def lexLt : List Int → List Int → Bool
+  | [], [] => false
+  | [], _ :: _ => true
+  | _ :: _, [] => false
+  | x :: xs, y :: ys => if x < y then true else if y < x then false else lexLt xs ys
+
+private theorem lexLt_irrefl : ∀ l : List Int, lexLt l l = false
+  | [] => rfl
+  | x :: xs => by
+    simp only [lexLt, if_neg (Int.lt_irrefl x)]
+    exact lexLt_irrefl xs
+
+private theorem lexLt_asymm : ∀ {l₁ l₂ : List Int},
+    lexLt l₁ l₂ = true → lexLt l₂ l₁ = false := by
+  intro l₁
+  induction l₁ with
+  | nil => intro l₂ h; cases l₂ with
+    | nil => exact absurd h (by simp [lexLt])
+    | cons y ys => rfl
+  | cons x xs ih =>
+    intro l₂ h
+    cases l₂ with
+    | nil => simp [lexLt] at h
+    | cons y ys =>
+      simp only [lexLt] at h ⊢
+      by_cases h1 : x < y
+      · rw [if_neg (by omega), if_pos (by omega)]
+      · rw [if_neg h1] at h
+        by_cases h2 : y < x
+        · rw [if_pos h2] at h; exact absurd h (by simp)
+        · rw [if_neg h2] at h
+          rw [if_neg h2, if_neg h1]
+          exact ih h
+
+private theorem lexLt_antisymm : ∀ {l₁ l₂ : List Int},
+    lexLt l₁ l₂ = false → lexLt l₂ l₁ = false → l₁ = l₂ := by
+  intro l₁
+  induction l₁ with
+  | nil =>
+    intro l₂ h₁ h₂
+    cases l₂ with
+    | nil => rfl
+    | cons y ys => exact absurd h₁ (by simp [lexLt])
+  | cons x xs ih =>
+    intro l₂ h₁ h₂
+    cases l₂ with
+    | nil => exact absurd h₂ (by simp [lexLt])
+    | cons y ys =>
+      simp only [lexLt] at h₁ h₂
+      by_cases h1 : x < y
+      · exact absurd h₁ (by rw [if_pos h1]; simp)
+      · by_cases h2 : y < x
+        · exact absurd h₂ (by rw [if_pos h2]; simp)
+        · rw [if_neg h1, if_neg h2] at h₁
+          rw [if_neg h2, if_neg h1] at h₂
+          have hxy : x = y := by omega
+          rw [hxy, ih h₁ h₂]
+
+private theorem lexLt_negtrans : ∀ {l₁ l₂ l₃ : List Int},
+    lexLt l₁ l₃ = true → lexLt l₁ l₂ = true ∨ lexLt l₂ l₃ = true := by
+  intro l₁
+  induction l₁ with
+  | nil =>
+    intro l₂ l₃ h
+    cases l₂ with
+    | nil => exact Or.inr h
+    | cons y ys => exact Or.inl rfl
+  | cons x xs ih =>
+    intro l₂ l₃ h
+    cases l₃ with
+    | nil => simp [lexLt] at h
+    | cons z zs =>
+      cases l₂ with
+      | nil => exact Or.inr rfl
+      | cons y ys =>
+        simp only [lexLt] at h ⊢
+        by_cases h1 : x < z
+        · by_cases h2 : x < y
+          · exact Or.inl (by rw [if_pos h2])
+          · refine Or.inr ?_
+            rw [if_pos (by omega)]
+        · rw [if_neg h1] at h
+          by_cases h3 : z < x
+          · rw [if_pos h3] at h; exact absurd h (by simp)
+          · rw [if_neg h3] at h
+            have hxz : x = z := by omega
+            subst hxz
+            by_cases h2 : x < y
+            · exact Or.inl (by rw [if_pos h2])
+            · by_cases h4 : y < x
+              · exact Or.inr (by rw [if_pos h4])
+              · have hxy : x = y := by omega
+                subst hxy
+                rcases ih h with hl | hr
+                · exact Or.inl (by rw [if_neg h2, if_neg h2]; exact hl)
+                · exact Or.inr (by rw [if_neg h2, if_neg h2]; exact hr)
+
+private theorem opLt_eq_lexLt (a b : Op) : opLt a b = lexLt (opKey a) (opKey b) := by
+  simp only [opLt, opKey, lexLt, UInt64.lt_iff_toNat_lt, Int.ofNat_lt]
   repeat' split
   all_goals simp_all
   all_goals omega
 
-private theorem opLt_eq_false_iff {a b : Op} :
-    opLt a b = false ↔
-      ¬(a.lamport.toNat < b.lamport.toNat
-        ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat < b.replica.toNat)
-        ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
-            ∧ a.child < b.child)
-        ∨ (a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
-            ∧ a.child = b.child ∧ a.dest < b.dest)) := by
-  rw [← opLt_eq_true_iff]
-  cases h : opLt a b <;> simp
-
-theorem opLe_refl (a : Op) : opLe a a = true := by
-  simp only [opLe, Bool.not_eq_true']
-  rw [opLt_eq_false_iff]
-  omega
-
-theorem opLe_trans (a b c : Op) : opLe a b → opLe b c → opLe a c := by
-  simp only [opLe, Bool.not_eq_true']
-  rw [opLt_eq_false_iff, opLt_eq_false_iff, opLt_eq_false_iff]
-  intro h₁ h₂
-  omega
-
-theorem opLe_total (a b : Op) : opLe a b || opLe b a := by
-  simp only [opLe, Bool.not_eq_true', Bool.or_eq_true]
-  rw [opLt_eq_false_iff, opLt_eq_false_iff]
-  omega
-
-/-- `opLe` is antisymmetric: two ops that tie on all four keys are the same
-op — the fact that makes the sorted presentation of a log *unique*, and ties
-in the stable sort harmless. -/
-theorem opLe_antisymm {a b : Op} (h₁ : opLe a b) (h₂ : opLe b a) : a = b := by
-  simp only [opLe, Bool.not_eq_true'] at h₁ h₂
-  rw [opLt_eq_false_iff] at h₁ h₂
-  obtain ⟨hl, hr, hc, hd⟩ :
-      a.lamport.toNat = b.lamport.toNat ∧ a.replica.toNat = b.replica.toNat
-        ∧ a.child = b.child ∧ a.dest = b.dest := by omega
+private theorem opKey_inj {a b : Op} (h : opKey a = opKey b) : a = b := by
+  simp only [opKey, List.cons.injEq, and_true] at h
+  obtain ⟨hl, hr, hc, hd, hg⟩ := h
   cases a; cases b
   simp_all [← UInt64.toNat_inj]
+  omega
+
+theorem opLe_refl (a : Op) : opLe a a = true := by
+  simp only [opLe, opLt_eq_lexLt, lexLt_irrefl, Bool.not_false]
+
+theorem opLe_trans (a b c : Op) : opLe a b → opLe b c → opLe a c := by
+  simp only [opLe, opLt_eq_lexLt, Bool.not_eq_true']
+  intro h₁ h₂
+  by_cases h : lexLt (opKey c) (opKey a) = true
+  · rcases lexLt_negtrans (l₂ := opKey b) h with hl | hr
+    · exact absurd hl (by simp [h₂])
+    · exact absurd hr (by simp [h₁])
+  · simpa using h
+
+theorem opLe_total (a b : Op) : opLe a b || opLe b a := by
+  simp only [opLe, opLt_eq_lexLt, Bool.or_eq_true, Bool.not_eq_true']
+  by_cases h : lexLt (opKey b) (opKey a) = true
+  · exact Or.inr (lexLt_asymm h)
+  · exact Or.inl (by simpa using h)
+
+theorem opLe_antisymm {a b : Op} (h₁ : opLe a b) (h₂ : opLe b a) : a = b := by
+  simp only [opLe, opLt_eq_lexLt, Bool.not_eq_true'] at h₁ h₂
+  exact opKey_inj (lexLt_antisymm h₂ h₁)
 
 /-- The traced sort projects to the plain stable sort of the ops (core's
 stability lemma `List.mergeSort_zipIdx`), so `absReplay` is literally
@@ -1104,19 +1215,447 @@ theorem decode_encode_id (ov : Array Int) {i : Nat} (h : i < ov.size)
     toI (getWord (encodeView ov) i) = ov[i] := by
   rw [getWord_encodeView ov h, toI_ofI h1 h2]
 
-/-! ## §8. Input codec: the request round-trips
+
+/-! ## §9. The gate (format v3): the filter, and what survives it -/
+
+private theorem map_fst_filter_zipIdx {α : Type _} (p : α → Bool) :
+    ∀ (l : List α) (i : Nat),
+      ((l.zipIdx i).filter (fun x => p x.1)).map Prod.fst = l.filter p := by
+  intro l
+  induction l with
+  | nil => intro i; rfl
+  | cons a t ih =>
+    intro i
+    rw [List.zipIdx_cons, List.filter_cons, List.filter_cons]
+    by_cases h : p a
+    · simp only [h, if_pos, List.map_cons]
+      rw [ih (i + 1)]
+    · simp only [h, Bool.false_eq_true, if_false]
+      exact ih (i + 1)
+
+private theorem pairwise_fst_of_zipIdxLE {L : List (Op × Nat)}
+    (h : L.Pairwise (fun a b => List.zipIdxLE opLe a b = true)) :
+    (L.map Prod.fst).Pairwise (fun a b => opLe a b = true) := by
+  rw [List.pairwise_map]
+  refine h.imp ?_
+  intro a b hab
+  simp only [List.zipIdxLE] at hab
+  split at hab
+  · rename_i hle
+    exact hle
+  · exact absurd hab (by simp)
+
+/-- Sorting index-tagged ops and dropping the tags is sorting the ops: the
+tag only breaks ties, and `opLe` has none (`opLe_antisymm`). Core's
+`List.mergeSort_zipIdx` says this for a *contiguous* tagging; the gate hands
+the sort a FILTERED tagging, whose indices are the surviving request slots,
+so the general statement is the one the gated kernel needs. -/
+private theorem map_fst_mergeSort_zipIdxLE (L : List (Op × Nat)) :
+    (L.mergeSort (List.zipIdxLE opLe)).map Prod.fst
+      = (L.map Prod.fst).mergeSort opLe := by
+  refine List.Perm.eq_of_pairwise
+    (fun _ _ _ _ hxy hyx => opLe_antisymm hxy hyx)
+    (pairwise_fst_of_zipIdxLE
+      (List.pairwise_mergeSort (List.zipIdxLE_trans opLe_trans)
+        (List.zipIdxLE_total opLe_total) L))
+    (List.pairwise_mergeSort opLe_trans opLe_total _)
+    ?_
+  exact ((List.mergeSort_perm L (List.zipIdxLE opLe)).map Prod.fst).trans
+    (List.mergeSort_perm (L.map Prod.fst) opLe).symm
+
+/-- **Gating is pre-filtering.** The gated kernel's view is *literally* the
+ungated kernel run on the admitted sub-log — the filter removes ops and does
+nothing else. Every `absReplay` theorem therefore transfers to the shipping
+gated kernel with no new argument, which is why the acyclicity results below
+are one line each. -/
+theorem gatedReplay_eq_absReplay_admitted (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) :
+    gatedReplay gs rs fp ops = absReplay fp (admittedOps gs rs ops).toArray := by
+  simp only [gatedReplay, gatedReplayFull]
+  rw [overrides_foldl_applyOpFull, absReplay_eq_foldl_mergeSort,
+      map_fst_mergeSort_zipIdxLE, map_fst_filter_zipIdx]
+  simp only [admittedOps]
+
+/-- **Acyclicity survives the gate** — and survives it for free: the gated
+view is `absReplay` on a sub-log, so this *is* `absReplay_terminates`. -/
+theorem gatedReplay_terminates (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) (r : Nat → Nat) (hg : GroundedBase r fp) :
+    ∀ i, Terminates fp (gatedReplay gs rs fp ops) i := by
+  rw [gatedReplay_eq_absReplay_admitted]
+  exact absReplay_terminates _ _ r hg
+
+/-- `absReplay_acyclic` for the gated kernel: on a grounded base, the gated
+replay of *any* op array under *any* grant/revocation substrate has no
+cycle. -/
+theorem gatedReplay_acyclic (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) (r : Nat → Nat) (hg : GroundedBase r fp) :
+    ∀ i, ¬ Reaches fp (gatedReplay gs rs fp ops) i i :=
+  fun i => (gatedReplay_terminates gs rs fp ops r hg i).not_reaches_self
+
+/-- Every override chain of the gated view terminates at root without
+revisiting a node. -/
+theorem gatedReplay_chain_nodup (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) (r : Nat → Nat) (hg : GroundedBase r fp) :
+    ∀ i, ∃ l, ChainTo fp (gatedReplay gs rs fp ops) i l ∧ l.Nodup := by
+  rw [gatedReplay_eq_absReplay_admitted]
+  exact absReplay_chain_nodup _ _ r hg
+
+/-- The gated view has one word per node, gate or no gate. -/
+theorem size_gatedReplay (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) :
+    (gatedReplay gs rs fp ops).size = fp.size := by
+  rw [gatedReplay_eq_absReplay_admitted]
+  exact size_absReplay _ _
+
+/-! ### The antitone direction: revocations only ever remove -/
+
+/-- `Authority.authority_view_antitone`, in the kernel's carrier: growing the
+revocation array never activates a grant. Well-founded induction on the id,
+mirroring `activeFrom`'s own recursion. -/
+theorem activeFrom_antitone {gs : Array Grant} {rs rs' : Array Nat}
+    (hgrow : ∀ i, isRevoked rs i = true → isRevoked rs' i = true) :
+    ∀ i, activeFrom gs rs' i = true → activeFrom gs rs i = true := by
+  intro i
+  induction i using Nat.strongRecOn with
+  | _ i ih =>
+    intro h
+    cases hf : findGrant gs i with
+    | none =>
+      rw [activeFrom, hf] at h
+      exact absurd h (by simp)
+    | some g =>
+      have hunfold : ∀ r : Array Nat, activeFrom gs r i =
+          (if isRevoked r i then false
+            else if g.parent == 0 then true
+            else if _h : g.parent < i then activeFrom gs r g.parent else false) := by
+        intro r; rw [activeFrom, hf]
+      rw [hunfold] at h ⊢
+      by_cases hrev : isRevoked rs' i = true
+      · rw [if_pos hrev] at h; exact absurd h (by simp)
+      · have hrev' : isRevoked rs i = false := by
+          cases hr : isRevoked rs i with
+          | false => rfl
+          | true => exact absurd (hgrow i hr) (by simp [hrev])
+        rw [if_neg hrev] at h
+        rw [if_neg (by simp [hrev'])]
+        by_cases hroot : (g.parent == 0) = true
+        · rw [if_pos hroot]
+        · rw [if_neg hroot] at h ⊢
+          by_cases hlt : g.parent < i
+          · rw [dif_pos hlt] at h ⊢
+            exact ih g.parent hlt h
+          · rw [dif_neg hlt] at h; exact absurd h (by simp)
+
+/-- The gate is antitone in the revocation substrate, op by op. -/
+theorem permittedOp_antitone {gs : Array Grant} {rs rs' : Array Nat}
+    (hgrow : ∀ i, isRevoked rs i = true → isRevoked rs' i = true) (op : Op)
+    (h : permittedOp gs rs' op = true) : permittedOp gs rs op = true := by
+  cases hf : findGrant gs op.cite with
+  | none => simp only [permittedOp, hf] at h; exact absurd h (by simp)
+  | some g =>
+    simp only [permittedOp, hf, Bool.and_eq_true] at h ⊢
+    exact ⟨activeFrom_antitone hgrow _ h.1, h.2⟩
+
+/-- **`kernel_gated_antitone` — the executable twin of
+`Gated.gated_antitone`, and the point of the whole exercise.** Growing the
+revocation words never ENLARGES the sub-log the kernel replays: every op
+admitted under the larger revocation set was already admitted under the
+smaller. Late revocations only ever remove moves from effect; they cannot
+authorise one, resurrect one, or smuggle one into the fold. -/
+theorem kernel_gated_antitone {gs : Array Grant} {rs rs' : Array Nat}
+    (hgrow : ∀ i, isRevoked rs i = true → isRevoked rs' i = true)
+    (ops : Array Op) {op : Op} (h : op ∈ admittedOps gs rs' ops) :
+    op ∈ admittedOps gs rs ops := by
+  simp only [admittedOps, List.mem_filter] at h ⊢
+  exact ⟨h.1, permittedOp_antitone hgrow op h.2⟩
+
+/-- Appending revocations only grows the revoked set — the wire's merge. -/
+theorem isRevoked_append {rs Δ : Array Nat} {i : Nat}
+    (h : isRevoked rs i = true) : isRevoked (rs ++ Δ) i = true := by
+  simp only [isRevoked, Array.any_eq_true'] at h ⊢
+  obtain ⟨x, hx, hxi⟩ := h
+  exact ⟨x, by simp [hx], hxi⟩
+
+/-- `kernel_gated_antitone` at an actual sync: merging in a peer's
+revocations only ever shrinks the replayed sub-log —
+`Gated.gated_merge_only_revokes` in the kernel. -/
+theorem kernel_gated_merge_only_revokes (gs : Array Grant) (rs Δ : Array Nat)
+    (ops : Array Op) {op : Op} (h : op ∈ admittedOps gs (rs ++ Δ) ops) :
+    op ∈ admittedOps gs rs ops :=
+  kernel_gated_antitone (fun _ hi => isRevoked_append hi) ops h
+
+/-! ### The status trace is total -/
+
+theorem size_statuses_gatedReplayFull (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) :
+    (gatedReplayFull gs rs fp ops).statuses.size = ops.size := by
+  simp only [gatedReplayFull]
+  rw [size_statuses_foldl]
+  simp [initStatuses]
+
+/-- Every entry of the final status block is either the value the gate wrote
+before the fold, or an `opStatus` verdict the fold wrote — the one induction
+both the range theorem and the `3`-marks-unauthorised theorem consume. -/
+private theorem statuses_foldl_cases {fp : Array Int} {n : Nat} :
+    ∀ (l : List (Op × Nat)) (acc : ReplayFull) (j : Nat),
+      (l.foldl (applyOpFull fp n) acc).statuses.getD j 0 = acc.statuses.getD j 0
+      ∨ ∃ (ov : Array Int) (op : Op),
+          (l.foldl (applyOpFull fp n) acc).statuses.getD j 0 = opStatus fp n ov op := by
+  intro l
+  induction l with
+  | nil => intro acc j; exact Or.inl rfl
+  | cons p t ih =>
+    intro acc j
+    rw [List.foldl_cons]
+    rcases ih (applyOpFull fp n acc p) j with hkeep | hwrote
+    · rw [hkeep]
+      by_cases hj : j = p.2
+      · by_cases hin : p.2 < acc.statuses.size
+        · exact Or.inr ⟨acc.overrides, p.1, by
+            show (acc.statuses.set! p.2 (opStatus fp n acc.overrides p.1)).getD j 0 = _
+            rw [hj, getD_set!_self hin]⟩
+        · refine Or.inl ?_
+          show (acc.statuses.set! p.2 (opStatus fp n acc.overrides p.1)).getD j 0 = _
+          rw [hj, getD_oob (by
+                rw [Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]; omega),
+              getD_oob (by omega)]
+      · exact Or.inl (by
+          show (acc.statuses.set! p.2 (opStatus fp n acc.overrides p.1)).getD j 0 = _
+          rw [getD_set!_ne hj])
+    · exact Or.inr hwrote
+
+/-- **The status vocabulary is closed**: every word of the v3 status block is
+one of the four documented codes. -/
+theorem gated_status_mem_range (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) (j : Nat) :
+    (gatedReplayFull gs rs fp ops).statuses.getD j 0 = 0
+    ∨ (gatedReplayFull gs rs fp ops).statuses.getD j 0 = 1
+    ∨ (gatedReplayFull gs rs fp ops).statuses.getD j 0 = 2
+    ∨ (gatedReplayFull gs rs fp ops).statuses.getD j 0 = 3 := by
+  simp only [gatedReplayFull]
+  rcases statuses_foldl_cases (fp := fp) (n := fp.size) _
+      ⟨Array.replicate fp.size (-2), initStatuses gs rs ops⟩ j with hkeep | ⟨ov, op, hw⟩
+  · rw [hkeep]
+    show (initStatuses gs rs ops).getD j 0 = 0 ∨ _
+    by_cases hj : j < ops.size
+    · have : (initStatuses gs rs ops).getD j 0
+          = if permittedOp gs rs ops[j] then 2 else 3 := by
+        simp only [initStatuses]
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_map,
+            Array.getElem?_eq_getElem hj]
+        rfl
+      rw [this]
+      split
+      · exact Or.inr (Or.inr (Or.inl rfl))
+      · exact Or.inr (Or.inr (Or.inr rfl))
+    · rw [getD_oob (by simp [initStatuses]; omega)]
+      exact Or.inl rfl
+  · rw [hw]
+    rcases opStatus_mem_range fp fp.size ov op with h | h | h
+    · exact Or.inl h
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr (Or.inl h))
+
+private theorem getElem?_of_mem_zipIdx {α : Type _} {l : List α} {p : α × Nat}
+    (h : p ∈ l.zipIdx) : l[p.2]? = some p.1 := by
+  rw [List.mem_iff_getElem?] at h
+  obtain ⟨k, hk⟩ := h
+  rw [List.getElem?_zipIdx] at hk
+  cases hl : l[k]? with
+  | none => rw [hl] at hk; exact absurd hk (by simp)
+  | some a =>
+    rw [hl] at hk
+    have hp : p = (a, k) := by
+      have hk' := Option.some.inj hk
+      simpa using hk'.symm
+    rw [hp]
+    simpa using hl
+
+private theorem statuses_foldl_untouched {fp : Array Int} {n : Nat} :
+    ∀ (l : List (Op × Nat)) (acc : ReplayFull) (j : Nat), (∀ p ∈ l, p.2 ≠ j) →
+      (l.foldl (applyOpFull fp n) acc).statuses.getD j 0
+        = acc.statuses.getD j 0 := by
+  intro l
+  induction l with
+  | nil => intro acc j _; rfl
+  | cons p t ih =>
+    intro acc j hne
+    rw [List.foldl_cons, ih _ _ (fun q hq => hne q (List.mem_cons_of_mem p hq))]
+    show (acc.statuses.set! p.2 (opStatus fp n acc.overrides p.1)).getD j 0 = _
+    exact getD_set!_ne (fun he => hne p List.mem_cons_self (he ▸ rfl))
+
+private theorem statuses_foldl_ne_three {fp : Array Int} {n : Nat}
+    (l : List (Op × Nat)) (acc : ReplayFull) (j : Nat)
+    (h : acc.statuses.getD j 0 ≠ 3) :
+    (l.foldl (applyOpFull fp n) acc).statuses.getD j 0 ≠ 3 := by
+  rcases statuses_foldl_cases l acc j with hkeep | ⟨ov, op, hw⟩
+  · rw [hkeep]; exact h
+  · rw [hw]
+    rcases opStatus_mem_range fp n ov op with hs | hs | hs <;> rw [hs] <;> decide
+
+/-- **Status `3` marks exactly the ops the gate removed.** Not "at least"
+(the fold never writes a `3`: its verdicts are `opStatus`'s three codes) and
+not "at most" (an unauthorised op is not in the fold's list at all, so its
+slot keeps the `3` the gate wrote). With `size_statuses_gatedReplayFull` this
+is trace completeness: one word per request op, and the word says which of
+the four things happened to it. -/
+theorem gated_status_eq_three_iff (gs : Array Grant) (rs : Array Nat)
+    (fp : Array Int) (ops : Array Op) {j : Nat} (hj : j < ops.size) :
+    (gatedReplayFull gs rs fp ops).statuses.getD j 0 = 3
+      ↔ permittedOp gs rs ops[j] = false := by
+  have hinit : (initStatuses gs rs ops).getD j 0
+      = if permittedOp gs rs ops[j] then 2 else 3 := by
+    simp only [initStatuses]
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_map,
+        Array.getElem?_eq_getElem hj]
+    rfl
+  constructor
+  · intro h
+    by_cases hp : permittedOp gs rs ops[j] = true
+    · exfalso
+      refine statuses_foldl_ne_three _ _ j ?_ h
+      rw [hinit, if_pos hp]
+      decide
+    · simpa using hp
+  · intro hp
+    simp only [gatedReplayFull]
+    rw [statuses_foldl_untouched _ _ j ?_, hinit, if_neg (by simp [hp])]
+    intro q hq hqj
+    rw [List.mem_mergeSort, List.mem_filter] at hq
+    have hmem : ops.toList[q.2]? = some q.1 := getElem?_of_mem_zipIdx hq.1
+    rw [hqj, Array.getElem?_toList, Array.getElem?_eq_getElem hj] at hmem
+    have : q.1 = ops[j] := (Option.some.inj hmem).symm
+    rw [this] at hq
+    exact absurd hq.2 (by simp [hp])
+
+/-- `gated_out_is_forever` in the kernel: an op the gate refused under `rs`
+is refused under every larger revocation array — its status word stays `3`,
+so a UI never sees a de-authorised move come back. -/
+theorem gated_unauthorised_is_forever {gs : Array Grant} {rs rs' : Array Nat}
+    (hgrow : ∀ i, isRevoked rs i = true → isRevoked rs' i = true)
+    (fp : Array Int) (ops : Array Op) {j : Nat} (hj : j < ops.size)
+    (h : (gatedReplayFull gs rs fp ops).statuses.getD j 0 = 3) :
+    (gatedReplayFull gs rs' fp ops).statuses.getD j 0 = 3 := by
+  rw [gated_status_eq_three_iff gs rs fp ops hj] at h
+  rw [gated_status_eq_three_iff gs rs' fp ops hj]
+  cases hp : permittedOp gs rs' ops[j] with
+  | false => rfl
+  | true => exact absurd (permittedOp_antitone hgrow _ hp) (by simp [h])
+
+
+
+/-- Sorting a pair, unfolded once — the mergeSort layer discharged so the
+concrete fold below is structural and `decide` can finish it (`Move.lean` §3
+does the same for the miniature). -/
+private theorem mergeSort_pair {α : Type _} {le : α → α → Bool} {a b : α} :
+    [a, b].mergeSort le = if le a b then [a, b] else [b, a] := by
+  rw [List.mergeSort]
+  simp [List.merge]
+
+/-! ### ⚠ The boundary: the ADMITTED set is antitone, the APPLIED set is not
+
+`kernel_gated_antitone` says revocations only ever remove ops from the feed.
+It is tempting to read that as "revoking never makes a move happen" — and
+that reading is FALSE, because the cycle rule is not monotone in the log: an
+op the fold skipped only because an earlier op was in the way applies once
+that op is gated out. The fixture below is the two-node witness; the theorem
+is stated in the same breath as the antitone one so nobody quotes the
+flattering half. Two root nodes, two root-issued grants of scope 2, and two
+moves that would close a cycle. -/
+
+/-- Two nodes, both structural roots — grounded, so the acyclicity theorems
+apply. -/
+def unblockBase : Array Int := #[-1, -1]
+/-- Two root-issued grants, each of scope 2 (covering nodes 0 and 1). -/
+def unblockGrants : Array Grant := #[⟨1, 0, 2⟩, ⟨2, 0, 2⟩]
+/-- The earlier move (lamport 1): node 1 under node 0, citing grant 1. -/
+def unblockOpA : Op := { lamport := 1, replica := 0, child := 1, dest := 0, cite := 1 }
+/-- The later move (lamport 2): node 0 under node 1, citing grant 2 — a
+cycle, so the fold skips it while `unblockOpA` stands. -/
+def unblockOpB : Op := { lamport := 2, replica := 0, child := 0, dest := 1, cite := 2 }
+/-- The request's op array. -/
+def unblockOps : Array Op := #[unblockOpA, unblockOpB]
+
+/-- With nothing revoked, the gate admits both moves. -/
+theorem unblock_admitted : admittedOps unblockGrants #[] unblockOps = [unblockOpA, unblockOpB] := by
+  have hA : permittedOp unblockGrants #[] unblockOpA = true := by
+    show (activeFrom unblockGrants #[] 1 && decide (1 < 2)) = true
+    rw [show activeFrom unblockGrants #[] 1 = true from by
+      rw [activeFrom, show findGrant unblockGrants 1 = some ⟨1, 0, 2⟩ from rfl]
+      simp [isRevoked]]
+    decide
+  have hB : permittedOp unblockGrants #[] unblockOpB = true := by
+    show (activeFrom unblockGrants #[] 2 && decide (0 < 2)) = true
+    rw [show activeFrom unblockGrants #[] 2 = true from by
+      rw [activeFrom, show findGrant unblockGrants 2 = some ⟨2, 0, 2⟩ from rfl]
+      simp [isRevoked]]
+    decide
+  show List.filter (permittedOp unblockGrants #[]) [unblockOpA, unblockOpB] = _
+  rw [List.filter_cons, List.filter_cons, hA, hB]
+  simp
+
+/-- Revoking grant 1 removes the earlier move from the feed — the antitone
+direction, on this fixture. -/
+theorem unblock_admitted_revoked : admittedOps unblockGrants #[1] unblockOps = [unblockOpB] := by
+  have hA : permittedOp unblockGrants #[1] unblockOpA = false := by
+    show (activeFrom unblockGrants #[1] 1 && decide (1 < 2)) = false
+    rw [show activeFrom unblockGrants #[1] 1 = false from by
+      rw [activeFrom, show findGrant unblockGrants 1 = some ⟨1, 0, 2⟩ from rfl]
+      simp [isRevoked]]
+    decide
+  have hB : permittedOp unblockGrants #[1] unblockOpB = true := by
+    show (activeFrom unblockGrants #[1] 2 && decide (0 < 2)) = true
+    rw [show activeFrom unblockGrants #[1] 2 = true from by
+      rw [activeFrom, show findGrant unblockGrants 2 = some ⟨2, 0, 2⟩ from rfl]
+      simp [isRevoked]]
+    decide
+  show List.filter (permittedOp unblockGrants #[1]) [unblockOpA, unblockOpB] = _
+  rw [List.filter_cons, List.filter_cons, hA, hB]
+  simp
+
+/-- ⚠ **Revoking a grant can ADD an applied move.** The revocation set grows
+(`#[] ⊆ #[1]`), the admitted feed shrinks (`unblock_admitted_revoked`) — and
+the resulting VIEW gains an override it did not have: node 0 was un-moved and
+is now under node 1, because the op that had been blocking `unblockOpB` by
+the cycle rule is gone. So `kernel_gated_antitone`'s antitonicity is exactly
+about the FEED, and any claim of the form "more revocations ⇒ fewer applied
+ops" is refuted here. What survives is the security-relevant statement: no op
+is applied whose authority the substrate does not carry
+(`Gated.kernel_gate_agrees_gatedOps`), and de-authorisation is forever
+(`gated_unauthorised_is_forever`). -/
+theorem applied_set_not_antitone :
+    (∀ i, isRevoked (#[] : Array Nat) i = true → isRevoked #[1] i = true)
+    ∧ gatedReplay unblockGrants #[] unblockBase unblockOps = #[-2, 0]
+    ∧ gatedReplay unblockGrants #[1] unblockBase unblockOps = #[1, -2] := by
+  refine ⟨fun i hi => absurd hi (by simp [isRevoked]), ?_, ?_⟩
+  · rw [gatedReplay_eq_absReplay_admitted, unblock_admitted,
+        absReplay_eq_foldl_mergeSort]
+    show (List.mergeSort [unblockOpA, unblockOpB] opLe).foldl (applyOp unblockBase 2)
+        (Array.replicate 2 (-2)) = _
+    rw [mergeSort_pair, show opLe unblockOpA unblockOpB = true from by decide]
+    decide
+  · rw [gatedReplay_eq_absReplay_admitted, unblock_admitted_revoked,
+        absReplay_eq_foldl_mergeSort]
+    show (List.mergeSort [unblockOpB] opLe).foldl (applyOp unblockBase 2)
+        (Array.replicate 2 (-2)) = _
+    rw [List.mergeSort_singleton]
+    decide
+
+
+/-! ## §8. Input codec: the request round-trips (format v3)
 
 The output side round-tripped in §7; here the *input* side stops being a
 one-way street. `encodeRequest` (in `Exec.lean`) is the canonical encoder for
-the request layout; these theorems prove `decodeBase`/`decodeOps` invert it
-exactly, under the range conditions every real request satisfies (sizes and
-children in u64 range, parents and destinations in i64 range). With
+the v3 request layout — magic, four counts, then the base, op, grant and
+revocation blocks — and these theorems prove the four decoders invert it
+exactly, under the range conditions every real request satisfies (counts and
+ids in u64 range, parents and destinations in i64 range). With
 `replay_encodeRequest`, the byte-level kernel applied to a canonical request
-is *literally* the decision layer plus the proved output codec — no unproved
-decode step remains between them. The one thing left outside any proof is
-that the Rust marshaller emits `encodeRequest`'s exact bytes: a finite,
-testable claim (exercised end-to-end by the property suite), not a semantic
-gap. -/
+is *literally* the gated decision layer plus the proved output codec — no
+unproved decode step remains between them, and the magic guard is discharged
+rather than assumed. The one thing left outside any proof is that the Rust
+marshaller emits `encodeRequest`'s exact bytes: a finite, testable claim
+(checked at runtime against `requestCanonicalKernel`), not a semantic gap. -/
 
 private theorem size_foldl_pushWords (l : List UInt64) :
     ∀ b : ByteArray, (l.foldl pushWord b).size = b.size + 8 * l.length := by
@@ -1160,166 +1699,379 @@ private theorem getWord_foldl_pushWords (l : List UInt64) :
 
 /-- Word `j` of the canonical request is word `j` of `requestWords`. -/
 private theorem getWord_encodeRequest (fp : Array Int) (ops : Array Op)
-    {j : Nat} (hj : j < (requestWords fp ops).length) :
-    getWord (encodeRequest fp ops) j = (requestWords fp ops)[j] := by
-  have h := getWord_foldl_pushWords (requestWords fp ops) ByteArray.empty 0
+    (gs : Array Grant) (rs : Array Nat)
+    {j : Nat} (hj : j < (requestWords fp ops gs rs).length) :
+    getWord (encodeRequest fp ops gs rs) j = (requestWords fp ops gs rs)[j] := by
+  have h := getWord_foldl_pushWords (requestWords fp ops gs rs) ByteArray.empty 0
     (by simp) j hj
   simpa using h
 
-private theorem length_flatMap_quad (f : Op → List UInt64)
-    (h4 : ∀ op, (f op).length = 4) :
-    ∀ l : List Op, (l.flatMap f).length = 4 * l.length := by
+/-! ### Block lengths and block-local indexing -/
+
+private theorem length_flatMap_quint {α : Type _} (f : α → List UInt64)
+    (hk : ∀ x, (f x).length = 5) :
+    ∀ l : List α, (l.flatMap f).length = 5 * l.length := by
   intro l
   induction l with
-  | nil => rfl
+  | nil => simp
   | cons a t ih =>
-    simp only [List.flatMap_cons, List.length_append, h4, ih, List.length_cons]
+    simp only [List.flatMap_cons, List.length_append, hk, ih, List.length_cons]
     omega
 
-private theorem requestWords_length (fp : Array Int) (ops : Array Op) :
-    (requestWords fp ops).length = 2 + fp.size + 4 * ops.size := by
-  have h := length_flatMap_quad
-    (fun op => [op.lamport, op.replica, UInt64.ofNat op.child, ofI op.dest])
-    (fun _ => rfl) ops.toList
-  simp only [requestWords, List.length_cons, List.length_append,
-    List.length_map, Array.length_toList, h]
-  omega
-
-private theorem getElem?_flatMap_quad (f : Op → List UInt64)
-    (h4 : ∀ op, (f op).length = 4) :
-    ∀ (l : List Op) (q k : Nat) (hq : q < l.length), k < 4 →
-      (l.flatMap f)[4 * q + k]? = (f (l[q]'hq))[k]? := by
+private theorem getElem?_flatMap_quint {α : Type _} (f : α → List UInt64)
+    (hk : ∀ x, (f x).length = 5) :
+    ∀ (l : List α) (q i : Nat) (hq : q < l.length), i < 5 →
+      (l.flatMap f)[5 * q + i]? = (f (l[q]'hq))[i]? := by
   intro l
   induction l with
-  | nil => intro q k hq _; simp at hq
+  | nil => intro q i hq _; simp at hq
   | cons a t ih =>
-    intro q k hq hk
+    intro q i hq hi
     match q with
     | 0 =>
       simp only [List.flatMap_cons, Nat.mul_zero, Nat.zero_add,
         List.getElem_cons_zero]
-      rw [List.getElem?_append_left (by rw [h4]; exact hk)]
+      rw [List.getElem?_append_left (by rw [hk]; exact hi)]
     | q + 1 =>
       simp only [List.flatMap_cons, List.getElem_cons_succ]
-      rw [List.getElem?_append_right (by rw [h4]; omega)]
-      rw [show 4 * (q + 1) + k - (f a).length = 4 * q + k by rw [h4]; omega]
-      exact ih q k (by simpa using hq) hk
+      rw [List.getElem?_append_right (by rw [hk]; omega)]
+      rw [show 5 * (q + 1) + i - (f a).length = 5 * q + i by rw [hk]; omega]
+      exact ih q i (by simpa using hq) hi
+
+private theorem length_flatMap_triple {α : Type _} (f : α → List UInt64)
+    (hk : ∀ x, (f x).length = 3) :
+    ∀ l : List α, (l.flatMap f).length = 3 * l.length := by
+  intro l
+  induction l with
+  | nil => simp
+  | cons a t ih =>
+    simp only [List.flatMap_cons, List.length_append, hk, ih, List.length_cons]
+    omega
+
+private theorem getElem?_flatMap_triple {α : Type _} (f : α → List UInt64)
+    (hk : ∀ x, (f x).length = 3) :
+    ∀ (l : List α) (q i : Nat) (hq : q < l.length), i < 3 →
+      (l.flatMap f)[3 * q + i]? = (f (l[q]'hq))[i]? := by
+  intro l
+  induction l with
+  | nil => intro q i hq _; simp at hq
+  | cons a t ih =>
+    intro q i hq hi
+    match q with
+    | 0 =>
+      simp only [List.flatMap_cons, Nat.mul_zero, Nat.zero_add,
+        List.getElem_cons_zero]
+      rw [List.getElem?_append_left (by rw [hk]; exact hi)]
+    | q + 1 =>
+      simp only [List.flatMap_cons, List.getElem_cons_succ]
+      rw [List.getElem?_append_right (by rw [hk]; omega)]
+      rw [show 3 * (q + 1) + i - (f a).length = 3 * q + i by rw [hk]; omega]
+      exact ih q i (by simpa using hq) hi
+
+theorem length_baseWords (fp : Array Int) : (baseWords fp).length = fp.size := by
+  simp [baseWords]
+
+theorem length_opWords (ops : Array Op) : (opWords ops).length = 5 * ops.size := by
+  rw [opWords, length_flatMap_quint
+    (fun op => [op.lamport, op.replica, UInt64.ofNat op.child, ofI op.dest,
+      UInt64.ofNat op.cite]) (fun _ => rfl) ops.toList]
+  simp
+
+theorem length_grantWords (gs : Array Grant) :
+    (grantWords gs).length = 3 * gs.size := by
+  rw [grantWords, length_flatMap_triple
+    (fun g => [UInt64.ofNat g.id, UInt64.ofNat g.parent, UInt64.ofNat g.scope])
+    (fun _ => rfl) gs.toList]
+  simp
+
+theorem length_revWords (rs : Array Nat) : (revWords rs).length = rs.size := by
+  simp [revWords]
+
+private theorem requestWords_length (fp : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat) :
+    (requestWords fp ops gs rs).length
+      = 5 + fp.size + 5 * ops.size + 3 * gs.size + rs.size := by
+  simp only [requestWords, List.length_cons, List.length_append,
+    length_baseWords, length_opWords, length_grantWords, length_revWords]
+  omega
+
+/-- Past the five header words, the request is its four blocks. -/
+private theorem getElem?_request_body (fp : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat) (i : Nat) :
+    (requestWords fp ops gs rs)[5 + i]?
+      = (baseWords fp ++ opWords ops ++ grantWords gs ++ revWords rs)[i]? := by
+  simp only [requestWords]
+  rw [show 5 + i = i + 1 + 1 + 1 + 1 + 1 by omega,
+      List.getElem?_cons_succ, List.getElem?_cons_succ, List.getElem?_cons_succ,
+      List.getElem?_cons_succ, List.getElem?_cons_succ]
+
+private theorem body_base (A B C D : List UInt64) {i : Nat} (h : i < A.length) :
+    (A ++ B ++ C ++ D)[i]? = A[i]? := by
+  rw [List.getElem?_append_left (by simp only [List.length_append]; omega),
+      List.getElem?_append_left (by simp only [List.length_append]; omega),
+      List.getElem?_append_left h]
+
+private theorem body_ops (A B C D : List UInt64) {i : Nat} (h : i < B.length) :
+    (A ++ B ++ C ++ D)[A.length + i]? = B[i]? := by
+  rw [List.getElem?_append_left (by simp only [List.length_append]; omega),
+      List.getElem?_append_left (by simp only [List.length_append]; omega),
+      List.getElem?_append_right (by omega),
+      show A.length + i - A.length = i by omega]
+
+private theorem body_grants (A B C D : List UInt64) {i : Nat} (h : i < C.length) :
+    (A ++ B ++ C ++ D)[A.length + B.length + i]? = C[i]? := by
+  rw [List.getElem?_append_left (by simp only [List.length_append]; omega),
+      List.getElem?_append_right (by simp only [List.length_append]; omega),
+      show A.length + B.length + i - (A ++ B).length = i by simp only [List.length_append]; omega]
+
+private theorem body_revs (A B C D : List UInt64) {i : Nat} (_h : i < D.length) :
+    (A ++ B ++ C ++ D)[A.length + B.length + C.length + i]? = D[i]? := by
+  rw [List.getElem?_append_right (by simp only [List.length_append]; omega),
+      show A.length + B.length + C.length + i - (A ++ B ++ C).length = i by
+        simp only [List.length_append]; omega]
 
 private theorem getElem_of_getElem? {l : List UInt64} {i : Nat} {v : UInt64}
     (h : i < l.length) (hv : l[i]? = some v) : l[i] = v := by
   rw [List.getElem?_eq_getElem h] at hv
   exact Option.some.inj hv
 
+/-! ### The header words -/
+
+private theorem word_magic (fp : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat) :
+    getWord (encodeRequest fp ops gs rs) 0 = magicV3 := by
+  rw [getWord_encodeRequest fp ops gs rs (by rw [requestWords_length]; omega)]
+  rfl
+
+private theorem word_count (fp : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat) :
+    (getWord (encodeRequest fp ops gs rs) 1 = UInt64.ofNat fp.size)
+    ∧ (getWord (encodeRequest fp ops gs rs) 2 = UInt64.ofNat ops.size)
+    ∧ (getWord (encodeRequest fp ops gs rs) 3 = UInt64.ofNat gs.size)
+    ∧ (getWord (encodeRequest fp ops gs rs) 4 = UInt64.ofNat rs.size) := by
+  refine ⟨?_, ?_, ?_, ?_⟩ <;>
+    · rw [getWord_encodeRequest fp ops gs rs (by rw [requestWords_length]; omega)]
+      rfl
+
+/-! ### The four decoders invert the encoder -/
+
 /-- **The base decodes back exactly** from the canonical request. -/
 theorem decodeBase_encodeRequest (fp : Array Int) (ops : Array Op)
-    (hn : fp.size < 2 ^ 64)
+    (gs : Array Grant) (rs : Array Nat) (hn : fp.size < 2 ^ 64)
     (hfp : ∀ (i : Nat) (h : i < fp.size), -(2 ^ 63) ≤ fp[i] ∧ fp[i] < 2 ^ 63) :
-    decodeBase (encodeRequest fp ops) = fp := by
-  have hw0 : getWord (encodeRequest fp ops) 0 = UInt64.ofNat fp.size := by
-    rw [getWord_encodeRequest fp ops (by rw [requestWords_length]; omega)]
-    rfl
-  have hn' : (getWord (encodeRequest fp ops) 0).toNat = fp.size := by
-    rw [hw0, UInt64.toNat_ofNat']
+    decodeBase (encodeRequest fp ops gs rs) = fp := by
+  have hn' : (getWord (encodeRequest fp ops gs rs) 1).toNat = fp.size := by
+    rw [(word_count fp ops gs rs).1, UInt64.toNat_ofNat']
     omega
   simp only [decodeBase, hn']
   apply Array.ext
   · simp
   · intro i h1 h2
     simp only [Array.getElem_map, Array.getElem_range]
-    have hidx : 2 + i < (requestWords fp ops).length := by
-      rw [requestWords_length]
-      simp at h1
-      omega
-    rw [getWord_encodeRequest fp ops hidx]
     have h1' : i < fp.size := by simpa using h1
-    have hval : (requestWords fp ops)[2 + i]'hidx = ofI fp[i] := by
+    have hidx : 5 + i < (requestWords fp ops gs rs).length := by
+      rw [requestWords_length]; omega
+    rw [getWord_encodeRequest fp ops gs rs hidx]
+    have hval : (requestWords fp ops gs rs)[5 + i]'hidx = ofI fp[i] := by
       apply getElem_of_getElem? hidx
-      simp only [requestWords]
-      rw [show (2 : Nat) + i = i + 1 + 1 by omega,
-          List.getElem?_cons_succ, List.getElem?_cons_succ,
-          List.getElem?_append_left (by simpa using h1'),
-          List.getElem?_map, Array.getElem?_toList,
-          Array.getElem?_eq_getElem h1']
+      rw [getElem?_request_body,
+          body_base _ _ _ _ (by rw [length_baseWords]; exact h1')]
+      simp only [baseWords, List.getElem?_map, Array.getElem?_toList,
+        Array.getElem?_eq_getElem h1']
       rfl
     rw [hval, toI_ofI (hfp i h1').1 (hfp i h1').2]
 
 /-- **The ops decode back exactly** from the canonical request. -/
 theorem decodeOps_encodeRequest (fp : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat)
     (hn : fp.size < 2 ^ 64) (hm : ops.size < 2 ^ 64)
     (hchild : ∀ (j : Nat) (h : j < ops.size), ops[j].child < 2 ^ 64)
+    (hcite : ∀ (j : Nat) (h : j < ops.size), ops[j].cite < 2 ^ 64)
     (hdest : ∀ (j : Nat) (h : j < ops.size),
       -(2 ^ 63) ≤ ops[j].dest ∧ ops[j].dest < 2 ^ 63) :
-    decodeOps (encodeRequest fp ops) = ops := by
-  have hw0 : (getWord (encodeRequest fp ops) 0).toNat = fp.size := by
-    rw [getWord_encodeRequest fp ops (by rw [requestWords_length]; omega)]
-    show (UInt64.ofNat fp.size).toNat = fp.size
-    rw [UInt64.toNat_ofNat']
-    omega
-  have hw1 : (getWord (encodeRequest fp ops) 1).toNat = ops.size := by
-    rw [getWord_encodeRequest fp ops (by rw [requestWords_length]; omega)]
-    show (UInt64.ofNat ops.size).toNat = ops.size
-    rw [UInt64.toNat_ofNat']
-    omega
-  -- One quad word, extracted: word 2 + n + (4j + k) is field k of op j.
-  have hquad : ∀ (j k : Nat) (hj : j < ops.size) (hk : k < 4),
-      getWord (encodeRequest fp ops) (2 + fp.size + (4 * j + k))
+    decodeOps (encodeRequest fp ops gs rs) = ops := by
+  have hw1 : (getWord (encodeRequest fp ops gs rs) 1).toNat = fp.size := by
+    rw [(word_count fp ops gs rs).1, UInt64.toNat_ofNat']; omega
+  have hw2 : (getWord (encodeRequest fp ops gs rs) 2).toNat = ops.size := by
+    rw [(word_count fp ops gs rs).2.1, UInt64.toNat_ofNat']; omega
+  have hquint : ∀ (j k : Nat) (hj : j < ops.size) (hk : k < 5),
+      getWord (encodeRequest fp ops gs rs) (5 + fp.size + (5 * j + k))
         = ([ops[j].lamport, ops[j].replica, UInt64.ofNat ops[j].child,
-            ofI ops[j].dest][k]'(by simpa using hk)) := by
+            ofI ops[j].dest, UInt64.ofNat ops[j].cite][k]'(by simpa using hk)) := by
     intro j k hj hk
-    have hidx : 2 + fp.size + (4 * j + k) < (requestWords fp ops).length := by
-      rw [requestWords_length]
-      omega
-    rw [getWord_encodeRequest fp ops hidx]
+    have hidx : 5 + fp.size + (5 * j + k) < (requestWords fp ops gs rs).length := by
+      rw [requestWords_length]; omega
+    rw [getWord_encodeRequest fp ops gs rs hidx]
     apply getElem_of_getElem? hidx
-    simp only [requestWords]
     have hj' : j < ops.toList.length := by simpa using hj
-    rw [show 2 + fp.size + (4 * j + k) = fp.size + (4 * j + k) + 1 + 1 by omega,
-        List.getElem?_cons_succ, List.getElem?_cons_succ,
-        List.getElem?_append_right (by simp),
-        show fp.size + (4 * j + k) - (List.map ofI fp.toList).length
-          = 4 * j + k by simp,
-        getElem?_flatMap_quad _ (fun _ => rfl) ops.toList j k hj' hk]
+    rw [show 5 + fp.size + (5 * j + k) = 5 + (fp.size + (5 * j + k)) by omega,
+        getElem?_request_body]
+    rw [show fp.size = (baseWords fp).length by rw [length_baseWords],
+        body_ops _ _ _ _ (by rw [length_opWords]; omega)]
+    rw [show opWords ops = ops.toList.flatMap
+          (fun op => [op.lamport, op.replica, UInt64.ofNat op.child, ofI op.dest,
+            UInt64.ofNat op.cite]) from rfl,
+        getElem?_flatMap_quint _ (fun _ => rfl) ops.toList j k hj' hk]
     simp only [Array.getElem_toList]
     rw [List.getElem?_eq_getElem (by simpa using hk)]
-  simp only [decodeOps, hw0, hw1]
+  simp only [decodeOps, hw1, hw2]
   apply Array.ext
   · simp
   · intro j h1 h2
     simp only [Array.getElem_map, Array.getElem_range]
     have hj : j < ops.size := by simpa using h1
-    have q0 := hquad j 0 hj (by omega)
-    have q1 := hquad j 1 hj (by omega)
-    have q2 := hquad j 2 hj (by omega)
-    have q3 := hquad j 3 hj (by omega)
-    rw [show (2 : Nat) + fp.size + j * 4 = 2 + fp.size + (4 * j + 0) by omega]
-    rw [show 2 + fp.size + (4 * j + 0) + 1 = 2 + fp.size + (4 * j + 1) by omega,
-        show 2 + fp.size + (4 * j + 0) + 2 = 2 + fp.size + (4 * j + 2) by omega,
-        show 2 + fp.size + (4 * j + 0) + 3 = 2 + fp.size + (4 * j + 3) by omega]
-    rw [q0, q1, q2, q3]
+    have q0 := hquint j 0 hj (by omega)
+    have q1 := hquint j 1 hj (by omega)
+    have q2 := hquint j 2 hj (by omega)
+    have q3 := hquint j 3 hj (by omega)
+    have q4 := hquint j 4 hj (by omega)
+    rw [show (5 : Nat) + fp.size + j * 5 = 5 + fp.size + (5 * j + 0) by omega]
+    rw [show 5 + fp.size + (5 * j + 0) + 1 = 5 + fp.size + (5 * j + 1) by omega,
+        show 5 + fp.size + (5 * j + 0) + 2 = 5 + fp.size + (5 * j + 2) by omega,
+        show 5 + fp.size + (5 * j + 0) + 3 = 5 + fp.size + (5 * j + 3) by omega,
+        show 5 + fp.size + (5 * j + 0) + 4 = 5 + fp.size + (5 * j + 4) by omega]
+    rw [q0, q1, q2, q3, q4]
     show Op.mk ops[j].lamport ops[j].replica (UInt64.ofNat ops[j].child).toNat
-        (toI (ofI ops[j].dest)) = ops[j]
+        (toI (ofI ops[j].dest)) (UInt64.ofNat ops[j].cite).toNat = ops[j]
     have hc : (UInt64.ofNat ops[j].child).toNat = ops[j].child := by
       rw [UInt64.toNat_ofNat']
       have := hchild j hj
       omega
-    rw [hc, toI_ofI (hdest j hj).1 (hdest j hj).2]
+    have hg : (UInt64.ofNat ops[j].cite).toNat = ops[j].cite := by
+      rw [UInt64.toNat_ofNat']
+      have := hcite j hj
+      omega
+    rw [hc, hg, toI_ofI (hdest j hj).1 (hdest j hj).2]
+
+/-- **The grants decode back exactly** from the canonical request. -/
+theorem decodeGrants_encodeRequest (fp : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat)
+    (hn : fp.size < 2 ^ 64) (hm : ops.size < 2 ^ 64) (hng : gs.size < 2 ^ 64)
+    (hgr : ∀ (k : Nat) (h : k < gs.size),
+      gs[k].id < 2 ^ 64 ∧ gs[k].parent < 2 ^ 64 ∧ gs[k].scope < 2 ^ 64) :
+    decodeGrants (encodeRequest fp ops gs rs) = gs := by
+  have hw1 : (getWord (encodeRequest fp ops gs rs) 1).toNat = fp.size := by
+    rw [(word_count fp ops gs rs).1, UInt64.toNat_ofNat']; omega
+  have hw2 : (getWord (encodeRequest fp ops gs rs) 2).toNat = ops.size := by
+    rw [(word_count fp ops gs rs).2.1, UInt64.toNat_ofNat']; omega
+  have hw3 : (getWord (encodeRequest fp ops gs rs) 3).toNat = gs.size := by
+    rw [(word_count fp ops gs rs).2.2.1, UInt64.toNat_ofNat']; omega
+  have htriple : ∀ (k t : Nat) (hk : k < gs.size) (ht : t < 3),
+      getWord (encodeRequest fp ops gs rs)
+          (5 + fp.size + ops.size * 5 + (3 * k + t))
+        = ([UInt64.ofNat gs[k].id, UInt64.ofNat gs[k].parent,
+            UInt64.ofNat gs[k].scope][t]'(by simpa using ht)) := by
+    intro k t hk ht
+    have hidx : 5 + fp.size + ops.size * 5 + (3 * k + t)
+        < (requestWords fp ops gs rs).length := by
+      rw [requestWords_length]; omega
+    rw [getWord_encodeRequest fp ops gs rs hidx]
+    apply getElem_of_getElem? hidx
+    have hk' : k < gs.toList.length := by simpa using hk
+    rw [show 5 + fp.size + ops.size * 5 + (3 * k + t)
+          = 5 + (fp.size + 5 * ops.size + (3 * k + t)) by omega,
+        getElem?_request_body]
+    rw [show fp.size = (baseWords fp).length by rw [length_baseWords],
+        show 5 * ops.size = (opWords ops).length by rw [length_opWords],
+        show (baseWords fp).length + (opWords ops).length + (3 * k + t)
+          = (baseWords fp).length + ((opWords ops).length + (3 * k + t)) by omega]
+    rw [show (baseWords fp).length + ((opWords ops).length + (3 * k + t))
+          = (baseWords fp).length + (opWords ops).length + (3 * k + t) by omega,
+        body_grants _ _ _ _ (by rw [length_grantWords]; omega)]
+    rw [show grantWords gs = gs.toList.flatMap
+          (fun g => [UInt64.ofNat g.id, UInt64.ofNat g.parent,
+            UInt64.ofNat g.scope]) from rfl,
+        getElem?_flatMap_triple _ (fun _ => rfl) gs.toList k t hk' ht]
+    simp only [Array.getElem_toList]
+    rw [List.getElem?_eq_getElem (by simpa using ht)]
+  simp only [decodeGrants, hw1, hw2, hw3]
+  apply Array.ext
+  · simp
+  · intro k h1 h2
+    simp only [Array.getElem_map, Array.getElem_range]
+    have hk : k < gs.size := by simpa using h1
+    have t0 := htriple k 0 hk (by omega)
+    have t1 := htriple k 1 hk (by omega)
+    have t2 := htriple k 2 hk (by omega)
+    rw [show (5 : Nat) + fp.size + ops.size * 5 + k * 3
+          = 5 + fp.size + ops.size * 5 + (3 * k + 0) by omega]
+    rw [show 5 + fp.size + ops.size * 5 + (3 * k + 0) + 1
+          = 5 + fp.size + ops.size * 5 + (3 * k + 1) by omega,
+        show 5 + fp.size + ops.size * 5 + (3 * k + 0) + 2
+          = 5 + fp.size + ops.size * 5 + (3 * k + 2) by omega]
+    rw [t0, t1, t2]
+    show Grant.mk (UInt64.ofNat gs[k].id).toNat (UInt64.ofNat gs[k].parent).toNat
+        (UInt64.ofNat gs[k].scope).toNat = gs[k]
+    obtain ⟨hi, hp, hs⟩ := hgr k hk
+    rw [UInt64.toNat_ofNat', UInt64.toNat_ofNat', UInt64.toNat_ofNat',
+        Nat.mod_eq_of_lt hi, Nat.mod_eq_of_lt hp, Nat.mod_eq_of_lt hs]
+
+/-- **The revocations decode back exactly** from the canonical request. -/
+theorem decodeRevs_encodeRequest (fp : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat)
+    (hn : fp.size < 2 ^ 64) (hm : ops.size < 2 ^ 64) (hng : gs.size < 2 ^ 64)
+    (hnr : rs.size < 2 ^ 64)
+    (hrev : ∀ (t : Nat) (h : t < rs.size), rs[t] < 2 ^ 64) :
+    decodeRevs (encodeRequest fp ops gs rs) = rs := by
+  have hw1 : (getWord (encodeRequest fp ops gs rs) 1).toNat = fp.size := by
+    rw [(word_count fp ops gs rs).1, UInt64.toNat_ofNat']; omega
+  have hw2 : (getWord (encodeRequest fp ops gs rs) 2).toNat = ops.size := by
+    rw [(word_count fp ops gs rs).2.1, UInt64.toNat_ofNat']; omega
+  have hw3 : (getWord (encodeRequest fp ops gs rs) 3).toNat = gs.size := by
+    rw [(word_count fp ops gs rs).2.2.1, UInt64.toNat_ofNat']; omega
+  have hw4 : (getWord (encodeRequest fp ops gs rs) 4).toNat = rs.size := by
+    rw [(word_count fp ops gs rs).2.2.2, UInt64.toNat_ofNat']; omega
+  simp only [decodeRevs, hw1, hw2, hw3, hw4]
+  apply Array.ext
+  · simp
+  · intro t h1 h2
+    simp only [Array.getElem_map, Array.getElem_range]
+    have ht : t < rs.size := by simpa using h1
+    have hidx : 5 + fp.size + ops.size * 5 + gs.size * 3 + t
+        < (requestWords fp ops gs rs).length := by
+      rw [requestWords_length]; omega
+    rw [getWord_encodeRequest fp ops gs rs hidx]
+    have hval : (requestWords fp ops gs rs)[5 + fp.size + ops.size * 5 + gs.size * 3 + t]'hidx
+        = UInt64.ofNat rs[t] := by
+      apply getElem_of_getElem? hidx
+      rw [show 5 + fp.size + ops.size * 5 + gs.size * 3 + t
+            = 5 + (fp.size + 5 * ops.size + 3 * gs.size + t) by omega,
+          getElem?_request_body]
+      rw [show fp.size = (baseWords fp).length by rw [length_baseWords],
+          show 5 * ops.size = (opWords ops).length by rw [length_opWords],
+          show 3 * gs.size = (grantWords gs).length by rw [length_grantWords],
+          body_revs _ _ _ _ (by rw [length_revWords]; omega)]
+      simp only [revWords, List.getElem?_map, Array.getElem?_toList,
+        Array.getElem?_eq_getElem ht]
+      rfl
+    rw [hval, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (hrev t ht)]
 
 /-- **Whole-request round trip**: the byte-level kernel applied to the
-canonical encoding of `(base, ops)` is exactly the decision layer followed by
-the proved output codec. Nothing unverified stands between
-`uwueave_replay_kernel`'s bytes and `absReplayFull`'s mathematics for
-canonical requests. -/
+canonical encoding of `(base, ops, grants, revocations)` is exactly the gated
+decision layer followed by the proved output codec. Nothing unverified stands
+between `uwueave_replay_kernel`'s bytes and `gatedReplayFull`'s mathematics
+for canonical requests — including the v3 magic guard, which is *discharged*
+here (a canonical request carries the magic, so the refusal branch is dead)
+rather than assumed away. -/
 theorem replay_encodeRequest (fp : Array Int) (ops : Array Op)
-    (hn : fp.size < 2 ^ 64) (hm : ops.size < 2 ^ 64)
+    (gs : Array Grant) (rs : Array Nat)
+    (hn : fp.size < 2 ^ 64) (hm : ops.size < 2 ^ 64) (hng : gs.size < 2 ^ 64)
+    (hnr : rs.size < 2 ^ 64)
     (hfp : ∀ (i : Nat) (h : i < fp.size), -(2 ^ 63) ≤ fp[i] ∧ fp[i] < 2 ^ 63)
     (hchild : ∀ (j : Nat) (h : j < ops.size), ops[j].child < 2 ^ 64)
+    (hcite : ∀ (j : Nat) (h : j < ops.size), ops[j].cite < 2 ^ 64)
     (hdest : ∀ (j : Nat) (h : j < ops.size),
-      -(2 ^ 63) ≤ ops[j].dest ∧ ops[j].dest < 2 ^ 63) :
-    replay (encodeRequest fp ops)
-      = encodeView ((absReplayFull fp ops).overrides
-          ++ (absReplayFull fp ops).statuses) := by
-  simp only [replay]
-  rw [decodeBase_encodeRequest fp ops hn hfp,
-      decodeOps_encodeRequest fp ops hn hm hchild hdest]
+      -(2 ^ 63) ≤ ops[j].dest ∧ ops[j].dest < 2 ^ 63)
+    (hgr : ∀ (k : Nat) (h : k < gs.size),
+      gs[k].id < 2 ^ 64 ∧ gs[k].parent < 2 ^ 64 ∧ gs[k].scope < 2 ^ 64)
+    (hrev : ∀ (t : Nat) (h : t < rs.size), rs[t] < 2 ^ 64) :
+    replay (encodeRequest fp ops gs rs)
+      = encodeView ((gatedReplayFull gs rs fp ops).overrides
+          ++ (gatedReplayFull gs rs fp ops).statuses) := by
+  simp only [replay, word_magic, beq_self_eq_true, if_pos]
+  rw [decodeBase_encodeRequest fp ops gs rs hn hfp,
+      decodeOps_encodeRequest fp ops gs rs hn hm hchild hcite hdest,
+      decodeGrants_encodeRequest fp ops gs rs hn hm hng hgr,
+      decodeRevs_encodeRequest fp ops gs rs hn hm hng hnr hrev]
 
 end Uwueave.Exec

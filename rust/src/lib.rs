@@ -21,9 +21,19 @@
 //!   implementation.
 //!   `derived_view_sec` is the guarantee; `view_not_stable` is the priced,
 //!   documented anomaly (an older remote op can retroactively skip a move you
-//!   watched happen) — and the kernel's v2 per-op trace
+//!   watched happen) — and the kernel's v3 per-op trace
 //!   ([`MoveLog::replay_traced`]) makes that anomaly observable, naming the
 //!   exact op each replay skipped.
+//!
+//!   Format v3 also moved **authorization** inside the kernel: the log
+//!   carries a grant/revocation substrate ([`Grant`], `MoveLog::issue`,
+//!   `MoveLog::revoke`), each op cites the grant it exercises, and the kernel
+//!   filters unauthorised ops ahead of its sort, naming them
+//!   [`OpOutcome::SkippedUnauthorised`]. `Uwueave/Gated.lean` §5 proves that
+//!   in-kernel gate agrees with the abstract `gatedOps` model — safety with
+//!   no hypotheses, both directions under `WF` + `UniqueGrant` — so the gate
+//!   this crate ships is the gate the theorems are about. ⚠ There is no
+//!   ungated path: an op citing no grant does not replay.
 //! * [`seq`] — an RGA-style sequence CRDT with tombstones: a grow-only,
 //!   content-addressed element set (union merge + tombstone-OR) whose visible
 //!   linearization is **authored in Lean** (`Uwueave/SeqKernel.lean`),
@@ -84,11 +94,12 @@ pub mod era;
 mod ffi;
 pub mod movelog;
 pub mod seq;
+pub mod weave;
 
 pub use causal::{CausalWeave, InsertError, MergeError, NodeId};
 pub use era::{
     EraEvent, EraEventStatus, EraGroup, EraMergeError, EraMergeStats, EraRecordError,
     EraResolution, EraRole,
 };
-pub use movelog::{MoveLog, MoveOp, OpOutcome, TracedReplay};
+pub use movelog::{Grant, MoveLog, MoveOp, OpOutcome, TracedReplay};
 pub use seq::{SeqCrdt, SeqDeleteError, SeqInsertError, SeqMergeError, SeqMergeStats};

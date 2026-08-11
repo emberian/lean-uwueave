@@ -60,15 +60,16 @@ open Uwueave.Exec
 /-! ## §1. Decidable equality on kernel ops
 
 `GSet.insert` (via `decide (b = a)`) needs `DecidableEq Op`. The kernel's
-`Op` only derived `Inhabited`; the four fields all carry `DecidableEq` in
-core, so the structure does too. -/
+`Op` only derived `Inhabited`; the five fields (format v3 added `cite`, the
+grant the op exercises) all carry `DecidableEq` in core, so the structure
+does too. -/
 
 instance instDecidableEqOp : DecidableEq Op := fun a b =>
   if h : a.lamport = b.lamport ∧ a.replica = b.replica ∧
-      a.child = b.child ∧ a.dest = b.dest then
+      a.child = b.child ∧ a.dest = b.dest ∧ a.cite = b.cite then
     isTrue (by cases a; cases b; simp_all)
   else
-    isFalse (fun heq => by cases heq; exact h ⟨rfl, rfl, rfl, rfl⟩)
+    isFalse (fun heq => by cases heq; exact h ⟨rfl, rfl, rfl, rfl, rfl⟩)
 
 /-! ## §2. The log carrier and the insert implementation -/
 

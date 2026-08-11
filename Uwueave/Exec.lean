@@ -7,41 +7,75 @@ implement the move-log replay; it marshals bytes to `uwueave_replay_kernel`
 here, and `build.rs` links into the cdylib/rlib. Rust's remaining jobs are the
 deliberately dumb ones: storage, hashing, indexes, IO.
 
-## The contract — FORMAT v2 (v1 responses no longer exist; this was a flag day)
+## The contract — FORMAT v3 (v2 requests no longer parse; this was a flag day)
 
-Input `ByteArray`, little-endian 64-bit words (unchanged from v1):
+**What v3 added and what it broke.** v2's request was `(base, ops)` and its
+response `(overrides, statuses ∈ {0,1,2})`. v3 gives the request an *authority
+substrate* — grants and revocations — and the ops a citation, so the gate
+`Uwueave/Gated.lean` models at the op layer runs *inside the shipping kernel*:
+an op whose cited grant is not active-and-covering never reaches the sort, and
+says so in the trace as status `3`. Every v2 request must be re-encoded; every
+v2 response reader must learn the fourth code. The break is **loud in both
+directions**: the request carries a magic word, and a request without it gets
+an EMPTY response (see `replay`), which no length check accepts.
+
+Input `ByteArray`, little-endian 64-bit words:
 
 ```
-word 0            : n  — node count
-word 1            : m  — op count
-words 2 .. 2+n    : firstParent[i] as i64   (-1 = root)
-then m × 4 words  : lamport, replica, child (u64 index), dest as i64
-                    (-1 = move to root; 0 ≤ d < n = move under node d)
+word 0            : magic — `magicV3` = 0x5557454156450003 ("UWEAVE" ‖ 3).
+                    Anything else ⇒ empty response (refusal, never a guess)
+word 1            : n  — node count
+word 2            : m  — op count
+word 3            : ng — grant count
+word 4            : nr — revocation count
+words 5 .. 5+n    : firstParent[i] as i64   (-1 = root)
+then m × 5 words  : lamport, replica, child (u64 index), dest as i64
+                    (-1 = move to root; 0 ≤ d < n = move under node d),
+                    cite (u64 grant id the op exercises)
+then ng × 3 words : grant id, parent grant id (0 = issued by the root
+                    authority), scope
+then nr × 1 word  : revoked grant id
 ```
 
-Output `ByteArray`, exactly `n + m` words (**v2** — v1 emitted only the first
-block; a v1 consumer reading a v2 response must refuse, not truncate):
+Output `ByteArray`, exactly `n + m` words:
 
 ```
 words 0 .. n      : override[i] as i64 — -2 = no override, -1 = overridden
                     to root, d ≥ 0 = overridden under node d
 words n .. n+m    : status[j] as i64, one per request op, in REQUEST order —
                     0 = applied, 1 = skipped (cycle rule), 2 = skipped
-                    (invalid: child or destination index out of range)
+                    (invalid: child or destination index out of range),
+                    3 = skipped (unauthorised: the cited grant is not active,
+                    or its scope does not cover the moved node)
 ```
 
 Both dimensions `n` and `m` are in the request, so the response parses
 unambiguously. The status block is what makes `view_not_stable`'s priced
-anomaly *observable*: a UI can now see exactly which ops the replay dropped.
+anomaly *observable*: a UI can see exactly which ops the replay dropped — and
+now *why*, with `3` naming the moves **authority** removed rather than the
+cycle rule.
 
-Semantics: ops applied in total `(lamport, replica, child, dest)` order (the
-request index breaks ties, which only identical duplicate ops can produce —
-the sort is stable); an op whose destination's effective-ancestor chain passes
-through its child is **skipped** (the Kleppmann cycle rule — `Uwueave/Move.lean`
-§2 is the abstract account of exactly this rule, including its proved price,
-`view_not_stable`, and §3 is the machine-checked bridge showing the miniature
-table and this kernel's sort-and-fold are the same rule on the 2-node
-universe).
+Semantics, in kernel order:
+
+  1. **Gate** (`permittedOp`, ahead of the sort): op `o` survives iff the
+     grant with id `o.cite` is **active** — present, chaining to a
+     root-issued grant, with no revoked link on the way (`activeFrom`, the
+     executable carrier of `Authority.Active`) — and that grant's scope
+     covers the moved node (`o.child < scope`, `Gated.covers`). Refused ops
+     are not replayed at all; their status slot is `3`.
+  2. **Sort**: the survivors, in total `(lamport, replica, child, dest)`
+     order (the request index breaks ties, which only identical duplicate ops
+     can produce — the sort is stable).
+  3. **Fold**: an op whose destination's effective-ancestor chain passes
+     through its child is **skipped** (the Kleppmann cycle rule —
+     `Uwueave/Move.lean` §2 is the abstract account of exactly this rule,
+     including its proved price, `view_not_stable`, and §3 is the
+     machine-checked bridge showing the miniature table and this kernel's
+     sort-and-fold are the same rule on the 2-node universe).
+
+The gate is a *filter*, and `gatedReplay_eq_absReplay_admitted` says exactly
+that: the gated kernel is the ungated kernel run on the admitted sub-log, so
+every theorem about `absReplay` transfers verbatim.
 
 ⚠ **The grounded-base obligation lives at the caller.** Every acyclicity
 theorem about this kernel (`absReplay_acyclic` and kin, `ExecRefine`) assumes
@@ -58,12 +92,15 @@ nothing C backend and trusted like any compiler output. What is and is not
 proved about it, precisely:
 
 **By construction** (no proof debt): `replay` is *literally*
-`encodeView ∘ (overrides ++ statuses) ∘ absReplayFull ∘ (decodeBase, decodeOps)`
-— a composition, not a re-implementation — so there is no fold-layer/byte-layer
+`encodeView ∘ (overrides ++ statuses) ∘ gatedReplayFull ∘ (decodeGrants,
+decodeRevs, decodeBase, decodeOps)` behind one magic-word guard — a
+composition, not a re-implementation — so there is no fold-layer/byte-layer
 agreement left to prove. The decision layer is the named function
-`absReplayFull`; `absReplay` is *definitionally* its override component
-(`absReplay = (absReplayFull …).overrides` holds by `rfl`), so every theorem
-stated about `absReplay` is a theorem about the shipping kernel's view block.
+`gatedReplayFull`; `gatedReplay` is *definitionally* its override component
+(`gatedReplay = (gatedReplayFull …).overrides` holds by `rfl`), and the
+ungated `absReplay` stands in the same relation to `absReplayFull`, so every
+theorem stated about either is a theorem about the shipping kernel's view
+block.
 
 **Proved, in `Uwueave/ExecRefine.lean`** (axioms ⊆ `{propext, Classical.choice,
 Quot.sound}`; no `sorry`/`native_decide`/`#guard`):
@@ -87,6 +124,18 @@ Quot.sound}`; no `sorry`/`native_decide`/`#guard`):
     request op — and `applyOp_skip_of_opStatus_ne_zero` — a nonzero status is
     a real no-op on the view: the trace partitions the replay into ops that
     acted and ops that did not.
+  * **The gate** (§9, format v3): `gatedReplay_eq_absReplay_admitted` — the
+    gated kernel *is* `absReplay` on the admitted sub-log, so
+    `gatedReplay_acyclic` / `gatedReplay_terminates` are the ungated
+    theorems applied, not new arguments; `kernel_gated_antitone` — growing
+    the revocation words never enlarges the admitted sub-log (the executable
+    twin of `Gated.gated_antitone`), with `gated_unauthorised_is_forever`
+    its status-block reading; `gated_status_eq_three_iff` — status `3`
+    marks **exactly** the ops the gate removed — with
+    `size_statuses_gatedReplayFull` and `gated_status_mem_range` completing
+    the trace; and ⚠ `applied_set_not_antitone`, the refutation that keeps
+    the antitone claim honest: revoking a grant can *add* an applied op,
+    because dropping an op can un-block a cycle-skipped one.
   * **SEC for this kernel** (`kernel_derived_view_sec`, with `absReplay_perm`,
     `absReplay_append_mem`, `absReplay_ext_mem`): the replay is a function of
     the op *set* — blind to delivery order and to redelivery — so
@@ -119,7 +168,17 @@ downstream of the C backend, as above. The former open items — the
 Prop-level connection of `absReplay` to the derived-view abstraction, and
 the input-side codec — are **closed**: `kernel_derived_view_sec` /
 `absReplay_ext_mem` and `replay_encodeRequest` in `ExecRefine`, plus the
-2-node symbol bridge in `Move.lean` §3.
+2-node symbol bridge in `Move.lean` §3. The gate's own abstract/executable
+gap is closed by theorem in `Gated.lean` §5
+(`kernel_gate_agrees_gatedOps`).
+
+⚠ **Total is not resource-safe.** Every decoder sizes its block from a count
+word, so a request that carries the magic but a garbage count allocates by
+that count. The kernel cannot produce a wrong answer this way (`getWord` is
+`0` out of range, so the extra entries decode to junk ops, which the gate
+refuses and the cycle rule bounds) but it can be made to allocate. That is a
+property of a length-prefixed wire format read by a total decoder, was
+equally true of v2, and belongs to whoever admits bytes to the kernel.
 -/
 
 namespace Uwueave.Exec
@@ -150,18 +209,45 @@ def pushWord (b : ByteArray) (u : UInt64) : ByteArray :=
     (fun ba k => ba.push (UInt8.ofNat ((u >>> (UInt64.ofNat (8 * k))).toNat % 256)))
     b
 
-/-- One decoded move op. -/
+/-- One decoded move op. `cite` (format v3) is the id of the grant whose
+authority this op exercises — `Gated.GOp.cite`, in the kernel's carrier. The
+default `0` is the root *sentinel*, never a grant id on a well-formed
+substrate (`Authority.WF` forces `parent < id`, so a present `(0, p, σ)`
+would need `p < 0`), which makes an op that forgets its citation refused
+rather than privileged: fail-closed by construction of the field's default.
+The ungated decision layer (`absReplayFull`, and `Move.lean` §3's miniature)
+ignores `cite` entirely; only `permittedOp` reads it. -/
 structure Op where
   lamport : UInt64
   replica : UInt64
   child   : Nat
   dest    : Int
+  cite    : Nat := 0
   deriving Inhabited
 
-/-- The total replay order: (lamport, replica, child, dest), lexicographic.
-Total — no two distinct encoded ops compare equal on all four keys and tie,
-so the sort's output is unique and replicas agree regardless of sort
-stability. -/
+/-- One decoded grant record — `Authority.Grant`'s `(id, parent, scope)`
+triple in the kernel's carrier. `parent = 0` means "issued by the root
+authority directly"; `scope` is the `Nat` ceiling `Gated.covers` reads (a
+grant of scope `σ` may move exactly the nodes with index `< σ`). -/
+structure Grant where
+  id     : Nat
+  parent : Nat
+  scope  : Nat
+  deriving Inhabited, DecidableEq, Repr
+
+/-- The total replay order: (lamport, replica, child, dest, **cite**),
+lexicographic. Total — no two distinct encoded ops compare equal on all five
+keys and tie, so the sort's output is unique and replicas agree regardless of
+sort stability.
+
+⚠ `cite` is a sort key, not decoration. v3 made it a field of `Op`, and an
+order that ignored it would tie two *distinct* ops (same move, different
+grant cited) — at which point the sorted presentation of a log is no longer
+unique, the stable sort settles the tie by REQUEST index, and two replicas
+that received the log in different orders replay it differently.
+`opLe_antisymm` is exactly the fact that would fail, and SEC
+(`absReplay_perm`, `absReplay_ext_mem`, `kernel_derived_view_sec`) is what
+rides on it. -/
 def opLt (a b : Op) : Bool :=
   if a.lamport < b.lamport then true
   else if b.lamport < a.lamport then false
@@ -169,11 +255,14 @@ def opLt (a b : Op) : Bool :=
   else if b.replica < a.replica then false
   else if a.child < b.child then true
   else if b.child < a.child then false
-  else a.dest < b.dest
+  else if a.dest < b.dest then true
+  else if b.dest < a.dest then false
+  else a.cite < b.cite
 
 /-- Non-strict companion of `opLt` (`a ≤ b` iff `¬ b < a`) — the comparator
 the stable sort consumes. Total because `opLt` is a strict total order, and
-two ops compare equal under it only when they are the same op. -/
+two ops compare equal under it only when they are the same op
+(`opLe_antisymm`). -/
 def opLe (a b : Op) : Bool := !opLt b a
 
 /-- Effective parent of `n` under the override array: the override if one was
@@ -258,30 +347,164 @@ grounded. -/
 def absReplay (firstParent : Array Int) (ops : Array Op) : Array Int :=
   (absReplayFull firstParent ops).overrides
 
-/-- Decode words `2 .. 2+n` as the structural first-parent array (`n` = word 0). -/
-def decodeBase (input : ByteArray) : Array Int :=
-  let n := (getWord input 0).toNat
-  (Array.range n).map (fun i => toI (getWord input (2 + i)))
+/-! ## The gate (format v3): authority, ahead of the sort
 
-/-- Decode the `m` ops (`m` = word 1) following the parent block. -/
+`Uwueave/Gated.lean` gates the abstract op feed by `Authority.Active`; these
+four definitions are that gate in the shipping kernel's carrier — arrays of
+records instead of `GSet`s, `Bool` instead of `Prop`. `Gated.lean` §5 proves
+the two agree on encoded states (`kernel_gate_agrees`), so this is a port,
+not a second design. -/
+
+/-- The grant carrying id `i`, if the substrate holds one. **First match**:
+on a substrate violating `Authority.UniqueGrant` two records share an id and
+this picks one, where the abstract `Gated.permitted` takes the union over
+both — the exact seam `kernel_gate_agrees` carries `UniqueGrant` for, and
+which content-addressed grant ids (`id = hash(parent, scope, …)`) discharge
+in a deployment. -/
+def findGrant (gs : Array Grant) (i : Nat) : Option Grant :=
+  gs.find? (fun g => g.id == i)
+
+/-- Is grant id `i` revoked? Revocations are a flat id list — grow-only on
+the wire, exactly `Authority.Revoked`. -/
+def isRevoked (rs : Array Nat) (i : Nat) : Bool :=
+  rs.any (fun x => x == i)
+
+/-- **`Authority.Active`, executable**: grant `i` is active when it is
+present, unrevoked, and either root-issued (`parent = 0`) or its parent is
+itself active. Total by well-founded recursion on the id — no fuel, because
+the recursion only descends when `parent < i`, which is precisely
+`Authority.WF`'s creation-order clause; a substrate whose chain fails to
+descend is **refused** here rather than walked, which is the fail-closed
+reading of an ill-formed grant DAG (and why `activeFrom` needs no
+`GroundedBase`-style hypothesis to terminate). -/
+def activeFrom (gs : Array Grant) (rs : Array Nat) (i : Nat) : Bool :=
+  match findGrant gs i with
+  | none => false
+  | some g =>
+    if isRevoked rs i then false
+    else if g.parent == 0 then true
+    else if _h : g.parent < i then activeFrom gs rs g.parent
+    else false
+termination_by i
+decreasing_by exact _h
+
+/-- **The gate**: op `o` is permitted when its cited grant is active and that
+grant's scope covers the moved node (`o.child < scope` — `Gated.covers`,
+which is why `σ = 0` is the fully-attenuated dead token). Only the moved node
+is gated; gating the destination too is a policy variant `Gated.lean` names
+and does not take. -/
+def permittedOp (gs : Array Grant) (rs : Array Nat) (op : Op) : Bool :=
+  match findGrant gs op.cite with
+  | none => false
+  | some g => activeFrom gs rs op.cite && decide (op.child < g.scope)
+
+/-- **The feed**: the sub-log the gate admits to the replay — `Gated.gatedOps`
+in the kernel's carrier, and the object `kernel_gated_antitone` is about. -/
+def admittedOps (gs : Array Grant) (rs : Array Nat) (ops : Array Op) : List Op :=
+  ops.toList.filter (permittedOp gs rs)
+
+/-- The status block before the fold runs: `3` (skipped-unauthorised) in the
+slot of every op the gate refused — those slots are never written again,
+because their ops never reach the fold — and `2` elsewhere, the fail-closed
+initial value the fold overwrites for every admitted op. -/
+def initStatuses (gs : Array Grant) (rs : Array Nat) (ops : Array Op) : Array Int :=
+  ops.map (fun op => if permittedOp gs rs op then 2 else 3)
+
+/-- **The gated decision layer**: filter by the gate, *then* sort, then fold —
+the same traced fold as `absReplayFull`, over the survivors only, with the
+refused ops' request slots pre-set to `3`. Pairing with the request index
+survives the filter, so statuses stay attributed to REQUEST slots even though
+the fold no longer visits every one. -/
+def gatedReplayFull (gs : Array Grant) (rs : Array Nat)
+    (firstParent : Array Int) (ops : Array Op) : ReplayFull :=
+  let n := firstParent.size
+  (((ops.toList.zipIdx).filter (fun p => permittedOp gs rs p.1)).mergeSort
+      (List.zipIdxLE opLe)).foldl
+    (applyOpFull firstParent n)
+    ⟨Array.replicate n (-2), initStatuses gs rs ops⟩
+
+/-- The gated view — definitionally the override block of `gatedReplayFull`
+(a projection, so `rfl`), exactly as `absReplay` is of `absReplayFull`. -/
+def gatedReplay (gs : Array Grant) (rs : Array Nat)
+    (firstParent : Array Int) (ops : Array Op) : Array Int :=
+  (gatedReplayFull gs rs firstParent ops).overrides
+
+/-! ## The v3 codec -/
+
+/-- The format-v3 magic word: ASCII `UWEAVE` followed by the version, `3`. A
+request that does not open with it is refused outright (`replay`), so a v2
+encoder cannot be silently reinterpreted under the v3 layout. -/
+def magicV3 : UInt64 := 0x5557454156450003
+
+/-- Decode words `5 .. 5+n` as the structural first-parent array (`n` = word 1). -/
+def decodeBase (input : ByteArray) : Array Int :=
+  let n := (getWord input 1).toNat
+  (Array.range n).map (fun i => toI (getWord input (5 + i)))
+
+/-- Decode the `m` ops (`m` = word 2) following the parent block, five words
+each — the fifth is the grant citation. -/
 def decodeOps (input : ByteArray) : Array Op :=
-  let n := (getWord input 0).toNat
-  let m := (getWord input 1).toNat
+  let n := (getWord input 1).toNat
+  let m := (getWord input 2).toNat
   (Array.range m).map (fun j =>
-    let o := 2 + n + j * 4
+    let o := 5 + n + j * 5
     { lamport := getWord input o
       replica := getWord input (o + 1)
       child   := (getWord input (o + 2)).toNat
-      dest    := toI (getWord input (o + 3)) })
+      dest    := toI (getWord input (o + 3))
+      cite    := (getWord input (o + 4)).toNat })
 
-/-- The canonical request, as words: `n`, `m`, the parent block, then each
-op's `(lamport, replica, child, dest)` quad — exactly the layout the contract
-header documents and `decodeBase`/`decodeOps` read. -/
-def requestWords (firstParent : Array Int) (ops : Array Op) : List UInt64 :=
-  UInt64.ofNat firstParent.size :: UInt64.ofNat ops.size ::
-    (firstParent.toList.map ofI
-      ++ ops.toList.flatMap fun op =>
-          [op.lamport, op.replica, UInt64.ofNat op.child, ofI op.dest])
+/-- Decode the `ng` grants (`ng` = word 3) following the op block, three
+words each: `(id, parent, scope)`. -/
+def decodeGrants (input : ByteArray) : Array Grant :=
+  let n := (getWord input 1).toNat
+  let m := (getWord input 2).toNat
+  let ng := (getWord input 3).toNat
+  (Array.range ng).map (fun k =>
+    let o := 5 + n + m * 5 + k * 3
+    { id     := (getWord input o).toNat
+      parent := (getWord input (o + 1)).toNat
+      scope  := (getWord input (o + 2)).toNat })
+
+/-- Decode the `nr` revocations (`nr` = word 4) following the grant block,
+one word each: a revoked grant id. -/
+def decodeRevs (input : ByteArray) : Array Nat :=
+  let n := (getWord input 1).toNat
+  let m := (getWord input 2).toNat
+  let ng := (getWord input 3).toNat
+  let nr := (getWord input 4).toNat
+  (Array.range nr).map (fun t =>
+    (getWord input (5 + n + m * 5 + ng * 3 + t)).toNat)
+
+/-- The base block of the canonical request: one word per structural parent. -/
+def baseWords (firstParent : Array Int) : List UInt64 :=
+  firstParent.toList.map ofI
+
+/-- The op block of the canonical request: each op's
+`(lamport, replica, child, dest, cite)` quintuple. -/
+def opWords (ops : Array Op) : List UInt64 :=
+  ops.toList.flatMap fun op =>
+    [op.lamport, op.replica, UInt64.ofNat op.child, ofI op.dest,
+     UInt64.ofNat op.cite]
+
+/-- The grant block of the canonical request: each grant's
+`(id, parent, scope)` triple. -/
+def grantWords (gs : Array Grant) : List UInt64 :=
+  gs.toList.flatMap fun g =>
+    [UInt64.ofNat g.id, UInt64.ofNat g.parent, UInt64.ofNat g.scope]
+
+/-- The revocation block of the canonical request: one word per revoked id. -/
+def revWords (rs : Array Nat) : List UInt64 :=
+  rs.toList.map UInt64.ofNat
+
+/-- The canonical request, as words: the magic, the four counts, then the
+base, op, grant and revocation blocks — exactly the layout the contract
+header documents and the four decoders read. -/
+def requestWords (firstParent : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat) : List UInt64 :=
+  magicV3 :: UInt64.ofNat firstParent.size :: UInt64.ofNat ops.size ::
+    UInt64.ofNat gs.size :: UInt64.ofNat rs.size ::
+    (baseWords firstParent ++ opWords ops ++ grantWords gs ++ revWords rs)
 
 /-- **The canonical request encoder** — the input-side codec mirror.
 `ExecRefine` proves `decodeBase`/`decodeOps` invert it exactly
@@ -290,23 +513,35 @@ def requestWords (firstParent : Array Int) (ops : Array Op) : List UInt64 :=
 the Lean level. What remains outside any proof is only that the Rust
 marshaller produces these exact bytes — a finite, testable claim the
 property suite exercises end-to-end. -/
-def encodeRequest (firstParent : Array Int) (ops : Array Op) : ByteArray :=
-  (requestWords firstParent ops).foldl pushWord ByteArray.empty
+def encodeRequest (firstParent : Array Int) (ops : Array Op)
+    (gs : Array Grant) (rs : Array Nat) : ByteArray :=
+  (requestWords firstParent ops gs rs).foldl pushWord ByteArray.empty
 
 /-- Encode the override view, one little-endian word per entry. -/
 def encodeView (ov : Array Int) : ByteArray :=
   ov.foldl (fun b v => pushWord b (ofI v)) ByteArray.empty
 
-/-- The replay: literally decode → `absReplayFull` → encode, the override
-block first and the status block after it (format v2). The byte layer's
+/-- The replay: literally decode → `gatedReplayFull` → encode, the override
+block first and the status block after it (format v3). The byte layer's
 agreement with the decision layer is **by construction** — this is a
 composition, not a re-implementation, so there is no fold/bytes gap to close
 by proof. (The output length is right — `n + m` words — because the fold
-preserves both blocks' sizes: `size_absReplay` and
-`size_statuses_absReplayFull` in `ExecRefine`.) -/
+preserves both blocks' sizes: `size_gatedReplay` and
+`size_statuses_gatedReplayFull` in `ExecRefine`.)
+
+The magic guard is the flag day made mechanical: bytes that are not a v3
+request get an **empty** response. A v2 caller therefore fails its own length
+check instead of reading override words out of a status block, and no reader
+can mistake a refusal for an answer — there is no `n + m` for which the empty
+response is a valid one, since `n + m = 0` requests are themselves refused
+only by not carrying the magic. -/
 def replay (input : ByteArray) : ByteArray :=
-  let out := absReplayFull (decodeBase input) (decodeOps input)
-  encodeView (out.overrides ++ out.statuses)
+  if getWord input 0 == magicV3 then
+    let out := gatedReplayFull (decodeGrants input) (decodeRevs input)
+      (decodeBase input) (decodeOps input)
+    encodeView (out.overrides ++ out.statuses)
+  else
+    ByteArray.empty
 
 /-- The C entry point. Owned `ByteArray` in, owned `ByteArray` out. -/
 @[export uwueave_replay_kernel]
@@ -325,7 +560,13 @@ exercised. (Still test evidence, not proof: Rust has no formal semantics to
 prove against.) -/
 @[export uwueave_request_canonical]
 def requestCanonicalKernel (input : ByteArray) : ByteArray :=
-  let re := encodeRequest (decodeBase input) (decodeOps input)
-  ByteArray.empty.push (if re.data == input.data then 1 else 0)
+  if getWord input 0 == magicV3 then
+    let re := encodeRequest (decodeBase input) (decodeOps input)
+      (decodeGrants input) (decodeRevs input)
+    ByteArray.empty.push (if re.data == input.data then 1 else 0)
+  else
+    -- Not a v3 request: refuse before decoding, so a v2 caller's parent word
+    -- is never read as a count.
+    ByteArray.empty.push 0
 
 end Uwueave.Exec
