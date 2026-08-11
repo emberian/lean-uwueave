@@ -38,6 +38,7 @@ import Uwueave.Gluing
 import Uwueave.Holes
 import Uwueave.Cost
 import Uwueave.JoinHom
+import Uwueave.Evidence
 import Uwueave.Choreo
 import Uwueave.Tactics
 import Uwueave.Audit
