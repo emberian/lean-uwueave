@@ -108,6 +108,7 @@ import Uwueave.ResultStatus
 import Uwueave.Recoverable
 import Uwueave.HonestRender
 import Uwueave.Histories
+import Uwueave.LiveSegmented
 import Uwueave.ForkGrade
 import Uwueave.RenderProgress
 import Uwueave.HistoryBase
