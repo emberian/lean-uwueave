@@ -7,8 +7,20 @@
 //! that settles the question.
 //!
 //! It is a LOOKUP TABLE, not a checker. Every (shape, kind) entry below is
-//! annotated with the theorem it cites, and the unit tests verify that every
-//! cited file exists in the repo and actually contains the cited theorem.
+//! annotated with the theorem it cites, and the unit tests verify, against
+//! the actual Lean sources, that the table cannot disagree with them:
+//!   - every cited file exists and defines the cited theorem (outside
+//!     comments, resolved through the file's real namespace structure to a
+//!     fully-qualified name — display names are not keys);
+//!   - each citation's ledger status matches docs/MAP.md's keystone ledger
+//!     (the curated public-surface list), in BOTH directions: citing an
+//!     unlisted theorem as a keystone fails the suite, and so does keeping an
+//!     `[unlisted]` marker after the ledger gains the row — the catalog
+//!     cannot silently outrun its receipts, nor sit on them;
+//!   - each verdict's direction matches the cited statements as written in
+//!     the Lean: a FREE row may not cite a `¬ IConfluent` theorem and must
+//!     cite a positive one, an ESCALATES row must cite a negation, a SEAM row
+//!     must cite both the `SegmentedIConfluent` seam and the global negation.
 //! Pairs the Lean development does not settle are reported UNCLASSIFIED —
 //! never guessed.
 //!
@@ -156,6 +168,32 @@ impl Verdict {
 struct Cite {
     thm: &'static str,
     file: &'static str,
+    /// Whether this theorem is a row of docs/MAP.md's keystone ledger — the
+    /// curated public-surface list. This flag is a CLAIM, not a wish: the test
+    /// suite parses the ledger, matches each citation by (name, module), and
+    /// fails if the flag disagrees in either direction. Unlisted citations
+    /// render with an `[unlisted]` marker.
+    keystone: bool,
+}
+
+/// A citation whose theorem is a row of docs/MAP.md's keystone ledger.
+/// (A macro, not a const fn, so the expansion is a struct literal and
+/// `&[cite!(…)]` still promotes to `'static` in the table.)
+macro_rules! cite {
+    ($thm:expr, $file:expr) => {
+        Cite { thm: $thm, file: $file, keystone: true }
+    };
+}
+
+/// The theorem exists in the Lean (existence is test-enforced) but is not on
+/// docs/MAP.md's keystone ledger — rendered honestly as `[unlisted]`:
+/// classification prose only. When the ledger gains the row, the test suite
+/// fails until this is upgraded to `cite!(...)` — growth is conscious in both
+/// directions.
+macro_rules! cite_unlisted {
+    ($thm:expr, $file:expr) => {
+        Cite { thm: $thm, file: $file, keystone: false }
+    };
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -196,7 +234,7 @@ const WEAVE: &str = "Uwueave/Weave.lean";
 
 /// Every ESCALATES verdict is constructive — this is the theorem that turns a
 /// failed invariant into a runnable two-replica repro.
-const ESCALATION_WITNESS: Cite = Cite { thm: "escalation_witness", file: CONFLUENCE };
+const ESCALATION_WITNESS: Cite = cite!("escalation_witness", CONFLUENCE);
 
 // ---------------------------------------------------------------------------
 // Shared exit descriptions (each cites the theorem that blesses it)
@@ -209,8 +247,8 @@ const EXIT_ESCROW: Exit = Exit {
             bound survives every merge, and the global bound follows by summing \
             the quotas.",
     cites: &[
-        Cite { thm: "escrow_local_bound_iconfluent", file: CATALOG },
-        Cite { thm: "escrow_global_bound", file: CATALOG },
+        cite!("escrow_local_bound_iconfluent", CATALOG),
+        cite_unlisted!("escrow_global_bound", CATALOG),
     ],
 };
 
@@ -219,7 +257,7 @@ const EXIT_SEAM: Exit = Exit {
     label: "segmented (re-allocation seam)",
     story: "run free within an allocation and coordinate only to change the \
             allocation — one invariant, both verdicts, with the seam named.",
-    cites: &[Cite { thm: "budget_segmented", file: SEGMENTED }],
+    cites: &[cite!("budget_segmented", SEGMENTED)],
 };
 
 // thm: derived_view_sec (price: view_not_stable)
@@ -230,8 +268,8 @@ const EXIT_OPLOG: Exit = Exit {
             ops. The honest price, also a theorem (view_not_stable): an older \
             remote op can retroactively un-apply an edit you watched happen.",
     cites: &[
-        Cite { thm: "derived_view_sec", file: MOVE },
-        Cite { thm: "view_not_stable", file: MOVE },
+        cite!("derived_view_sec", MOVE),
+        cite!("view_not_stable", MOVE),
     ],
 };
 
@@ -242,8 +280,8 @@ const EXIT_MV: Exit = Exit {
             visible conflict; resolving it is an ordinary write at a dominating \
             clock.",
     cites: &[
-        Cite { thm: "conflict_surfaces", file: MVREGISTER },
-        Cite { thm: "resolution_is_a_write", file: MVREGISTER },
+        cite!("conflict_surfaces", MVREGISTER),
+        cite!("resolution_is_a_write", MVREGISTER),
     ],
 };
 
@@ -253,7 +291,7 @@ const EXIT_LWW: Exit = Exit {
     story: "hold the value in a single last-writer-wins register: the join selects \
             one write, so no invariant on that one register can break — someone \
             loses, silently, and that is the trade.",
-    cites: &[Cite { thm: "lww_every_invariant_iconfluent", file: CATALOG }],
+    cites: &[cite!("lww_every_invariant_iconfluent", CATALOG)],
 };
 
 // thm: per_user_activation_free, pi_iconfluent
@@ -263,18 +301,23 @@ const EXIT_PER_USER: Exit = Exit {
             and whatever per-user invariant you keep lifts pointwise to the whole \
             map.",
     cites: &[
-        Cite { thm: "per_user_activation_free", file: WEAVE },
-        Cite { thm: "pi_iconfluent", file: CONFLUENCE },
+        cite_unlisted!("per_user_activation_free", WEAVE),
+        cite!("pi_iconfluent", CONFLUENCE),
     ],
 };
 
-// thm: causal_dag_free
+// thm: causal_dag_free (the packaged keystone) = grounded_iconfluent +
+// grounded_acyclic (the pair it conjoins, keystones themselves)
 const EXIT_GROUNDED: Exit = Exit {
     label: "content-addressed insertion (causal-dag)",
     story: "fix parents at creation and derive ids from content: every edge \
             descends in rank, which is free and implies acyclicity — no cycle \
             check at any replication scale.",
-    cites: &[Cite { thm: "causal_dag_free", file: ACYCLICITY }],
+    cites: &[
+        cite!("causal_dag_free", ACYCLICITY),
+        cite!("grounded_iconfluent", ACYCLICITY),
+        cite!("grounded_acyclic", ACYCLICITY),
+    ],
 };
 
 // thm: orset_present_survives
@@ -283,7 +326,7 @@ const EXIT_ORSET_SCOPED: Exit = Exit {
     story: "state the feature in the form that is actually true: presence through \
             a tag the other side has not tombstoned survives the merge. That \
             conditional is what \"add-wins\" means.",
-    cites: &[Cite { thm: "orset_present_survives", file: ORSET_L }],
+    cites: &[cite!("orset_present_survives", ORSET_L)],
 };
 
 // thm: clset_present_iconfluent
@@ -291,7 +334,7 @@ const EXIT_CLSET: Exit = Exit {
     label: "causal-length set",
     story: "presence as counter parity is free per element; the arbitration is \
             baked in — a longer remote history wins the element.",
-    cites: &[Cite { thm: "clset_present_iconfluent", file: ORSET_L }],
+    cites: &[cite!("clset_present_iconfluent", ORSET_L)],
 };
 
 // thm: fork_evidence_iconfluent, no_unilateral_evidence
@@ -301,8 +344,8 @@ const EXIT_DETECT: Exit = Exit {
             blocks at one slot are themselves the proof, the evidence survives \
             every future merge, and a replica holding one block frames nobody.",
     cites: &[
-        Cite { thm: "fork_evidence_iconfluent", file: CAUSALITY },
-        Cite { thm: "no_unilateral_evidence", file: CAUSALITY },
+        cite!("fork_evidence_iconfluent", CAUSALITY),
+        cite_unlisted!("no_unilateral_evidence", CAUSALITY),
     ],
 };
 
@@ -328,8 +371,8 @@ const LWW_SINGLE_NOTE: &str =
 const LWW_SINGLE: Ruling = Ruling {
     verdict: Verdict::Free,
     cites: &[
-        Cite { thm: "lww_every_invariant_iconfluent", file: CATALOG },
-        Cite { thm: "LWW.join_selects", file: CATALOG },
+        cite!("lww_every_invariant_iconfluent", CATALOG),
+        cite_unlisted!("LWW.join_selects", CATALOG),
     ],
     story: None,
     note: Some(LWW_SINGLE_NOTE),
@@ -340,9 +383,9 @@ const LWW_SINGLE: Ruling = Ruling {
 const QUOTA_SEAM: Ruling = Ruling {
     verdict: Verdict::Seam,
     cites: &[
-        Cite { thm: "escrow_local_bound_iconfluent", file: CATALOG },
-        Cite { thm: "budget_segmented", file: SEGMENTED },
-        Cite { thm: "budget_not_iconfluent", file: SEGMENTED },
+        cite!("escrow_local_bound_iconfluent", CATALOG),
+        cite!("budget_segmented", SEGMENTED),
+        cite!("budget_not_iconfluent", SEGMENTED),
     ],
     story: Some(SEAM_STORY),
     note: None,
@@ -352,7 +395,7 @@ const QUOTA_SEAM: Ruling = Ruling {
 // thm: active_path_not_iconfluent
 const ACTIVE_PATH_ESCALATES: Ruling = Ruling {
     verdict: Verdict::Escalates,
-    cites: &[Cite { thm: "active_path_not_iconfluent", file: WEAVE }],
+    cites: &[cite!("active_path_not_iconfluent", WEAVE)],
     story: Some(
         "Replica A activates branch 1 — a legal root-to-leaf path. Replica B \
          activates the sibling branch 2 — also legal. The merged flag-set lights \
@@ -383,7 +426,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_mem_iconfluent
         (GSet, Member) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gset_mem_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_mem_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "anything a replica has observed survives every merge — the tier-1 \
@@ -394,7 +437,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_notmem_iconfluent
         (GSet, NotMember) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gset_notmem_iconfluent", file: CATALOG }],
+            cites: &[cite_unlisted!("gset_notmem_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "a union of two sets both lacking the element lacks it; together \
@@ -406,7 +449,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_monotone_iconfluent
         (GSet, LowerBound) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gset_monotone_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_monotone_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "\"at least these members\" is upward-closed under inclusion — the \
@@ -418,7 +461,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_atMostOne_not_iconfluent
         (GSet, Ceiling) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "gset_atMostOne_not_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_atMostOne_not_iconfluent", CATALOG)],
             story: Some(
                 "Replica A's set is {0}; replica B's is {1} — each within a cap of \
                  one. The merge is union: {0, 1}, and the ceiling breaks. Any cap \
@@ -431,7 +474,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_atMostOne_not_iconfluent
         (GSet, Unique) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "gset_atMostOne_not_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_atMostOne_not_iconfluent", CATALOG)],
             story: Some(
                 "Replica A pins item 0; replica B pins item 1. Each replica holds \
                  exactly one pin — perfectly legal. The merge is union, so it holds \
@@ -444,7 +487,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: or_breaks_iconfluence
         (GSet, Mutex) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "or_breaks_iconfluence", file: CATALOG }],
+            cites: &[cite!("or_breaks_iconfluence", CATALOG)],
             story: Some(
                 "Replica A watches Alice take the lock: her flag set, Bob's clear. \
                  Replica B watches Bob take it. Both states satisfy \"exactly one \
@@ -467,7 +510,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: acyclicity_not_iconfluent
         (GSet, Acyclic) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "acyclicity_not_iconfluent", file: ACYCLICITY }],
+            cites: &[cite!("acyclicity_not_iconfluent", ACYCLICITY)],
             story: Some(
                 "Replica A inserts the edge 0 → 1; replica B inserts 1 → 0. Each \
                  graph is a DAG on its own; the union contains the 2-cycle. By \
@@ -485,7 +528,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gcounter_lowerBound_iconfluent
         (GCounter, LowerBound) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gcounter_lowerBound_iconfluent", file: CATALOG }],
+            cites: &[cite_unlisted!("gcounter_lowerBound_iconfluent", CATALOG)],
             story: None,
             note: Some("merge only raises counts, so a grow-only floor survives."),
             exits: &[],
@@ -493,7 +536,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: escrow_local_bound_iconfluent (the escrow carrier IS a G-Counter)
         (GCounter, Ceiling) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "escrow_local_bound_iconfluent", file: CATALOG }],
+            cites: &[cite!("escrow_local_bound_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "the proved bound is per-key (f i ≤ q i — the escrow carrier is \
@@ -509,7 +552,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: pncounter_nonneg_not_iconfluent
         (PnCounter, Balance) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "pncounter_nonneg_not_iconfluent", file: CATALOG }],
+            cites: &[cite!("pncounter_nonneg_not_iconfluent", CATALOG)],
             story: Some(PN_BALANCE_STORY),
             note: None,
             exits: &[EXIT_ESCROW, EXIT_SEAM],
@@ -517,7 +560,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: pncounter_nonneg_not_iconfluent (the proved instance is 0 ≤ net)
         (PnCounter, LowerBound) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "pncounter_nonneg_not_iconfluent", file: CATALOG }],
+            cites: &[cite!("pncounter_nonneg_not_iconfluent", CATALOG)],
             story: Some(PN_BALANCE_STORY),
             note: Some(
                 "the proved instance is 0 ≤ net — a balance IS a lower bound on the \
@@ -536,7 +579,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: lww_cross_field_not_iconfluent
         (Lww, CrossField) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "lww_cross_field_not_iconfluent", file: CATALOG }],
+            cites: &[cite!("lww_cross_field_not_iconfluent", CATALOG)],
             story: Some(
                 "The invariant relates two registers: fieldA ≤ fieldB. Replica A \
                  writes both fields to 5 at t=2; replica B writes fieldA := 0 at \
@@ -551,8 +594,8 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         (Lww, ActivePath) => Some(Ruling {
             verdict: Verdict::Free,
             cites: &[
-                Cite { thm: "per_user_activation_free", file: WEAVE },
-                Cite { thm: "pi_iconfluent", file: CONFLUENCE },
+                cite_unlisted!("per_user_activation_free", WEAVE),
+                cite!("pi_iconfluent", CONFLUENCE),
             ],
             story: None,
             note: Some(
@@ -567,7 +610,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_mem_iconfluent (the MV state is a grow-only set of writes)
         (MvReg, Member) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gset_mem_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_mem_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "the replicated state is a grow-only set of tagged writes, so an \
@@ -580,9 +623,9 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         (MvReg, Unique) => Some(Ruling {
             verdict: Verdict::Pattern,
             cites: &[
-                Cite { thm: "conflict_surfaces", file: MVREGISTER },
-                Cite { thm: "view_antichain", file: MVREGISTER },
-                Cite { thm: "resolution_is_a_write", file: MVREGISTER },
+                cite!("conflict_surfaces", MVREGISTER),
+                cite_unlisted!("view_antichain", MVREGISTER),
+                cite!("resolution_is_a_write", MVREGISTER),
             ],
             story: Some(
                 "The multi-value register refuses to pick a winner: genuinely \
@@ -601,7 +644,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: orset_present_not_iconfluent
         (OrSet, Member) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "orset_present_not_iconfluent", file: ORSET_L }],
+            cites: &[cite!("orset_present_not_iconfluent", ORSET_L)],
             story: Some(
                 "Both replicas have seen the element added under tags t1 and t2. \
                  Replica A removes what it observed and tombstones t2 — still alive \
@@ -622,7 +665,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: clset_present_iconfluent
         (ClSet, Member) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "clset_present_iconfluent", file: ORSET_L }],
+            cites: &[cite!("clset_present_iconfluent", ORSET_L)],
             story: None,
             note: Some(
                 "arbitration is baked in: the replica with the longer causal length \
@@ -634,7 +677,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: clset_absent_iconfluent
         (ClSet, NotMember) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "clset_absent_iconfluent", file: ORSET_L }],
+            cites: &[cite_unlisted!("clset_absent_iconfluent", ORSET_L)],
             story: None,
             note: Some(
                 "absence is the same per-key selection argument — the CL-Set has no \
@@ -645,7 +688,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: clset_cross_element_not_iconfluent
         (ClSet, CrossField) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "clset_cross_element_not_iconfluent", file: ORSET_L }],
+            cites: &[cite_unlisted!("clset_cross_element_not_iconfluent", ORSET_L)],
             story: Some(
                 "The invariant links elements: if 0 is present then 1 is present. \
                  Replica A holds counts {0 ↦ 3, 1 ↦ 1} — both odd, both present. \
@@ -661,7 +704,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gcounter_lowerBound_iconfluent (the escrow carrier is a G-Counter)
         (Escrow, LowerBound) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gcounter_lowerBound_iconfluent", file: CATALOG }],
+            cites: &[cite_unlisted!("gcounter_lowerBound_iconfluent", CATALOG)],
             story: None,
             note: Some("the escrow carrier is a G-Counter; a grow-only floor survives."),
             exits: &[],
@@ -670,8 +713,8 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         (Escrow, Ceiling) => Some(Ruling {
             verdict: Verdict::Free,
             cites: &[
-                Cite { thm: "escrow_local_bound_iconfluent", file: CATALOG },
-                Cite { thm: "escrow_global_bound", file: CATALOG },
+                cite!("escrow_local_bound_iconfluent", CATALOG),
+                cite_unlisted!("escrow_global_bound", CATALOG),
             ],
             story: None,
             note: Some(
@@ -684,8 +727,8 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         (Escrow, Balance) => Some(Ruling {
             verdict: Verdict::Free,
             cites: &[
-                Cite { thm: "escrow_local_bound_iconfluent", file: CATALOG },
-                Cite { thm: "escrow_global_bound", file: CATALOG },
+                cite!("escrow_local_bound_iconfluent", CATALOG),
+                cite_unlisted!("escrow_global_bound", CATALOG),
             ],
             story: None,
             note: Some(
@@ -703,7 +746,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_mem_iconfluent
         (CausalDag, Member) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gset_mem_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_mem_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "node presence in an append-only store is G-Set membership; \
@@ -714,7 +757,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_monotone_iconfluent
         (CausalDag, LowerBound) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gset_monotone_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_monotone_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "\"at least these nodes exist\" is monotone-closed under inclusion, \
@@ -725,7 +768,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_atMostOne_not_iconfluent (exits: Causality.lean's evidence pair)
         (CausalDag, Unique) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[Cite { thm: "gset_atMostOne_not_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_atMostOne_not_iconfluent", CATALOG)],
             story: Some(
                 "An equivocating author signs two different blocks for the same \
                  (author, seq) slot and gossips one to each side of a partition. \
@@ -740,9 +783,9 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         (CausalDag, Acyclic) => Some(Ruling {
             verdict: Verdict::Free,
             cites: &[
-                Cite { thm: "causal_dag_free", file: ACYCLICITY },
-                Cite { thm: "grounded_iconfluent", file: ACYCLICITY },
-                Cite { thm: "grounded_acyclic", file: ACYCLICITY },
+                cite!("causal_dag_free", ACYCLICITY),
+                cite!("grounded_iconfluent", ACYCLICITY),
+                cite!("grounded_acyclic", ACYCLICITY),
             ],
             story: None,
             note: Some(
@@ -760,7 +803,7 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: gset_mem_iconfluent
         (MoveLog, Member) => Some(Ruling {
             verdict: Verdict::Free,
-            cites: &[Cite { thm: "gset_mem_iconfluent", file: CATALOG }],
+            cites: &[cite!("gset_mem_iconfluent", CATALOG)],
             story: None,
             note: Some(
                 "an op, once in the log, survives every merge; whether it still has \
@@ -772,9 +815,9 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         (MoveLog, Acyclic) => Some(Ruling {
             verdict: Verdict::Pattern,
             cites: &[
-                Cite { thm: "derived_view_sec", file: MOVE },
-                Cite { thm: "miniInterp_acyclic", file: MOVE },
-                Cite { thm: "view_not_stable", file: MOVE },
+                cite!("derived_view_sec", MOVE),
+                cite!("miniInterp_acyclic", MOVE),
+                cite!("view_not_stable", MOVE),
             ],
             story: Some(
                 "Replicate the monotone thing — the grow-only set of move ops — and \
@@ -935,7 +978,63 @@ fn wrap(text: &str, indent: &str) -> String {
 }
 
 fn cite_string(c: &Cite) -> String {
-    format!("{} — {}", c.thm, c.file)
+    if c.keystone {
+        format!("{} — {}", c.thm, c.file)
+    } else {
+        format!("{} [unlisted] — {}", c.thm, c.file)
+    }
+}
+
+/// Every citation the tool can ever print: rulings, exits, and the
+/// escalation-witness coda. The audit tests walk exactly this.
+fn all_citations() -> Vec<Cite> {
+    let mut cites = vec![ESCALATION_WITNESS];
+    for shape in ALL_SHAPES {
+        for kind in ALL_KINDS {
+            if let Some(ruling) = classify(shape, kind) {
+                cites.extend_from_slice(ruling.cites);
+                for exit in ruling.exits {
+                    cites.extend_from_slice(exit.cites);
+                }
+            }
+        }
+    }
+    cites
+}
+
+/// The distinct citations that stand on theorems the keystone ledger omits.
+fn distinct_unlisted() -> Vec<Cite> {
+    let mut seen: Vec<Cite> = Vec::new();
+    for c in all_citations() {
+        if !c.keystone && !seen.contains(&c) {
+            seen.push(c);
+        }
+    }
+    seen
+}
+
+const LEDGER_FOOTER_CLEAN: &str =
+    "Every cited theorem is on docs/MAP.md's keystone ledger (enforced by tests).";
+
+const UNLISTED_LEGEND: &str =
+    "[unlisted] — the cited theorem exists in the Lean (existence enforced by \
+     tests) but is not on docs/MAP.md's keystone ledger; classification prose \
+     only.";
+
+/// One honest line about the ledger cross-check. The tests assert this footer
+/// can never claim more than docs/MAP.md actually lists.
+fn ledger_footer() -> String {
+    let unlisted = distinct_unlisted();
+    if unlisted.is_empty() {
+        LEDGER_FOOTER_CLEAN.to_string()
+    } else {
+        format!(
+            "Citations are cross-checked against docs/MAP.md's keystone ledger \
+             (enforced by tests); {} cited theorem(s) are not on it and are \
+             marked [unlisted] — classification prose only.",
+            unlisted.len()
+        )
+    }
 }
 
 fn cite_list(cites: &[Cite]) -> String {
@@ -1031,6 +1130,17 @@ fn render(source: &str, schema: &Schema) -> String {
                 &row[0], &row[1], &row[2], &row[3], &row[4],
             ]));
         }
+
+        // If any rendered citation lacks its audit receipt, say what the
+        // marker means right here, not in a manual.
+        let any_unlisted_rendered = rows.iter().filter_map(|r| r.ruling.as_ref()).any(|ru| {
+            ru.cites.iter().any(|c| !c.keystone)
+                || ru.exits.iter().any(|e| e.cites.iter().any(|c| !c.keystone))
+        });
+        if any_unlisted_rendered {
+            out.push('\n');
+            out.push_str(&wrap(UNLISTED_LEGEND, ""));
+        }
     }
 
     // Fields that carry no invariant at all.
@@ -1110,6 +1220,7 @@ fn render(source: &str, schema: &Schema) -> String {
     out.push_str(&"-".repeat(WRAP_WIDTH));
     out.push('\n');
     out.push_str(&wrap(DISCLAIMER, ""));
+    out.push_str(&wrap(&ledger_footer(), ""));
     out
 }
 
@@ -1196,6 +1307,7 @@ fn help_text() -> String {
     p(&mut h, "  invariant moves: acyclic      # PATTERN — derived view, priced honestly");
     p(&mut h, "");
     h.push_str(&wrap(DISCLAIMER, ""));
+    h.push_str(&wrap(&ledger_footer(), ""));
     h
 }
 
@@ -1306,6 +1418,9 @@ mod tests {
     fn known_free_lookup() {
         let ruling = classify(Shape::GSet, Kind::Member).expect("gset/member is classified");
         assert_eq!(ruling.verdict, Verdict::Free);
+        // No [unlisted] marker: gset_mem_iconfluent is a keystone-ledger row
+        // in docs/MAP.md. If it ever leaves the ledger, the resolve test forces
+        // the citation to cite_unlisted!(...) — update this expectation with it.
         assert_eq!(
             cite_string(&ruling.cites[0]),
             "gset_mem_iconfluent — Uwueave/Catalog.lean"
@@ -1414,54 +1529,358 @@ mod tests {
         assert_eq!(classified, 40);
     }
 
-    /// Every citation used anywhere in the table (rulings and exits alike).
-    fn every_citation() -> Vec<Cite> {
-        let mut cites = vec![ESCALATION_WITNESS];
-        for shape in ALL_SHAPES {
-            for kind in ALL_KINDS {
-                if let Some(ruling) = classify(shape, kind) {
-                    cites.extend_from_slice(ruling.cites);
-                    for exit in ruling.exits {
-                        cites.extend_from_slice(exit.cites);
-                    }
-                }
-            }
-        }
-        cites
-    }
+    // ========================================================================
+    // The audit gate — the mechanism that makes catalog↔Lean disagreement a
+    // test failure instead of a drift. All scans run over comment-STRIPPED
+    // Lean source, so prose can neither satisfy nor confuse a check.
+    // ========================================================================
 
-    fn file_defines_theorem(content: &str, name: &str) -> bool {
-        let needle = format!("theorem {}", name);
-        let mut start = 0;
-        while let Some(pos) = content[start..].find(&needle) {
-            let after = start + pos + needle.len();
-            let boundary = match content[after..].chars().next() {
-                None => true,
-                Some(c) => !(c.is_ascii_alphanumeric() || c == '_' || c == '\''),
-            };
-            if boundary {
-                return true;
-            }
-            start = after;
-        }
-        false
-    }
-
-    #[test]
-    fn citations_resolve_to_real_files_and_theorems() {
-        // Walk up from CARGO_MANIFEST_DIR (rust/) to the repo root — the
-        // directory that contains Uwueave/.
+    /// Walk up from CARGO_MANIFEST_DIR (rust/) to the repo root — the
+    /// directory that contains Uwueave/.
+    fn repo_root() -> std::path::PathBuf {
         let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         loop {
             if root.join("Uwueave").is_dir() {
-                break;
+                return root;
             }
             assert!(
                 root.pop(),
                 "no directory containing Uwueave/ above CARGO_MANIFEST_DIR"
             );
         }
-        for cite in every_citation() {
+    }
+
+    /// Blank out Lean comments (`-- …` and nested `/- … -/`), preserving
+    /// newlines and all code characters, so later scans cannot match inside
+    /// docstrings or prose.
+    fn strip_lean_comments(src: &str) -> String {
+        let chars: Vec<char> = src.chars().collect();
+        let mut out = String::with_capacity(src.len());
+        let mut i = 0;
+        let mut depth = 0usize;
+        let mut line_comment = false;
+        while i < chars.len() {
+            let c = chars[i];
+            let next = chars.get(i + 1).copied();
+            if line_comment {
+                if c == '\n' {
+                    line_comment = false;
+                    out.push('\n');
+                } else {
+                    out.push(' ');
+                }
+                i += 1;
+            } else if depth > 0 {
+                if c == '-' && next == Some('/') {
+                    depth -= 1;
+                    out.push_str("  ");
+                    i += 2;
+                } else if c == '/' && next == Some('-') {
+                    depth += 1;
+                    out.push_str("  ");
+                    i += 2;
+                } else {
+                    out.push(if c == '\n' { '\n' } else { ' ' });
+                    i += 1;
+                }
+            } else if c == '/' && next == Some('-') {
+                depth = 1;
+                out.push_str("  ");
+                i += 2;
+            } else if c == '-' && next == Some('-') {
+                line_comment = true;
+                out.push_str("  ");
+                i += 2;
+            } else {
+                out.push(c);
+                i += 1;
+            }
+        }
+        out
+    }
+
+    /// The rows of docs/MAP.md's `## Keystone ledger` table, as
+    /// (theorem-name-as-cited, module) pairs — the curated public-surface
+    /// list the CLI may claim. Keyed by name AND module because display
+    /// names collide (`wf_iconfluent` is both a Sequence and an Authority
+    /// row); a name alone is not a key.
+    fn keystone_ledger(root: &std::path::Path) -> Vec<(String, String)> {
+        let path = root.join("docs/MAP.md");
+        let content = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("could not read {}: {}", path.display(), e));
+        let heading = content.find("## Keystone ledger").unwrap_or_else(|| {
+            panic!(
+                "docs/MAP.md no longer has a `## Keystone ledger` section — \
+                 re-point the CLI's citation gate consciously"
+            )
+        });
+        let section = &content[heading..];
+        let section = match section[2..].find("\n## ") {
+            Some(i) => &section[..i + 2],
+            None => section,
+        };
+        let mut rows = Vec::new();
+        for line in section.lines() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            // A ledger row is `| `name` … | Module | … |`.
+            if cells.len() < 3 {
+                continue;
+            }
+            let (first, module) = (cells[1], cells[2]);
+            let Some(rest) = first.strip_prefix('`') else {
+                continue; // header or separator row
+            };
+            let Some(tick) = rest.find('`') else { continue };
+            let name = &rest[..tick];
+            assert!(
+                !name.is_empty() && !module.is_empty() && !module.contains('`'),
+                "unparseable keystone-ledger row in docs/MAP.md: `{}`",
+                line
+            );
+            rows.push((name.to_string(), module.to_string()));
+        }
+        // If this parser goes half-blind the gate must go red, not silently
+        // green: the section's own "N rows:" summary must agree when present.
+        if let Some(idx) = section.find(" rows:") {
+            let digits: String = section[..idx]
+                .chars()
+                .rev()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            let stated: usize = digits
+                .chars()
+                .rev()
+                .collect::<String>()
+                .parse()
+                .expect("digits before ' rows:'");
+            assert_eq!(
+                rows.len(),
+                stated,
+                "parsed {} keystone-ledger rows but docs/MAP.md says {} — the \
+                 table and its summary (or this parser) disagree",
+                rows.len(),
+                stated
+            );
+        }
+        assert!(
+            rows.len() >= 50,
+            "only {} keystone-ledger rows parsed from docs/MAP.md — the table \
+             format moved or the ledger shrank; update this parser consciously",
+            rows.len()
+        );
+        assert!(
+            rows.iter()
+                .any(|(n, m)| n == "escalation_witness" && m == "Confluence"),
+            "docs/MAP.md's ledger no longer lists escalation_witness — parser \
+             or ledger regressed"
+        );
+        rows
+    }
+
+    /// Byte offset (in comment-stripped text) of `theorem <name>` as a whole
+    /// word, or None.
+    fn find_theorem_def(stripped: &str, name: &str) -> Option<usize> {
+        let needle = format!("theorem {}", name);
+        let mut start = 0;
+        while let Some(pos) = stripped[start..].find(&needle) {
+            let abs = start + pos;
+            let after = abs + needle.len();
+            let after_ok = match stripped[after..].chars().next() {
+                None => true,
+                Some(c) => !(c.is_ascii_alphanumeric() || c == '_' || c == '\''),
+            };
+            let before_ok = stripped[..abs]
+                .chars()
+                .last()
+                .map_or(true, |c| !(c.is_ascii_alphanumeric() || c == '_'));
+            if after_ok && before_ok {
+                return Some(abs);
+            }
+            start = after;
+        }
+        None
+    }
+
+    /// The namespace prefix in force at `offset`, tracked through
+    /// namespace/section opens and their matching `end`s. Panics — a test
+    /// failure, not a guess — on any scope shape it cannot account for.
+    fn namespace_stack_at(stripped: &str, offset: usize, file: &str) -> Vec<String> {
+        #[derive(PartialEq)]
+        enum Kind {
+            Namespace,
+            Section,
+        }
+        let mut stack: Vec<(Kind, String)> = Vec::new();
+        let mut pos = 0;
+        for line in stripped.split_inclusive('\n') {
+            let line_start = pos;
+            pos += line.len();
+            if line_start >= offset {
+                break;
+            }
+            let t = line.trim();
+            if let Some(rest) = t.strip_prefix("namespace ") {
+                let name = rest.split_whitespace().next().unwrap_or("").to_string();
+                assert!(!name.is_empty(), "{}: nameless `namespace`", file);
+                stack.push((Kind::Namespace, name));
+            } else if t == "section" {
+                stack.push((Kind::Section, String::new()));
+            } else if let Some(rest) = t.strip_prefix("section ") {
+                let name = rest.split_whitespace().next().unwrap_or("").to_string();
+                stack.push((Kind::Section, name));
+            } else if t == "end" || t.starts_with("end ") {
+                let name = t.strip_prefix("end").unwrap().trim();
+                let (_, top) = stack
+                    .pop()
+                    .unwrap_or_else(|| panic!("{}: `{}` with no open scope", file, t));
+                assert!(
+                    top == name,
+                    "{}: `end {}` closed a scope opened as `{}` — this scanner \
+                     needs a conscious upgrade for that shape",
+                    file,
+                    name,
+                    top
+                );
+            }
+        }
+        stack
+            .into_iter()
+            .filter(|(k, _)| *k == Kind::Namespace)
+            .map(|(_, n)| n)
+            .collect()
+    }
+
+    /// Resolve a citation to (fully-qualified Lean name, definition offset)
+    /// using the cited file's actual namespace structure. A display name is
+    /// not a key: the citation's spelling must be a dot-suffix of the real
+    /// name, and pin membership is decided on the full name only.
+    fn resolve_citation(stripped: &str, cite: &Cite) -> (String, usize) {
+        let bare = cite.thm.rsplit('.').next().unwrap();
+        let (as_written, off) = match find_theorem_def(stripped, cite.thm) {
+            Some(off) => (cite.thm, off),
+            None => (
+                bare,
+                find_theorem_def(stripped, bare).unwrap_or_else(|| {
+                    panic!(
+                        "{} does not define `theorem {}` (cited as {})",
+                        cite.file, bare, cite.thm
+                    )
+                }),
+            ),
+        };
+        let stack = namespace_stack_at(stripped, off, cite.file);
+        let mut full = stack.join(".");
+        if !full.is_empty() {
+            full.push('.');
+        }
+        full.push_str(as_written);
+        assert!(
+            full == cite.thm || full.ends_with(&format!(".{}", cite.thm)),
+            "citation `{}` is not a suffix of the resolved name `{}` in {}",
+            cite.thm,
+            full,
+            cite.file
+        );
+        (full, off)
+    }
+
+    /// Comment-stripped source of a cited Lean file, cached per file.
+    fn stripped_source<'a>(
+        root: &std::path::Path,
+        cache: &'a mut std::collections::HashMap<&'static str, String>,
+        file: &'static str,
+    ) -> &'a str {
+        cache.entry(file).or_insert_with(|| {
+            let path = root.join(file);
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("could not read {}: {}", path.display(), e));
+            strip_lean_comments(&content)
+        })
+    }
+
+    /// The statement of the theorem at `off`: from the `theorem` keyword to
+    /// the first `:=`. In this repo's statement style every `¬`/`IConfluent`/
+    /// `SegmentedIConfluent` token precedes the first `:=` (which is either a
+    /// named argument like `(S := …)` — always AFTER the head symbol it
+    /// belongs to — or the proof's own `:=`). A statement shape that hides a
+    /// required token past the cut fails the polarity assertions loudly and
+    /// gets this upgraded, not guessed around.
+    fn statement_at<'a>(stripped: &'a str, off: usize, what: &str) -> &'a str {
+        let rest = &stripped[off..];
+        match rest.find(":=") {
+            Some(i) => &rest[..i],
+            None => panic!(
+                "no `:=` after `theorem {}` — statement extraction needs an upgrade",
+                what
+            ),
+        }
+    }
+
+    fn is_ident_char(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == '_' || c == '\''
+    }
+
+    /// Byte offsets of standalone identifier occurrences of `token`.
+    fn token_positions(text: &str, token: &str) -> Vec<usize> {
+        let mut out = Vec::new();
+        let mut start = 0;
+        while let Some(pos) = text[start..].find(token) {
+            let abs = start + pos;
+            let before_ok = text[..abs].chars().last().map_or(true, |c| !is_ident_char(c));
+            let after = abs + token.len();
+            let after_ok = text[after..].chars().next().map_or(true, |c| !is_ident_char(c));
+            if before_ok && after_ok {
+                out.push(abs);
+            }
+            start = abs + token.len();
+        }
+        out
+    }
+
+    /// Is the token at `pos` negated — `¬` directly before it, looking
+    /// through whitespace and opening parens?
+    fn negated_at(text: &str, pos: usize) -> bool {
+        text[..pos]
+            .chars()
+            .rev()
+            .find(|c| !c.is_whitespace() && *c != '(')
+            == Some('¬')
+    }
+
+    struct Polarity {
+        positive_iconfluent: bool,
+        negated_iconfluent: bool,
+        segmented: bool,
+    }
+
+    fn statement_polarity(stmt: &str) -> Polarity {
+        let mut p = Polarity {
+            positive_iconfluent: false,
+            negated_iconfluent: false,
+            segmented: false,
+        };
+        for pos in token_positions(stmt, "IConfluent") {
+            if negated_at(stmt, pos) {
+                p.negated_iconfluent = true;
+            } else {
+                p.positive_iconfluent = true;
+            }
+        }
+        p.segmented = !token_positions(stmt, "SegmentedIConfluent").is_empty();
+        p
+    }
+
+    /// Every citation resolves to a real theorem in the cited file (through
+    /// the file's actual namespace structure), and its keystone flag agrees
+    /// with docs/MAP.md's ledger — in both directions. This is the gate
+    /// GROKREVIEW §2.8 asked for: the check binary cannot disagree with the
+    /// repo's curated ledger and stay green.
+    #[test]
+    fn citations_resolve_to_real_files_and_theorems() {
+        let root = repo_root();
+        let ledger = keystone_ledger(&root);
+        let mut cache = std::collections::HashMap::new();
+        for cite in all_citations() {
             let path = root.join(cite.file);
             assert!(
                 path.is_file(),
@@ -1469,16 +1888,197 @@ mod tests {
                 cite.thm,
                 cite.file
             );
-            let content = std::fs::read_to_string(&path)
-                .unwrap_or_else(|e| panic!("could not read {}: {}", path.display(), e));
-            // `LWW.join_selects` lives in a namespace; grep its bare name.
-            let bare = cite.thm.rsplit('.').next().unwrap();
+            let stripped = stripped_source(&root, &mut cache, cite.file).to_string();
+            let (_full, _off) = resolve_citation(&stripped, &cite);
+            let module = cite
+                .file
+                .strip_prefix("Uwueave/")
+                .and_then(|f| f.strip_suffix(".lean"))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "citation file is not of the form Uwueave/<Module>.lean: {}",
+                        cite.file
+                    )
+                });
+            let listed = ledger
+                .iter()
+                .any(|(n, m)| n == cite.thm && m == module);
+            if cite.keystone {
+                assert!(
+                    listed,
+                    "{} ({}) is NOT on docs/MAP.md's keystone ledger: either add \
+                     its row there, or demote the citation to cite_unlisted!(...) \
+                     so the output stops implying curation it does not have",
+                    cite.thm, module
+                );
+            } else {
+                assert!(
+                    !listed,
+                    "{} ({}) IS on docs/MAP.md's keystone ledger but the catalog \
+                     still marks it [unlisted] — upgrade the citation to \
+                     cite!(...) and let the output claim the row",
+                    cite.thm, module
+                );
+            }
+        }
+    }
+
+    /// Every verdict points the same direction as the Lean statements it
+    /// cites — read from the source, not inferred from names.
+    #[test]
+    fn verdicts_match_the_lean_statements() {
+        let root = repo_root();
+        let mut cache = std::collections::HashMap::new();
+        let mut polarity_of = |c: &Cite| -> Polarity {
+            let stripped = stripped_source(&root, &mut cache, c.file).to_string();
+            let (_full, off) = resolve_citation(&stripped, c);
+            statement_polarity(statement_at(&stripped, off, c.thm))
+        };
+        for shape in ALL_SHAPES {
+            for kind in ALL_KINDS {
+                let Some(ruling) = classify(shape, kind) else {
+                    continue;
+                };
+                let pair = format!("({}, {})", shape.token(), kind.token());
+                let pols: Vec<(&Cite, Polarity)> =
+                    ruling.cites.iter().map(|c| (c, polarity_of(c))).collect();
+                match ruling.verdict {
+                    Verdict::Free => {
+                        for (c, p) in &pols {
+                            assert!(
+                                !p.negated_iconfluent,
+                                "{} is FREE but cites {} whose statement negates IConfluent",
+                                pair, c.thm
+                            );
+                            assert!(
+                                !c.thm.contains("not_iconfluent"),
+                                "{} is FREE but cites {}",
+                                pair,
+                                c.thm
+                            );
+                        }
+                        assert!(
+                            pols.iter().any(|(_, p)| p.positive_iconfluent),
+                            "{} is FREE but no cited statement asserts IConfluent",
+                            pair
+                        );
+                    }
+                    Verdict::Escalates => {
+                        assert!(
+                            pols.iter().any(|(_, p)| p.negated_iconfluent),
+                            "{} ESCALATES but no cited statement negates IConfluent",
+                            pair
+                        );
+                    }
+                    Verdict::Seam => {
+                        assert!(
+                            pols.iter().any(|(_, p)| p.negated_iconfluent),
+                            "{} is SEAM but no cited statement negates IConfluent \
+                             (the global failure half is missing)",
+                            pair
+                        );
+                        assert!(
+                            pols.iter().any(|(_, p)| p.segmented),
+                            "{} is SEAM but no cited statement asserts \
+                             SegmentedIConfluent (the seam half is missing)",
+                            pair
+                        );
+                    }
+                    Verdict::Pattern => {
+                        for (c, p) in &pols {
+                            assert!(
+                                !p.negated_iconfluent,
+                                "{} is PATTERN but cites {} whose statement negates IConfluent",
+                                pair, c.thm
+                            );
+                            assert!(
+                                !c.thm.contains("not_iconfluent"),
+                                "{} is PATTERN but cites {}",
+                                pair,
+                                c.thm
+                            );
+                        }
+                    }
+                }
+                for exit in ruling.exits {
+                    for c in exit.cites {
+                        let p = polarity_of(c);
+                        assert!(
+                            !p.negated_iconfluent,
+                            "{} exit `{}` cites {} whose statement negates \
+                             IConfluent — an exit must be a way OUT",
+                            pair, exit.label, c.thm
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Same philosophy as the coverage pin: shrinking (or growing) the set of
+    /// ledger-less citations is a conscious edit here, never a silent one.
+    /// The per-citation flags themselves are enforced against docs/MAP.md by
+    /// citations_resolve_to_real_files_and_theorems.
+    #[test]
+    fn unlisted_citation_count_is_pinned() {
+        let unlisted = distinct_unlisted();
+        let names: Vec<&str> = unlisted.iter().map(|c| c.thm).collect();
+        assert_eq!(unlisted.len(), 9, "unlisted citations changed: {:?}", names);
+    }
+
+    /// The rendered output marks every ledger-less citation, and the footer
+    /// claims exactly as much as the flags (themselves ledger-enforced) allow.
+    #[test]
+    fn output_marks_unlisted_citations_and_footer_tells_the_truth() {
+        // A schema exercising every classified pair.
+        let mut text = String::new();
+        for shape in ALL_SHAPES {
+            text.push_str(&format!(
+                "field f_{}: {}\n",
+                shape.token().replace('-', "_"),
+                shape.token()
+            ));
+        }
+        for shape in ALL_SHAPES {
+            for kind in ALL_KINDS {
+                if classify(shape, kind).is_some() {
+                    text.push_str(&format!(
+                        "invariant f_{}: {}\n",
+                        shape.token().replace('-', "_"),
+                        kind.token()
+                    ));
+                }
+            }
+        }
+        let schema = parse_schema(&text).expect("generated schema parses");
+        let report = render("all.schema", &schema);
+        // Wrapping breaks lines at spaces; compare against a flattened copy.
+        let flat = report.replace('\n', " ");
+        let unlisted = distinct_unlisted();
+        if unlisted.is_empty() {
             assert!(
-                file_defines_theorem(&content, bare),
-                "{} does not define `theorem {}` (cited as {})",
-                cite.file,
-                bare,
-                cite.thm
+                !report.contains("[unlisted]"),
+                "no citation is unlisted, yet the output shows a marker"
+            );
+            assert!(flat.contains(LEDGER_FOOTER_CLEAN));
+        } else {
+            // Every unlisted citation is visibly marked in the verdict table
+            // (table cells are never wrapped), with the literal marker text —
+            // asserted against the string, not via cite_string, so dropping
+            // the marker from the renderer cannot self-consistently pass.
+            for c in &unlisted {
+                assert!(
+                    report.contains(&format!("{} [unlisted] — {}", c.thm, c.file)),
+                    "unlisted citation not rendered with its marker: {} — {}",
+                    c.thm,
+                    c.file
+                );
+            }
+            assert!(flat.contains("classification prose only"));
+            assert!(
+                !flat.contains("Every cited theorem is on docs/MAP.md"),
+                "the footer claims a clean ledger while {} citation(s) lack rows",
+                unlisted.len()
             );
         }
     }
