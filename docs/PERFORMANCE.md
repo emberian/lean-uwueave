@@ -9,7 +9,7 @@ ever been timed.*
 > `BENCH_MAX=1000` rerun made on 2026-08-11; it is deliberately separate from
 > the baseline and does not replace the original full-range sweep. Section 12
 > separately records Wave 23 proof-elaboration and build-closure engineering,
-> and §§13–16 do the same for Waves 24–27; those figures are not kernel-runtime
+> and §§13–17 do the same for Waves 24–28; those figures are not kernel-runtime
 > benchmarks. Current
 > complexity statements come from proved equivalence where applicable, source
 > inspection, successful builds, and generated-C inspection; only the rows in
@@ -1442,3 +1442,80 @@ properties, one runtime-auth arrival, six runtime-build closure, and two UNDONE
 census tests. This is aggregate validation-path duration, not test-body or
 journal throughput. Its fail-closed native warning remained exactly **13
 objects / 659,152 B**.
+
+---
+
+## 17. Wave 28 authenticated ERA certificate — 2026-08-12
+
+Wave 28 adds one proof-only leaf joining authenticated frontier progress to an
+ERA finalisation certificate without collapsing their premises. This section
+reports source/compiler size, proof elaboration, trust-floor acceptance, and
+aggregate Lean coverage. It is not a runtime benchmark, cryptographic security
+argument, byte decoder, or deployment observation.
+
+`AuthenticatedEraCertificate` is **507 LOC / 22,097 source bytes**. Its current
+artifacts are **404,648 B olean / 54,480 B generated C**. The focused build
+passed **38/38** jobs. An immediate cached `lake build` replay took 0.14 s;
+that is dependency-cache validation, not clean-build throughput.
+
+One serialized direct source pass used
+`lake env lean -j1 --profile --json Uwueave/AuthenticatedEraCertificate.lean`,
+wrapped by macOS `/usr/bin/time -lp`, with existing imported oleans and no
+warmup, cache reset, repetition, or retained before sample:
+
+| profile observation | value |
+|---|---:|
+| wall / user / system | **5.56 s / 0.62 s / 0.96 s** |
+| peak RSS | **1,249,247,232 B** |
+| import | **5.17 s** |
+| elaboration | **111 ms** |
+| tactic execution | **20.6 ms** |
+| `simp` | **9.72 ms** |
+| type checking | **24.7 ms** |
+| typeclass inference | **13.6 ms** |
+| LCNF base / mono / impure | **8.43 / 6.91 / 3.22 ms** |
+
+The unusually import-dominated wall observation was collected under active
+swarm contention. Profiler categories are cumulative and nested; the table is
+one-shot workload-location evidence, not a median, speedup, or sum of disjoint
+costs.
+
+The authority audit checked the separation rather than merely the final
+theorem name. `AuthenticatedProgress` supplies exact accepted-event binding,
+received-trace membership, genuine `WasIssued`, issuer/source equality, and
+signer roster membership. `CompleteAnnouncement` separately ties the same
+codec event to its cut, before/after worlds, issued pool, delivered log,
+frontier settlement, and lawful `DeliveryAdvance.complete_after`. Only their
+`Verification` conjunction yields `EraCertificate.Settled` and a reusable
+certificate.
+
+The reusable artifact deliberately forgets signature provenance and retains
+only the exact ERA key plus `settledCert` proof. Its theorem is scoped to
+`EraCertificate.Delivery` and exact-key equality. It does not license future
+issuance or announcements, prove a cut newly added, authenticate every
+candidate event or event ID, identify a designated arbiter, validate an
+authored codec against bytes, or supply a deployed EUF-style security premise.
+The positive fixture is therefore accompanied by load-bearing refusals for an
+accepted-but-unissued record and an authenticated-but-incomplete cut.
+
+The core `CompleteAnnouncement.settled` theorem depends on no axioms. The
+delivery-scope, seal, and reusable-soundness projections inherit only the
+repository's standard `propext`, `Classical.choice`, and `Quot.sound` floor;
+the refusal theorems remain within that standard floor. The source contains no
+`sorry`, `admit`, `unsafe`, `native_decide`, scoped recursion-depth override,
+or heartbeat override.
+
+Acceptance passed **1 positive fixture and 5 expected refusals**. Its prefix
+audits covered **118 production constants and 4 fixture constants**. The final
+Lean aggregate completed **183 jobs**, traversed **159 root modules**, and
+checked **25,041 constants** against the trust floor. These are coverage
+counts, not performance samples. Honest marker reconciliation left **155
+markers / 153 blocks / 43 files**: model-level authenticated settlement is
+closed, while deployed cryptography, event-ID authenticity, runtime generation,
+and announcement-scope certification remain open.
+
+The final all-target Cargo gate remained **147/147 green** in **16.00 s real**,
+including **1.61 s** of compilation. No Rust target or test count changed in
+this proof-only wave, and the native closure remained exactly **13 objects /
+659,152 B**. The wall duration is aggregate validation-path time, not
+certificate evaluation or runtime throughput.

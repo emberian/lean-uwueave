@@ -40,9 +40,14 @@ claim because the unseen issued pool remains load-bearing.
     upward closures give may-arrive sets, and advance is reverse inclusion of
     those closures.  The two-dimensional witness below contains two
     incomparable points.
-  * **Progress is trusted, not generated.** ⟨UNDONE⟩ `DeliveryAdvance` checks
-    the semantic price of an advance but no protocol here manufactures or
-    authenticates progress messages.
+  * **Progress is authenticated by the proof-model successor, not generated.**
+    ⟨DONE at the model boundary; UNDONE for runtime and deployment⟩
+    `DeliveryAdvance` checks only the semantic price of an advance.
+    `Uwueave.AuthenticatedFrontier` separately retains a received, accepted and
+    genuinely issued signed progress event, binds its decoded issued/delivered
+    sets to that event, and conjoins the lawful advance. No protocol here
+    manufactures the message, instantiates deployed cryptography, or proves a
+    runtime advances honestly.
   * **Timestamps label candidate events externally.** ⟨TERMINAL for the
     bridge, ⟨UNDONE⟩ for the old carrier⟩ `ResultEvidence` stores no timestamp,
     so a bridge takes `stamp : (alpha x Source) -> T`.  Smuggling a timestamp

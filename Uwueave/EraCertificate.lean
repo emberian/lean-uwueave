@@ -124,6 +124,12 @@ id collision does the same with an honest arbiter).
   * ⟨TERMINAL⟩ **A key licenses reuse, not verification** — inherited verbatim
     from `CertificateScope`. `era_verifiedAt_is_sound` is the reuse form, and it
     needs one honest verification to have happened.
+    `Uwueave.AuthenticatedEraCertificate.Verification.toReusableCertificate`
+    now inhabits that model-level path from an accepted, received and genuinely
+    issued progress event plus an independent complete announcement. The
+    resulting reusable artifact deliberately retains only the exact ERA key and
+    its semantic acceptance proof—not the signature or trace. This does not
+    instantiate deployed cryptography or event-id authenticity.
   * ⚠ **Finality rests on event-id authenticity, and the miniature drops it.**
     `Era.lean` needs no uniqueness premise for `resolve_same_sets`; its
     determinism survives a collision. Finality does not:

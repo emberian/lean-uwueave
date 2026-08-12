@@ -555,7 +555,31 @@ Lean fixtures for authenticated context/frontier and the V4 sidecar, delegates
 the unchanged three-green/fifteen-red-command transactional V3 suite, and runs
 four focused durable-arrival recovery/refusal tests.
 
-### 5.2 Records v4 still needs
+### 5.2 Authenticated ERA certificate: exact delivery scope
+
+`AuthenticatedEraCertificate.Verification` is the bridge from the signed
+frontier layer into ERA's existing certificate machinery. It consumes one
+exact accepted, genuinely issued, roster-bound progress event and a separate
+`CompleteAnnouncement` tying that same event to truthful before/after ERA
+worlds, its announced cut, issued pool, delivered log, and lawful complete
+frontier. Only those two premises together yield `Settled`, the concrete
+`settledCert`, delivery-scoped free termination, and the user-level role seal.
+
+`Verification.toReusableCertificate` then intentionally discards the signed
+record, signature, issuer, roster, trace, and frontier witness. The retained
+artifact is exactly an ERA delivery key and proof that `settledCert` accepts
+it. Exact-key equality licenses reuse through `KeyCertSound`; it does not
+replay verification, authenticate storage, or survive a new announcement
+under the old key. There is still no certificate for the unbounded announcement
+future and no concrete cryptographic verifier.
+
+The Wave-28 subprocess gate has one positive and five exact-red fixtures. It
+pins verification, reusable-certificate soundness and seal survival, then
+refuses the wrong event domain, accepted-but-unissued input, incomplete
+announcement/frontier, and wrong reusable key. Its prefix checks audit 118
+production constants and four test-support constants.
+
+### 5.3 Records v4 still needs
 
 The next runtime journal schema should use explicit typed lanes rather than a
 generic byte/event escape hatch:
@@ -580,7 +604,7 @@ four arrays a caller chose to marshal. No such commitment is present in
 `RuntimeAuthV4.SignedContent` today; adding it is a v4 schema revision that
 must receive its own field tag and codec-separation theorems.
 
-### 5.3 Authenticity, authority, membership, and execution
+### 5.4 Authenticity, authority, membership, and execution
 
 Composition is conjunctive, not substitutive:
 

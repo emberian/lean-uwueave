@@ -19,7 +19,7 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 129 numbered transport rows.** Wave 24's elaborator and
+**Ledger total: 130 numbered transport rows.** Wave 24's elaborator and
 projection splits changed owners and proof routes without changing the earlier
 judgements. Wave 25 adds five crossings: application state into typed query
 semantics; checked state results into exact world futures/certificates; checked
@@ -36,6 +36,10 @@ validation, deterministic Rust, and its own canonical durable frame; semantic
 six-status effects into one shared executable canonical list; and authoritative
 arrival replay into a typed host-callback obligation plus a separately tested
 durable Rust queue.
+Wave 28 adds the authenticated ERA certificate crossing: an exact accepted and
+issued signed progress event plus a separately lawful, complete announcement
+becomes a delivery-scoped settled certificate and a record-free exact-key
+reusable artifact.
 
 ---
 
@@ -1847,6 +1851,30 @@ strictly increasing parent bytes where Lean requires only `Nodup`; durability
 depends on the selected sync policy; caller-supplied equality IDs and opaque
 payload bytes are not authentication.
 
+**45u. Authenticated signed ERA progress plus complete announcement → settled delivery certificate** ⚠
+*source* one `AuthenticatedFrontier.AuthenticatedProgress`, its exact
+`AuthenticatedAdvance`, an authored `AuthenticatedEraCertificate.EraCodec`,
+and `CompleteAnnouncement` over that same signed event · *target*
+`EraCertificate.Settled` at the exact decoded after-world, delivery-scoped
+`FreeTermination`, its surviving ERA seal, and a record-free
+`ReusableCertificate` · *transport* `CompleteAnnouncement.settled`,
+`Verification.deliveryScope`, `Verification.sealSurvives`, and
+`ReusableCertificate.sound`; `Verification.payload_exact`, `.wasIssued`,
+`.source_exact`, `.cut_mem`, and `.announcement` retain the exact bridge ·
+*needs* independent signature acceptance and genuine issuance, exact source
+and finite-roster membership, a deployment-authored codec, the ERA
+announcement relation, exact after-world pool/log equality to the same
+frontier advance, and `finalized_complete` for every finalized issued event ·
+*without issuance* `Fixtures.accepted_unissued_cannot_be_progress` refuses an
+accepted toy signature absent from the issuance transcript; *without semantic
+completeness* `Fixtures.authentication_does_not_manufacture_complete_cut`
+keeps authentication fixed while an incomplete decoded world refutes
+`Settled`. The reusable artifact carries only `eraKey` and `settledCert`,
+matches exact keys, and is sound for `EraCertificate.Delivery` only. It does
+not verify the codec, authenticate event IDs, detect `HonestExtension`,
+license announcement/issuance futures, observe a deployment, or prove
+cryptographic hardness.
+
 ---
 
 ## The meta-row
@@ -1903,13 +1931,14 @@ temporal fairness, and checked woven edits. Rows 45–45g connect the covered
 history engine, logical persistent runtime, canonical artifact journal,
 bounded planning generator, native protocol syntax, total result/report
 program, staged authenticated-v4 boundary, and the explicit canonical-byte
-emitter. Rows 45h–45t add explicit application-state query semantics, exact
+emitter. Rows 45h–45u add explicit application-state query semantics, exact
 world/certificate binding, proof-indexed V3 erasure, validated V3
 rendering/durability/inspection, finite causal-history persistence, typed
 position attribution, authenticated running observation, and transactional V3
 export, then authenticated one-use context delivery, the checked `UWV4`-to-
 sidecar boundary, bounded sidecar rendering/framing, shared canonical effect
-reification, and the durable-arrival callback/host separation. What
+reification, the durable-arrival callback/host separation, and authenticated
+ERA finalisation. What
 remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives

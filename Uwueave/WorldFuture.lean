@@ -173,10 +173,14 @@ clothes.
     `Uwueave.Frontier` now supplies the Timely-style antichain whose advance
     retires a timestamp range and a narrow theorem transporting complete,
     settled worlds to stability of `Evidence.values`. ⟨UNDONE for this carrier
-    and deployment⟩ `World.frontier` remains a `GSet Source`, timestamps are not
-    stored in `ResultEvidence`, progress is not authenticated or generated, and
-    full `render` stability is not claimed. `roster` bounds accepted membership,
-    but a roster is not an antichain.
+    and deployment⟩ `World.frontier` remains a `GSet Source`, and timestamps or
+    authentication records are not stored in `ResultEvidence`.
+    `Uwueave.AuthenticatedFrontier` and
+    `Uwueave.AuthenticatedWorldContext` authenticate proof-level progress and
+    bind it to a lawful decoded advance, but no runtime generates that progress
+    or discharges the deployed signature premise. Full `render` stability is
+    not claimed. `roster` bounds accepted membership, but a roster is not an
+    antichain.
   * **A seal is still trusted, not verified.** ⟨UNDONE⟩ `epoch` and `sealed`
     are a producer's announcement, exactly as `Era.advance` announces a cut
     unconditionally. What is *new* here and not in `Evidence.lean` is that the

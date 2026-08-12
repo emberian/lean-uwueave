@@ -300,11 +300,11 @@
     face &mdash; the theorem names, the refutations, the prices, and the compiled kernels.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">181</div><div class="l">Lean modules</div>
-        <div class="s">179 library modules plus two separate CLI mains</div></div>
-      <div class="stat"><div class="n">24,921</div><div class="l">constants audited</div>
+      <div class="stat"><div class="n">182</div><div class="l">Lean modules</div>
+        <div class="s">180 library modules plus two separate CLI mains</div></div>
+      <div class="stat"><div class="n">25,041</div><div class="l">constants audited</div>
         <div class="s">the live Lean&nbsp;4.30 floor gate</div></div>
-      <div class="stat"><div class="n">686</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">700</div><div class="l">keystones in the ledger</div>
         <div class="s">each tagged with a generality and a reachability axis</div></div>
       <div class="stat"><div class="n">8</div><div class="l">priced exits</div>
         <div class="s">each with an availability check and a price</div></div>
@@ -318,13 +318,13 @@
     <p style="font-size:.9rem;color:var(--muted);max-width:78ch;margin-top:1.1rem"><strong>Check
     every cell.</strong> These commands were run against this repository to produce the numbers
     above &mdash; a stat with no command under it is decoration:</p>
-<pre><code># 181 Lean modules in the assembled worktree
+<pre><code># 182 Lean modules in the assembled worktree
 rg --files Uwueave -g '*.lean' | wc -l
 
-# 686 rows in the keystone ledger
+# 700 rows in the keystone ledger
 awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 
-# 156 UNDONE markers / 154 blocks / 43 source files
+# 155 UNDONE markers / 153 blocks / 43 source files
 ./scripts/undone-census.sh --check
 
 # 8 exits — the constructors of `inductive Exit`
@@ -336,17 +336,17 @@ grep -RFn '@[export ' Uwueave/
 # `"packages": []` — no dependencies, mathlib included
 grep '"packages"' lake-manifest.json
 
-# the root/Audit gate: 182 jobs; prints `#audit_floor: N constants audited`
+# the root/Audit gate: 183 jobs; prints `#audit_floor: N constants audited`
 lake build</code></pre>
     <p style="font-size:.85rem;color:var(--muted);max-width:78ch"><strong>The audit count is a
     moving floor, not a protocol constant.</strong> The number your own <code>lake build</code>
     prints is authoritative. Root coverage is checked separately: Lean parses the real root
-    header, including indented imports. It reports 158 direct root modules excluding
-    <code>Audit</code>; the transitive root/gate closure reaches all 179 import-pure library
+    header, including indented imports. It reports 159 direct root modules excluding
+    <code>Audit</code>; the transitive root/gate closure reaches all 180 import-pure library
     modules. <code>ArtifactEmitMain</code> and <code>ArtifactInspectionMain</code> are compiled
     separately because both own a root-level <code>main</code>; the proof aggregate covers their
-    pure library modules instead. The same checkpoint has 686 MAP keystones, 129 documented
-    transports and 156 UNDONE markers in 154 blocks across 43 source files. The serialized
+    pure library modules instead. The same checkpoint has 700 MAP keystones, 130 documented
+    transports and 155 UNDONE markers in 153 blocks across 43 source files. The serialized
     Wave-27 <code>cargo test --all-targets</code> gate passed all 147 tests in 24.08 seconds,
     including 2.59 seconds of compilation.</p>
 
@@ -1837,6 +1837,15 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       verification, shape, grant and context receipts; canonical decoding returns a neutral
       <code>Manifest</code> and cannot reconstruct <code>CheckedManifest</code>, signature validity,
       authority or membership.</p>
+      <p>Wave 28 carries the authenticated progress event into ERA&rsquo;s concrete certificate
+      machinery without treating a signature as semantic completeness. One independent
+      <code>CompleteAnnouncement</code> binds the same event to the exact before/after worlds,
+      cut, issued pool, delivered log and lawful frontier; only their conjunction yields the
+      delivery-scoped settled certificate and role seal. The reusable artifact intentionally
+      forgets the signed record and retains only the exact ERA key plus semantic acceptance.
+      It licenses reuse at that key, not re-verification or the unbounded announcement future.
+      One positive and five exact-red subprocess fixtures pin those boundaries; the production
+      prefix audit covers 118 constants.</p>
       <p>The pure-Rust storage layer now has four distinct journal surfaces. In addition to artifact and
       typed MoveLog storage, <code>HistoryJournal</code> stores canonical explicit 32-byte event
       IDs with strictly ordered parents that must already be accepted. Every admitted prefix is
@@ -2016,7 +2025,7 @@ def replayKernel (input : ByteArray) : ByteArray :=
       <code>Classical.choice</code>, <code>Quot.sound</code>) is fatal: a <code>sorry</code>
       (<code>sorryAx</code>), custom axiom, or Lean-4.30 <code>native_decide</code>
       (<code>_native.native_decide.ax_…</code>) goes red. The whole-tree command retains its
-      300-constant tripwire and currently audits 24,921 constants. Seven trust subprocess fixtures
+      300-constant tripwire and currently audits 25,041 constants. Seven trust subprocess fixtures
       exercise the exact allowed floor, indented/root header parsing, prefix vacuity, and all
       three forbidden dependency classes. They prove the gate can fail, but share its
       <code>collectAxioms</code> implementation and are not an independent checker. A separate
@@ -2078,7 +2087,7 @@ lake build
 cd rust &amp;&amp; cargo test</code></pre>
     <p>Further reading in the repo:
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/MAP.md">docs/MAP.md</a>
-    (every module, what it settles, and the 686-row keystone ledger with its generality and
+    (every module, what it settles, and the 700-row keystone ledger with its generality and
     reachability axes) ·
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/TRUST.md">docs/TRUST.md</a>
     (the three ledgers) ·

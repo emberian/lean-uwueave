@@ -148,6 +148,7 @@ import Uwueave.Byzantine
 import Uwueave.AuthenticatedAdmission
 import Uwueave.AuthenticatedFrontier
 import Uwueave.AuthenticatedWorldContext
+import Uwueave.AuthenticatedEraCertificate
 import Uwueave.Durable
 import Uwueave.PersistentRuntime
 import Uwueave.PersistentHistoryRuntime

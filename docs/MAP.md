@@ -10,14 +10,14 @@ that policy to every constant in this namespace. A stray `sorry` or
 [ledger](#keystone-ledger) below is a reading aid, not a trust mechanism.)
 
 ✅ **Coverage, 2026-08-12.** The file table below has one row for each of the
-181 Lean module files under `Uwueave/`, including the nested `Preo` and
+182 Lean module files under `Uwueave/`, including the nested `Preo` and
 `Tactics` modules. This is a documentation invariant rather than a trust
 mechanism: the root aggregator and `#gate_covers_root` remain the authorities
 for transitive gate coverage. Re-derive the table's coverage instead of
 trusting this prose after adding or moving a module:
 
-The frozen Wave 27 gate built 182 jobs, found 158 direct root modules below
-the gated closure, and audited 24,921 `Uwueave` constants. Those are mechanical
+The frozen Wave 28 gate built 183 jobs, found 159 direct root modules below
+the gated closure, and audited 25,041 `Uwueave` constants. Those are mechanical
 snapshot counts, not a semantic-adequacy claim.
 
 ```sh
@@ -30,7 +30,7 @@ source = re.split(
 mapped = set(re.findall(r"^\| `([^`]+\.lean)` \|", source, re.MULTILINE))
 present = {str(path) for path in Path("Uwueave").rglob("*.lean")}
 assert mapped == present, (sorted(present - mapped), sorted(mapped - present))
-assert len(mapped) == 181
+assert len(mapped) == 182
 PY
 ```
 
@@ -189,6 +189,7 @@ curiosity.)
 | `Uwueave/AuthenticatedAdmission.lean` | The model-level conjunction of authentication, fork attribution, holder binding, and capability admission. `authenticIssuer_to_signatureAuthentic` derives Byzantine attribution premises from accepted signed events through an explicit codec. `AuthenticatedGatedOp` additionally requires genuine issuance, an explicit grant-holder policy, and `Gated.gatedOps`; Mallory's borrowed live grant and Bob's revoked genuine grant make those checks independently load-bearing. FORMAT v3/FFI signature admission remains outside the result. |
 | `Uwueave/AuthenticatedFrontier.lean` | Authentication and frontier semantics meet without being conflated. `AuthenticatedProgress.ofAuthenticIssuer` retains one accepted signed ERA progress event, received-trace membership, genuine `WasIssued`, exact issuer/source, reserved kind, and finite-roster membership. A deployment-authored `ProgressCodec` projects timestamp, both frontiers, and the issued/before/after delivered sets from that same signed event; `AuthenticatedAdvance.toDeliveryAdvance` exposes the independently proved lawful transition. This authenticates an exact signer-authored claim, not an external running state, truthful codec, network observation, or cryptographic implementation. Consumers must bind every projection to their actual state. |
 | `Uwueave/AuthenticatedWorldContext.lean` | The proof-carrying successor to `WorldContext`: accepted-and-issued signed typed-position claims retain exact world/value/static-position bindings, while signed-decoded origin/version are checked against the real causal cut and version base. `ConsumptionReceipt` grows one-use tombstones without deleting outstanding grants; `AuthenticatedConsumingDelivery` binds authenticated frontier issued/delivered sets exactly to both actual worlds, requires every new candidate to have a contextual signed witness, justifies every used grant, ties the progress signer to the actual roster, and enforces grant uniqueness. It projects only to `WorldFuture.DeliveryFuture`. The strict one-grant/one-candidate rule deliberately rejects batch-capability semantics; codecs, signature security, and host delivery remain deployment premises. |
+| `Uwueave/AuthenticatedEraCertificate.lean` | A signed and genuinely issued progress event is joined to an independently proved lawful, delivery-complete ERA announcement without making either premise imply the other. `CompleteAnnouncement.settled` binds decoded cut/world/pool/log/frontier data from that same event and discharges `EraCertificate.Settled`; `Verification` exposes exact payload, issuance, source/roster, announcement, delivery scope, and surviving seal. `ReusableCertificate.sound` deliberately forgets the record and reuses only `settledCert` at exact `eraKey` equality under delivery. Accepted-but-unissued and authenticated-but-incomplete fixtures refuse the two missing halves. `EraCodec`, roster meaning, cryptographic security, live observation, event-ID authenticity, honest-extension detection, and the announcement future remain external. |
 | `Uwueave/Byzantine.lean` | Separates equivocation, forgery, and withholding. Fork evidence is permanent under gossip and attributes blame only with authentic issuance; an unauthenticated submitter can otherwise pass the ordinary grant gate. `authentic_issuance_preserves_finality` states the ERA finality repair with grounded announcements and id authenticity, while `forged_announced_id_breaks_era_finality` realizes the exact failure without them. `authenticity_and_delivery_are_independent` keeps safety and liveness obligations distinct. |
 | `Uwueave/Durable.lean` | A logical durability rung: canonical payload codecs, version/domain-separated self-delimiting frames, append-only journals, and prefix recovery. `recover_crashPrefix` proves that a canonical journal followed by an explicitly characterized torn frame recovers exactly the completed records; `recover_crashPrefix_monotone` preserves prefix order as more records complete. `DeploymentAssumptions` names, but does not inhabit, the missing filesystem/flush/crash refinement. |
 | `Uwueave/EvidenceGraph.lean` | Structured evidence documents with typed candidate, source, obligation, and certificate vertices and rank-descending attribution/owing/discharge edges. Endpoint `WellFormed` is I-confluent and `encodeEvidenceGraph_joinHom` preserves merge. `flat_encodeEvidence_is_projection` recovers the old evidence document through a forgetful join homomorphism; `danglingAttribution_is_malformed` proves endpoint integrity remains a real invariant rather than a consequence of typed edge shapes alone. |
@@ -261,7 +262,7 @@ each `Live` / `LatticeOnly` tag cites nothing beyond the named module's own
 docstrings (upgraded by `CausalReach` theorems where those supersede them);
 `—` marks rows the axis does not apply to. Every row is covered by
 `#audit_floor`'s total gate — there is no per-row trust column to read. The
-table currently holds 686 rows:
+table currently holds 700 rows:
 
 | Theorem | Module | Generality | Reachability |
 |---|---|---|---|
@@ -951,6 +952,20 @@ table currently holds 686 rows:
 | `fixture_bytes_length` | Preo/RuntimeAuthV4Fixtures | finite-story | — |
 | `fixture_bytes_format_prefix` | Preo/RuntimeAuthV4Fixtures | finite-story | — |
 | `fixture_bytes_decode_exact` | Preo/RuntimeAuthV4Fixtures | finite-story | — |
+| `CompleteAnnouncement.settled` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.payload_exact` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.wasIssued` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.source_exact` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.cut_mem` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.announcement` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.settled` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.settledCert` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.deliveryScope` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.sealSurvives` | AuthenticatedEraCertificate | ∀-general | — |
+| `ReusableCertificate.sound` | AuthenticatedEraCertificate | ∀-general | — |
+| `Verification.toReusableCertificate_key` | AuthenticatedEraCertificate | ∀-general | — |
+| `Fixtures.accepted_unissued_cannot_be_progress` | AuthenticatedEraCertificate | finite-story | — |
+| `Fixtures.authentication_does_not_manufacture_complete_cut` | AuthenticatedEraCertificate | finite-story | — |
 
 Ledger rows grow with the tree; reachability is derived from module docstrings
 **and** from `CausalReach` theorems where those supersede older caution notes.

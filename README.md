@@ -244,6 +244,16 @@ is a bigger, real schema that deliberately contains one.
   the private checked value. Its `⟨4,162⟩` durable framing is intentionally not
   the existing `UWV4` signed-request wire and is not a verifier.
 
+- **Authenticated ERA finality now reaches the certificate layer without
+  laundering its premises.** One exact signed progress event supplies accepted
+  and genuinely issued source/roster identity; a separate complete-announcement
+  proof supplies the truthful ERA worlds, cut, issued pool, delivered log, and
+  lawful frontier. Together they yield the delivery-scoped settled certificate
+  and its user-level seal. The reusable artifact deliberately forgets the
+  signature and retains only the exact ERA key plus semantic acceptance: it
+  licenses delivery reuse at that key, not verification, new announcements, or
+  cryptographic authenticity.
+
 ## Some things we found that surprised us
 
 **Content-addressing gives you acyclicity for free.** Naming things by the hash
@@ -316,11 +326,11 @@ lake build              # every proof + the total axiom gate (Lean core only, no
 cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
 
-The current checkpoint is **181** Lean source modules (**158** direct proof-root
-imports excluding `Audit`, **182** full-build jobs) and **24,921** audited
-constants, with **686** MAP keystones and **129** documented transports. The
-generated work ledger records **156** `⟨UNDONE⟩`
-markers in **154** blocks across **43** source files. The serialized Wave-27
+The current checkpoint is **182** Lean source modules (**159** direct proof-root
+imports excluding `Audit`, **183** full-build jobs) and **25,041** audited
+constants, with **700** MAP keystones and **130** documented transports. The
+generated work ledger records **155** `⟨UNDONE⟩`
+markers in **153** blocks across **43** source files. The serialized Wave-27
 Rust aggregate passed **147/147** tests in **24.08s** (including **2.59s** of
 compilation). Counts are checkpoints; the commands and fail-closed gates are
 the durable contract.

@@ -4,8 +4,8 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 156
-- **Extracted blocks (marker-bearing source lines):** 154
+- **Marker occurrences:** 155
+- **Extracted blocks (marker-bearing source lines):** 153
 - **Lean files containing markers:** 43
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
@@ -335,7 +335,7 @@ had run Era through it:
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
 ````
 
-### [`Uwueave/EraCertificate.lean:135`](../Uwueave/EraCertificate.lean#L135)
+### [`Uwueave/EraCertificate.lean:141`](../Uwueave/EraCertificate.lean#L141)
 
 ````text
     contrapositive is `finality_failure_refutes_id_authenticity`. ⟨UNDONE at the
@@ -344,7 +344,7 @@ had run Era through it:
     unproved.
 ````
 
-### [`Uwueave/EraCertificate.lean:139`](../Uwueave/EraCertificate.lean#L139)
+### [`Uwueave/EraCertificate.lean:145`](../Uwueave/EraCertificate.lean#L145)
 
 ````text
   * ⟨UNDONE⟩ **`HonestExtension` is a hypothesis, not a detection.** It is
@@ -354,7 +354,7 @@ had run Era through it:
     both are out of scope in `Era.lean` and remain out of scope here.
 ````
 
-### [`Uwueave/EraCertificate.lean:144`](../Uwueave/EraCertificate.lean#L144)
+### [`Uwueave/EraCertificate.lean:150`](../Uwueave/EraCertificate.lean#L150)
 
 ````text
   * ⟨UNDONE⟩ **The announcement future has no certificate at all.** §5 says what
@@ -365,14 +365,14 @@ had run Era through it:
     the arbiter does not have.
 ````
 
-### [`Uwueave/EraCertificate.lean:150`](../Uwueave/EraCertificate.lean#L150)
+### [`Uwueave/EraCertificate.lean:156`](../Uwueave/EraCertificate.lean#L156)
 
 ````text
   * ⟨UNDONE⟩ **One evaluator at a time**, and `Type 0` only —
     `CertificateScope`'s two, inherited.
 ````
 
-### [`Uwueave/EraCertificate.lean:152`](../Uwueave/EraCertificate.lean#L152)
+### [`Uwueave/EraCertificate.lean:158`](../Uwueave/EraCertificate.lean#L158)
 
 ````text
   * ⟨UNDONE⟩ **The witnesses are witnesses.** §3-§6's separations run on
@@ -381,7 +381,7 @@ had run Era through it:
     unbounded pools.
 ````
 
-### [`Uwueave/EraCertificate.lean:926`](../Uwueave/EraCertificate.lean#L926)
+### [`Uwueave/EraCertificate.lean:932`](../Uwueave/EraCertificate.lean#L932)
 
 ````text
 naming an id rather than an event. ⟨UNDONE⟩ in the boundary — the repair is
@@ -506,15 +506,7 @@ paved over. Concretely, what is missing is a function
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = deliberately outside it.
 ````
 
-### [`Uwueave/Frontier.lean:43`](../Uwueave/Frontier.lean#L43)
-
-````text
-  * **Progress is trusted, not generated.** ⟨UNDONE⟩ `DeliveryAdvance` checks
-    the semantic price of an advance but no protocol here manufactures or
-    authenticates progress messages.
-````
-
-### [`Uwueave/Frontier.lean:47`](../Uwueave/Frontier.lean#L47)
+### [`Uwueave/Frontier.lean:52`](../Uwueave/Frontier.lean#L52)
 
 ````text
     bridge, ⟨UNDONE⟩ for the old carrier⟩ `ResultEvidence` stores no timestamp,
@@ -1578,13 +1570,17 @@ clothes.
 
 ````text
     settled worlds to stability of `Evidence.values`. ⟨UNDONE for this carrier
-    and deployment⟩ `World.frontier` remains a `GSet Source`, timestamps are not
-    stored in `ResultEvidence`, progress is not authenticated or generated, and
-    full `render` stability is not claimed. `roster` bounds accepted membership,
-    but a roster is not an antichain.
+    and deployment⟩ `World.frontier` remains a `GSet Source`, and timestamps or
+    authentication records are not stored in `ResultEvidence`.
+    `Uwueave.AuthenticatedFrontier` and
+    `Uwueave.AuthenticatedWorldContext` authenticate proof-level progress and
+    bind it to a lawful decoded advance, but no runtime generates that progress
+    or discharges the deployed signature premise. Full `render` stability is
+    not claimed. `roster` bounds accepted membership, but a roster is not an
+    antichain.
 ````
 
-### [`Uwueave/WorldFuture.lean:180`](../Uwueave/WorldFuture.lean#L180)
+### [`Uwueave/WorldFuture.lean:184`](../Uwueave/WorldFuture.lean#L184)
 
 ````text
   * **A seal is still trusted, not verified.** ⟨UNDONE⟩ `epoch` and `sealed`
@@ -1597,7 +1593,7 @@ clothes.
     rather than an unremarked one; it does not make the arbiter honest.
 ````
 
-### [`Uwueave/WorldFuture.lean:188`](../Uwueave/WorldFuture.lean#L188)
+### [`Uwueave/WorldFuture.lean:192`](../Uwueave/WorldFuture.lean#L192)
 
 ````text
   * **`Wf` and `RosterKnown` are hypotheses, not invariants.** ⟨UNDONE⟩
@@ -1608,7 +1604,7 @@ clothes.
     none is built.
 ````
 
-### [`Uwueave/WorldFuture.lean:197`](../Uwueave/WorldFuture.lean#L197)
+### [`Uwueave/WorldFuture.lean:201`](../Uwueave/WorldFuture.lean#L201)
 
 ````text
   * **The separation is one witness, not a classification.** ⟨UNDONE⟩ §3 proves

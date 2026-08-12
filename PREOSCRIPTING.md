@@ -266,6 +266,91 @@ the native durable-arrival tests:
 scripts/wave27-acceptance-canaries.sh
 ```
 
+### Signed ERA cut bridge and reusable delivery certificate
+
+[`AuthenticatedEraCertificate`](Uwueave/AuthenticatedEraCertificate.lean)
+joins the authenticated frontier path to ERA finalisation without treating one
+as proof of the other. `EraCodec` extends the frontier codec with event time,
+announced cut, and before/after ERA-world projections. Every projection is
+applied to the exact event in `progress.acceptedEvent`; the canonical frontier
+candidate pairs that ERA event and its decoded time with the event's actor.
+Those codec functions are authored semantic bindings, not hashes or an
+authenticated wire decoder.
+
+`CompleteAnnouncement` is the separate lawfulness/completeness price. For the
+same signed event it requires:
+
+- an `EraCertificate.Announcement` from the decoded before-world to the
+  decoded after-world;
+- membership of the decoded cut in the after-world's cuts;
+- exact equivalences between after-world pool/log membership and the lawful
+  advance's issued/delivered booleans for every canonical ERA candidate; and
+- settlement in the decoded after-frontier for every finalised pool event.
+
+The cut-membership field says that the cut is present after the announcement;
+it does not say that this call newly added it. Likewise, the two `iff` fields
+classify the canonical candidates obtained from ERA events. They do not exclude
+extra malformed or non-canonical points in a more general frontier carrier.
+`CompleteAnnouncement.settled` combines these premises with the lawful
+advance's delivery-completeness theorem to prove
+`EraCertificate.Settled afterWorld`.
+
+`Verification` is the exact junction. Its authenticated acceptance, receipt,
+genuine issuance, actor/issuer equality and roster membership live in the
+indexed `AuthenticatedProgress`; its stored field is the independent
+`CompleteAnnouncement`. From both it exposes the announcement, cut membership,
+settlement, `settledCert (eraKey afterWorld)`, and the existing role-seal
+theorem. A signature alone therefore proves neither announcement lawfulness
+nor settlement, while a lawful announcement alone authenticates no source.
+
+The resulting free-termination theorem is intentionally scoped to
+`EraCertificate.Delivery`: already-issued events may arrive while the cut set
+and issuance pool stay frozen. It says that `finalView` is stable on that axis
+only. It does **not** license stopping under `Announcement` (the cut set may
+grow) or `Issuance` (the pool may grow), and it says nothing about ERA's
+non-final `fullView`.
+
+`Verification.toReusableCertificate` then forgets the one-time signed record,
+signature, issuer, roster, received trace and frontier proof. The resulting
+`ReusableCertificate` contains exactly an `EraKey` and a proof that
+`EraCertificate.settledCert` accepts that key. Its `Matches` relation is exact
+key equality, and `ReusableCertificate.sound` turns that pair into a reusable
+`KeyCertSound` object for `finalView` under `Delivery`. It cannot be reused for
+a different key, and retaining it is not equivalent to retaining or replaying
+the original authentication.
+
+This is a model-level proof bridge, not a deployment verifier. The signature
+scheme and key/revocation views, received trace, issuance oracle, roster,
+frontier decoder, complete announcement, and event-ID authenticity remain
+caller premises. The fixture uses the toy signature scheme. The module creates
+no live record or cut, checks no production cryptography, defines no wire
+format, and establishes no filesystem, network, replay-store, or host-execution
+guarantee.
+
+The frozen acceptance gate is copy-pastable from the repository root:
+
+```sh
+scripts/wave28-era-certificate-canaries.sh
+```
+
+It contains seven Lean fixtures (one common support file, one positive, and
+five standalone red fixtures), **190 lines including the runner**. The latest
+frozen functional run took **7.0s**: the positive pins acceptance, issuance,
+`Announcement`, `Settled`, exact reusable key/acceptance/soundness and
+`sealSurvives`; the reds reject the wrong reserved domain, accepted-but-unissued
+input, an incomplete announcement codec, an incomplete settled frontier, and a
+wrong reusable key. Declaration-prefix floors cover 118 production constants
+and four common-test constants, both clean.
+
+At the same freeze the aggregate census was 182 Lean source modules, 183 full
+build jobs, 159 direct proof-root imports excluding `Audit`, and 25,041 audited
+constants, with 700 MAP keystones and 130 documented transports. The remaining
+work ledger records 155 literal `⟨UNDONE⟩` occurrences extracted as 153
+marker-bearing blocks across 43 Lean files. These are checkpoint counts; the
+final aggregate Rust gate passed 147/147 tests in 16.00s, including 1.61s of
+compilation. These are checkpoint counts; the fail-closed commands are the
+durable acceptance contract.
+
 ### Runtime-auth V4: checked sidecar, not the `UWV4` request
 
 Three byte protocols now sit near one another and must remain distinct:
@@ -1075,6 +1160,7 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export`, `Preo.ArtifactDurable`, `Preo.ProjectionV2`, `preo_export` | **BUILT AND SURFACED.** Private proof-indexed builders project answered classifications, certified world futures, ordinary/profile protocol elaborations and exact-plan five-currency budgets into one canonical first-order artifact. The manifest supplies every stable ID, witness codec and budget plan equality explicitly; it emits canonical durable bytes and must pass V2 structural/resource validation before rendering. Unresolved invariants, wrong certificates, wrong-plan budgets and duplicate IDs fail closed. Published V1 remains the budget-empty legacy schema. Composed profile plans wait for a dedicated checked export builder; decoded wire tags have no path back to semantic proof constructors. |
 | ✅ **authenticated observed V3 export** | `Preo.ObservedBoundResult`, `Preo.ArtifactV3Checked`, `Preo.ProjectionV3Core`, `Preo.ArtifactV3Surface`, `preo_export_v3` | **BUILT AND SURFACED for one exact observed typed program.** The command consumes separate authenticity, running-reach, authored-reach, certificate, plan and budget proofs; projects checked query/result/world/certificate rows plus positional reads/holes/analyses/effects; enforces work and validator resource caps; and publishes only after the whole environment transaction succeeds. Canonical bytes are generically framed under the distinct V3 format tag. The caller still supplies observation/authenticity and stable name registries; decoded validation cannot reconstruct proofs or check every semantic association. |
 | ✅ authenticated frontier + consuming world context | `AuthenticatedFrontier`, `AuthenticatedWorldContext` | **PROVED for explicit deployment premises.** A signed, received, genuinely issued progress event is conjoined with a lawful delivery advance; exact signed positions, active causal grants and fresh consumption tombstones justify each newly delivered candidate. Stale version, wrong origin and consumed-token reuse refuse. No signature hardness, network observation, roster completeness or host execution is inferred. |
+| ✅ authenticated ERA delivery certificate | `AuthenticatedEraCertificate`, `EraCertificate` | **PROVED as an exact model-level bridge.** One signed, received and genuinely issued progress event is joined to a separate complete, lawful ERA announcement at the same decoded event; this yields `Settled`, an exact-key reusable `settledCert`, and role sealing under `Delivery`. Cut membership need not be newly added, canonical-candidate equivalences do not exclude malformed extra frontier points, and no free-termination result is claimed for `Announcement`, `Issuance`, or `fullView`. Cryptography, decoding and deployment premises remain external. |
 | ✅ runtime-auth V4 sidecar | `RuntimeAuthV4Checked`, `RuntimeAuthV4Durable`, `RuntimeAuthV4Projection` | **BUILT as a one-way checked projection.** Exact `ReadyForExecution`, active grant and finite context produce neutral canonical format-`⟨4,162⟩` rows/bytes and a validated Rust DTO. The frozen fixture is 369 bytes. This sidecar is not the `UWV4` signed request, and decode/render/storage reconstruct no verifier, authority, membership or frontier proof. |
 | **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
 | ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term`, `Preo.Planning` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, bounded authored action-subset search, and exact crossing/meeting non-function refutations. **Unbuilt:** arbitrary schedule discovery and the pretty inline budget block. |
