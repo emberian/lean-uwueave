@@ -77,11 +77,11 @@ flat enum all four are peers in one list.
 
 ## Non-claims, labelled
 
-  * ⟨UNDONE⟩ **Nothing here searches.** A `Repair` is a value someone
-    *constructs*; there is no `synth : (P : Promise) → Option (Σ Q, Repair P Q)`
-    that finds one, and in particular nothing here finds a non-trivial seam or an
-    escrow partition. That is the same gap `Exits.lean` names, one layer up, and
-    it is the reason this file is a *type*, not a solver.
+  * ⟨UNDONE, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+    search.** A `Repair` is a value someone *constructs*. Downstream
+    `RepairSynthesis` and `FiniteRepairMenu` search an explicitly supplied finite
+    catalog and return exhaustive refusal only inside it; they do not discover a
+    non-trivial seam, an escrow partition, or a complete universe of repairs.
   * ⟨UNDONE⟩ **`Price.add` is a declared accumulation, not a minimum.** Chaining
     adds the fields. It is NOT claimed that the sum is the least price achievable
     for the composite: `SeamAlgebra.linked_segmented` is a case where two seams

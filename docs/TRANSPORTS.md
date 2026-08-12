@@ -19,7 +19,7 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 130 numbered transport rows.** Wave 24's elaborator and
+**Ledger total: 132 numbered transport rows.** Wave 24's elaborator and
 projection splits changed owners and proof routes without changing the earlier
 judgements. Wave 25 adds five crossings: application state into typed query
 semantics; checked state results into exact world futures/certificates; checked
@@ -40,6 +40,10 @@ Wave 28 adds the authenticated ERA certificate crossing: an exact accepted and
 issued signed progress event plus a separately lawful, complete announcement
 becomes a delivery-scoped settled certificate and a record-free exact-key
 reusable artifact.
+Wave 29 adds two explicitly finite crossings: checked authored repair rows to
+an exact dependent menu result, and an authored coherent history plus assumed
+successful logical replay to arrival-order-independent event-set observation.
+Neither discovers its finite universe or closes a marker.
 
 ---
 
@@ -1875,6 +1879,46 @@ not verify the codec, authenticate event IDs, detect `HonestExtension`,
 license announcement/issuance futures, observe a deployment, or prove
 cryptographic hardness.
 
+**45v. Checked authored finite repair rows → exact dependent menu result** ⚠
+*source* a `FiniteRepairMenu.UniverseInput` of proof-carrying
+`RepairSynthesis.Candidate`s plus inert presentation tags, an explicit entry
+bound, and authored numeric IDs · *target* either a `Found` carrying the exact
+catalog member, applicability proof, dependent typed `Repair`, generated
+available `RepairCandidate`, and complete eight-axis `Price`, or refusal of
+every applicable row in exactly that checked list · *transport*
+`checkUniverse`, `CheckedUniverse.toCatalog`, `synthesize`,
+`Found.repair_price`, `Found.row_price`, and
+`Result.exhaustive_of_isFound_false` · *needs* the length bound, strictly
+increasing numeric-ID presentation order, and every row's explicit residual
+decider and price-coherent discharge · *without the bound or order*
+`Examples.bound_refusal_is_exact` and `reversed_ids_are_refused` refuse before
+search; *without applicability* `impossible_refusal_is_exactly_exhaustive`
+retains the exact negative theorem. `authored_order_changes_choice_not_price_order`
+shows that numeric identity is also the caller's deterministic selection
+policy: it is not a semantic ordering of `Price`, authentication, or a derived
+global optimum. The empty-list refusal is intentionally vacuous. No theorem
+discovers repairs, seams, escrow partitions, colorings, or a complete menu.
+
+**45w. Authored finite history plus successful logical replay → settled event-set observation** ⚠
+*source* `FiniteHistoryDelivery.FiniteGrowth`, containing an exact complete
+version/event enumeration, injective caller IDs, origin-shaped parent lists,
+parent closure, coherent history, ancestor selection, and policy generation,
+plus two `DeliveredGrowth` values with permuted arrivals, explicit successful
+`PersistentHistoryRuntime` replay, exact accepted lists, coherent cursors, and
+empty pending buffers · *target* exact materialized membership, equal
+`SameEventSet`, and equal extensional `eventSetView` across arrival orders and
+capacities · *transport* `DeliveredGrowth.materialized_iff`, `.sameEventSet`,
+and `.eventSetView_eq`; separately, `FiniteGrowth.view_eq_state` and
+`semantic_view_eq_of_recordDetermined` reach semantic history views only from
+the existing coherence/policy and `SameRecord` premises · *needs* every field
+above as authored evidence; replay success and cursor coherence are stored,
+not inferred from the event list · *without that evidence* event-set equality
+does not reconstruct a `History`, prove delivery, or manufacture convergence.
+Stable IDs are equality keys, Lean parent lists require only the authored
+shape, and nothing here authenticates IDs, builds repeated fresh versions,
+relates Rust's strictly ordered parent bytes to Lean, observes a network, or
+proves a host/filesystem refinement.
+
 ---
 
 ## The meta-row
@@ -1931,14 +1975,15 @@ temporal fairness, and checked woven edits. Rows 45–45g connect the covered
 history engine, logical persistent runtime, canonical artifact journal,
 bounded planning generator, native protocol syntax, total result/report
 program, staged authenticated-v4 boundary, and the explicit canonical-byte
-emitter. Rows 45h–45u add explicit application-state query semantics, exact
+emitter. Rows 45h–45w add explicit application-state query semantics, exact
 world/certificate binding, proof-indexed V3 erasure, validated V3
 rendering/durability/inspection, finite causal-history persistence, typed
 position attribution, authenticated running observation, and transactional V3
 export, then authenticated one-use context delivery, the checked `UWV4`-to-
 sidecar boundary, bounded sidecar rendering/framing, shared canonical effect
-reification, the durable-arrival callback/host separation, and authenticated
-ERA finalisation. What
+reification, the durable-arrival callback/host separation, authenticated ERA
+finalisation, checked finite repair-menu selection, and authored finite-history
+event-set observation. What
 remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives

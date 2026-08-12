@@ -9,7 +9,7 @@ ever been timed.*
 > `BENCH_MAX=1000` rerun made on 2026-08-11; it is deliberately separate from
 > the baseline and does not replace the original full-range sweep. Section 12
 > separately records Wave 23 proof-elaboration and build-closure engineering,
-> and §§13–17 do the same for Waves 24–28; those figures are not kernel-runtime
+> and §§13–18 do the same for Waves 24–29; those figures are not kernel-runtime
 > benchmarks. Current
 > complexity statements come from proved equivalence where applicable, source
 > inspection, successful builds, and generated-C inspection; only the rows in
@@ -1519,3 +1519,137 @@ including **1.61 s** of compilation. No Rust target or test count changed in
 this proof-only wave, and the native closure remained exactly **13 objects /
 659,152 B**. The wall duration is aggregate validation-path time, not
 certificate evaluation or runtime throughput.
+
+---
+
+## 18. Wave 29 finite repair and history-delivery boundaries — 2026-08-12
+
+Wave 29 makes two formerly prose-level finite boundaries explicit. A checked
+repair menu performs executable bounded search in an authored stable-ID order;
+a finite history presentation relates successful settled permutations of one
+authored event list to the pure delivery cursor. The evidence below is source
+and compiler size, one-shot proof/compiler diagnostics, adversarial acceptance,
+and aggregate Lean coverage. It does not update §10's runtime-kernel timings,
+measure repair-search throughput, or establish a Lean↔Rust runtime refinement.
+
+### Executable finite repair menu
+
+`FiniteRepairMenu` is **467 LOC / 17,722 source bytes**, with a **662,560 B**
+olean and **114,544 B** generated C. Its focused build passed **37/37** jobs.
+One warm shared-cache direct source pass used `lake env lean -j1 --profile`
+wrapped by macOS `/usr/bin/time -lp`, without a retained before sample:
+
+| profile observation | value |
+|---|---:|
+| wall / user / system | **1.20 s / 0.64 s / 0.46 s** |
+| peak RSS | **1,255,718,912 B** |
+| import | **754 ms** |
+| elaboration | **89 ms** |
+| tactic execution | **30 ms** |
+| type checking | **36 ms** |
+
+This is an N=1 compiler diagnostic, not a repeated benchmark or speedup. The
+search itself is executable: `checkUniverse` checks list length and strict
+stable-ID order, and `synthesize` filters applicable entries and takes the
+first. The result retains the exact typed repair, generated menu row, and all
+eight `Price` axes. Exhaustive refusal quantifies over exactly the admitted
+list.
+
+The limitations are part of the contract. `maxEntries` is caller-authored, so
+the check is relative to a supplied bound rather than a fixed deployment
+resource ceiling. “Minimum” means least numeric stable ID among applicable
+rows of that exact list; it is neither a `Price` ordering nor a global optimum
+over all possible repairs, exits, targets, colourings, or infinite carrier
+inhabitants. Tags and labels remain presentation inputs. Reordering only the
+authored IDs can therefore change the chosen repair without changing semantic
+price ordering, and the fixtures pin that policy dependence explicitly.
+
+### Finite history at the delivery edge
+
+`FiniteHistoryDelivery` is **156 LOC / 6,751 source bytes**, with a **467,496
+B** olean and only **1,378 B** generated C. Its final focused build passed
+**37/37** jobs; after refreshed dependencies, the changed target took 1.4 s on
+that validation run. A separate serialized direct source pass, with existing
+oleans and no warmup, cache reset, repetition, or before sample, reported:
+
+| profile observation | value |
+|---|---:|
+| wall / user / system | **5.73 s / 0.59 s / 0.97 s** |
+| peak RSS | **1,244,708,864 B** |
+| import | **5.26 s** |
+| elaboration | **134 ms** |
+| tactic execution | **14.1 ms** |
+| `simp` | **4.4 ms** |
+| type checking | **45.9 ms** |
+| typeclass inference | **27.8 ms** |
+
+The import-dominated wall sample was collected under active parallel swarm
+contention. Nested profiler categories are directional workload evidence, not
+a median, elapsed-time decomposition, or history-delivery benchmark.
+
+`FiniteGrowth.versions_complete` is the explicit finiteness premise: every
+version of the carrier occurs in the authored finite list. Stable IDs, exact
+parent lists, parent closure, coherence, ancestor selection, and policy
+generation are separate fields; none is inferred from bytes or a host.
+`DeliveredGrowth` then requires a permutation of the authored events, exact
+successful replay, accepted-list equality, cursor coherence, and an empty
+pending queue. Its equality theorem applies only between values already
+carrying all those proofs. It does not establish that every permutation
+replays, that capacity always suffices, that IDs are authentic, or that the
+host journal implements this Lean carrier.
+
+The external positive witness exercises a six-version successive/criss-cross
+lock history under both causal and reverse arrival orders, proving settled
+`SameEventSet` and event-set-view equality plus exact duplicate retry. Separate
+expected refusals cover stable-ID collision, self-parenting, and duplicate
+parents. Those finite cases validate the adapter's intended use; they are not
+a classification of all histories or delivery schedules.
+
+The runtime conclusion deliberately stops at equality of the extensional
+event-set view. Semantic history views still require an independent
+`HistoryConvergent` or `RecordDetermined` premise; event-set equality alone is
+not silently promoted to semantic convergence. The proof leaf remains outside
+`RuntimeInit`: importing it there would add roughly 31 proof/model modules to
+the 13-object native path without exposing a justified FFI operation.
+
+### Trust, acceptance, and aggregate closure
+
+The audited public theorems depend only on the repository's standard
+`propext`/`Quot.sound` floor; neither leaf uses `Classical.choice`, `sorry`,
+`admit`, `unsafe`, `native_decide`, recursion-depth overrides, or heartbeat
+overrides. The acceptance runner passed **2 positive fixtures and 8 expected
+refusals** across **11 Lean files plus the runner, 389 LOC**, in **11.2 s**.
+Prefix-floor audits covered **228 `FiniteRepairMenu` constants, 63
+`FiniteHistoryDelivery` constants, and 61 shared support constants**.
+
+The serialized scaling suite then ran **8/8 rows**: each leaf at
+`N = 0/1/4/16`, using two warmups plus five measured runs and reporting
+medians. History's `N=1` row settled on retry 9; Repair's `N=16` wall row
+remained infrastructure-noisy after retry 9 (**wall MAD 10.576923%**, user MAD
+2.5%). The runner therefore exited 3 honestly rather than relabeling the noisy
+phase as a pass. The subtract-`N=0` per-item slopes themselves passed:
+
+| leaf | peak-RSS slope | elaboration slope | 4 MiB/item gate |
+|---|---:|---:|---:|
+| finite repair menu | **441,344 B/item** | **0.1885 ms/item** | **PASS** |
+| finite history delivery | **440,320 B/item** | **0.2145 ms/item** | **PASS** |
+
+Comparison accounting was **8 expected `NO_BASELINE_MISSING_API`, 6 scaling
+PASS, and 1 `INFRASTRUCTURE_NOISY`**. Exact API goldens pinned **5 repair and 6
+history declarations**. The passing slopes are compiler-memory/elaboration
+measurements, not repair-search or event-delivery latency; the unresolved
+Repair wall row remains noisy and is not used for a speedup claim.
+
+The final Lean aggregate covered **184 modules / 185 jobs**, traversed **161
+root modules**, and checked **25,333 constants** against the trust floor. Its
+**55.49 s** wall observation was recorded under active parallel compilation
+contention and is aggregate validation-path time, not clean-build throughput.
+Honest marker yield was zero: existing finite/global/convergence boundaries
+were narrowed, not closed, and the census remains **155 markers / 153 blocks /
+43 files**.
+
+The final all-target Cargo gate remained **147/147 green** in **23.98 s real**,
+including **2.38 s** of compilation. No Rust target or test count changed, and
+the native closure remained exactly **13 objects / 659,152 B**. This is
+aggregate validation-path time, not evidence that the new proof leaves execute
+through the native runtime.

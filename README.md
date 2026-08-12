@@ -254,6 +254,17 @@ is a bigger, real schema that deliberately contains one.
   licenses delivery reuse at that key, not verification, new announcements, or
   cryptographic authenticity.
 
+- **Finite repair and history boundaries now return proof-carrying whole
+  values.** `FiniteRepairMenu` checks an explicit row bound and strict stable-ID
+  order, then returns the least applicable authored ID with its exact typed
+  repair, generated menu row, and complete eight-axis `Price`, or proves every
+  listed row inapplicable. IDs are deterministic author policy, not a global
+  price order or discovery procedure. `FiniteHistoryDelivery` relates one
+  authored complete finite history to explicitly successful coherent settled
+  replays; different arrival orders then have the same event-set view. It does
+  not infer delivery success, authentication, semantic-history convergence, or
+  a Lean↔Rust/filesystem refinement.
+
 ## Some things we found that surprised us
 
 **Content-addressing gives you acyclicity for free.** Naming things by the hash
@@ -326,12 +337,12 @@ lake build              # every proof + the total axiom gate (Lean core only, no
 cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
 
-The current checkpoint is **182** Lean source modules (**159** direct proof-root
-imports excluding `Audit`, **183** full-build jobs) and **25,041** audited
-constants, with **700** MAP keystones and **130** documented transports. The
+The current checkpoint is **184** Lean source modules (**161** direct proof-root
+imports excluding `Audit`, **185** full-build jobs) and **25,333** audited
+constants, with **721** MAP keystones and **132** documented transports. The
 generated work ledger records **155** `⟨UNDONE⟩`
-markers in **153** blocks across **43** source files. The serialized Wave-28
-Rust aggregate passed **147/147** tests in **16.00s** (including **1.61s** of
+markers in **153** blocks across **43** source files. The serialized Wave-29
+Rust aggregate passed **147/147** tests in **23.98s** (including **2.38s** of
 compilation). Counts are checkpoints; the commands and fail-closed gates are
 the durable contract.
 

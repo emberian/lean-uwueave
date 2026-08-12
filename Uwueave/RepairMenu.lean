@@ -131,12 +131,15 @@ identity seam and refutes it at `Exits.balTotal`.
     meeting count. `balanceEscrow_price_and_delta` couples that price projection
     to the exact `PromiseRelation.strengthened` delta and a concrete source-legal
     state the escrowed promise forbids.
-  * ⟨UNDONE⟩ **Nothing here searches.** `MenuTotality.synth` searches for a seam
-    over a covering pool; the escrow partition is still handed in, and the
-    conditional constructor is what a menu prints when the search does not exist.
-  * ⟨UNDONE⟩ **The generated menus are not proved exhaustive** either. What
-    changed is that an unavailable row can now be *printed with its refutation*
-    instead of being silently absent.
+  * ⟨UNDONE, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+    menu search.** `MenuTotality.synth` searches for a seam over a covering pool,
+    while downstream `FiniteRepairMenu` chooses from an explicitly supplied,
+    checked finite catalog. The escrow partition and candidate universe are still
+    handed in rather than discovered.
+  * ⟨UNDONE⟩ **The generated menus are not proved exhaustive** either.
+    `FiniteRepairMenu` refusal is exhaustive only for the supplied checked rows.
+    An unavailable row can be *printed with its refutation* instead of being
+    silently absent, but no theorem says the catalog contains every repair.
   * ⟨scope⟩ **The full-coordination row's number is a ceiling, not a floor.**
     `full_price_is_the_ceiling` cites `Cost.crossings_le_length`. It is the one
     generated price with no clique behind it, and it is the one number a caller

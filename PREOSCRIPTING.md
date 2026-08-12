@@ -437,6 +437,39 @@ checksums, sync policy, reopen validation, and torn-tail policy, but those are
 deployment evidence—not a theorem that a filesystem or device honors its
 premises.
 
+### Bounded authored repair menus
+
+[`Uwueave.FiniteRepairMenu`](Uwueave/FiniteRepairMenu.lean) makes one useful
+author-facing repair search executable without pretending to discover the
+universe of repairs. A `UniverseInput` is an authored list of
+`MenuCandidate`s plus an explicit `maxEntries`. `checkUniverse` first rejects a
+list longer than that bound, then requires the stable numeric candidate IDs to
+be strictly increasing. A successful `CheckedUniverse` retains both proofs;
+its `toCatalog` projection preserves the exact list and merely forgets menu
+presentation data.
+
+`synthesize` returns the first applicable entry in that checked list. Strict ID
+order makes it the least applicable authored ID, but the IDs are ordering
+policy, not semantic costs: changing which repair receives the lower ID can
+change the selected repair. The theorem therefore compares stable IDs only. It
+does not order, total, scalarize, or exchange any field of `Repair.Price`.
+
+The successful `Found` value retains the exact typed `Repair`, generated
+available menu row, and the unchanged complete eight-axis `Price`: seam
+crossings, arbiter cuts, rollback window, resolution writes, evidence
+retention, plural read, reachability restriction, and assumptions. The row is
+generated from the proof that the same candidate applies, so its promise delta
+and price are those of that exact repair rather than authored duplicates.
+
+Refusal is equally exact and equally local. `Result.refused` proves that every
+entry in the checked list is inapplicable; an empty checked list therefore
+refuses vacuously. It does **not** prove that the source promise has no repair
+outside the list, that the list contains every exit or target promise, or that
+an infinite carrier has been enumerated. Over-bound and noncanonical raw inputs
+are rejected before search rather than silently truncated or reordered. This
+leaf can supply the repair-catalog side of `Preo.Planning`; it does not replace
+that module's separate finite schedule/action search.
+
 ### Finite history runtime: exactly what became executable
 
 [`Uwueave.HistoryRuntime`](Uwueave/HistoryRuntime.lean) proves that the
@@ -503,6 +536,78 @@ authentication. None of these runtimes enumerates arbitrary or infinite DAGs,
 lifts the proof model beyond its `Type 0` boundary, authenticates IDs, proves
 filesystem/device premises, or bridges opaque payload bytes back to
 `SelectedAdmission`/`Coherent` proofs.
+
+[`Uwueave.FiniteHistoryDelivery`](Uwueave/FiniteHistoryDelivery.lean) now
+supplies the strongest honest bridge at that last boundary: a caller-authored
+finite presentation, not an automatic reconstruction. `FiniteGrowth` takes an
+existing `History`, `HistoryMerge`, and implementation, then requires an
+explicit complete duplicate-free version list and an event list whose payloads
+are exactly those versions. The caller also supplies stable equality IDs,
+injectivity over the finite presentation, exact ID and parent lists for every
+`Origin.root`/`ran`/`merged` node, parent closure, history coherence, ancestor
+selection, and `PolicyGenerated`. From those semantic premises,
+`view_eq_state` proves that the policy-derived view reproduces every authored
+history state.
+
+`DeliveredGrowth` witnesses one successful replay of a permutation of exactly
+that event list from an empty capacity-bound delivery cursor. Replay success,
+the exact accepted arrival list, cursor coherence, and an empty pending buffer
+are fields—they are not inferred merely from `FiniteGrowth`. Two such settled
+witnesses for the same growth materialize the same full event set despite
+different arrival orders, and hence have equal `eventSetView`s. The positive
+fixture instantiates the six-version lock history: root, two branches, two
+sibling merges, and their merge, delivered in causal and reverse order.
+
+This event-set result is not a semantic-history convergence theorem. The leaf
+does not derive `SameRecord` from delivered events, and its separate
+`semantic_view_eq_of_convergent` and
+`semantic_view_eq_of_recordDetermined` helpers still require a caller-proved
+`SameRecord` plus the corresponding `HistoryPolicy` premise. It performs no
+delivery automatically, decodes no opaque payload, authenticates no stable ID,
+and states no relation to the Rust journals or filesystem. Collision, self
+parent, and duplicate-parent refusals are executable runtime fixtures, not
+proof that arbitrary host bytes denote this authored history.
+
+The combined fail-closed gate is copy-pastable from the repository root:
+
+```sh
+scripts/wave29-finite-canaries.sh
+```
+
+Its frozen acceptance set is an executable runner plus 11 Lean files: one
+shared support file, two positive fixtures, and eight standalone red fixtures
+(**389 lines total**). The latest functional run took **11.2s**. Repair-menu
+reds pin the least authored ID, full price, exact-list refusal, size bound, and
+canonical order; history reds pin ID collision, self-parent, and
+duplicate-parent refusal. Declaration-prefix floors cover 228
+`FiniteRepairMenu` constants, 63 `FiniteHistoryDelivery` constants, and 61
+shared-support constants; all were clean, with no `native_decide`, `sorry`,
+`admit`, or `axiom`.
+
+At this freeze the aggregate census was 184 Lean source modules, 185 full-build
+jobs, 161 direct proof-root imports excluding `Audit`, and 25,333 audited
+constants, with 721 MAP keystones and 132 documented transports. Exact
+benchmark-facing API/output goldens are available without rebuilding
+dependencies:
+
+```sh
+PREO_BENCH_SKIP_BUILD=1 scripts/preo-bench.sh wave29-golden
+```
+
+That gate passed five exact repair outputs, six exact history outputs, and the
+API-status contract. Serialized `lean -j1 --profile` plus `/usr/bin/time -lp`
+(two warmups, median five, no cache clearing or trace profiler) measured repair
+RSS growth at **441,344 B/item** with **0.1885 ms/item** elaboration growth, and
+history RSS growth at **440,320 B/item** with **0.2145 ms/item** elaboration
+growth; both RSS slopes pass the 4 MiB/item cap. The new APIs had only a frozen
+header-only `MISSING_API` baseline, so comparison reports
+`NO_BASELINE_MISSING_API`, not a historical speedup. Repair N16 remained
+infrastructure-noisy after nine retries (wall MAD 10.576923%, user MAD 2.5%);
+the other rows finished noise-free. The final all-target Cargo gate remained
+**147/147 green** in **23.98s real**, including **2.38s** of compilation; no
+Rust target or test count changed, and the native closure remained 13 objects /
+659,152 B. These are checkpoint measurements, not substitutes for the
+executable gates.
 
 ## 1. The thesis
 
@@ -1134,6 +1239,7 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | clash repro | `escalation_witness` | proved |
 | priced exit menu | `Exits` | proved |
 | typed repairs + promise deltas | `Repair`, `RepairMenu` | **proved**: generated repairs retain exact promise relations and an eight-axis price, including reachability restriction rather than falsely pricing escrow as free |
+| ✅ bounded authored repair-menu search | `FiniteRepairMenu`, `RepairSynthesis` | **BUILT for an explicit checked list.** Search enforces a written size cap and strictly increasing stable IDs, returns the least applicable authored ID with its exact typed repair, row, delta and complete eight-axis price, or proves every listed row inapplicable. IDs are ordering policy rather than price; refusal says nothing about repairs omitted from the finite list. |
 | mergeable-vs-replay verdict | `JoinHom.summaryFold_iff_joinHom` | proved |
 | epistemic result carrier | `Evidence`, `Holes` | proved |
 | future-indexed exactness | `Evidence`, `WorldFuture`, `Preo/Future` | **proved and surfaced**: declarations retain the world model/index; checked stability and certificates project proofs, and only extension→delivery restriction exists |
@@ -1167,6 +1273,7 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |
 | durable artifacts | `Durable`, `ArtifactDurableCore` | **proved logical codec/journal rung** with canonical roundtrip, generic stack-safe framed encoding, and torn-tail recovery; no filesystem, flush or crash-atomicity guarantee is claimed |
 | ✅ bounded finite history delivery | `HistoryRuntime`, `PersistentHistoryRuntime`; Rust `HistoryJournal`/`BufferedHistoryJournal`/`HistoryArrivalJournal` | **BUILT for caller-ID finite events.** Exact retry/collision, bounded pending delivery, finite drain, criss-cross event-set convergence, replay and checked checkpoints are executable. The older Rust buffered wrapper remains volatile; the distinct arrival journal durably retains accepted pending events and canonical state checkpoints across reopen. Opaque payload persistence is not authentication. No cross-language refinement, ID authenticity, infinite enumeration or proof-history reconstruction is claimed. |
+| ✅ authored finite history presentation | `FiniteHistoryDelivery` | **PROVED for caller-supplied witnesses.** A complete finite version/event presentation with exact IDs, origin parents, closure, coherence, ancestor selection and policy generation reproduces the authored semantic states. Separately witnessed settled replays of permutations of that exact event list converge only at the runtime event-set view. Delivery is not synthesized, `SameRecord` remains an independent premise for semantic convergence, and no Rust, byte-decoding, filesystem or authentication relation is claimed. |
 
 ## 11. What would make us abandon this
 

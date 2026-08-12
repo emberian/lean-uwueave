@@ -118,9 +118,9 @@ shim, build script, Cargo manifest, and lockfile must also be unchanged.
 initialization with `Once`; failure aborts rather than exposing a partly
 initialized runtime. The current native-closure gate observed 13 Lake-owned
 objects (659,152 bytes before archiving) and 14 archive members including the
-shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The serialized Wave-28
-`cargo test --all-targets` gate passed 147/147 tests in 16.00 seconds, including
-1.61 seconds of compilation.
+shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The serialized Wave-29
+`cargo test --all-targets` gate passed 147/147 tests in 23.98 seconds, including
+2.38 seconds of compilation.
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native
@@ -579,7 +579,31 @@ refuses the wrong event domain, accepted-but-unissued input, incomplete
 announcement/frontier, and wrong reusable key. Its prefix checks audit 118
 production constants and four test-support constants.
 
-### 5.3 Records v4 still needs
+### 5.3 Finite authoring and delivery are proof leaves, not runtime widening
+
+Wave 29 adds two import-pure proof leaves and deliberately leaves
+`RuntimeInit`, the FFI, and the native closure unchanged. `FiniteRepairMenu`
+checks an explicit finite row bound and stable-ID order, then retains the exact
+typed repair, generated menu row, and full `Price`; it has no host endpoint and
+does not discover or globally optimize repairs.
+
+`FiniteHistoryDelivery` begins with an authored complete finite `History` and
+explicitly assumes each `DeliveredGrowth` replay succeeds, has the exact
+accepted list, is coherent, and settles. It proves that different arrival
+orders materialize the same finite event set and therefore the same
+`eventSetView`. That is not a byte codec, Rust callback implementation,
+filesystem observation, delivery theorem, authentication mechanism, or
+semantic-history convergence theorem. The latter still requires a separate
+`SameRecord` plus `HistoryConvergent` or `RecordDetermined` premise.
+
+The test-only Wave-29 runner exercises a six-version repeated lock history in
+causal and maximally reversed order and refuses ID collision, self-parent, and
+duplicate-parent inputs. Its repair cases check the finite bound/order,
+least-authored-ID, exact full price, and exact-list refusal boundaries. Both
+incremental RSS slopes pass: 441,344 B/item for repair and 440,320 B/item for
+history.
+
+### 5.4 Records v4 still needs
 
 The next runtime journal schema should use explicit typed lanes rather than a
 generic byte/event escape hatch:
@@ -604,7 +628,7 @@ four arrays a caller chose to marshal. No such commitment is present in
 `RuntimeAuthV4.SignedContent` today; adding it is a v4 schema revision that
 must receive its own field tag and codec-separation theorems.
 
-### 5.4 Authenticity, authority, membership, and execution
+### 5.5 Authenticity, authority, membership, and execution
 
 Composition is conjunctive, not substitutive:
 

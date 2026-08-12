@@ -32,6 +32,13 @@ Modes:
   wave27-compare BASE CUR   Compare Wave27 profiles; wall is informational and
                             the V3 export RSS ceiling is 4 MiB/item.
   wave27-all                Run Wave27 goldens, baseline, current, and compare.
+  wave29-golden             Check finite repair/history outputs and API status.
+  wave29-record-goldens DIR Write freshly canonicalized Wave29 goldens to DIR.
+  wave29-profile [ROOT]     Profile finite repair/history N=0/1/4/16 controls.
+  wave29-baseline [COMMIT]  Profile an isolated commit (default: 8f649c8).
+  wave29-compare BASE CUR   Compare Wave29 scaling; wall is informational and
+                            RSS growth may not exceed 4 MiB/item.
+  wave29-all                Run Wave29 goldens, baseline, current, and compare.
 
 Profiling uses two warmups and five measured serialized `lean -j1 --profile`
 runs by default. If wall or user MAD exceeds 8%, it retries with nine measured
@@ -55,6 +62,8 @@ wave26_expected_dir="$golden_dir/expected-wave26"
 wave26_baseline_file="$repo_root/tests/preo-bench/baselines/49881d3-wave26.tsv"
 wave27_expected_dir="$golden_dir/expected-wave27"
 wave27_baseline_file="$repo_root/tests/preo-bench/baselines/81aa899-wave27.tsv"
+wave29_expected_dir="$golden_dir/expected-wave29"
+wave29_baseline_file="$repo_root/tests/preo-bench/baselines/8f649c8-wave29.tsv"
 
 warmups=${PREO_BENCH_WARMUPS:-2}
 runs=${PREO_BENCH_RUNS:-5}
@@ -142,6 +151,17 @@ wave27_cases=(
   'v4_checked_1|tests/preo-bench/perf/wave27/V4Checked1.lean|v4_checked|1|v4_checked_builder'
   'v4_checked_4|tests/preo-bench/perf/wave27/V4Checked4.lean|v4_checked|4|v4_checked_builder'
   'v4_checked_16|tests/preo-bench/perf/wave27/V4Checked16.lean|v4_checked|16|v4_checked_builder'
+)
+
+wave29_cases=(
+  'repair_menu_0|tests/preo-bench/perf/wave29/RepairMenu0.lean|repair_menu|0|finite_repair_menu'
+  'repair_menu_1|tests/preo-bench/perf/wave29/RepairMenu1.lean|repair_menu|1|finite_repair_menu'
+  'repair_menu_4|tests/preo-bench/perf/wave29/RepairMenu4.lean|repair_menu|4|finite_repair_menu'
+  'repair_menu_16|tests/preo-bench/perf/wave29/RepairMenu16.lean|repair_menu|16|finite_repair_menu'
+  'history_delivery_0|tests/preo-bench/perf/wave29/HistoryDelivery0.lean|history_delivery|0|finite_history_delivery'
+  'history_delivery_1|tests/preo-bench/perf/wave29/HistoryDelivery1.lean|history_delivery|1|finite_history_delivery'
+  'history_delivery_4|tests/preo-bench/perf/wave29/HistoryDelivery4.lean|history_delivery|4|finite_history_delivery'
+  'history_delivery_16|tests/preo-bench/perf/wave29/HistoryDelivery16.lean|history_delivery|16|finite_history_delivery'
 )
 
 tmp_dir=''
@@ -233,6 +253,37 @@ prepare_wave27_root() {
       targets+=(Uwueave.Preo.RuntimeAuthV4Checked Uwueave.Preo.RuntimeAuthV4Examples)
     fi
     (cd -- "$root" && lake build "${targets[@]}") >&2
+  fi
+}
+
+wave29_api_available() {
+  local root=$1 api=${2:-}
+  case "$api" in
+    '') return 0 ;;
+    finite_repair_menu) [[ -f $root/Uwueave/FiniteRepairMenu.lean ]] ;;
+    finite_history_delivery) [[ -f $root/Uwueave/FiniteHistoryDelivery.lean ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+prepare_wave29_root() {
+  local root=$1
+  if [[ ${PREO_BENCH_SKIP_BUILD:-0} != 1 ]]; then
+    local targets=()
+    wave29_api_available "$root" finite_repair_menu &&
+      targets+=(Uwueave.FiniteRepairMenu)
+    wave29_api_available "$root" finite_history_delivery &&
+      targets+=(Uwueave.FiniteHistoryDelivery)
+    if (( ${#targets[@]} > 0 )); then
+      echo "preo-bench: refreshing Wave29 benchmark dependencies in $root" >&2
+      (cd -- "$root" && lake build "${targets[@]}") >&2
+    fi
+  fi
+  if wave29_api_available "$root" finite_history_delivery; then
+    mkdir -p -- "$root/.lake/build/lib/lean/Bench"
+    (cd -- "$root" && lake env lean -j1 \
+      -o .lake/build/lib/lean/Bench/Wave29HistoryDeliveryFixture.olean \
+      Bench/Wave29HistoryDeliveryFixture.lean) >&2
   fi
 }
 
@@ -435,6 +486,53 @@ wave27_golden_check() {
   printf 'gate\tstatus\tdeclarations\nwave27-export-golden\tpass\t%s\n' "$count"
 }
 
+wave29_api_status() {
+  local root=$1
+  printf 'api\tstatus\tbasis\n'
+  if wave29_api_available "$root" finite_repair_menu; then
+    printf 'finite_repair_menu\tAVAILABLE\tFiniteRepairMenu bounded canonical synthesis\n'
+  else
+    printf 'finite_repair_menu\tMISSING_API\tFiniteRepairMenu module absent\n'
+  fi
+  if wave29_api_available "$root" finite_history_delivery; then
+    printf 'finite_history_delivery\tAVAILABLE\tFiniteHistoryDelivery authored growth delivery\n'
+  else
+    printf 'finite_history_delivery\tMISSING_API\tFiniteHistoryDelivery module absent\n'
+  fi
+}
+
+capture_wave29_goldens() {
+  local root=$1 out=$2
+  make_tmp
+  mkdir -p -- "$out"
+  local repair_json="$tmp_dir/wave29-repair.json"
+  local history_json="$tmp_dir/wave29-history.json"
+  run_lean "$root" --json tests/preo-bench/golden/Wave29RepairMenu.lean \
+    >"$repair_json"
+  canonical_json_messages "$repair_json" >"$out/repair-output.txt"
+  run_lean "$root" --json tests/preo-bench/golden/Wave29HistoryDelivery.lean \
+    >"$history_json"
+  canonical_json_messages "$history_json" >"$out/history-output.txt"
+  wave29_api_status "$root" >"$out/api-status.tsv"
+}
+
+wave29_golden_check() {
+  make_tmp
+  prepare_wave29_root "$repo_root"
+  local actual="$tmp_dir/wave29-golden" failed=0 file
+  capture_wave29_goldens "$repo_root" "$actual"
+  for file in repair-output.txt history-output.txt api-status.tsv; do
+    if ! cmp -s -- "$wave29_expected_dir/$file" "$actual/$file"; then
+      echo "preo-bench: Wave29 golden mismatch: $file" >&2
+      diff -u -- "$wave29_expected_dir/$file" "$actual/$file" >&2 || true
+      failed=1
+    fi
+  done
+  (( failed == 0 )) || exit 1
+  printf 'gate\tstatus\trepair_outputs\thistory_outputs\n'
+  printf 'wave29-exact-goldens\tpass\t5\t6\n'
+}
+
 median() {
   local file=$1
   local n
@@ -632,6 +730,29 @@ wave27_profile_root() {
   fi
 }
 
+wave29_profile_root() {
+  local root=${1:-$repo_root}
+  make_tmp
+  prepare_wave29_root "$root"
+  printf 'case\tgroup\titems\truns\twarmups\tnoisy\twall_mad_pct\tuser_mad_pct\twall_s\tuser_s\tsys_s\trss_bytes\timport_ms\tinterpretation_ms\telaboration_ms\ttypecheck_ms\ttypeclass_ms\ttactic_ms\tcompile_ms\n'
+  local spec name source group items required_api row saw_noisy=0
+  for spec in "${wave29_cases[@]}"; do
+    IFS='|' read -r name source group items required_api <<<"$spec"
+    if [[ -n $case_filter && $name != "$case_filter" ]]; then continue; fi
+    if ! wave29_api_available "$root" "$required_api"; then
+      echo "preo-bench: skipping $name: MISSING_API $required_api" >&2
+      continue
+    fi
+    row=$(measure_case "$root" "$name" "$source" "$group" "$items" "$runs" 1)
+    printf '%s\n' "$row"
+    if [[ $(cut -f6 <<<"$row") == 1 ]]; then saw_noisy=1; fi
+  done
+  if (( saw_noisy )); then
+    echo "preo-bench: one or more Wave29 cases remain infrastructure-noisy" >&2
+    return 3
+  fi
+}
+
 profile_root() {
   local root=${1:-$repo_root}
   make_tmp
@@ -697,6 +818,30 @@ wave27_baseline_profile() {
   git -C "$repo_root" worktree add --detach "$worktree" "$commit" >&2
   local result=0
   wave27_profile_root "$worktree" || result=$?
+  git -C "$repo_root" worktree remove --force "$worktree" >&2
+  worktree_path=''
+  return "$result"
+}
+
+wave29_baseline_profile() {
+  local commit=${1:-8f649c8}
+  make_tmp
+  local worktree="$tmp_dir/wave29-baseline-worktree"
+  worktree_path=$worktree
+  git -C "$repo_root" worktree add --detach "$worktree" "$commit" >&2
+  mkdir -p -- "$worktree/tests/preo-bench/perf/wave29" "$worktree/Bench"
+  cp -R -- "$repo_root/tests/preo-bench/perf/wave29/." \
+    "$worktree/tests/preo-bench/perf/wave29/"
+  cp -- "$repo_root/Bench/Wave29HistoryDeliveryFixture.lean" "$worktree/Bench/"
+  local result=0
+  wave29_profile_root "$worktree" || result=$?
+  wave29_api_status "$worktree" >"$tmp_dir/wave29-baseline-api-status.tsv"
+  if ! cmp -s -- "$repo_root/tests/preo-bench/baselines/8f649c8-wave29-api-status.tsv" \
+      "$tmp_dir/wave29-baseline-api-status.tsv"; then
+    diff -u -- "$repo_root/tests/preo-bench/baselines/8f649c8-wave29-api-status.tsv" \
+      "$tmp_dir/wave29-baseline-api-status.tsv" >&2 || true
+    result=1
+  fi
   git -C "$repo_root" worktree remove --force "$worktree" >&2
   worktree_path=''
   return "$result"
@@ -1002,6 +1147,68 @@ compare_wave27_profiles() {
   ' "$baseline" "$current"
 }
 
+compare_wave29_profiles() {
+  local baseline=$1 current=$2
+  [[ -f $baseline ]] || { echo "preo-bench: missing Wave29 baseline: $baseline" >&2; exit 2; }
+  [[ -f $current ]] || { echo "preo-bench: missing Wave29 current profile: $current" >&2; exit 2; }
+  awk -F '\t' '
+    BEGIN { OFS="\t"; print "case", "metric", "baseline", "current", "delta", "percent", "status" }
+    FNR == 1 { next }
+    NR == FNR { known[$1]=1; for(i=1;i<=NF;i++) base[$1,i]=$i; next }
+    {
+      name=$1; group=$2; items=$3
+      user[group,items]=$10; elab[group,items]=$15; rss[group,items]=$12
+      if (!known[name])
+        print name, "case", "MISSING_API", group, "", "", "NO_BASELINE_MISSING_API"
+      else {
+        info(name,"wall_s",base[name,9],$9)
+        check(name,"user_s",base[name,10],$10,10,.050,20,.100)
+        check(name,"import_ms",base[name,13],$13,10,50,20,100)
+        check(name,"interpretation_ms",base[name,14],$14,10,50,20,100)
+        check(name,"elaboration_ms",base[name,15],$15,10,50,20,100)
+        check(name,"typecheck_ms",base[name,16],$16,10,50,20,100)
+        check(name,"typeclass_ms",base[name,17],$17,10,50,20,100)
+        check(name,"tactic_ms",base[name,18],$18,10,50,20,100)
+        check(name,"compile_ms",base[name,19],$19,10,50,20,100)
+        check(name,"rss_bytes",base[name,12],$12,5,67108864,10,134217728)
+      }
+      if ($6 == 1) { print name,"noise","0","1","1","","INFRASTRUCTURE_NOISY"; noisy=1 }
+    }
+    END {
+      split("repair_menu history_delivery", groups, " ")
+      for (i in groups) {
+        group=groups[i]
+        if (user[group,0] != "" && user[group,4] != "" && user[group,16] != "") {
+          scale(group "_16","incremental_user_s_per_item",
+            (user[group,4]-user[group,0])/4,(user[group,16]-user[group,0])/16,.010)
+          scale(group "_16","incremental_elaboration_ms_per_item",
+            (elab[group,4]-elab[group,0])/4,(elab[group,16]-elab[group,0])/16,10)
+          rss4=(rss[group,4]-rss[group,0])/4
+          rss16=(rss[group,16]-rss[group,0])/16
+          status=rss16 > 4194304 ? "FAIL_SCALE" : "PASS"
+          if (status == "FAIL_SCALE") failed=1
+          print group "_16","incremental_rss_bytes_per_item",rss4,rss16,
+            rss16-rss4,percent(rss4,rss16),status
+        }
+      }
+      if (failed) exit 1
+      if (noisy) exit 3
+    }
+    function percent(old,new) { if(old==0)return new==0?0:999999; return 100*(new-old)/old }
+    function info(name,metric,old,new) { print name,metric,old,new,new-old,percent(old,new),"INFO" }
+    function check(name,metric,old,new,wp,wa,fp,fa, p,d,status) {
+      d=new-old; p=percent(old,new); status="PASS"
+      if(p>fp && d>fa){status="FAIL";failed=1}else if(p>wp && d>wa)status="WARN"
+      print name,metric,old,new,d,p,status
+    }
+    function scale(name,metric,old,new,absolute, p,d,status) {
+      d=new-old;p=percent(old,new);status=(p>25 && d>absolute)?"FAIL_SCALE":"PASS"
+      if(status=="FAIL_SCALE")failed=1
+      print name,metric,old,new,d,p,status
+    }
+  ' "$baseline" "$current"
+}
+
 mode=${1:-}
 case "$mode" in
   -h|--help|'') usage; [[ -n $mode ]] || exit 2 ;;
@@ -1058,6 +1265,27 @@ case "$mode" in
     wave27_baseline_profile 81aa899 >"$wave27_baseline"
     wave27_profile_root "$repo_root" >"$wave27_current"
     compare_wave27_profiles "$wave27_baseline" "$wave27_current"
+    ;;
+  wave29-golden) wave29_golden_check ;;
+  wave29-record-goldens)
+    [[ $# == 2 ]] || { usage >&2; exit 2; }
+    prepare_wave29_root "$repo_root"
+    capture_wave29_goldens "$repo_root" "$2"
+    ;;
+  wave29-profile) wave29_profile_root "${2:-$repo_root}" ;;
+  wave29-baseline) wave29_baseline_profile "${2:-8f649c8}" ;;
+  wave29-compare)
+    [[ $# == 3 ]] || { usage >&2; exit 2; }
+    compare_wave29_profiles "$2" "$3"
+    ;;
+  wave29-all)
+    make_tmp
+    wave29_golden_check
+    wave29_current="$tmp_dir/wave29-current.tsv"
+    wave29_baseline="$tmp_dir/wave29-baseline.tsv"
+    wave29_baseline_profile 8f649c8 >"$wave29_baseline"
+    wave29_profile_root "$repo_root" >"$wave29_current"
+    compare_wave29_profiles "$wave29_baseline" "$wave29_current"
     ;;
   all)
     make_tmp

@@ -1,0 +1,13 @@
+[(10, false), (20, true), (40, true)]
+some 20
+some { seamCrossings := 2,
+  arbiterCuts := 0,
+  rollbackWindow := 0,
+  resolutionWrites := 0,
+  retainsEvidence := false,
+  pluralRead := false,
+  restrictsReachability := false,
+  assumptions := [] }
+false
+[some (Uwueave.FiniteRepairMenu.Check.RefusalKind.tooLarge),
+ some (Uwueave.FiniteRepairMenu.Check.RefusalKind.nonCanonical)]

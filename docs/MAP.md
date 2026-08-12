@@ -10,14 +10,14 @@ that policy to every constant in this namespace. A stray `sorry` or
 [ledger](#keystone-ledger) below is a reading aid, not a trust mechanism.)
 
 ✅ **Coverage, 2026-08-12.** The file table below has one row for each of the
-182 Lean module files under `Uwueave/`, including the nested `Preo` and
+184 Lean module files under `Uwueave/`, including the nested `Preo` and
 `Tactics` modules. This is a documentation invariant rather than a trust
 mechanism: the root aggregator and `#gate_covers_root` remain the authorities
 for transitive gate coverage. Re-derive the table's coverage instead of
 trusting this prose after adding or moving a module:
 
-The frozen Wave 28 gate built 183 jobs, found 159 direct root modules below
-the gated closure, and audited 25,041 `Uwueave` constants. Those are mechanical
+The frozen Wave 29 gate built 185 jobs, found 161 direct root modules below
+the gated closure, and audited 25,333 `Uwueave` constants. Those are mechanical
 snapshot counts, not a semantic-adequacy claim.
 
 ```sh
@@ -30,7 +30,7 @@ source = re.split(
 mapped = set(re.findall(r"^\| `([^`]+\.lean)` \|", source, re.MULTILINE))
 present = {str(path) for path in Path("Uwueave").rglob("*.lean")}
 assert mapped == present, (sorted(present - mapped), sorted(mapped - present))
-assert len(mapped) == 182
+assert len(mapped) == 184
 PY
 ```
 
@@ -196,6 +196,7 @@ curiosity.)
 | `Uwueave/ChoreoRec.lean` | Guarded anonymous recursion over `Choreo`, interpreted only through finite fuel-bounded approximants. `approximate_embed` proves conservativity for every finite choreography and `projection_sound_approx` reuses the existing global/local semantics rather than inventing a recursive bisimulation. The operational layer proves a guarded barrier loop can step and a mismatched barrier is deadlocked; this is finite local progress only, with no fairness or eventual-delivery claim. |
 | `Uwueave/WorldContext.lean` | Delivery futures extended with active authority capabilities, a downward-closed causal cut, and a version-history base/head. `delivery_projects` forgets these axes and `delivery_lifts` recovers a projected step only under explicit frozen-context and admission hypotheses. `same_world_axes_hide_context` and `projected_delivery_does_not_lift_without_context` prove equal materialized state, pool, frontier, and epoch do not determine the allowed future. `AuthenticatedWorldContext` now supplies the model-level signed/issued typed-position and one-use-consumption successor, while deployed cryptography and automatic IDs remain external. |
 | `Uwueave/RepairSynthesis.lean` | Exact search over an explicit finite repair catalog. Rows retain stable IDs, decidable residual applicability, the actual typed `Repair`, and its complete eight-axis `Price`; a caller-supplied valuation ranks without replacing that record. `Catalog.minimum_none_exhaustive` and `Examples.refusal_is_exhaustive_for_catalog` scope refusal to supplied entries, while `finds_least_applicable` proves the executable search skips an inapplicable zero-score row. No repair universe, seam, or escrow partition is enumerated. |
+| `Uwueave/FiniteRepairMenu.lean` | A bounded author-facing adapter over `RepairSynthesis`. Raw rows pass an exact length check and a strictly increasing numeric-ID check before `CheckedUniverse.toCatalog` exposes the unchanged underlying catalog. Search returns the first applicable authored ID together with its exact dependent `Repair`, generated available menu row, and complete eight-axis `Price`; refusal quantifies only over the checked list. Numeric IDs are an authored deterministic policy, not semantic cost or authentication: changing only them changes the selected priced repair. Empty, oversized, and reversed-ID fixtures keep vacuity, resource refusal, and noncanonical order visible. This does not discover a candidate universe, seam, escrow partition, global minimum, or exhaustive menu, and closes no marker. |
 | `Uwueave/ChoreoChoice.lean` | Communicated Boolean choice over read-free `Choreo` blocks. `projection_sound` needs no `ReadsAgree`: the observer emits one label and remote endpoints branch on that delivered datum. The divergent-state fixtures exercise both branches while local observations disagree; missing labels and observer-label mismatches return `none`. This is finite safety, not channel authenticity, fairness, recursion, or eventual delivery. |
 | `Uwueave/ClashGraph.lean` | Every caller-enumerated finite simple graph embeds exactly as the singleton clash graph of its independent-set invariant (`singleton_clashes_iff`). The induced `C₅` has no singleton triangle yet `c5_forces_three_domains`, proving the chromatic floor is real. A proof-carrying finite `LeaveOneOutObstruction` separately transports its listed size to a global segmented-width floor; no arbitrary carrier or infinite graph is enumerated. |
 | `Uwueave/CompositeDelta.lean` | Explicit finite operation patches close the run-level ancestral-confluence boundary. `legalUnderComposition_iff_ancestralConfluent` is exact for arbitrary admitted patches; a proof-carrying residual `Algebra` supplies diamond, merge, and legality laws. The cheap lock inhabits it, while the existing two-step counter fails `LegalUnderComposition` and therefore cannot supply an algebra. No patch is reconstructed from state endpoints. |
@@ -213,6 +214,7 @@ curiosity.)
 | `Uwueave/HistoryRuntime.lean` | Total finite history decisions and causal append. `refused_impossible` eliminates the finite engine's proof-backed refusal under coherent higher judgement, `decideTotal_valid` and `higherSweep_complete` cover the authored finite pair space without manufacturing an infinite enumeration, and `appendDag_reaches_inl` materializes a selected merge as a fresh proof-carrying child. The event layer admits only duplicate-free, non-self, causally closed parent lists: exact retries are idempotent, ID/content collisions and missing parents refuse, and `sameEventSet_converges` is independent of arrival order. Wave 26's bounded `DeliveryState` buffers causally premature events, drains deterministically when parents arrive, refuses retry/collision/self/duplicate-parent/capacity failures, and preserves `DeliveryValid` (capacity only) through successful `receive`/`receiveAll`; `SettledSameEventSet.view_eq` gives convergence after settlement. Stable IDs remain caller-supplied equality keys, not authenticated or globally unique. `orderAgreement_iff_selector_symmetric_at` states the exact conditioned symmetry requirement; `asymmetric_but_convergent` prevents it being over-read as a universal necessity. |
 | `Uwueave/PersistentRuntime.lean` | A pure authoritative-log and recovery contract. Checked replay treats exact nonce retries idempotently and conflicting nonce content as refusal; a `CheckedBatch` plus the explicit `AtomicBatchObservation` premise reopens only before or after the complete batch. Validated checkpoints replay their suffix exactly like the whole log, and derived caches are irrelevant to reopen. `strict_prefix_not_atomic` and `snapshot_only_recovery_unsafe` make atomicity and record identity load-bearing. No filesystem, checksum, lock, flush, rename, or power-loss refinement is claimed. |
 | `Uwueave/PersistentHistoryRuntime.lean` | The causal event admission function lifted into `PersistentRuntime`'s authoritative cursor/checkpoint contract. The delivery schema persists authoritative arrival records separately from materialized/pending state; `DeliveryCursorCoherent` is capacity plus exact arrival = materialized-or-pending membership. `DurableArrivalCallbacks` now names the typed receive/reopen equations, `schemaArrivalCallbacks` inhabits them, and `durableCallbacks_reverse_reopen_exact` pins reverse replay. Rust's separate `HistoryArrivalJournal` appends accepted arrivals before in-memory transition, replays bounded pending state, verifies canonical capacity-bound checkpoints, and refuses collisions/corruption; opaque payload bytes are deliberately not authentication. No theorem relates its bytes, checksums, sync policy, or filesystem to Lean. The older `BufferedHistoryJournal` still loses pending state, and Rust parent lists are strictly increasing where Lean asks only `Nodup`. |
+| `Uwueave/FiniteHistoryDelivery.lean` | An authored finite `History` is paired with an exact version/event enumeration, injective caller IDs, origin-shaped parent lists, parent closure, coherence, ancestor selection, and policy generation. A `DeliveredGrowth` additionally assumes a permuted arrival list, successful logical replay, exact accepted records, cursor coherence, and settlement; only then do `materialized_iff`, `sameEventSet`, and `eventSetView_eq` forget arrival order and capacity. `FiniteGrowth.view_eq_state` and `semantic_view_eq_of_recordDetermined` keep semantic history derivation behind the existing policy premises rather than deriving it from event-set equality. The module constructs no fresh succession, authenticated ID, host bytes, Rust parent canonicalization, network liveness, or Lean↔Rust refinement, and closes no marker. |
 | `Uwueave/Preo/ArtifactJournalKernel.lean` | The executable scanner for concatenated canonical ArtifactDurable-v2 frames, importing the narrow `ArtifactDurableCore` rather than checked examples or pretty printers. It returns exact record offsets and stops at the first clean EOF, syntactically torn final frame, or corrupt frame; `scan_stops_at_first_refusal` and `scan_torn_final` pin those boundaries. A narrow exported kernel returns one validation byte for exactly one canonical frame. `PhysicalRecord.Valid` names outer version/domain/length/digest obligations parametrically; it implements neither the digest nor stable storage, and opaque payload mutations detectable only by authentication remain outside framing. |
 | `Uwueave/Preo/ArtifactJournalDiagnostics.lean` | Optional `Repr` instances for journal faults, refusals, inspections, records, stop reasons, scan results, and physical records. Operator/test diagnostics retain their public instances without pulling generated display code into the exported validator's native object closure. |
 | `Uwueave/Preo/Planning.lean` | The bounded planning surface. `actionChoices` enumerates exactly the `2^n` canonical sublists of a duplicate-free, pre-capped action universe; `generatedPlans` retains exactly the covering schedules. A `Problem` runs the existing five-currency schedule and eight-axis repair engines under explicit ranking policies and a universal structural compatibility proof, returning a coupled selection or exact finite-scope refusal. The Boolean quota generator enumerates every exact partition and selects only nonstarving rows. No currency conversion or claim beyond the authored action/repair universes is made. |
@@ -262,7 +264,7 @@ each `Live` / `LatticeOnly` tag cites nothing beyond the named module's own
 docstrings (upgraded by `CausalReach` theorems where those supersede them);
 `—` marks rows the axis does not apply to. Every row is covered by
 `#audit_floor`'s total gate — there is no per-row trust column to read. The
-table currently holds 700 rows:
+table currently holds 721 rows:
 
 | Theorem | Module | Generality | Reachability |
 |---|---|---|---|
@@ -966,6 +968,27 @@ table currently holds 700 rows:
 | `Verification.toReusableCertificate_key` | AuthenticatedEraCertificate | ∀-general | — |
 | `Fixtures.accepted_unissued_cannot_be_progress` | AuthenticatedEraCertificate | finite-story | — |
 | `Fixtures.authentication_does_not_manufacture_complete_cut` | AuthenticatedEraCertificate | finite-story | — |
+| `FiniteGrowth.view_eq_state` | FiniteHistoryDelivery | ∀-general | — |
+| `DeliveredGrowth.accepted_iff` | FiniteHistoryDelivery | ∀-general | — |
+| `DeliveredGrowth.materialized_iff` | FiniteHistoryDelivery | ∀-general | — |
+| `DeliveredGrowth.capacity_respected` | FiniteHistoryDelivery | ∀-general | — |
+| `DeliveredGrowth.sameEventSet` | FiniteHistoryDelivery | ∀-general | — |
+| `DeliveredGrowth.eventSetView_eq` | FiniteHistoryDelivery | ∀-general | — |
+| `semantic_view_eq_of_recordDetermined` | FiniteHistoryDelivery | ∀-general | — |
+| `MenuCandidate.row_price` | FiniteRepairMenu | ∀-general | — |
+| `CheckedUniverse.stableIds` | FiniteRepairMenu | ∀-general | — |
+| `CheckedUniverse.toCatalog` (def) | FiniteRepairMenu | ∀-general | — |
+| `CheckedUniverse.mem_applicableEntries_iff` | FiniteRepairMenu | ∀-general | — |
+| `CheckedUniverse.minimum_le_of_applicable` | FiniteRepairMenu | ∀-general | — |
+| `CheckedUniverse.minimum_none_exhaustive` | FiniteRepairMenu | ∀-general | — |
+| `Found.repair_price` | FiniteRepairMenu | ∀-general | — |
+| `Found.row_price` | FiniteRepairMenu | ∀-general | — |
+| `Result.exhaustive_of_isFound_false` | FiniteRepairMenu | ∀-general | — |
+| `Examples.positive_finds_least_authored_id` | FiniteRepairMenu | finite-story | — |
+| `Examples.authored_order_changes_choice_not_price_order` | FiniteRepairMenu | finite-story | — |
+| `Examples.impossible_refusal_is_exactly_exhaustive` | FiniteRepairMenu | finite-story | — |
+| `Examples.bound_refusal_is_exact` | FiniteRepairMenu | finite-story | — |
+| `Examples.reversed_ids_are_refused` | FiniteRepairMenu | finite-story | — |
 
 Ledger rows grow with the tree; reachability is derived from module docstrings
 **and** from `CausalReach` theorems where those supersede older caution notes.

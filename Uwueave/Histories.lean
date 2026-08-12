@@ -196,10 +196,13 @@ replaced.
     an exact algebra refusal. `HistoryRuntime.appendSelected` now allocates one
     fresh `V ⊕ Unit` version, constructs its `Origin.merged`, and proves the
     extended history coherent; its causal event boundary also proves exact
-    retry and event-set convergence. What remains is a generic succession of
-    fresh types/identifiers supporting repeated criss-cross growth and a
-    host-byte-to-proof-indexed-history refinement; no endpoint-only patch
-    reconstruction is claimed.
+    retry and event-set convergence. `FiniteHistoryDelivery` now relates one
+    complete finite authored history presentation to exact settled runtime
+    event membership under an assumed successful replay; its stable IDs are
+    authored equality keys, not authenticity or reconstruction evidence. What
+    remains is a generic succession of fresh types/identifiers supporting
+    repeated criss-cross growth and a host-byte-to-proof-indexed-history
+    refinement; no endpoint-only patch reconstruction is claimed.
 
 Literature: Kaki, Priya, Sivaramakrishnan, Jagannathan, "Mergeable Replicated
 Data Types", OOPSLA 2019 (the version-store/LCA model whose *repeated* merge is

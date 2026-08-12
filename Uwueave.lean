@@ -99,6 +99,7 @@ import Uwueave.AuthenticatedEraCertificate
 import Uwueave.Durable
 import Uwueave.PersistentRuntime
 import Uwueave.PersistentHistoryRuntime
+import Uwueave.FiniteHistoryDelivery
 import Uwueave.EvidenceGraph
 import Uwueave.Preo.Future
 import Uwueave.Preo.ArtifactData
@@ -148,6 +149,7 @@ import Uwueave.Preo.ArtifactEmit
 import Uwueave.Preo.Quickstart
 import Uwueave.StatusSemanticsAcceptance
 import Uwueave.RepairSynthesis
+import Uwueave.FiniteRepairMenu
 import Uwueave.RuntimeAuthV4
 import Uwueave.Preo.RuntimeAuthV4Data
 import Uwueave.Preo.RuntimeAuthV4Checked

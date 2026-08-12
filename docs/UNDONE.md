@@ -658,10 +658,13 @@ file is the frontier it named.
     an exact algebra refusal. `HistoryRuntime.appendSelected` now allocates one
     fresh `V ⊕ Unit` version, constructs its `Origin.merged`, and proves the
     extended history coherent; its causal event boundary also proves exact
-    retry and event-set convergence. What remains is a generic succession of
-    fresh types/identifiers supporting repeated criss-cross growth and a
-    host-byte-to-proof-indexed-history refinement; no endpoint-only patch
-    reconstruction is claimed.
+    retry and event-set convergence. `FiniteHistoryDelivery` now relates one
+    complete finite authored history presentation to exact settled runtime
+    event membership under an assumed successful replay; its stable IDs are
+    authored equality keys, not authenticity or reconstruction evidence. What
+    remains is a generic succession of fresh types/identifiers supporting
+    repeated criss-cross growth and a host-byte-to-proof-indexed-history
+    refinement; no endpoint-only patch reconstruction is claimed.
 ````
 
 ## `Uwueave/HistoryBase.lean`
@@ -1227,11 +1230,11 @@ clothes.
 ### [`Uwueave/Repair.lean:80`](../Uwueave/Repair.lean#L80)
 
 ````text
-  * ⟨UNDONE⟩ **Nothing here searches.** A `Repair` is a value someone
-    *constructs*; there is no `synth : (P : Promise) → Option (Σ Q, Repair P Q)`
-    that finds one, and in particular nothing here finds a non-trivial seam or an
-    escrow partition. That is the same gap `Exits.lean` names, one layer up, and
-    it is the reason this file is a *type*, not a solver.
+  * ⟨UNDONE, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+    search.** A `Repair` is a value someone *constructs*. Downstream
+    `RepairSynthesis` and `FiniteRepairMenu` search an explicitly supplied finite
+    catalog and return exhaustive refusal only inside it; they do not discover a
+    non-trivial seam, an escrow partition, or a complete universe of repairs.
 ````
 
 ### [`Uwueave/Repair.lean:85`](../Uwueave/Repair.lean#L85)
@@ -1315,20 +1318,23 @@ constructors.
 ### [`Uwueave/RepairMenu.lean:134`](../Uwueave/RepairMenu.lean#L134)
 
 ````text
-  * ⟨UNDONE⟩ **Nothing here searches.** `MenuTotality.synth` searches for a seam
-    over a covering pool; the escrow partition is still handed in, and the
-    conditional constructor is what a menu prints when the search does not exist.
+  * ⟨UNDONE, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+    menu search.** `MenuTotality.synth` searches for a seam over a covering pool,
+    while downstream `FiniteRepairMenu` chooses from an explicitly supplied,
+    checked finite catalog. The escrow partition and candidate universe are still
+    handed in rather than discovered.
 ````
 
-### [`Uwueave/RepairMenu.lean:137`](../Uwueave/RepairMenu.lean#L137)
+### [`Uwueave/RepairMenu.lean:139`](../Uwueave/RepairMenu.lean#L139)
 
 ````text
-  * ⟨UNDONE⟩ **The generated menus are not proved exhaustive** either. What
-    changed is that an unavailable row can now be *printed with its refutation*
-    instead of being silently absent.
+  * ⟨UNDONE⟩ **The generated menus are not proved exhaustive** either.
+    `FiniteRepairMenu` refusal is exhaustive only for the supplied checked rows.
+    An unavailable row can be *printed with its refutation* instead of being
+    silently absent, but no theorem says the catalog contains every repair.
 ````
 
-### [`Uwueave/RepairMenu.lean:268`](../Uwueave/RepairMenu.lean#L268)
+### [`Uwueave/RepairMenu.lean:271`](../Uwueave/RepairMenu.lean#L271)
 
 ````text
 `Exits.lean`'s biggest ⟨UNDONE⟩ is "a menu is not a solver": it reports a seam
@@ -1337,14 +1343,14 @@ whose only missing piece is named, and the displayed price and delta are pinned
 to the repair the residual buys. -/
 ````
 
-### [`Uwueave/RepairMenu.lean:637`](../Uwueave/RepairMenu.lean#L637)
+### [`Uwueave/RepairMenu.lean:640`](../Uwueave/RepairMenu.lean#L640)
 
 ````text
 handed and cannot decide. `Exits.lean`'s ⟨UNDONE⟩ — *"it reports that a seam exit
 exists for a σ you hand it; it does not synthesize the σ"* — with a type. -/
 ````
 
-### [`Uwueave/RepairMenu.lean:872`](../Uwueave/RepairMenu.lean#L872)
+### [`Uwueave/RepairMenu.lean:875`](../Uwueave/RepairMenu.lean#L875)
 
 ````text
 own ⟨UNDONE⟩ says an absent row means "nobody proved it". -/
