@@ -118,9 +118,9 @@ shim, build script, Cargo manifest, and lockfile must also be unchanged.
 initialization with `Once`; failure aborts rather than exposing a partly
 initialized runtime. The current native-closure gate observed 13 Lake-owned
 objects (659,152 bytes before archiving) and 14 archive members including the
-shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The serialized Wave-27
-`cargo test --all-targets` gate passed 147/147 tests in 24.08 seconds, including
-2.59 seconds of compilation.
+shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The serialized Wave-28
+`cargo test --all-targets` gate passed 147/147 tests in 16.00 seconds, including
+1.61 seconds of compilation.
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native

@@ -129,8 +129,8 @@ a two-frame logical journal through bounded Lean V2/V3 inspection. The pure
 library modules are root/audit covered; `ArtifactEmitMain` and
 `ArtifactInspectionMain` remain separately compiled CLI boundaries so their two
 root-level `main` declarations never enter one proof aggregate. The serialized
-Wave-27 `cargo test --all-targets` gate passed **147/147 Rust tests** in 24.08s
-(2.59s compile time). That is valuable
+Wave-28 `cargo test --all-targets` gate passed **147/147 Rust tests** in 16.00s
+(1.61s compile time). That is valuable
 implementation evidence, not an atomic-write, stable-media, path-safety, or
 filesystem-crash theorem.
 

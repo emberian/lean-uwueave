@@ -330,8 +330,8 @@ The current checkpoint is **182** Lean source modules (**159** direct proof-root
 imports excluding `Audit`, **183** full-build jobs) and **25,041** audited
 constants, with **700** MAP keystones and **130** documented transports. The
 generated work ledger records **155** `⟨UNDONE⟩`
-markers in **153** blocks across **43** source files. The serialized Wave-27
-Rust aggregate passed **147/147** tests in **24.08s** (including **2.59s** of
+markers in **153** blocks across **43** source files. The serialized Wave-28
+Rust aggregate passed **147/147** tests in **16.00s** (including **1.61s** of
 compilation). Counts are checkpoints; the commands and fail-closed gates are
 the durable contract.
 
