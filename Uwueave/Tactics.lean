@@ -1,5 +1,5 @@
 /-
-# Uwueave.Tactics — the verdict as a value, and the machinery demonstrated.
+# Uwueave.Tactics — heavy demonstrations of the tactic and verdict layers.
 
 The tactics themselves live one module down, in `Uwueave.Tactics.Core`, which
 imports `Catalog` and nothing else. That split is the point of this file's
@@ -13,8 +13,8 @@ remaining eighteen are reachable, and the six that are not are
 `Catalog.lean`'s own — a tactic cannot shorten the proof of the lemma it is
 made of.
 
-What is *added* here, above the tactics, is the layer that turns a
-classification into a **term**:
+`Uwueave.Tactics.Verdict`, imported here, is the minimal production layer that
+turns a classification into a **term**. This module demonstrates its exports:
 
   * `Clash.toVerdict` — a found refutation, as `Spec.Verdict.clash`;
   * `classifyIn?` / `classify?` — `Option (Verdict I)` from a probe pool.
@@ -27,16 +27,18 @@ classification into a **term**:
   * `classifyFinite` — **total**. Over a `FinEnum` carrier with a decidable
     invariant it returns a `Verdict I` for every input, and
     `classifyFinite_isFree_iff` is the completeness theorem: it answers `free`
-    exactly when the invariant *is* I-confluent. This is the only entry point
-    that decides.
+    exactly when the invariant *is* I-confluent. This is the explicit,
+    verdict-valued total decision function and has no implicit work cap;
+    automatic tactic routing is separately capped at 64 states / 4096 pairs.
   * `verdict` — the tactic form: on a goal `Verdict I` it runs the same
     positive routes `classify` runs (through the shared
-    `Classify.tryPositiveRoutes`, so the two cannot drift) and emits
+    `Classify.tryPositiveRoutesOutcome`, so the two cannot drift) and emits
     `Verdict.free`, else searches for a clash and emits `Verdict.clash`, else
-    fails loudly.
+    fails loudly. Resource refusals and unexpected internal failures remain
+    distinct from ordinary route inapplicability.
 
 Codex's proposed split named these `classifyProof` / `findClash` / `classify?`
-/ `classifyFinite`. Three are here under those names; `classifyProof` is not,
+/ `classifyFinite`. Three are exported under those names; `classifyProof` is not,
 because it already exists and is called `classify` — renaming a tactic the
 tree's total gate audits would buy nothing. `findClash` is in `Tactics.Core`
 §4, where it returns `Option (Clash I)`: a `Clash` is a refutation *by
@@ -44,19 +46,16 @@ construction*, which is why "the search reports free" is not a bug that can be
 written here, and why the search itself needs no `Verdict` and so can sit below
 `Spec`.
 
-## Why the value layer is here and not in `Tactics.Core`
+## Why the value layer is in `Tactics.Verdict`, not `Tactics.Core`
 
 `Verdict` is defined in `Spec.lean`, which imports `Move`. Putting these four
 in `Core` would drag `Move`, `Acyclicity`, `Exec` and `Segmented` under the
-tactic layer and re-block files the split just freed — `Segmented`'s own shrink
-entry among them. So `Core` holds everything that does not mention `Verdict`
-(including the search), and this file holds everything that does. The clean
-version of this would move `Verdict` itself into a leaf below `Spec`; that is a
-one-file change nobody has needed yet, and it is the reason this boundary is
-where it is rather than where it belongs.
+tactic layer and re-block files the split just freed. So `Core` holds
+everything that does not mention `Verdict` (including the search),
+`Tactics.Verdict` is the small evidence-carrying layer used by production, and
+this file imports the domain modules needed only for executable examples.
 -/
-import Uwueave.Tactics.Core
-import Uwueave.Spec
+import Uwueave.Tactics.Verdict
 import Uwueave.Segmented
 import Uwueave.ORSet
 import Uwueave.Undo
@@ -68,179 +67,6 @@ open Uwueave Uwueave.Catalog Uwueave.Spec
 
 universe u v
 
-/-! ## §1. The verdict as a value.
-
-`Spec.Verdict` is the evidence-carrying object the DSL composes and a consumer
-reads: `free h` carries an `IConfluent` proof, `clash x y …` carries the repro.
-Everything below produces one, and the reason none of them can produce a *wrong*
-one is structural rather than careful: a `Verdict I` cannot be built without the
-evidence, so the only failure available to a search is to produce nothing. -/
-
-/-- A verdict is decisive in the direction it claims — `free` is a proof. This
-and its twin below are what let the completeness theorem be proved without ever
-inspecting how a verdict was computed. -/
-theorem iconfluent_of_isFree {S : Type u} [MergeState S] {I : Invariant S}
-    {v : Verdict I} (h : v.isFree = true) : IConfluent I := by
-  cases v with
-  | free hI => exact hI
-  | clash x y hx hy hbad => simp [Verdict.isFree] at h
-
-/-- …and decisive in the other direction too: a `clash` verdict carries its own
-refutation. There is no third answer, which is why `Verdict` can be read as a
-decision whenever one was reached. -/
-theorem not_iconfluent_of_isFree_false {S : Type u} [MergeState S] {I : Invariant S}
-    {v : Verdict I} (h : v.isFree = false) : ¬ IConfluent I := by
-  cases v with
-  | free hI => simp [Verdict.isFree] at h
-  | clash x y hx hy hbad => exact fun hc => hbad (hc x y hx hy)
-
-/-- A found clash (`Tactics.Core` §4), as the verdict it is. -/
-def Clash.toVerdict {S : Type u} [MergeState S] {I : Invariant S} (c : Clash I) : Verdict I :=
-  .clash c.x c.y c.hx c.hy c.hbad
-
-/-- ⚠ **The safety fact, by `rfl`.** Anything the search produces reports
-`clash`. Not "in practice" — the search's return type is `Option (Clash I)` and
-`Clash` has one constructor, which takes the refutation. -/
-@[simp] theorem Clash.toVerdict_isFree {S : Type u} [MergeState S] {I : Invariant S}
-    (c : Clash I) : c.toVerdict.isFree = false := rfl
-
-/-- **Classify against an explicit pool.** `some v` carries a real repro;
-`none` is **NO VERDICT** — the pool found nothing, which is a fact about the
-pool (`findClash_none`) and not about `I`.
-
-⚠ Being an ordinary function, this needs `DecidablePred I` from instance
-synthesis. An invariant behind a `def` (`Segmented.BudgetInv`) hides its
-decidability from the synthesizer; supply the instance at the use site — §2
-does. The `classify` tactic gets past this by exposing the head itself, which
-is a thing a tactic can do and a function cannot. -/
-def classifyIn? {S : Type u} [MergeState S] (I : Invariant S) [DecidablePred I]
-    (pool : List S) : Option (Verdict I) :=
-  (findClash I pool).map Clash.toVerdict
-
-/-- `classifyIn?` over the registered `Probes` pool — the default entry point.
-Same contract: `none` is no verdict. -/
-def classify? {S : Type u} [MergeState S] [Probes S] (I : Invariant S) [DecidablePred I] :
-    Option (Verdict I) :=
-  classifyIn? I (Probes.probes (S := S))
-
-/-- ⚠ **THE SAFETY THEOREM.** The pool route can never answer `free`. So a
-`none` from `classifyIn?` is unambiguous: it is the *absence* of a verdict, and
-there is no execution in which it means "coordination-free". A caller that
-treats `none` as freedom is making that error unaided by anything here. -/
-theorem classifyIn?_never_free {S : Type u} [MergeState S] {I : Invariant S} [DecidablePred I]
-    {pool : List S} {v : Verdict I} (h : classifyIn? I pool = some v) : v.isFree = false := by
-  unfold classifyIn? at h
-  cases hf : findClash I pool with
-  | none => simp [hf] at h
-  | some c =>
-      simp only [hf, Option.map_some] at h
-      have hv : c.toVerdict = v := Option.some.inj h
-      subst hv
-      rfl
-
-/-- And what a `some` *does* mean: the invariant is refuted. -/
-theorem classifyIn?_sound {S : Type u} [MergeState S] {I : Invariant S} [DecidablePred I]
-    {pool : List S} {v : Verdict I} (h : classifyIn? I pool = some v) : ¬ IConfluent I :=
-  not_iconfluent_of_isFree_false (classifyIn?_never_free h)
-
-/-- **The total one.** Over a carrier that enumerates *with its completeness
-proof* and a decidable invariant, classification is a function: every input
-gets a verdict, and the verdict carries the evidence either way. The `free`
-branch is not a search result promoted to a claim — it is `findClash_none`
-composed with `FinEnum.complete`, i.e. the enumeration's own completeness doing
-the work that a probe pool cannot do. -/
-def classifyFinite {S : Type u} [MergeState S] [FinEnum S] (I : Invariant S) [DecidablePred I] :
-    Verdict I :=
-  match hf : findClash I (FinEnum.enum (S := S)) with
-  | some c => c.toVerdict
-  | none => .free fun x y hx hy =>
-      findClash_none hf x (FinEnum.complete x) y (FinEnum.complete y) hx hy
-
-/-- **The completeness theorem.** `classifyFinite` answers `free` exactly when
-the invariant is I-confluent — no false frees (that direction is
-`iconfluent_of_isFree`, and it holds of *any* verdict) and, the half that is
-about this function, **no false clashes**: it does not give up and report a
-repro on a confluent invariant, because it could not have built one. -/
-theorem classifyFinite_isFree_iff {S : Type u} [MergeState S] [FinEnum S]
-    (I : Invariant S) [DecidablePred I] :
-    (classifyFinite I).isFree = true ↔ IConfluent I := by
-  constructor
-  · exact iconfluent_of_isFree
-  · intro hc
-    cases hv : (classifyFinite I).isFree with
-    | true => rfl
-    | false => exact absurd hc (not_iconfluent_of_isFree_false hv)
-
-/-- The refutation reading of the same call: a `clash` answer is a real one. -/
-theorem classifyFinite_not_iconfluent {S : Type u} [MergeState S] [FinEnum S]
-    (I : Invariant S) [DecidablePred I] (h : (classifyFinite I).isFree = false) :
-    ¬ IConfluent I :=
-  not_iconfluent_of_isFree_false h
-
-namespace Classify
-
-open Lean Meta Elab Tactic
-
-/-- `Verdict I` ↦ `(S, MergeState instance, I)`. `Verdict.cross` is an
-`abbrev`, so a reducible whnf at the call site lands here too. -/
-def verdictArgs? (e : Expr) : Option (Expr × Expr × Expr) :=
-  let e := e.consumeMData
-  if e.isAppOfArity ``Uwueave.Spec.Verdict 3 then
-    let a := e.getAppArgs
-    some (a[0]!, a[1]!, a[2]!)
-  else
-    none
-
-end Classify
-
-/-- **The verdict tactic — `classify`, returning a term.** On a goal
-`Verdict I` (or `Verdict.cross R`, which reduces to one) it runs the positive
-routes on a scratch `IConfluent I` goal and emits `Verdict.free` with the proof
-they built; failing that it searches a probe pool and emits `Verdict.clash`
-with all three side conditions `decide`d. Both branches are kernel-checked
-terms, so the tactic can fail but cannot lie.
-
-`verdict using <list>` supplies the pool explicitly, exactly as `classify`
-does. When neither a route nor a clash lands, it throws — there is no
-default. -/
-syntax "verdict" (" using " term)? : tactic
-
-open Lean Meta Elab Tactic Classify in
-elab_rules : tactic
-  | `(tactic| verdict $[using $poolStx]?) => withMainContext do
-  let goal ← getMainGoal
-  let ty ← whnfR (← instantiateMVars (← goal.getType))
-  let some (S, inst, I) := verdictArgs? ty
-    | throwError "verdict: expected a goal of the form `Verdict I`, got{indentExpr ty}\n\
-        For `IConfluent I` / `¬ IConfluent I` goals use `classify`."
-  let explicit? ← match poolStx with
-    | some stx => do
-        let e ← Term.elabTerm stx (some (← mkAppM ``List #[S]))
-        Term.synthesizeSyntheticMVars
-        pure (some (← instantiateMVars e))
-    | none => pure none
-  -- Free: the same routes `classify` runs, on a scratch `IConfluent I` goal.
-  let iconfTy ← mkAppOptM ``Uwueave.IConfluent #[S, inst, I]
-  let m ← mkFreshExprSyntheticOpaqueMVar iconfTy
-  if ← tryPositiveOn m.mvarId! S I then
-    goal.assign (← mkAppOptM ``Uwueave.Spec.Verdict.free #[S, inst, I, m])
-    replaceMainGoal []
-    return
-  -- Clash: the pool search, with every side condition re-derived by `decide`.
-  let (pool, source) ← getPool S explicit?
-  match ← Classify.findClash S inst I pool with
-  | .ok (x, y) =>
-      let (px, py, pbad) ← clashParts S inst I x y
-      goal.assign (← mkAppOptM ``Uwueave.Spec.Verdict.clash #[S, inst, I, x, y, px, py, pbad])
-      replaceMainGoal []
-  | .error (legal, total) =>
-      throwError "verdict: NO VERDICT — and none is invented.\n\
-        No free route applied to{indentExpr ty}\n\
-        and no clash was found: {legal} of {total} states in {source} satisfy \
-        the invariant, and no pair of them clashes. A probe pool is a \
-        heuristic, so this is silence, not freedom. Register a `FinEnum` \
-        instance for the carrier (then `classifyFinite` decides), widen the \
-        pool with `verdict using <list>`, or build the verdict by hand."
 
 /-! ## §2. The value layer, demonstrated.
 
@@ -435,6 +261,20 @@ example : ¬ IConfluent (S := PNCounter Bool) (fun c => 0 ≤ net c) := by
   clash (fun b => if b then 10 else 0, fun b => if b then 10 else 0),
         (fun b => if b then 10 else 0, fun b => if b then 0 else 10)
 
+/-- Regression: `clash` exposes a named invariant before synthesizing its
+three decidable side conditions. Raw `(by decide)` used to fail here. -/
+example : ¬ IConfluent (Segmented.BudgetInv 10) := by
+  clash ((fun b => if b then 10 else 0), (fun b => if b then 10 else 0)),
+        ((fun b => if b then 0 else 10), (fun b => if b then 0 else 10))
+
+/-- Regression: `rsubst` recursively splits disjunctions beyond the old
+hard-coded eight branches. -/
+example (n : Nat)
+    (h : n = 0 ∨ n = 1 ∨ n = 2 ∨ n = 3 ∨ n = 4 ∨ n = 5 ∨ n = 6 ∨ n = 7 ∨ n = 8) :
+    n ≤ 8 := by
+  rsubst h
+  all_goals decide
+
 /-- `Undo.mem_s01` (8 lines → 1). -/
 example {w : Write} (h : s01 w = true) : w = w0 ∨ w = w1 := by
   mem_union h [s01]
@@ -468,5 +308,32 @@ example (w : Write) : InView s01ur w ↔ w = r1 := by
   view_unique mem_s01ur, r1
 
 end IdiomDemo
+
+/-! ## §5. Automatic-work acceptance.
+
+The tactic route is deliberately bounded; the explicit value function remains
+total and unchanged. `GSet (Fin 7)` has 128 finite states, twice the automatic
+state cap. -/
+
+/--
+error: classify: route `exhaustive decision over FinEnum` refused work:
+automatic finite route refused
+-/
+#guard_msgs (error, substring := true) in
+example : IConfluent (S := GSet (Fin 7)) (fun s => s 0 = s 1) := by
+  classify
+
+/--
+error: verdict: route `exhaustive decision over FinEnum` refused work:
+automatic finite route refused
+-/
+#guard_msgs (error, substring := true) in
+example : Verdict (S := GSet (Fin 7)) (fun s => s 0 = s 1) := by
+  verdict
+
+/-- Merely forming the explicit total classification remains supported for the
+same carrier; only automatic tactic routing refuses the implicit work. -/
+example : Verdict (S := GSet (Fin 7)) (fun s => s 0 = s 1) :=
+  classifyFinite (fun s : GSet (Fin 7) => s 0 = s 1)
 
 end Uwueave.Tactics

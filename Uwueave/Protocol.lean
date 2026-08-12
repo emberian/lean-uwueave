@@ -246,24 +246,62 @@ theorem denote_parallel_demands {Strategy : Type} (left right : Term Strategy)
         sessionDemands (right.denote strategy) :=
   sessionDemands_comp _ _
 
-@[simp] theorem repeatSession_zero (session : Session) :
+theorem repeatSession_zero (session : Session) :
     repeatSession session 0 = nilSession := rfl
 
-@[simp] theorem repeatSession_succ (session : Session) (n : Nat) :
+theorem repeatSession_succ (session : Session) (n : Nat) :
     repeatSession session (n + 1) = session.comp (repeatSession session n) := rfl
 
 /-- Crossing effects add through bounded repetition. -/
-theorem repeatSession_crossings (session : Session) : ∀ n : Nat,
+@[simp] theorem repeatSession_crossings (session : Session) : ∀ n : Nat,
     (repeatSession session n).crossings = n * session.crossings
   | 0 => by simp [repeatSession, nilSession]
   | n + 1 => by
       simp [repeatSession, repeatSession_crossings, Nat.succ_mul, Nat.add_comm]
+
+/-- A demand stream repeated a bounded number of times.  Its structural
+equations are explicit-only for the same reason as `repeatSession`'s: callers
+should normalize observations without forcing a large authored bound. -/
+def repeatDemands (demands : List Demand) : Nat → List Demand
+  | 0 => []
+  | n + 1 => demands ++ repeatDemands demands n
+
+theorem repeatDemands_zero (demands : List Demand) :
+    repeatDemands demands 0 = [] := rfl
+
+theorem repeatDemands_succ (demands : List Demand) (n : Nat) :
+    repeatDemands demands (n + 1) = demands ++ repeatDemands demands n := rfl
+
+/-- Demand observations normalize without materializing the repeated session.
+The recursive `repeatSession` equations remain available to `rw`, but are not
+global simp rules: simplifying the generator first is linear in the authored
+bound and can exhaust the default recursion depth before reaching this
+observation. -/
+@[simp] theorem repeatSession_demands (session : Session) : ∀ n : Nat,
+    sessionDemands (repeatSession session n) =
+      repeatDemands (sessionDemands session) n
+  | 0 => by rw [repeatSession_zero]; rfl
+  | n + 1 => by
+      rw [repeatSession_succ, sessionDemands_comp, repeatSession_demands]
+      rfl
 
 /-- Demand annotations repeat by append, without being collapsed into a scalar. -/
 theorem repeatSession_demands_succ (session : Session) (n : Nat) :
     sessionDemands (repeatSession session (n + 1)) =
       sessionDemands session ++ sessionDemands (repeatSession session n) := by
   rw [repeatSession_succ, sessionDemands_comp]
+
+/-! Regression: with the old global `repeatSession_succ` simp rule this
+projection at bound 400 exceeded the default recursion depth.  The semantic
+projection now closes in one rewrite regardless of the bound. -/
+theorem repeatSession_four_hundred_crossings (session : Session) :
+    (repeatSession session 400).crossings = 400 * session.crossings := by
+  simp
+
+theorem repeatSession_four_hundred_demands (session : Session) :
+    sessionDemands (repeatSession session 400) =
+      repeatDemands (sessionDemands session) 400 := by
+  simp
 
 /-- Sequential association preserves both observable effects and all demands. -/
 theorem seq_associative_observables {Strategy : Type}

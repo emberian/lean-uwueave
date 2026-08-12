@@ -1,3 +1,7 @@
+-- Intentionally indented: `#gate_covers_root` must use Lean's header parser,
+-- not a column-zero line scanner (see the trust-canary regression).
+  import Uwueave.TrustFloor
+import Uwueave.ListProofs
 import Uwueave.Confluence
 import Uwueave.Exec
 import Uwueave.Catalog
@@ -92,6 +96,9 @@ import Uwueave.Durable
 import Uwueave.PersistentRuntime
 import Uwueave.EvidenceGraph
 import Uwueave.Preo.Future
+import Uwueave.Preo.ArtifactData
+import Uwueave.Preo.ArtifactChecked
+import Uwueave.Preo.ArtifactDiagnostics
 import Uwueave.Preo.Artifact
 import Uwueave.Preo.Export
 import Uwueave.Preo.Expr
@@ -99,11 +106,15 @@ import Uwueave.Preo.Incremental
 import Uwueave.Preo.ResultProgram
 import Uwueave.Preo.ProtocolSurface
 import Uwueave.Preo.Planning
+import Uwueave.Preo.ArtifactDurableCore
 import Uwueave.Preo.ArtifactDurable
 import Uwueave.Preo.ArtifactJournalKernel
+import Uwueave.Preo.ArtifactJournalDiagnostics
 import Uwueave.Preo.ProjectionV1
 import Uwueave.Preo.ProjectionV2
 import Uwueave.RepairSynthesis
 import Uwueave.RuntimeAuthV4
+import Uwueave.RuntimeInit
+import Uwueave.Tactics.Verdict
 import Uwueave.Tactics
 import Uwueave.Audit

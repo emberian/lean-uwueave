@@ -580,12 +580,8 @@ response word `j`. -/
 
 theorem size_foldl_pushWord (ws : List UInt64) :
     ∀ b : ByteArray, (ws.foldl pushWord b).size = b.size + 8 * ws.length := by
-  induction ws with
-  | nil => intro b; simp
-  | cons w t ih =>
-    intro b
-    rw [List.foldl_cons, ih, size_pushWord, List.length_cons]
-    omega
+  simpa only using
+    Uwueave.Exec.WordCodec.foldlPushWord_size (fun word : UInt64 => word) ws
 
 /-- The encoded response is exactly one word per response word. -/
 theorem size_encodeWords (ws : List UInt64) :
@@ -606,33 +602,15 @@ theorem size_eraReplay (input : ByteArray) :
 theorem getWord_foldl_pushWord_lt (ws : List UInt64) :
     ∀ (b : ByteArray) (i : Nat), 8 * (i + 1) ≤ b.size →
       getWord (ws.foldl pushWord b) i = getWord b i := by
-  induction ws with
-  | nil => intro b i _; rfl
-  | cons w t ih =>
-    intro b i h
-    rw [List.foldl_cons, ih _ _ (by rw [size_pushWord]; omega),
-        getWord_pushWord_lt _ _ h]
+  simpa only using
+    Uwueave.Exec.WordCodec.foldlPushWord_get_lt (fun word : UInt64 => word) ws
 
 theorem getWord_foldl_pushWord (ws : List UInt64) :
     ∀ (b : ByteArray) (w : Nat), b.size = 8 * w →
       ∀ (j : Nat), (hj : j < ws.length) →
         getWord (ws.foldl pushWord b) (w + j) = ws[j] := by
-  induction ws with
-  | nil => intro b w _ j hj; simp at hj
-  | cons x t ih =>
-    intro b w hb j hj
-    rw [List.foldl_cons]
-    match j with
-    | 0 =>
-      rw [Nat.add_zero,
-          getWord_foldl_pushWord_lt t _ _ (by rw [size_pushWord, hb]; omega),
-          getWord_pushWord _ _ hb]
-      rfl
-    | j + 1 =>
-      have := ih (pushWord b x) (w + 1)
-        (by rw [size_pushWord, hb]; omega) j (by simpa using hj)
-      rw [show w + (j + 1) = w + 1 + j by omega, this]
-      rfl
+  simpa only using
+    Uwueave.Exec.WordCodec.foldlPushWord_get (fun word : UInt64 => word) ws
 
 /-- Word `j` of an encoded word list is word `j` of the list. -/
 theorem getWord_encodeWords (ws : List UInt64) {j : Nat} (hj : j < ws.length) :

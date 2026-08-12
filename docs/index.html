@@ -300,48 +300,43 @@
     face &mdash; the theorem names, the refutations, the prices, and the compiled kernels.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">53</div><div class="l">Lean modules</div>
-        <div class="s">one judgement, <code>Confluence</code> to <code>Repair</code>
-        (at <code>3ae20d4</code>)</div></div>
-      <div class="stat"><div class="n">4676</div><div class="l">constants audited</div>
-        <div class="s">a <em>floor</em>: the gate recorded at wave&nbsp;12e
-        (<code>a61bf02</code>); modules landed after it</div></div>
-      <div class="stat"><div class="n">126</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">123</div><div class="l">Lean modules</div>
+        <div class="s">all reached by the root and total trust gate</div></div>
+      <div class="stat"><div class="n">20,446</div><div class="l">constants audited</div>
+        <div class="s">the live Lean&nbsp;4.30 floor gate</div></div>
+      <div class="stat"><div class="n">477</div><div class="l">keystones in the ledger</div>
         <div class="s">each tagged with a generality and a reachability axis</div></div>
       <div class="stat"><div class="n">8</div><div class="l">priced exits</div>
         <div class="s">each with an availability check and a price</div></div>
-      <div class="stat"><div class="n">3</div><div class="l">compiled kernels</div>
-        <div class="s">move replay, sequence order, ERA resolution</div></div>
+      <div class="stat"><div class="n">4</div><div class="l">native-kernel modules</div>
+        <div class="s">six exports in one exact RuntimeInit closure</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
         <div class="s">Lean core only &mdash; nothing to vendor, nothing to pin</div></div>
     </div>
     <p style="font-size:.9rem;color:var(--muted);max-width:78ch;margin-top:1.1rem"><strong>Check
     every cell.</strong> These commands were run against this repository to produce the numbers
     above &mdash; a stat with no command under it is decoration:</p>
-<pre><code># 53 Lean modules (at HEAD — `ls` would count in-flight files too)
-git ls-tree -r --name-only HEAD | grep -cE '^Uwueave/.*\.lean$'
+<pre><code># 123 Lean modules in the assembled worktree
+rg --files Uwueave -g '*.lean' | wc -l
 
-# 126 rows in the keystone ledger
+# 477 rows in the keystone ledger
 awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 
 # 8 exits — the constructors of `inductive Exit`
 sed -n '/^inductive Exit/,/^\/-!/p' Uwueave/Exits.lean | grep -cE '^  \| [a-z]'
 
-# 4 exports: the three kernels, plus the canonical request encoder
-grep -rn '@[export ' Uwueave/
+# 6 exports across the four RuntimeInit kernel modules
+grep -RFn '@[export ' Uwueave/
 
 # `"packages": []` — no dependencies, mathlib included
 grep '"packages"' lake-manifest.json
 
 # the audit count, live: prints `#audit_floor: N constants audited`
 lake build</code></pre>
-    <p style="font-size:.85rem;color:var(--muted);max-width:78ch"><strong>Two of these are
-    floors, not constants, and are labelled with the commit that measured them.</strong> The
-    module count and the audit count both grow with the tree &mdash; this page was written
-    during a wave that landed six modules while it was being written &mdash; so the number your
-    own <code>lake build</code> prints, not the one here, is the live figure. The module command
-    reads <code>git ls-tree</code> rather than <code>ls</code> on purpose: in a repository with
-    concurrent work in flight, the worktree is not the commit.</p>
+    <p style="font-size:.85rem;color:var(--muted);max-width:78ch"><strong>The audit count is a
+    moving floor, not a protocol constant.</strong> The number your own <code>lake build</code>
+    prints is authoritative. Root coverage is checked separately: Lean parses the real root
+    header, including indented imports, and the current gate reaches all 123 module files.</p>
 
     <h2 style="margin-top:2.2rem">The shape of the whole thing</h2>
     <ol class="three">
@@ -1396,7 +1391,16 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           both directions: no false frees, no false clashes. The partial pool route cannot
           report freedom even by accident &mdash; <code>classifyIn?_never_free</code> is a
           theorem, so <code>none</code> is <strong>no verdict</strong> and never evidence of
-          freedom.</li>
+          freedom. Automatic tactic routing has a separate work contract: its typed
+          <code>RouteOutcome</code> distinguishes inapplicability from resource refusal and
+          internal failure, and the finite route refuses above 64 states / 4,096 ordered
+          pairs. Only the explicit value-level <code>classifyFinite</code> remains uncapped.</li>
+          <li><span class="badge pattern">native protocol authoring</span>
+          <code>preo_protocol</code> spells all six <code>Protocol.Term</code> constructors in a
+          parser-safe recursive grammar. One command emits the exact term, its one checked
+          elaboration, session, plan, five written limits and witnessed
+          <code>ProfileUpperBound</code>; unsupported syntax and out-of-range crossing origins
+          are refusals, not opaque guesses.</li>
           <li><span class="badge pattern">for a reader with a schema</span>
           <code>uwueave-check</code> reads ten shapes and eleven invariant kinds out of a few
           lines of schema and answers <code>FREE</code> / <code>ESCALATES</code> /
@@ -1730,66 +1734,71 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
 
   <section id="kernel">
     <p class="kicker">The implementation, without a twin</p>
-    <h2 class="prose">Three kernels, compiled from the Lean</h2>
+    <h2 class="prose">Four kernel modules, one exact native closure</h2>
     <div class="prose">
       <p>In most &ldquo;verified design&rdquo; projects the delicate logic gets re-implemented
       in the production language, and the proofs and the code start drifting the day the
       re-implementation lands. Here they cannot, because <strong>there is no second copy of the
-      rules</strong>. Three decision procedures are authored in Lean, exported, compiled to C by
-      <code>lake</code> alongside every other module, and linked into the Rust crate by
-      <code>build.rs</code>:</p>
+      rules</strong>. Four runtime-kernel modules are authored in Lean and imported by the
+      deliberately data-free <code>Uwueave.RuntimeInit</code>. Lake owns their exact transitive
+      native-object closure; <code>build.rs</code> validates, snapshots and archives that closure
+      rather than scanning a generated directory:</p>
       <ul class="thms">
-        <li><code>uwueave_replay_kernel</code> (<code>Uwueave/Exec.lean</code>) &mdash; the
-        move-log replay: total order, cycle rule, skip.</li>
+        <li><code>Uwueave/Exec.lean</code> &mdash; canonical request encoding, move-log replay
+        (total order, cycle rule, skip), and the request-canonicality audit: three exports.</li>
         <li><code>uwueave_seq_kernel</code> (<code>Uwueave/SeqKernel.lean</code>) &mdash; the
         sequence CRDT&rsquo;s RGA-with-tombstones order decision.</li>
         <li><code>uwueave_era_resolve</code> (<code>Uwueave/EraKernel.lean</code>) &mdash; ERA
         epoch resolution.</li>
+        <li><code>uwueave_preo_artifact_v2_validate_one</code>
+        (<code>Uwueave/Preo/ArtifactJournalKernel.lean</code>) &mdash; exact-one canonical
+        Preoscript artifact-v2 validation.</li>
       </ul>
-      <p>A fourth export, <code>uwueave_request_canonical</code>, is the canonical request
-      encoder &mdash; the Lean side of the byte layer, so the Rust marshaller is checked against
-      a <em>proved</em> encoder rather than against a second opinion.</p>
+      <p>Those modules expose six functions in total. The request encoder itself is
+      <code>uwueave_encode_request</code>; <code>uwueave_request_canonical</code> remains a
+      compatibility/test audit. The Rust side supplies typed lanes but owns no second FORMAT-v3
+      encoder or ArtifactEncoding decoder.</p>
     </div>
 
     <figure class="flow">
       <div class="scroller">
-        <svg class="wide" viewBox="0 0 880 200" role="img" aria-label="Pipeline: three Lean modules are compiled by lake to C files under .lake/build/ir, which build.rs compiles together with shim.c and links, with the Lean runtime, into the uwueave Rust crate.">
+        <svg class="wide" viewBox="0 0 880 200" role="img" aria-label="Pipeline: the data-free RuntimeInit root selects four kernel modules; Lake reports and compiles their exact transitive closure; build.rs snapshots those objects, compiles one shim, verifies the archive, and links it with the Lean runtime into the uwueave Rust crate.">
           <defs>
             <marker id="fl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
             </marker>
           </defs>
-          <text x="230" y="26" font-size="10.5" text-anchor="middle" fill="var(--muted)">lake build</text>
-          <text x="450" y="26" font-size="10.5" text-anchor="middle" fill="var(--muted)">cc, via build.rs</text>
+          <text x="230" y="26" font-size="10.5" text-anchor="middle" fill="var(--muted)">Lake setup closure</text>
+          <text x="450" y="26" font-size="10.5" text-anchor="middle" fill="var(--muted)">snapshot + archive</text>
           <text x="686" y="26" font-size="10.5" text-anchor="middle" fill="var(--muted)">link</text>
 
           <rect x="8" y="36" width="200" height="130" rx="10" fill="var(--bg)" stroke="var(--free)"/>
-          <text x="20" y="60" font-size="12.5" font-weight="650" fill="currentColor">the Lean semantics</text>
-          <text x="20" y="80" font-size="9.5" font-family="var(--mono)" fill="currentColor">Exec.replayKernel</text>
-          <text x="20" y="95" font-size="9.5" font-family="var(--mono)" fill="currentColor">SeqKernel.seqKernel</text>
-          <text x="20" y="110" font-size="9.5" font-family="var(--mono)" fill="currentColor">EraKernel.eraResolveKernel</text>
-          <text x="20" y="125" font-size="9.5" font-family="var(--mono)" fill="currentColor">Exec.requestCanonicalKernel</text>
-          <text x="20" y="147" font-size="10.5" fill="var(--muted)">authored once, proved here</text>
+          <text x="20" y="60" font-size="12.5" font-weight="650" fill="currentColor">RuntimeInit (data-free)</text>
+          <text x="20" y="80" font-size="9.5" font-family="var(--mono)" fill="currentColor">Exec · SeqKernel</text>
+          <text x="20" y="95" font-size="9.5" font-family="var(--mono)" fill="currentColor">EraKernel</text>
+          <text x="20" y="110" font-size="9.5" font-family="var(--mono)" fill="currentColor">ArtifactJournalKernel</text>
+          <text x="20" y="129" font-size="10.5" fill="var(--muted)">one initializer and one</text>
+          <text x="20" y="144" font-size="10.5" fill="var(--muted)">closure source of truth</text>
 
           <line x1="212" y1="100" x2="246" y2="100" stroke="currentColor" stroke-width="1.6" marker-end="url(#fl-arrow)"/>
 
           <rect x="252" y="36" width="176" height="130" rx="10" fill="var(--bg)" stroke="var(--border)"/>
-          <text x="264" y="60" font-size="12.5" font-weight="650" fill="currentColor">emitted C</text>
-          <text x="264" y="82" font-size="10" font-family="var(--mono)" fill="currentColor">.lake/build/ir/</text>
-          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">  Uwueave/**/*.c</text>
-          <text x="264" y="120" font-size="10.5" fill="var(--muted)">every module, re-emitted</text>
-          <text x="264" y="133" font-size="10.5" fill="var(--muted)">whenever the Lean changes;</text>
-          <text x="264" y="146" font-size="10.5" fill="var(--muted)">a red lake build now PANICS</text>
+          <text x="264" y="60" font-size="12.5" font-weight="650" fill="currentColor">Lake-owned objects</text>
+          <text x="264" y="82" font-size="10" font-family="var(--mono)" fill="currentColor">13 exact members</text>
+          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">655,368 bytes</text>
+          <text x="264" y="120" font-size="10.5" fill="var(--muted)">setup schema + paths</text>
+          <text x="264" y="133" font-size="10.5" fill="var(--muted)">validated; bytes stable</text>
+          <text x="264" y="146" font-size="10.5" fill="var(--muted)">before and after archive</text>
 
           <line x1="432" y1="100" x2="466" y2="100" stroke="currentColor" stroke-width="1.6" marker-end="url(#fl-arrow)"/>
 
           <rect x="472" y="36" width="192" height="130" rx="10" fill="var(--bg)" stroke="var(--border)"/>
-          <text x="484" y="60" font-size="12.5" font-weight="650" fill="currentColor">shim.c — 120 lines</text>
-          <text x="484" y="82" font-size="9.5" font-family="var(--mono)" fill="currentColor">init · replay · seq · era</text>
-          <text x="484" y="96" font-size="9.5" font-family="var(--mono)" fill="currentColor">request_canonical · free</text>
-          <text x="484" y="120" font-size="10.5" fill="var(--muted)">the entire C surface:</text>
-          <text x="484" y="133" font-size="10.5" fill="var(--muted)">six functions, each copying</text>
-          <text x="484" y="146" font-size="10.5" fill="var(--muted)">bytes in and bytes out</text>
+          <text x="484" y="60" font-size="12.5" font-weight="650" fill="currentColor">verified archive set</text>
+          <text x="484" y="82" font-size="9.5" font-family="var(--mono)" fill="currentColor">13 Lake objects + shim</text>
+          <text x="484" y="96" font-size="9.5" font-family="var(--mono)" fill="currentColor">14 unique members</text>
+          <text x="484" y="120" font-size="10.5" fill="var(--muted)">shim.c: 225 lines;</text>
+          <text x="484" y="133" font-size="10.5" fill="var(--muted)">one root initializer;</text>
+          <text x="484" y="146" font-size="10.5" fill="var(--muted)">every object byte checked</text>
 
           <line x1="668" y1="100" x2="702" y2="100" stroke="currentColor" stroke-width="1.6" marker-end="url(#fl-arrow)"/>
 
@@ -1799,15 +1808,16 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           <text x="720" y="95" font-size="10.5" fill="var(--muted)">no decision procedure</text>
           <text x="720" y="108" font-size="10.5" fill="var(--muted)">in Rust to drift</text>
           <text x="720" y="130" font-size="10" font-family="var(--mono)" fill="currentColor">+ libleanshared</text>
-          <text x="720" y="148" font-size="10.5" fill="var(--muted)">8 `unsafe`, all in ffi.rs</text>
+          <text x="720" y="148" font-size="10.5" fill="var(--muted)">14 `unsafe`, all in ffi.rs</text>
         </svg>
       </div>
-      <figcaption><code>build.rs</code> runs <code>lake build</code>, compiles the emitted C plus
-      the shim with <code>cc</code>, and links the Lean runtime. It used to tolerate a failed
-      <code>lake build</code> whenever stale C was already on disk &mdash; a green
-      <code>cargo test</code> reachable from a red <code>lake build</code>, which is exactly the
-      gate-that-cannot-go-red failure this project exists to refuse. It now panics instead, and
-      all three kernels are wired into the root module so their C is never stale.</figcaption>
+      <figcaption><code>build.rs</code> requires a full green <code>lake build</code>, takes closure
+      membership only from Lake&rsquo;s RuntimeInit setup description, snapshots and stages the
+      exact native objects, compiles only the shim with <code>cc</code>, and verifies the archive
+      member set and bytes. A final no-build gate rechecks paths, setup, closure, objects, every
+      Lean source and every build-control input. This closes stale/mixed object selection and
+      initializer drift; it does not prove code generation, the compiler/linker, ABI, shim,
+      runtime, or filesystem.</figcaption>
     </figure>
 
     <div class="prose" style="margin-top:1.4rem">
@@ -1878,12 +1888,13 @@ def replayKernel (input : ByteArray) : ByteArray :=
       them is terminal.</strong> That correction came from an outside reviewer and it stands:
       <code>docs/TRUST.md</code> Ledger&nbsp;2 breaks &ldquo;the C backend&rdquo; into Lean&rsquo;s
       C code generator, the C compiler and linker, the Lean runtime, <code>shim.c</code>, the
-      ABI/FFI boundary, Rust&rsquo;s eight <code>unsafe</code> blocks, the marshaller, the
-      storage glue and the build wiring &mdash; nine obligations with named next steps, plus one
-      absent component. Two of them are small enough to do this month: compile the emitted C
-      with <strong>CompCert</strong> and see whether Lean&rsquo;s output sits in its supported
-      subset; and export <code>encodeRequest</code> so the Rust marshaller has nothing left to
-      marshal.</p>
+      ABI/FFI boundary, Rust&rsquo;s 14 textual <code>unsafe</code> occurrences (all in
+      <code>ffi.rs</code>), Lean-owned request encoding, storage glue, and native build closure.
+      Eight rows remain obligations and two controls are paid. RuntimeInit now closes exact
+      object/initializer selection and the Lean encoder closes the duplicate FORMAT-v3 byte
+      decision; neither closure proves code generation, compiler/linker, runtime, shim, ABI,
+      unsafe ownership, storage, or durability. Compiling the exact emitted closure with
+      <strong>CompCert</strong> remains one bounded experiment.</p>
     </div>
   </section>
 
@@ -1896,13 +1907,19 @@ def replayKernel (input : ByteArray) : ByteArray :=
       &mdash; proved, not assumed), every classification above, every refutation as a concrete
       two-replica counterexample, and every price on the menu.</li>
       <li><strong>The audit is total, not curated &mdash; and it establishes logical hygiene,
-      not semantic adequacy.</strong> <code>Audit.lean</code>&rsquo;s <code>#audit_floor</code>
-      walks <em>every</em> constant in the <code>Uwueave</code> namespace and fails the build on
-      any axiom outside Lean&rsquo;s own floor (<code>propext</code>,
-      <code>Classical.choice</code>, <code>Quot.sound</code>): a <code>sorry</code>
-      (<code>sorryAx</code>) or a <code>native_decide</code> (<code>Lean.ofReduceBool</code>)
-      anywhere goes red with zero lag and no list to maintain, and a vacuity tripwire fails the
-      gate if the walk ever sees fewer than 300 constants. <strong>What a green gate does not
+      not semantic adequacy.</strong> <code>TrustFloor.lean</code> defines the one shared
+      <code>offFloor</code> policy. <code>Audit.lean</code>&rsquo;s <code>#audit_floor</code>
+      applies it to <em>every</em> constant in the <code>Uwueave</code> namespace, while generated
+      Preoscript facets and downstream <code>#audit_floor_prefix Namespace</code> checks use the
+      same implementation. Any axiom outside Lean&rsquo;s floor (<code>propext</code>,
+      <code>Classical.choice</code>, <code>Quot.sound</code>) is fatal: a <code>sorry</code>
+      (<code>sorryAx</code>), custom axiom, or Lean-4.30 <code>native_decide</code>
+      (<code>_native.native_decide.ax_…</code>) goes red. The whole-tree command retains its
+      300-constant tripwire and currently audits 20,446 constants. Seven subprocess fixtures
+      exercise the exact allowed floor, indented/root header parsing, prefix vacuity, and all
+      three forbidden dependency classes. They prove the gate can fail, but share its
+      <code>collectAxioms</code> implementation and are not an independent checker.
+      <strong>What a green gate does not
       say:</strong> that any of those theorems is <em>about</em> the thing we say it is about.
       That gap is not a premise and not an obligation &mdash; it is narrowed, by refutable
       witnesses and adversarial readers, and it never reaches zero.</li>
@@ -1910,7 +1927,7 @@ def replayKernel (input : ByteArray) : ByteArray :=
       <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/TRUST.md">docs/TRUST.md</a>
       sorts what this repository asks you to believe into the <em>logical</em> TCB (eight rows:
       two premise, three obligation, three narrowable), the <em>execution</em> TCB (ten rows:
-      zero premise, nine obligation, one absent component) and <em>environment and model</em>
+      zero premise, eight obligation, two paid controls) and <em>environment and model</em>
       premises (seventeen rows across delivery, cryptography and Bailis&rsquo;s generality). The
       rule it enforces: <strong>every boundary is decomposed into its irreducible premise and
       its remaining transmutable obligations, and a row with no next step must say why there is

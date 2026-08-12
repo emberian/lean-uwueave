@@ -311,6 +311,32 @@ theorem Reaches.rank_le {V : Type} {D : VersionDag V} {a b : V}
   · exact Nat.le_refl _
   · exact Nat.le_of_lt hr
 
+/-- A distinct version cannot reach one at an equal or smaller rank. This is the
+stable elimination form for negative reachability facts: concrete DAG proofs
+need only discharge disequality and the rank comparison, rather than repeatedly
+split `Reaches.eq_or_rank_lt`. -/
+theorem not_reaches_of_ne_of_rank_ge {V : Type} {D : VersionDag V} {a b : V}
+    (hne : a ≠ b) (hrank : D.rank b ≤ D.rank a) : ¬ Reaches D a b := by
+  intro h
+  rcases h.eq_or_rank_lt with he | hlt
+  · exact hne he
+  · exact (Nat.not_lt_of_ge hrank) hlt
+
+/-- **Well-founded induction over versions, through the DAG's rank.** This is
+the semantic induction principle clients of `VersionDag` need: the rank remains
+an implementation detail of the well-foundedness proof, while the induction
+hypothesis is stated directly over lower-ranked versions. -/
+theorem VersionDag.rank_induction {V : Type} (D : VersionDag V) {P : V → Prop}
+    (step : ∀ v, (∀ w, D.rank w < D.rank v → P w) → P v) : ∀ v, P v := by
+  have key : ∀ n, ∀ v, D.rank v = n → P v := by
+    intro n
+    induction n using Nat.strongRecOn with
+    | _ n ih =>
+        intro v hv
+        exact step v (fun w hw => ih (D.rank w) (by omega) w rfl)
+  intro v
+  exact key (D.rank v) v rfl
+
 /-- Reachability composes. -/
 theorem Reaches.trans {V : Type} {D : VersionDag V} {a b c : V}
     (h₁ : Reaches D a b) (h₂ : Reaches D b c) : Reaches D a c := by
@@ -486,18 +512,10 @@ theorem cc_commonAncestors (v : Ver) (h : CommonAncestor ccDag .mergeL .mergeR v
   · exact Or.inl rfl
   · exact Or.inr (Or.inl rfl)
   · exact Or.inr (Or.inr rfl)
-  · rcases h.2.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.2).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
 
 /-- `left` is a common ancestor of the two merge versions — it is a direct parent
 of both. -/
@@ -514,25 +532,17 @@ theorem cc_left_maximal : MaximalCommonBase ccDag .mergeL .mergeR .left := by
   refine ⟨cc_left_common, ?_⟩
   intro c hc hreach
   rcases cc_commonAncestors c hc with rfl | rfl | rfl
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
   · rfl
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
 
 /-- …and so is `right`. -/
 theorem cc_right_maximal : MaximalCommonBase ccDag .mergeL .mergeR .right := by
   refine ⟨cc_right_common, ?_⟩
   intro c hc hreach
   rcases cc_commonAncestors c hc with rfl | rfl | rfl
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
   · rfl
 
 /-- ⚠ **The criss-cross has no lowest common base.** Two distinct maximal ones,
@@ -555,24 +565,12 @@ theorem cc_branch_commonAncestors (v : Ver) (h : CommonAncestor ccDag .left .rig
     v = .root := by
   cases v
   · rfl
-  · rcases h.2.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.2).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
 
 /-- **`selected` is inhabited**: the fork point is the lowest common base of the
 two branches. -/
@@ -603,11 +601,9 @@ def twoDag : VersionDag Two where
 common ancestor rather than a flag. -/
 theorem two_no_common : ∀ b, ¬ CommonAncestor twoDag .x .y b := by
   intro b h
-  rcases h.1.eq_or_rank_lt with rfl | hr
-  · rcases h.2.eq_or_rank_lt with he | hr'
-    · exact absurd he (by decide)
-    · exact absurd hr' (Nat.lt_irrefl 0)
-  · exact absurd hr (Nat.lt_irrefl 0)
+  cases b
+  · exact not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.2
+  · exact not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1
 
 /-- The unavailable answer, as a `BaseSelection` value. -/
 def twoUnavailable : BaseSelection twoDag .x .y := .unavailable two_no_common
@@ -678,6 +674,41 @@ structure History.Coherent {V S Op : Type} (H : History V S Op) (M : AncestralMe
   root_unique : ∀ v, H.origin v = Origin.root → v = H.root
   /-- Every version discharges its origin. -/
   nodes : ∀ v, OriginOK H M impl v
+
+/-- **Induction over a coherent history by semantic origin.** The three cases
+receive the exact evidence stored by `OriginOK`; run and merge cases additionally
+receive induction hypotheses for every version they depend on. This packages
+the rank/common-ancestor plumbing once without hiding any model assumption or
+changing the public history representation. -/
+theorem History.Coherent.induction {V S Op : Type} {H : History V S Op}
+    {M : AncestralMerge S} {impl : Impl S Op} (hco : H.Coherent M impl)
+    {P : V → Prop}
+    (root : ∀ v, H.origin v = .root → P v)
+    (ran : ∀ v p, H.origin v = .ran p → H.dag.parent p v = true →
+      Reachable impl (H.state p) (H.state v) → P p → P v)
+    (merged : ∀ v l x y, H.origin v = .merged l x y →
+      H.dag.parent x v = true → H.dag.parent y v = true →
+      CommonAncestor H.dag x y l →
+      H.state v = M.merge3 (H.state l) (H.state x) (H.state y) →
+      P l → P x → P y →
+      (∀ b, CommonAncestor H.dag x y b → P b) → P v) : ∀ v, P v := by
+  refine H.dag.rank_induction (P := P) ?_
+  intro v ih
+  have hnode := hco.nodes v
+  cases hor : H.origin v with
+  | root => exact root v hor
+  | ran p =>
+      simp only [OriginOK, hor] at hnode
+      exact ran v p hor hnode.1 hnode.2 (ih p (H.dag.rank_lt _ _ hnode.1))
+  | merged l x y =>
+      simp only [OriginOK, hor] at hnode
+      obtain ⟨hpx, hpy, hca, hst⟩ := hnode
+      exact merged v l x y hor hpx hpy hca hst
+        (ih l (Nat.lt_of_le_of_lt hca.1.rank_le (H.dag.rank_lt _ _ hpx)))
+        (ih x (H.dag.rank_lt _ _ hpx))
+        (ih y (H.dag.rank_lt _ _ hpy))
+        (fun b hb => ih b
+          (Nat.lt_of_le_of_lt hb.1.rank_le (H.dag.rank_lt _ _ hpx)))
 
 /-! ### §4.1 The bridge to `MergeModel.BaseDecision`
 
@@ -788,34 +819,84 @@ theorem spend_tryApply (B : Nat) (op : Unit) (s : Nat) :
     show (if ((decide (s + 1 ≤ B)) = true) then some (s + 1) else none) = none
     rw [if_neg (by simp [h])]
 
-/-- **What a replica can reach under budget 2**: itself, or some `x` with
-`l ≤ x ≤ 2`. Nothing above the budget is ever locally committed — which is what
-makes the escrow's single-merge safety true, and what makes a merge result leave
-the reachable region. -/
-theorem spend2_run : ∀ (ops : List Unit) (l x : Nat),
-    run (spendOps 2).impl l ops = some x → x = l ∨ (l ≤ x ∧ x ≤ 2) := by
+/-- **What a replica can reach under budget `B`**: itself, or some `x` between
+its starting balance and the budget. This general result lives beside
+`spend_tryApply`, at the lowest layer that defines the spending model; the
+historical budget-2 API remains as wrappers below. -/
+theorem spend_run (B : Nat) : ∀ (ops : List Unit) (l x : Nat),
+    run (spendOps B).impl l ops = some x → x = l ∨ (l ≤ x ∧ x ≤ B) := by
   intro ops
   induction ops with
   | nil => intro l x h; exact Or.inl (Option.some.inj h).symm
   | cons op ops ih =>
     intro l x h
-    by_cases hl : l + 1 ≤ 2
-    · have htry : (spendOps 2).impl.tryApply op l = some (l + 1) := by
+    by_cases hl : l + 1 ≤ B
+    · have htry : (spendOps B).impl.tryApply op l = some (l + 1) := by
         rw [spend_tryApply]; exact if_pos hl
       rw [run_cons_some _ _ _ _ htry] at h
       rcases ih (l + 1) x h with he | ⟨h1, h2⟩
       · exact Or.inr ⟨by omega, by omega⟩
       · exact Or.inr ⟨by omega, h2⟩
-    · have htry : (spendOps 2).impl.tryApply op l = none := by
+    · have htry : (spendOps B).impl.tryApply op l = none := by
         rw [spend_tryApply]; exact if_neg hl
       rw [run_cons_none _ _ _ _ htry] at h
       exact absurd h (by simp)
 
-/-- The same, in `Reachable` form. -/
-theorem spend2_reachable {l x : Nat} (h : Reachable (spendOps 2).impl l x) :
-    x = l ∨ (l ≤ x ∧ x ≤ 2) := by
+/-- The budget-polymorphic result in `Reachable` form. -/
+theorem spend_reachable (B : Nat) {l x : Nat} (h : Reachable (spendOps B).impl l x) :
+    x = l ∨ (l ≤ x ∧ x ≤ B) := by
   obtain ⟨ops, hr⟩ := h
-  exact spend2_run ops l x hr
+  exact spend_run B ops l x hr
+
+/-- Spending `n` units, when the budget allows. -/
+theorem spend_reach_add (B : Nat) : ∀ (n l : Nat), l + n ≤ B →
+    Reachable (spendOps B).impl l (l + n) := by
+  intro n
+  induction n with
+  | zero => intro l _; exact Reachable.refl _ _
+  | succ n ih =>
+    intro l h
+    have htry : (spendOps B).impl.tryApply () l = some (l + 1) := by
+      rw [spend_tryApply]; exact if_pos (by omega)
+    have hstep : Reachable (spendOps B).impl l (l + 1) := by
+      refine ⟨[()], ?_⟩
+      show run (spendOps B).impl l [()] = some (l + 1)
+      rw [run_cons_some _ _ _ _ htry]
+      rfl
+    have hcomp := Reachable.trans hstep (ih (l + 1) (by omega))
+    rw [show l + 1 + n = l + (n + 1) from by omega] at hcomp
+    exact hcomp
+
+/-- **The converse of `spend_reachable`**: everything between the starting
+balance and the budget is reachable. -/
+theorem spend_reach (B : Nat) {l x : Nat} (h1 : l ≤ x) (h2 : x ≤ B) :
+    Reachable (spendOps B).impl l x := by
+  have h := spend_reach_add B (x - l) l (by omega)
+  rw [show l + (x - l) = x from by omega] at h
+  exact h
+
+/-- Spending never breaks its budget — `LocallySafe` at every `B`. -/
+theorem spend_locally_safe (B : Nat) :
+    LocallySafe (spendOps B).impl (fun n => n ≤ B) := by
+  intro op s s' h _
+  rw [spend_tryApply] at h
+  by_cases hb : s + 1 ≤ B
+  · rw [if_pos hb] at h
+    have he : s + 1 = s' := Option.some.inj h
+    rw [← he]; exact hb
+  · rw [if_neg hb] at h
+    exact absurd h (by simp)
+
+/-- **What a replica can reach under budget 2**: the historical specialization
+used by the counterexample proofs. -/
+theorem spend2_run : ∀ (ops : List Unit) (l x : Nat),
+    run (spendOps 2).impl l ops = some x → x = l ∨ (l ≤ x ∧ x ≤ 2) :=
+  spend_run 2
+
+/-- The historical budget-2 `Reachable` wrapper. -/
+theorem spend2_reachable {l x : Nat} (h : Reachable (spendOps 2).impl l x) :
+    x = l ∨ (l ≤ x ∧ x ≤ 2) :=
+  spend_reachable 2 h
 
 /-- One spend from zero. -/
 theorem spend2_reach_one : Reachable (spendOps 2).impl 0 1 :=
@@ -824,6 +905,42 @@ theorem spend2_reach_one : Reachable (spendOps 2).impl 0 1 :=
 /-- Two spends from zero. -/
 theorem spend2_reach_two : Reachable (spendOps 2).impl 0 2 :=
   ⟨[(), ()], show run (spendOps 2).impl 0 [(), ()] = some 2 from rfl⟩
+
+/-- The small arithmetic kernel behind both counter-safety theorems. Explicitly
+enumerating the three bounded values is substantially cheaper than asking
+`omega` to branch repeatedly over three symbolic natural subtractions. -/
+theorem counterMerge_le_four_of_le_two {l x y : Nat}
+    (hl : l ≤ 2) (hx : x ≤ 2) (hy : y ≤ 2) : counterMerge l x y ≤ 4 := by
+  have el : l = 0 ∨ l = 1 ∨ l = 2 := by omega
+  have ex : x = 0 ∨ x = 1 ∨ x = 2 := by omega
+  have ey : y = 0 ∨ y = 1 ∨ y = 2 := by omega
+  rcases el with rfl | rfl | rfl <;>
+    rcases ex with rfl | rfl | rfl <;>
+    rcases ey with rfl | rfl | rfl <;> decide
+
+/-- A counter merge stays under four whenever both branches are locally
+reachable from a legal base. Keeping the reachability split here lets the
+history theorem and the decision-model theorem share one semantic proof. -/
+theorem counterMerge_le_four_of_spend_reachable {l x y : Nat} (hl : l ≤ 4)
+    (hrx : Reachable (spendOps 2).impl l x)
+    (hry : Reachable (spendOps 2).impl l y) : counterMerge l x y ≤ 4 := by
+  have hrx' := spend2_reachable hrx
+  have hry' := spend2_reachable hry
+  by_cases hl2 : l ≤ 2
+  · apply counterMerge_le_four_of_le_two hl2
+    · rcases hrx' with rfl | ⟨_, h2⟩ <;> assumption
+    · rcases hry' with rfl | ⟨_, h2⟩ <;> assumption
+  · have ex : x = l := by
+      rcases hrx' with he | ⟨h1, h2⟩
+      · exact he
+      · exact (hl2 (Nat.le_trans h1 h2)).elim
+    have ey : y = l := by
+      rcases hry' with he | ⟨h1, h2⟩
+      · exact he
+      · exact (hl2 (Nat.le_trans h1 h2)).elim
+    subst x
+    subst y
+    simpa [counterMerge] using hl
 
 /-- **The escrow is ancestrally confluent.** For every legal ancestor and every
 pair of replicas reachable from it by local spends, the counter MRDT's merge
@@ -834,14 +951,7 @@ of `0`, and `AncestralMerge`'s laws pin everything else. -/
 theorem counter_ceiling4_ancestral :
     AncestralConfluent counterAM (spendOps 2).impl (fun n => n ≤ 4) := by
   intro l x y hl hx hy hrx hry
-  have hl' : l ≤ 4 := hl
-  have hx' : x ≤ 4 := hx
-  have hy' : y ≤ 4 := hy
-  have hrx' := spend2_reachable hrx
-  have hry' := spend2_reachable hry
-  show counterMerge l x y ≤ 4
-  unfold counterMerge
-  rcases hrx' with h | ⟨h1, h2⟩ <;> rcases hry' with h' | ⟨h1', h2'⟩ <;> omega
+  exact counterMerge_le_four_of_spend_reachable hl hrx hry
 
 /-- ⚠ **…and four is the tight ceiling**, so the judgement above is not a
 statement that happens to hold for any bound. At three it is **refuted**: both
@@ -1072,41 +1182,22 @@ theorem History.Coherent.sound {V S Op : Type} {H : History V S Op}
     (hMC : MergeClosedFrom M impl (H.state H.root))
     (hroot : I (H.state H.root)) :
     ∀ v, Reachable impl (H.state H.root) (H.state v) ∧ I (H.state v) := by
-  have step : ∀ v : V,
-      (∀ w, H.dag.rank w < H.dag.rank v →
-        Reachable impl (H.state H.root) (H.state w) ∧ I (H.state w)) →
-      Reachable impl (H.state H.root) (H.state v) ∧ I (H.state v) := by
-    intro v ih
-    have hnode := hco.nodes v
-    cases hor : H.origin v with
-    | root =>
-      have hv : v = H.root := hco.root_unique v hor
-      subst hv
-      exact ⟨Reachable.refl _ _, hroot⟩
-    | ran p =>
-      simp only [OriginOK, hor] at hnode
-      obtain ⟨hpar, hrun⟩ := hnode
-      obtain ⟨hRp, hIp⟩ := ih p (H.dag.rank_lt _ _ hpar)
-      obtain ⟨ops, hops⟩ := hrun
-      exact ⟨Reachable.trans hRp ⟨ops, hops⟩, hops.preserves hloc hIp⟩
-    | merged l x y =>
-      simp only [OriginOK, hor] at hnode
-      obtain ⟨hpx, hpy, hca, hst⟩ := hnode
-      have hltx := H.dag.rank_lt _ _ hpx
-      have hlty := H.dag.rank_lt _ _ hpy
-      obtain ⟨hRl, hIl⟩ := ih l (Nat.lt_of_le_of_lt hca.1.rank_le hltx)
-      obtain ⟨hRx, hIx⟩ := ih x hltx
-      obtain ⟨hRy, hIy⟩ := ih y hlty
-      rw [hst]
-      exact ⟨hMC _ _ _ hRl hRx hRy, hAC _ _ _ hRl hRx hRy hIl hIx hIy⟩
-  have key : ∀ (n : Nat) (v : V), H.dag.rank v ≤ n →
-      Reachable impl (H.state H.root) (H.state v) ∧ I (H.state v) := by
-    intro n
-    induction n with
-    | zero => intro v hv; exact step v (fun w hw => absurd hw (by omega))
-    | succ n ih => intro v hv; exact step v (fun w hw => ih w (by omega))
-  intro v
-  exact key (H.dag.rank v) v (Nat.le_refl _)
+  refine hco.induction
+    (P := fun v => Reachable impl (H.state H.root) (H.state v) ∧ I (H.state v)) ?_ ?_ ?_
+  · intro v hor
+    have hv : v = H.root := hco.root_unique v hor
+    subst v
+    exact ⟨Reachable.refl _ _, hroot⟩
+  · intro _ _ _ _ hrun ih
+    obtain ⟨hRp, hIp⟩ := ih
+    obtain ⟨ops, hops⟩ := hrun
+    exact ⟨Reachable.trans hRp ⟨ops, hops⟩, hops.preserves hloc hIp⟩
+  · intro _ _ _ _ _ _ _ _ hst ihl ihx ihy _
+    obtain ⟨hRl, hIl⟩ := ihl
+    obtain ⟨hRx, hIx⟩ := ihx
+    obtain ⟨hRy, hIy⟩ := ihy
+    rw [hst]
+    exact ⟨hMC _ _ _ hRl hRx hRy, hAC _ _ _ hRl hRx hRy hIl hIx hIy⟩
 
 /-! ### §7.1 The condition is refutable — and it is *exactly* what §5 violates
 
@@ -1124,9 +1215,7 @@ theorem counter_ancestralConfluentFrom :
   have hl2 : l ≤ 2 := by rcases spend2_reachable hl with h | ⟨_, h⟩ <;> omega
   have hx2 : x ≤ 2 := by rcases spend2_reachable hx with h | ⟨_, h⟩ <;> omega
   have hy2 : y ≤ 2 := by rcases spend2_reachable hy with h | ⟨_, h⟩ <;> omega
-  show counterMerge l x y ≤ 4
-  unfold counterMerge
-  omega
+  exact counterMerge_le_four_of_le_two hl2 hx2 hy2
 
 /-- ⚠ **…and refutes the closure half.** Two branches reachable from `0` merge to
 `3`, and `3` is not reachable from `0`: the budget stops at `2`. Set beside
@@ -1351,28 +1440,18 @@ theorem lv_commonAncestors (v : LVer) (h : CommonAncestor lvDag .m1 .m2 v) :
   · exact Or.inl rfl
   · exact Or.inr (Or.inl rfl)
   · exact Or.inr (Or.inr rfl)
-  · rcases h.2.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.2).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
 
 /-- `alice` is a maximal common base of the two merge versions. -/
 theorem lv_alice_maximal : MaximalCommonBase lvDag .m1 .m2 .alice := by
   refine ⟨lv_alice_common, ?_⟩
   intro c hc hreach
   rcases lv_commonAncestors c hc with rfl | rfl | rfl
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
   · rfl
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
 
 /-- …and so is `bob`, so the lock's second merge is under a genuinely ambiguous
 base decision too. -/
@@ -1380,12 +1459,8 @@ theorem lv_bob_maximal : MaximalCommonBase lvDag .m1 .m2 .bob := by
   refine ⟨lv_bob_common, ?_⟩
   intro c hc hreach
   rcases lv_commonAncestors c hc with rfl | rfl | rfl
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases hreach.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) hreach).elim
   · rfl
 
 /-- **§4's `ambiguous` bridge, discharged on a real history.** Two distinct
@@ -1458,35 +1533,17 @@ theorem historySafeFrom_iff {S Op : Type} {M : AncestralMerge S}
   constructor
   · intro hs V H hroot hco
     have hstep : ∀ v, ExtensionSafe H I v := hs V H hroot hco
-    have step : ∀ v : V,
-        (∀ w, H.dag.rank w < H.dag.rank v → I (H.state w)) →
-        I (H.state v) := by
-      intro v ih
-      have hnode := hco.nodes v
+    refine hco.induction (P := fun v => I (H.state v)) ?_ ?_ ?_
+    · intro v hor
+      simpa [ExtensionSafe, hor] using hstep v
+    · intro v _ hor _ _ ih
       have hsv := hstep v
-      cases hor : H.origin v with
-      | root =>
-          simpa [ExtensionSafe, hor] using hsv
-      | ran p =>
-          simp only [OriginOK, hor] at hnode
-          simp only [ExtensionSafe, hor] at hsv
-          exact hsv (ih p (H.dag.rank_lt _ _ hnode.1))
-      | merged l x y =>
-          simp only [OriginOK, hor] at hnode
-          simp only [ExtensionSafe, hor] at hsv
-          obtain ⟨hpx, hpy, hca, _⟩ := hnode
-          exact hsv
-            (ih l (Nat.lt_of_le_of_lt hca.1.rank_le
-              (H.dag.rank_lt _ _ hpx)))
-            (ih x (H.dag.rank_lt _ _ hpx))
-            (ih y (H.dag.rank_lt _ _ hpy))
-    have key : ∀ (n : Nat) (v : V), H.dag.rank v ≤ n → I (H.state v) := by
-      intro n
-      induction n with
-      | zero => intro v hv; exact step v (fun w hw => absurd hw (by omega))
-      | succ n ih => intro v hv; exact step v (fun w hw => ih w (by omega))
-    intro v
-    exact key (H.dag.rank v) v (Nat.le_refl _)
+      simp only [ExtensionSafe, hor] at hsv
+      exact hsv ih
+    · intro v _ _ _ hor _ _ _ _ ihl ihx ihy _
+      have hsv := hstep v
+      simp only [ExtensionSafe, hor] at hsv
+      exact hsv ihl ihx ihy
   · intro hs V H hroot hco v
     have hall := hs V H hroot hco
     cases hor : H.origin v <;> simp only [ExtensionSafe, hor]

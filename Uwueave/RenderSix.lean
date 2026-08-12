@@ -20,8 +20,8 @@ finality**. This file is the repair the first file specified, built out of the
 second file's material. Both exist here: `Carrier6` (§1) is the carrier,
 `statusOf_sound6` (§3) is the soundness contract.
 
-Nothing in `HonestRender.lean`, `ResultStatus.lean` or `Evidence.lean` is
-edited, restated or rivalled. `StabilityCert` and `IsTheAnswer` are **imported
+Nothing in `HonestRender.lean` or `Evidence.lean` is edited, restated or
+rivalled. `StabilityCert` and `IsTheAnswer` are **imported
 from `HonestRender`** and used verbatim, so §3's theorems are about that file's
 notions and not about look-alikes; `statusOf`, `forget` and the six `statusOf_*`
 lemmas are `ResultStatus`'s; the relation between the two dispatches is a
@@ -399,26 +399,8 @@ and the future is closed. `Evidence.values_of_render_exact` at the refined
 status. -/
 theorem values_of_statusOf_exact {β : Type} {e : Evidence.ResultEvidence β} {v : β}
     (h : statusOf e = Status.exact v) :
-    Evidence.values e v = true ∧ Holes.SealsTo (Evidence.values e) v ∧ Evidence.Closed e := by
-  by_cases hu : ∃ a, Evidence.values e a = true ∧ ∀ b, Evidence.values e b = true → b = a
-  · by_cases hc : Evidence.Closed e
-    · rw [ResultStatus.statusOf, dif_pos hu, if_pos hc] at h
-      injection h with hv
-      obtain ⟨hm, hs⟩ := Classical.choose_spec hu
-      exact ⟨hv ▸ hm, fun b hb => hv ▸ (hs b hb), hc⟩
-    · rw [ResultStatus.statusOf, dif_pos hu, if_neg hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-  · by_cases hne : ∃ a, Evidence.values e a = true
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+    Evidence.values e v = true ∧ Holes.SealsTo (Evidence.values e) v ∧ Evidence.Closed e :=
+  (ResultStatus.statusOf_eq_iff e (Status.exact v)).1 h
 
 /-- No candidate value is in an evidence whose `values` misses it. The bridge
 from the value axis back to the attributed candidates, used by the merge
@@ -437,52 +419,16 @@ theorem candidate_false_of_values_false {β : Type} {e : Evidence.ResultEvidence
 set **and** a closed future — the two facts the fold could not keep apart. -/
 theorem values_of_statusOf_absent {β : Type} {e : Evidence.ResultEvidence β}
     (h : statusOf e = Status.absent) :
-    (∀ a, Evidence.values e a = false) ∧ Evidence.Closed e := by
-  by_cases hu : ∃ a, Evidence.values e a = true ∧ ∀ b, Evidence.values e b = true → b = a
-  · by_cases hc : Evidence.Closed e
-    · rw [ResultStatus.statusOf, dif_pos hu, if_pos hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · rw [ResultStatus.statusOf, dif_pos hu, if_neg hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-  · by_cases hne : ∃ a, Evidence.values e a = true
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · by_cases hc : Evidence.Closed e
-      · refine ⟨fun a => ?_, hc⟩
-        cases hb : Evidence.values e a with
-        | false => rfl
-        | true => exact absurd ⟨a, hb⟩ hne
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+    (∀ a, Evidence.values e a = false) ∧ Evidence.Closed e :=
+  (ResultStatus.statusOf_eq_iff e Status.absent).1 h
 
 /-- **Inversion at `pending`.** Nothing observed yet is backed by an empty
 candidate set and an **open** future: the same values as `absent`, the opposite
 closure. -/
 theorem values_of_statusOf_pending {β : Type} {e : Evidence.ResultEvidence β}
     (h : statusOf e = Status.pending) :
-    (∀ a, Evidence.values e a = false) ∧ ¬ Evidence.Closed e := by
-  by_cases hu : ∃ a, Evidence.values e a = true ∧ ∀ b, Evidence.values e b = true → b = a
-  · by_cases hc : Evidence.Closed e
-    · rw [ResultStatus.statusOf, dif_pos hu, if_pos hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · rw [ResultStatus.statusOf, dif_pos hu, if_neg hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-  · by_cases hne : ∃ a, Evidence.values e a = true
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · refine ⟨fun a => ?_, hc⟩
-        cases hb : Evidence.values e a with
-        | false => rfl
-        | true => exact absurd ⟨a, hb⟩ hne
+    (∀ a, Evidence.values e a = false) ∧ ¬ Evidence.Closed e :=
+  (ResultStatus.statusOf_eq_iff e Status.pending).1 h
 
 /-- An open future has a witness: some source is owed and uncertified. -/
 theorem exists_open_source {β : Type} {e : Evidence.ResultEvidence β}
@@ -994,7 +940,7 @@ theorem giveUpRender_is_not_sound6 :
   have h := hs.absent_final ResultStatus.emptyOpenW ResultStatus.bobSpokeW
     ResultStatus.emptyOpenW_seals_to_bobSpokeW giveUpRender_emptyOpenW
   rw [giveUpRender_bobSpokeW] at h
-  exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+  cases h
 
 /-- ⚠ **THE FIVE-STATUS PREDICATE CERTIFIES THE SPINNER.** The lie's fold is
 `Evidence.render`, so `HonestRender.HonestRenderer` — the sibling file's honesty
@@ -1125,7 +1071,7 @@ theorem statusOf_not_extension_final_at_emptyClosedW :
   intro hft
   have h := hft ResultStatus.emptyOpenW ResultStatus.emptyClosedW_extends_to_emptyOpenW
   rw [ResultStatus.statusOf_emptyOpenW, ResultStatus.statusOf_emptyClosedW] at h
-  exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+  cases h
 
 /-- …and the `exact` badge is retracted by the same move, which is
 `Evidence.render_retracts_when_a_new_source_appears` at the status. -/
@@ -1135,7 +1081,7 @@ theorem statusOf_not_extension_final_at_exactW :
   intro hft
   have h := hft Evidence.openW Evidence.exactW_extends_to_openW
   rw [ResultStatus.statusOf_openW, ResultStatus.statusOf_exactW] at h
-  exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+  cases h
 
 /-- The `exact` badge is final under the sealed future. -/
 theorem statusOf_sealed_final_at_exactW :

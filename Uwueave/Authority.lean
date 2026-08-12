@@ -86,7 +86,7 @@ ERA, arXiv:2601.22963 — see `docs/BIBLIOGRAPHY.md`) · blocklace
 (Almeida–Shapiro 2024 — the grounded hash-DAG substrate; `Acyclicity.lean`).
 -/
 import Uwueave.Catalog
-import Uwueave.Tactics
+import Uwueave.Tactics.Core
 
 namespace Uwueave.Authority
 

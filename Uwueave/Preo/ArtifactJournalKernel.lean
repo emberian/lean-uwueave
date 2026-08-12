@@ -33,7 +33,7 @@ D5 4A 02 A1 (00 payload-byte)* 01
 
 Thus a payload of length `n` occupies exactly `5 + 2*n` journal bytes.
 -/
-import Uwueave.Preo.ArtifactDurable
+import Uwueave.Preo.ArtifactDurableCore
 
 namespace Uwueave.Preo.ArtifactJournalKernel
 
@@ -95,13 +95,13 @@ inductive Fault where
   | noncanonicalPayload
   | impossibleAcceptedTerminator
   | fuelExhausted
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Diagnostic result for a suffix already known not to decode as a frame. -/
 inductive Refusal where
   | torn
   | corrupt (relativeOffset : Nat) (fault : Fault)
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Diagnose a refused payload body.  EOF at a pair boundary or immediately
 after a data tag is a torn append.  Every other body tag is corruption. -/
@@ -157,7 +157,7 @@ inductive FrameInspection where
   | accepted (value : ArtifactEncoding) (following : Bytes) (consumed : Nat)
   | torn
   | corrupt (relativeOffset : Nat) (fault : Fault)
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Inspect exactly the next frame.  Successful semantic decoding is delegated
 to `decodeProjection`; syntactic diagnosis is used only after that decoder has
@@ -190,7 +190,7 @@ structure Record where
   startOffset : Nat
   endOffset : Nat
   value : ArtifactEncoding
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Why scanning stopped.  Corruption reports both the beginning of the
 refused record and the first byte diagnosed within it. -/
@@ -198,7 +198,7 @@ inductive Stop where
   | cleanEOF
   | tornFinal (recordStart observedEnd : Nat)
   | corrupt (recordStart faultOffset : Nat) (fault : Fault)
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- A maximal completed prefix.  `completedPrefixLength` is the exact byte
 offset after its last accepted frame (zero for an empty prefix). -/
@@ -206,7 +206,7 @@ structure ScanResult where
   records : List Record
   completedPrefixLength : Nat
   stop : Stop
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 def cleanAt (offset : Nat) : ScanResult :=
   ⟨[], offset, .cleanEOF⟩
@@ -679,8 +679,6 @@ structure PhysicalRecord (Digest : Type) where
   declaredLength : Nat
   frame : Bytes
   checksum : Digest
-  deriving Repr
-
 /-- The exact semantic obligations for accepting a physical record.  The host
 chooses the outer version/domain and checksum function, but the inner frame
 must still pass the one canonical ArtifactDurable-v2 decoder. -/

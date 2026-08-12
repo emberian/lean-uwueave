@@ -1238,7 +1238,8 @@ theorem semanticExport_exact_ids_and_lengths :
       ∧ SemanticExport.Encoding.sessions.length = 2
       ∧ SemanticExport.Encoding.plans.length = 2
       ∧ SemanticExport.Encoding.budgets.length = 1 := by
-  decide
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+    rfl, rfl⟩
 
 /-- Representation identities and every cross-row reference remain exactly the
 written manifest values; no source-name hashing fills any of these columns. -/
@@ -1257,7 +1258,7 @@ theorem semanticExport_exact_manifest_rows :
         (row.id, row.sessionId)) = [(708, 707), (710, 709)]
       ∧ SemanticExport.Encoding.budgets.map (fun row =>
         (row.id, row.sessionId, row.planId)) = [(711, 707, 708)] := by
-  decide
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- Both exported plans retain the actual five-coordinate realized profile;
 the source neither inserts crossing counts nor invents a meeting scalar. -/
@@ -1278,12 +1279,25 @@ theorem semanticExport_exact_budget :
         [(.peerBarrier, 2), (.arbiterCut, 0), (.networkRound, 0),
           (.userPrompt, 0), (.rollback, 0)])] := rfl
 
+/-- Rendering preserves successful validation without executing the validator
+or renderer a second time in this proof. The case split is on the already named
+validation result; `validation_ok` eliminates its error branch. -/
+theorem semanticExport_render_result_ok :
+    SemanticExport.RenderResult.isOk = true := by
+  change (SemanticExport.Validation.map ProjectionV2.renderRustSource).isOk = true
+  cases h : SemanticExport.Validation with
+  | ok value => rfl
+  | error error =>
+      have accepted := SemanticExport.validation_ok
+      rw [h] at accepted
+      cases accepted
+
 /-- Validation gates all generated outputs before the private value reaches the
-renderer. This equality is computational because the manifest is closed. -/
+renderer. Each computation is established once above and projected here. -/
 theorem semanticExport_validated_and_rendered :
     SemanticExport.Validation.isOk = true
       ∧ SemanticExport.RenderResult.isOk = true := by
-  exact ⟨SemanticExport.validation_ok, by decide⟩
+  exact ⟨SemanticExport.validation_ok, semanticExport_render_result_ok⟩
 
 /-! ### 4.4 Future declarations retain worlds and variance -/
 

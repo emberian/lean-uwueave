@@ -7,7 +7,9 @@ ever been timed.*
 > repo `31aac2b`, before the F1–F8 optimization pass. All eight fixes described
 > in §9 are now implemented. Section 10 records a post-fix
 > `BENCH_MAX=1000` rerun made on 2026-08-11; it is deliberately separate from
-> the baseline and does not replace the original full-range sweep. Current
+> the baseline and does not replace the original full-range sweep. Section 12
+> separately records Wave 23 proof-elaboration and build-closure engineering;
+> those figures are not kernel-runtime benchmarks. Current
 > complexity statements come from proved equivalence where applicable, source
 > inspection, successful builds, and generated-C inspection; only the rows in
 > §10 are new timings.
@@ -718,3 +720,94 @@ Named so nobody mistakes silence for a green light.
 * **`uwueave-check`**, the 83 KB binary in `rust/src/bin/`. Untimed.
 * **Anything above 10⁴–10⁵ elements.** The harness stops rather than
   extrapolating; so does this document.
+
+---
+
+## 12. Wave 23 proof and build engineering — 2026-08-11
+
+This section measures the cost of checking and shipping the implementation,
+not the runtime of a decision kernel. It records several different protocols
+because the wave began as an engineering investigation, not a pre-registered
+benchmark. The `Demo` row is the only controlled three-run median. Single-shot
+and declaration-level rows are still useful directional evidence, but they are
+labelled so they cannot be mistaken for statistically sampled wall-clock
+results.
+
+### Before/after engineering deltas
+
+| lane | primary before → after | source/artifact evidence | measurement scope |
+|---|---|---|---|
+| `ExecRefine` proof normalization and shared codecs | wall **6.97 s → 2.50 s** (−64.1%); user CPU **12.17 s → 6.96 s** (−42.8%); cumulative `simp` **7.31 s → 1.58 s** (−78.4%); cumulative tactic execution **5.26 s → 2.73 s** (−48.1%) | `ExecRefine.olean` **4,445,176 B → 4,351,928 B** (−93,248 B); generated C **38,960 B → 38,960 B**; `ExecRefine` +6 lines and `EraKernel` −22 lines, lane net −16 | One before and one after source-only `lake env lean --profile --json`, wrapped in `/usr/bin/time -lp`; imported oleans retained, no deliberate warmup, Lean default parallelism. Directional, not a controlled median. |
+| `Preo.Expr` simp normal forms | cumulative emitted `simp` events **950 ms → 55.3 ms** (−94.2%) | source **885 → 929 lines** (+44; +124/−80), **35,592 B → 37,245 B**; current olean **3,495,424 B**, with no retained baseline olean | One serial post-change `lake env lean -j1 --profile --json` run compared with one profiler-lane baseline. Warm imports were present. This is a diagnostic single shot, and the gain spans the `reads_*`, `eval_ext`, `MergeSafe.sound`, and fixture refactors. |
+| Six-status specification and consumers | summed source-check wall **6.40 s → 5.72 s** (−10.6%) | owned three-module source **2,999 → 2,994 lines**; consumer-file nets: `RenderSix` −54 and `StatusEffects` −58 lines; owned olean net −6,832 B, five-target olean net +22,392 B | One fresh isolated-clean-clone direct source pass per target, summed across `ResultStatus`, `RenderSix`, `StatusEffects`, `RenderProgress`, and `Preo.ResultProgram`. N=1 per file; a directional aggregate with wall-noise caveat, not `lake build`. |
+| Coherent-history proof kernel | three symbolic-subtraction proof hotspots **606 ms combined → one 74 ms shared kernel** (−87.8%) | `Histories` + `HistoryBase` + `HistoryPolicy` **4,665 → 4,666 lines** while adding reusable rank, induction, reachability, and budget APIs | One declaration-profiler diagnostic pass under concurrent swarm load, not repeated end-to-end module wall measurements. The 74 ms theorem replaces repeated proof search; each former theorem fell below the 40 ms reporting threshold, though its thin wrapper still elaborates and typechecks. |
+| Pairwise-disjoint `flatMap` and sublist proofs | duplicated target proof blocks **149 → 77 lines** (−48.3%) | three consumer files +60/−129, net −69 lines; new reusable `ListProofs` module 122 lines, so owned source net **+53 lines** including documentation and three generic fixtures | Structural proof-LOC measurement. Current one-shot source checks were 0.77 s (`ListProofs`), 0.96 s (`Sequence`), 1.28 s (`SeqKernel`), and 2.14 s (`Fugue`); there is no comparable before timing, so no speedup is claimed. |
+| Preo artifact production split | transitive production closure **36 → 12 modules** (−66.7%); generated C-source closure **4,460,710 B → 1,382,061 B** (−69.0%) | public artifact/export/projection/journal declarations retained behind data, checked, diagnostics, durable-core, and journal-diagnostics boundaries | Static import-closure and generated-source measurement. It measures what production artifact consumers pull in, not elapsed runtime or the final linked archive below. |
+| `Preo.Demo` proof cleanup | cumulative tactics **230 ms → 167 ms** (−27.4%); type checking **419 ms → 311 ms** (−25.8%); compilation-category sum **350.3 ms → 302.9 ms** (−13.5%); user CPU **4.06 s → 3.65 s** (−10.1%) | peak RSS **1,412,513,792 B → 1,393,180,672 B** (−1.37%); source +18/−4 lines; olean **1,472,352 B → 1,473,824 B** (+0.10%) for the new named render-result proof | Identical clean dependencies, serialized; one unmeasured warmup plus three native `lean --profile` runs, reporting medians. Wall was noisy and adverse (**3.88 s → 4.37 s**), so this row makes no wall-speedup claim. |
+
+Profiler categories are cumulative and nested: `simp`, tactic execution,
+typeclass inference, type checking, and compilation must not be added together
+or read as a partition of wall time. Lean can elaborate in parallel, so user
+CPU may exceed wall. Source lines include comments, fixtures, and preserved
+public wrappers; LOC is a maintenance measure, not a runtime proxy. Olean and
+generated-C sizes are toolchain-specific and say nothing by themselves about
+semantic equivalence.
+
+### Runtime archive and final gate
+
+Before Wave 23, `build.rs` recursively compiled the root and every emitted
+Uwueave C file. The observed archive held **116 members including the shim** and
+was **54,425,248 B**. The new closure is derived from Lake's
+`RuntimeInit.setup`: 12 transitive kernel imports plus `RuntimeInit` itself,
+exactly **13 Lake-owned objects / 655,368 raw bytes**. The verified archive is
+exactly **14 members including the shim / 798,968 B**. Against the observed old
+archive that is **87.9% fewer members** and **98.53% fewer bytes**. The 12-module
+artifact-production closure in the table above and the 13 Lean objects here are
+not a disagreement: the latter adds the generated `RuntimeInit` root object.
+
+| validation point | result |
+|---|---|
+| isolated rebuild after moving aside exactly the 13 generated `c.o` outputs | **1.07 s** |
+| immediate Lake no-build object query | **0.14 s** |
+| final full Cargo gate after the documentation fix | **147.13 s**, green |
+| unchanged `cargo test --quiet` | **0.93 s**, green |
+| final Lean/audit coverage | **126 jobs; 117 root modules; 20,446 constants audited** |
+| final Rust suite | **132/132 tests passed** |
+
+The 1.07 s closure rebuild is the isolated linker/build-graph datapoint. The
+147.13 s validation duration includes the fail-closed full Lake gate, native C,
+Rust build, and tests on a shared swarm machine; it is evidence that the whole
+path passed, not a reproducible speedup claim. The 0.93 s unchanged run skips
+work that Cargo has already proved fresh and therefore must not be compared with
+the full run.
+
+### How future proof/build measurements should be run
+
+Use the checked-in serial profiler for source elaboration:
+
+```
+scripts/proof-profile.sh Uwueave/ExecRefine.lean Uwueave/Preo/Demo.lean
+```
+
+It performs one unmeasured warmup and three measured runs by default and reports
+medians as TSV. `UWUEAVE_PROFILE_RUNS` may select another positive odd run
+count, and `UWUEAVE_PROFILE_WARMUPS` controls warmups. For a publishable
+before/after comparison:
+
+1. Use clean worktrees at named commits, the same Lean toolchain and machine,
+   and identical imported oleans. Run the two revisions serially with no other
+   Lean or Cargo workers.
+2. Report medians for wall, user, system, RSS, and profiler categories; retain
+   raw logs. State explicitly whether a result is source-only, `lake build`, a
+   Lake object query, or the fail-closed Cargo gate.
+3. Record source, olean, generated-C, and archive deltas separately. Do not use
+   cached-build wall time as the baseline for a source-only run, or archive
+   shrinkage as evidence of kernel throughput.
+4. Run the broad Cargo gate only against a frozen tree. Its final no-build check
+   deliberately rejects a source or setup change that races the build; a failed
+   concurrent run is a useful freshness test, not a benchmark sample.
+
+Runtime kernel comparisons still belong in the harness and protocol of §§10–11.
+Proof/build improvements in this section make the verified system cheaper to
+develop and ship; they do not change the runtime numbers above unless measured
+again by that harness.

@@ -269,87 +269,29 @@ theorem values_of_statusOf_provisional {β : Type}
     {e : Evidence.ResultEvidence β} {v : β}
     (h : statusOf e = Status.provisional v) :
     Evidence.values e v = true ∧ Holes.SealsTo (Evidence.values e) v
-      ∧ ¬ Evidence.Closed e := by
-  by_cases hu : ∃ a, Evidence.values e a = true ∧
-      ∀ b, Evidence.values e b = true → b = a
-  · by_cases hc : Evidence.Closed e
-    · rw [ResultStatus.statusOf, dif_pos hu, if_pos hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · rw [ResultStatus.statusOf, dif_pos hu, if_neg hc] at h
-      injection h with hv
-      obtain ⟨hm, hs⟩ := Classical.choose_spec hu
-      exact ⟨hv ▸ hm, fun b hb => hv ▸ hs b hb, hc⟩
-  · by_cases hne : ∃ a, Evidence.values e a = true
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+      ∧ ¬ Evidence.Closed e :=
+  (ResultStatus.statusOf_eq_iff e (Status.provisional v)).1 h
 
 /-- Non-uniqueness plus a witness produces two distinct witnesses. -/
 theorem two_of_nonunique {β : Type} {p : β → Bool}
     (hne : ∃ a, p a = true)
     (hnu : ¬ ∃ a, p a = true ∧ ∀ b, p b = true → b = a) :
-    ∃ a b, p a = true ∧ p b = true ∧ a ≠ b := by
-  obtain ⟨a, ha⟩ := hne
-  have hex : ∃ b, p b = true ∧ b ≠ a := by
-    apply Classical.byContradiction
-    intro hn
-    apply hnu
-    refine ⟨a, ha, ?_⟩
-    intro b hb
-    apply Classical.byContradiction
-    intro hba
-    exact hn ⟨b, hb, hba⟩
-  obtain ⟨b, hb, hba⟩ := hex
-  exact ⟨a, b, ha, hb, fun hab => hba hab.symm⟩
+    ∃ a b, p a = true ∧ p b = true ∧ a ≠ b :=
+  ResultStatus.exists_two_of_nonunique hne hnu
 
 theorem values_of_statusOf_forkedClosed {β : Type}
     {e : Evidence.ResultEvidence β} (h : statusOf e = Status.forkedClosed) :
     HasFork Evidence.values e ∧ Evidence.Closed e := by
-  by_cases hu : ∃ a, Evidence.values e a = true ∧
-      ∀ b, Evidence.values e b = true → b = a
-  · by_cases hc : Evidence.Closed e
-    · rw [ResultStatus.statusOf, dif_pos hu, if_pos hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · rw [ResultStatus.statusOf, dif_pos hu, if_neg hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-  · by_cases hne : ∃ a, Evidence.values e a = true
-    · by_cases hc : Evidence.Closed e
-      · exact ⟨two_of_nonunique hne hu, hc⟩
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+  change (∃ a b, Evidence.values e a = true ∧ Evidence.values e b = true ∧ a ≠ b)
+      ∧ Evidence.Closed e
+  exact (ResultStatus.statusOf_eq_iff e Status.forkedClosed).1 h
 
 theorem values_of_statusOf_forkedOpen {β : Type}
     {e : Evidence.ResultEvidence β} (h : statusOf e = Status.forkedOpen) :
     HasFork Evidence.values e ∧ ¬ Evidence.Closed e := by
-  by_cases hu : ∃ a, Evidence.values e a = true ∧
-      ∀ b, Evidence.values e b = true → b = a
-  · by_cases hc : Evidence.Closed e
-    · rw [ResultStatus.statusOf, dif_pos hu, if_pos hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-    · rw [ResultStatus.statusOf, dif_pos hu, if_neg hc] at h
-      exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-  · by_cases hne : ∃ a, Evidence.values e a = true
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_pos hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · exact ⟨two_of_nonunique hne hu, hc⟩
-    · by_cases hc : Evidence.Closed e
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_pos hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
-      · rw [ResultStatus.statusOf, dif_neg hu, if_neg hne, if_neg hc] at h
-        exact absurd h (ResultStatus.status_ne_of_tag (by simp [ResultStatus.statusTag]))
+  change (∃ a b, Evidence.values e a = true ∧ Evidence.values e b = true ∧ a ≠ b)
+      ∧ ¬ Evidence.Closed e
+  exact (ResultStatus.statusOf_eq_iff e Status.forkedOpen).1 h
 
 /-- `statusOf` discharges the total contract; the three new clauses come from
 the exact inversions immediately above, not from assumptions about a renderer. -/

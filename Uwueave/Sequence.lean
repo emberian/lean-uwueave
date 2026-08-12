@@ -113,6 +113,7 @@ below `n`, so a chain has length at most `n` and fuel `n` suffices
     (`seq.rs::interleaving_anomaly_through_the_kernel`), not just modeled here.
 -/
 import Uwueave.Move
+import Uwueave.ListProofs
 
 namespace Uwueave.Sequence
 
@@ -490,37 +491,23 @@ private theorem count_flatMap_le_one {n : Nat} {s : SeqState} (hwf : WF n s)
     (ih : ∀ a' j, (linearizeAux n s fuel a').count j ≤ 1) :
     ∀ cs : List Nat, cs.Nodup → (∀ c ∈ cs, s (c, a) = true) → ∀ j,
       (cs.flatMap (fun c => c :: linearizeAux n s fuel c)).count j ≤ 1 := by
-  intro cs
-  induction cs with
-  | nil => intro _ _ j; simp
-  | cons c cs ihcs =>
-    intro hnodup hanchor j
-    rw [List.flatMap_cons, List.count_append]
-    obtain ⟨hcnotin, hnodup'⟩ := List.nodup_cons.mp hnodup
-    have hrest := ihcs hnodup'
-      (fun c' hc' => hanchor c' (List.mem_cons_of_mem c hc')) j
-    have hchunk := count_chunk_le_one hwf ih c j
-    by_cases hz : (cs.flatMap (fun c => c :: linearizeAux n s fuel c)).count j = 0
-    · omega
-    · have hmem : j ∈ cs.flatMap (fun c => c :: linearizeAux n s fuel c) :=
-        List.count_pos_iff.mp (by omega)
-      obtain ⟨c', hc'in, hjc'⟩ := List.mem_flatMap.mp hmem
-      have hnot : j ∉ c :: linearizeAux n s fuel c := by
-        intro hjc
-        have h1 := chunk_mem_below hjc
-        have h2 := chunk_mem_below hjc'
-        have hcc' : c ≠ c' := fun h => hcnotin (h.symm ▸ hc'in)
-        have hca := hanchor c List.mem_cons_self
-        have hc'a := hanchor c' (List.mem_cons_of_mem c hc'in)
-        rcases h1 with rfl | hb1
-        · rcases h2 with rfl | hb2
-          · exact hcc' rfl
-          · exact not_below_sibling hwf huniq hca hc'a hb2
-        · rcases h2 with rfl | hb2
-          · exact not_below_sibling hwf huniq hc'a hca hb1
-          · exact below_sibling_disjoint hwf huniq hca hc'a hcc' j hb1 hb2
-      rw [List.count_eq_zero_of_not_mem hnot]
-      omega
+  intro cs hnodup hanchor
+  apply ListProofs.flatMap_count_le_one_of_nodup_of_pairwise_disjoint
+    (fun c => c :: linearizeAux n s fuel c) hnodup
+  · intro c _ j
+    exact count_chunk_le_one hwf ih c j
+  · intro c hc c' hc' hcc' j hj hj'
+    have h1 := chunk_mem_below hj
+    have h2 := chunk_mem_below hj'
+    have hca := hanchor c hc
+    have hc'a := hanchor c' hc'
+    rcases h1 with rfl | hb1
+    · rcases h2 with rfl | hb2
+      · exact hcc' rfl
+      · exact not_below_sibling hwf huniq hca hc'a hb2
+    · rcases h2 with rfl | hb2
+      · exact not_below_sibling hwf huniq hc'a hca hb1
+      · exact below_sibling_disjoint hwf huniq hca hc'a hcc' j hb1 hb2
 
 /-- Every id is emitted at most once, from any anchor, at any fuel — the
 duplicate-freedom half of exactly-once. -/
@@ -562,16 +549,8 @@ theorem dup_id_appears_twice :
 /-! ## §5. The anchor appears before its element -/
 
 private theorem sublist_flatMap_of_mem {α β : Type} (f : α → List β) :
-    ∀ (cs : List α) (c : α), c ∈ cs → (f c).Sublist (cs.flatMap f) := by
-  intro cs
-  induction cs with
-  | nil => intro c hc; cases hc
-  | cons c' cs ihcs =>
-    intro c hc
-    rw [List.flatMap_cons]
-    cases hc with
-    | head => exact List.sublist_append_left _ _
-    | tail _ hc => exact (ihcs c hc).trans (List.sublist_append_right _ _)
+    ∀ (cs : List α) (c : α), c ∈ cs → (f c).Sublist (cs.flatMap f) :=
+  ListProofs.sublist_flatMap_of_mem f
 
 /-- Inside any subtree emission that contains an element's anchor chain, the
 anchor is emitted and the element follows it. -/

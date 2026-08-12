@@ -74,7 +74,7 @@ locally (op-validation is the application's job), and it does not price
 metadata growth (tombstones, op logs — engineering, not semantics).
 -/
 import Uwueave.Spec
-import Uwueave.Tactics
+import Uwueave.Tactics.Core
 
 namespace Uwueave.Weave
 

@@ -173,6 +173,7 @@ import Uwueave.Preo.ProjectionV2
 import Uwueave.Preo.ResultProgram
 import Uwueave.Protocol
 import Uwueave.SeamAlgebra
+import Uwueave.TrustFloor
 
 namespace Uwueave.Preo
 
@@ -297,18 +298,12 @@ private def tryEmit (cmd : Syntax) : CommandElabM (Except String Unit) := do
     restore
     return .error why
 
-/-- The axioms a constant depends on, minus Lean's own floor. -/
-private def offFloor (c : Name) : CommandElabM (Array Name) := do
-  let axs ← collectAxioms c
-  return axs.filter fun a =>
-    !([``propext, ``Classical.choice, ``Quot.sound].contains a)
-
 /-- ⚠ **Every emitted facet answers to the tree's floor before a row exists.**
 This is what makes the *supplied* routes safe: a `sorry`-backed `Verdict`,
 `SegVerdict` or `Fourth.Correct` prints exactly like a real one, and no amount
 of reading the table would tell. -/
 private def floorCheck (at? : Syntax) (what : String) (c : Name) : CommandElabM Unit := do
-  let stray ← offFloor c
+  let stray ← Uwueave.TrustFloor.offFloor c
   unless stray.isEmpty do
     throwErrorAt at? "preo: the {what} `{c}` depends on \
       {String.intercalate ", " (stray.toList.map toString)} — outside the \

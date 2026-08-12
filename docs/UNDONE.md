@@ -738,27 +738,27 @@ file is the frontier it named.
     histories. No theorem here says that is the general pattern.
 ````
 
-### [`Uwueave/HistoryBase.lean:304`](../Uwueave/HistoryBase.lean#L304)
+### [`Uwueave/HistoryBase.lean:264`](../Uwueave/HistoryBase.lean#L264)
 
 ````text
     answer exists — the ⟨UNDONE⟩ `MergeModel` §9's own docstring records;
 ````
 
-### [`Uwueave/HistoryBase.lean:554`](../Uwueave/HistoryBase.lean#L554)
+### [`Uwueave/HistoryBase.lean:514`](../Uwueave/HistoryBase.lean#L514)
 
 ````text
 `selected_unique`, which forbids the pair at the history level. ⟨UNDONE⟩ This
 withdraws the *licence*; it is not a convergence proof. -/
 ````
 
-### [`Uwueave/HistoryBase.lean:1123`](../Uwueave/HistoryBase.lean#L1123)
+### [`Uwueave/HistoryBase.lean:1079`](../Uwueave/HistoryBase.lean#L1079)
 
 ````text
 name for it, no more. ⟨UNDONE⟩ There is no theorem here that the version index
 separates worlds a `WorldFuture.WorldCert` cannot — it does not. -/
 ````
 
-### [`Uwueave/HistoryBase.lean:1324`](../Uwueave/HistoryBase.lean#L1324)
+### [`Uwueave/HistoryBase.lean:1277`](../Uwueave/HistoryBase.lean#L1277)
 
 ````text
 ⟨UNDONE⟩ Two histories, not a classification: nothing here says visibility and
@@ -1243,9 +1243,9 @@ clothes.
     quotient's size is proved.
 ````
 
-## `Uwueave/Preo/ArtifactDurable.lean`
+## `Uwueave/Preo/ArtifactDurableCore.lean`
 
-### [`Uwueave/Preo/ArtifactDurable.lean:39`](../Uwueave/Preo/ArtifactDurable.lean#L39)
+### [`Uwueave/Preo/ArtifactDurableCore.lean:39`](../Uwueave/Preo/ArtifactDurableCore.lean#L39)
 
 ````text
   * ⟨UNDONE⟩ No deployment refinement proves that a host serializer agrees

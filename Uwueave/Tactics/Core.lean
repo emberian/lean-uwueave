@@ -41,22 +41,26 @@ Given `IConfluent I` or `¬ IConfluent I`, `classify` tries, in order:
      (`CLSet`, `GCounter`, any `K → LWW`), it is free. Also infinite.
   3. **monotone closure** (`Catalog.gset_monotone_iconfluent`) — for grow-only
      sets, discharge the upward-closure side condition with a short script.
-  4. **exhaustive decision** — over a carrier with a `FinEnum` instance (a
-     list plus a *proof* that it contains everything) and a decidable
-     invariant, `IConfluent I` is `Decidable`, and `decide` settles it either
-     way. This is the only route that also proves the **negative**.
+  4. **bounded exhaustive decision** — over a carrier with a transparent
+     `FinEnum` instance (a list plus a *proof* that it contains everything) and
+     a decidable invariant, `IConfluent I` is `Decidable`, and `decide` settles
+     it either way. Automatic routing accepts at most 64 states / 4096 ordered
+     pairs; larger or opaque enumerations are resource refusals. This is the
+     only automatic route that also proves the **negative**. The explicit
+     verdict-valued `Tactics.Verdict.classifyFinite` function is uncapped.
   5. **clash search** — for `¬ IConfluent I`: search a pool of concrete probe
      states for a pair `x, y` with `I x`, `I y`, `¬ I (x ⊔ y)`, then emit
      `not_iconfluent_of_clash x y (by decide) (by decide) (by decide)`.
 
 ### What `classify` covers — precisely
 
-* **Positive verdicts** are available for: any invariant over a
+* **Positive proofs** are available for: any invariant over a
   `SelectionMerge` carrier (infinite carriers included); conjunctions thereof;
-  monotone invariants over `GSet α` for any `α`; and *arbitrary* decidable
-  invariants over a carrier with `FinEnum` (`Bool`, `Fin n`, products of
-  those, and function spaces `A → B` out of a finite `A`).
-* **Negative verdicts** need only a decidable invariant and a probe that
+  monotone invariants over `GSet α` for any `α`; and arbitrary decidable
+  invariants over a carrier whose transparent `FinEnum` stays within the
+  automatic 64-state / 4096-pair work gate (`Bool`, small `Fin n`, and small
+  products or function spaces).
+* **Negative proofs** need only a decidable invariant and a probe that
   clashes — the carrier may be infinite (`GSet Nat`, `PNCounter Bool`,
   `LWW × LWW` all work off the default probe pools).
 * **NOT covered**, and `classify` says so rather than guessing: invariants
@@ -77,7 +81,15 @@ Loudly, always, and with the clash when it has one:
   *nothing* satisfies `I` is the commonest cause, and it looks nothing like
   "the invariant is confluent");
 * no route applies → the error lists what was tried and names the missing
-  instance.
+  instance;
+* the finite route exceeds its bound, cannot expose a bounded enumeration
+  spine, or hits a runtime limit → a named resource refusal stops routing;
+* an unexpected internal exception → a named internal error stops routing.
+
+Only ordinary route inapplicability continues to the next alternative. Every
+non-applied route restores the tactic state first, so a failed speculative
+`simp_all` or unification attempt cannot leak goals or metavariable assignments
+into the next route.
 
 `classify` never closes a goal by any route other than a term the kernel
 checks. `Probes` — the search pool — carries **no** completeness obligation
@@ -100,9 +112,9 @@ another file.
   * `iconf_intro` / `merge_unfold` — the opener, without the hand-written
     `show (x a || y a) = true` that pins the encoding into the proof.
 
-## §C. The evidence-carrying layer lives one file up
+## §C. The evidence-carrying layer lives in `Tactics.Verdict`
 
-`Uwueave.Tactics` adds `classifyIn?` / `classify?` / `classifyFinite` and the
+`Uwueave.Tactics.Verdict` adds `classifyIn?` / `classify?` / `classifyFinite` and the
 `verdict` tactic, which produce `Spec.Verdict` **terms** rather than closing a
 proposition. They are there and not here because `Verdict` is defined in
 `Spec.lean`, which sits above `Move`; putting them here would drag `Move` and
@@ -579,20 +591,73 @@ def clashProof (S inst I x y : Expr) : MetaM Expr := do
   let (px, py, pbad) ← clashParts S inst I x y
   mkAppOptM ``Uwueave.Tactics.not_iconfluent_of_clash #[S, inst, I, x, y, px, py, pbad]
 
-/-- Run a tactic script, reporting whether it closed the goal; restores state
-on failure so the next route starts clean. -/
-def tryRoute (stx : TSyntax `tactic) : TacticM Bool := do
+/-- A route does not merely succeed or fail. Inapplicability is expected and
+lets classification continue; a resource refusal or an internal exception is
+diagnostic information that must not be silently reinterpreted as
+inapplicability. -/
+inductive RouteOutcome where
+  | applied
+  | inapplicable (route : String) (reason : MessageData)
+  | resourceRefused (route : String) (reason : MessageData)
+  | internalError (route : String) (reason : MessageData)
+
+/-- Turn a typed route result into a Boolean for a named caller. Only genuine
+inapplicability becomes `false`; resource and internal failures remain loud. -/
+def RouteOutcome.toBoolFor (caller : String) : RouteOutcome → TacticM Bool
+  | .applied => pure true
+  | .inapplicable _ _ => pure false
+  | .resourceRefused route reason =>
+      throwError m!"{caller}: route `{route}` refused work:\n" ++ reason
+  | .internalError route reason =>
+      throwError m!"{caller}: internal error in route `{route}`:\n" ++ reason
+
+/-- Legacy `classify`-named Boolean interface. -/
+def RouteOutcome.toBool (outcome : RouteOutcome) : TacticM Bool :=
+  outcome.toBoolFor "classify"
+
+/-- Classify an exception raised while probing a route. Ordinary tactic errors
+mean that route did not apply; runtime limits and internal exceptions retain
+their distinct meaning. Interrupts are never caught by `tryCatchRuntimeEx`. -/
+def routeException (route : String) (ex : Exception) : RouteOutcome :=
+  if ex.isRuntime then
+    .resourceRefused route ex.toMessageData
+  else
+    match ex with
+    | .error _ msg => .inapplicable route msg
+    | .internal id _ =>
+        -- Tactic and term elaboration use these internal ids as ordinary
+        -- control flow for a failed alternative. Keep that narrow allowlist;
+        -- every other internal exception remains an internal error.
+        if id == Lean.Elab.abortTacticExceptionId ||
+            id == Lean.Elab.abortTermExceptionId ||
+            id == Lean.Elab.unsupportedSyntaxExceptionId ||
+            id == Lean.Meta.isDefEqStuckExceptionId then
+          .inapplicable route ex.toMessageData
+        else
+          .internalError route ex.toMessageData
+
+/-- Run a tactic script and retain *why* it did not close the goal. The tactic
+state is restored on every non-applied outcome so the next route starts clean. -/
+def tryRouteOutcome (route : String) (stx : TSyntax `tactic) : TacticM RouteOutcome := do
   let s ← saveState
-  try
-    evalTactic stx
-    if (← getUnsolvedGoals).isEmpty then
-      return true
-    else
+  let outcome ← tryCatchRuntimeEx
+    (do
+      evalTactic stx
+      if (← getUnsolvedGoals).isEmpty then
+        pure .applied
+      else
+        pure (.inapplicable route m!"the route left unsolved goals"))
+    (fun ex => pure (routeException route ex))
+  match outcome with
+  | .applied => pure .applied
+  | other =>
       s.restore
-      return false
-  catch _ =>
-    s.restore
-    return false
+      pure other
+
+/-- Compatibility wrapper for callers that only need success/inapplicability.
+Resource refusals and internal failures are deliberately re-thrown. -/
+def tryRoute (stx : TSyntax `tactic) : TacticM Bool := do
+  (← tryRouteOutcome "unnamed tactic route" stx).toBool
 
 /-- **The one-key selection route.** If the invariant reads the map at exactly
 one key and the value lattice selects, `key_selection_iconfluent` closes it.
@@ -604,38 +669,59 @@ find an occurrence `s k` in the body, `kabstract` it, and check that nothing
 else mentions `s`. That last check is what makes the route sound for one key
 and refuse for two (`ORSet.clset_cross_element_not_iconfluent` is the
 cross-key invariant, and it is *false*). -/
-def tryKeySelection (S I : Expr) : TacticM Bool := do
+private def runKeySelection (S I : Expr) : TacticM Bool := do
   let goal ← getMainGoal
-  try
-    let Sw ← whnf S
-    let .forallE _ K V _ := Sw | return false
-    if V.hasLooseBVars then return false
-    let some (k, P) ← lambdaTelescope I fun args body => do
-        unless args.size == 1 do return none
-        let s := args[0]!
-        let isRead := fun (e : Expr) => e.isApp && e.appFn! == s
-        -- A named invariant (`CLPresent s a`) hides the read behind a `def`;
-        -- expose the head once before giving up.
-        let (body, occ?) ←
-          match body.find? isRead with
-          | some occ => pure (body, some occ)
-          | none => do
-              let body' ← whnf body
-              pure (body', body'.find? isRead)
-        let some occ := occ? | return none
-        let key := occ.appArg!
-        if key.containsFVar s.fvarId! then return none
-        let abst ← kabstract body occ
-        let P := Expr.lam `v V abst .default
-        if P.containsFVar s.fvarId! then return none
-        return some (key, P)
-      | return false
-    let e ← mkAppOptM ``Uwueave.Tactics.key_selection_iconfluent #[K, V, none, none, k, P]
-    unless ← isDefEq (← goal.getType) (← inferType e) do return false
-    goal.assign e
-    replaceMainGoal []
-    return true
-  catch _ => return false
+  let Sw ← whnf S
+  let .forallE _ K V _ := Sw | return false
+  if V.hasLooseBVars then return false
+  let some (k, P) ← lambdaTelescope I fun args body => do
+      unless args.size == 1 do return none
+      let s := args[0]!
+      let isRead := fun (e : Expr) => e.isApp && e.appFn! == s
+      -- A named invariant (`CLPresent s a`) hides the read behind a `def`;
+      -- expose the head once before giving up.
+      let (body, occ?) ←
+        match body.find? isRead with
+        | some occ => pure (body, some occ)
+        | none => do
+            let body' ← whnf body
+            pure (body', body'.find? isRead)
+      let some occ := occ? | return none
+      let key := occ.appArg!
+      if key.containsFVar s.fvarId! then return none
+      let abst ← kabstract body occ
+      let P := Expr.lam `v V abst .default
+      if P.containsFVar s.fvarId! then return none
+      return some (key, P)
+    | return false
+  let e ← mkAppOptM ``Uwueave.Tactics.key_selection_iconfluent #[K, V, none, none, k, P]
+  unless ← isDefEq (← goal.getType) (← inferType e) do return false
+  goal.assign e
+  replaceMainGoal []
+  return true
+
+/-- Typed one-key route. Its speculative metavariable changes are restored
+unless it actually closes the goal. -/
+def tryKeySelectionOutcome (S I : Expr) : TacticM RouteOutcome := do
+  let route := "one-key selection"
+  let s ← saveState
+  let outcome ← tryCatchRuntimeEx
+    (do
+      if ← runKeySelection S I then
+        pure .applied
+      else
+        pure (.inapplicable route m!"the invariant is not a one-key read over a selection merge"))
+    (fun ex => pure (routeException route ex))
+  match outcome with
+  | .applied => pure .applied
+  | other =>
+      s.restore
+      pure other
+
+/-- Compatibility wrapper retaining the old Boolean API without collapsing
+resource or internal failures. -/
+def tryKeySelection (S I : Expr) : TacticM Bool := do
+  (← tryKeySelectionOutcome S I).toBool
 
 /-- The syntactic positive routes, in order of cost. Each either closes the
 goal or leaves it untouched. -/
@@ -652,39 +738,119 @@ def positiveRoutes : List (String × TSyntax `tactic) := Id.run do
            | exact hst _ hI
            | exact fun a ha => hst a (hI a ha)
            | exact ⟨hst _ hI.1, hst _ hI.2⟩
-           | simp_all))),
-    ("exhaustive decision over FinEnum",
-      Unhygienic.run `(tactic| decide))]
+           | simp_all)))]
+
+/-- Automatic exhaustive classification is intentionally much smaller than
+the total value-level `classifyFinite`: tactics must refuse unexpectedly large
+kernel computations instead of starting them implicitly. -/
+def automaticFiniteStateCap : Nat := 64
+
+/-- The corresponding worst-case pair census. Stating both limits keeps the
+work contract explicit if the state cap is tuned later. -/
+def automaticFinitePairWorkCap : Nat := 4096
+
+/-- Result of inspecting only a bounded prefix of a list expression. -/
+inductive BoundedList where
+  | complete (elems : Array Expr)
+  | overCap
+  | opaque (tail : Expr)
+
+/-- Walk at most `cap` cons cells. Unlike `listElems`, this never normalizes an
+unbounded enumeration merely to learn that it is too large. -/
+partial def boundedListElems (e : Expr) (cap : Nat) : MetaM BoundedList := do
+  let rec loop (e : Expr) (remaining : Nat) (acc : Array Expr) : MetaM BoundedList := do
+    let e ← withDefault <| whnf e
+    match e.getAppFnArgs with
+    | (``List.nil, _) => pure (.complete acc)
+    | (``List.cons, #[_, h, t]) =>
+        match remaining with
+        | 0 => pure .overCap
+        | n + 1 => loop t n (acc.push h)
+    | _ => pure (.opaque e)
+  loop e cap #[]
+
+/-- The only automatic exhaustive route. It first checks the `FinEnum`
+enumeration against explicit state/pair caps, then asks `decide`; exceeding a
+cap is a typed work refusal, not ordinary inapplicability. The explicit total
+function `classifyFinite` is deliberately unaffected. -/
+def tryAutomaticFiniteOutcome (S : Expr) : TacticM RouteOutcome := do
+  let route := "exhaustive decision over FinEnum"
+  let body : TacticM RouteOutcome := do
+    match ← trySynthInstance (← mkAppM ``FinEnum #[S]) with
+    | .some inst =>
+        let enum ← mkAppOptM ``FinEnum.enum #[S, inst]
+        match ← boundedListElems enum automaticFiniteStateCap with
+        | .overCap =>
+            pure (.resourceRefused route m!"automatic finite route refused: the enumeration has more than \
+              {automaticFiniteStateCap} states, exceeding the implicit-work cap \
+              ({automaticFinitePairWorkCap} ordered pairs). Use the explicit total \
+              `classifyFinite` function, narrow the carrier, or prove this goal directly.")
+        | .opaque tail =>
+            pure (.resourceRefused route m!"automatic finite route refused: the enumeration did not \
+              expose a bounded list spine, so its work could not be certified before evaluation:{indentExpr tail}")
+        | .complete elems =>
+            let work := elems.size * elems.size
+            if work > automaticFinitePairWorkCap then
+              pure (.resourceRefused route m!"automatic finite route refused: {elems.size} states require \
+                {work} ordered pairs, over the cap of {automaticFinitePairWorkCap}.")
+            else
+              tryRouteOutcome route (Unhygienic.run `(tactic| decide))
+    | _ => pure (.inapplicable route m!"no `FinEnum` instance is available")
+  tryCatchRuntimeEx body fun ex =>
+    pure <| if ex.isRuntime then
+      .resourceRefused route ex.toMessageData
+    else
+      .internalError route ex.toMessageData
 
 /-- The positive routes, in `classify`'s order, run against the main goal.
 Shared by `classify` (on an `IConfluent I` goal) and by the `verdict` tactic
 (on a scratch goal whose proof becomes `Verdict.free`), so the two can never
 drift into disagreeing about what "free" means. -/
+def tryPositiveRoutesOutcome (S I : Expr) : TacticM RouteOutcome := do
+  let (selectionName, selection) := positiveRoutes.head!
+  match ← tryRouteOutcome selectionName selection with
+  | .inapplicable _ _ => pure ()
+  | other => return other
+  match ← tryKeySelectionOutcome S I with
+  | .inapplicable _ _ => pure ()
+  | other => return other
+  for (route, stx) in positiveRoutes.tail! do
+    match ← tryRouteOutcome route stx with
+    | .inapplicable _ _ => pure ()
+    | other => return other
+  match ← tryAutomaticFiniteOutcome S with
+  | .inapplicable _ _ =>
+      pure (.inapplicable "positive classification" m!"no positive route applied")
+  | other => pure other
+
+/-- Compatibility wrapper: only true inapplicability becomes `false`. -/
 def tryPositiveRoutes (S I : Expr) : TacticM Bool := do
-  if ← tryRoute (positiveRoutes.head!).2 then
-    return true
-  if ← tryKeySelection S I then
-    return true
-  for (_, stx) in positiveRoutes.tail! do
-    if ← tryRoute stx then
-      return true
-  return false
+  (← tryPositiveRoutesOutcome S I).toBool
 
 /-- The positive routes against an *arbitrary* goal, with the tactic state —
 goals included — restored when none of them closes it. This is what lets a
 tactic whose goal is not a proposition (`Verdict I`) still ask the free
 question. -/
-def tryPositiveOn (mv : MVarId) (S I : Expr) : TacticM Bool := do
+def tryPositiveOnOutcome (mv : MVarId) (S I : Expr) : TacticM RouteOutcome := do
   let s ← saveState
   let saved ← getGoals
   setGoals [mv]
-  let closed ← try tryPositiveRoutes S I catch _ => pure false
-  if closed && (← getUnsolvedGoals).isEmpty then
-    setGoals saved
-    return true
-  else
-    s.restore
-    return false
+  let outcome ← tryPositiveRoutesOutcome S I
+  match outcome with
+  | .applied =>
+      if (← getUnsolvedGoals).isEmpty then
+        setGoals saved
+        pure .applied
+      else
+        s.restore
+        pure (.internalError "positive classification" m!"a route reported success but left goals")
+  | other =>
+      s.restore
+      pure other
+
+/-- Compatibility wrapper retaining the previous success test. -/
+def tryPositiveOn (mv : MVarId) (S I : Expr) : TacticM Bool := do
+  (← tryPositiveOnOutcome mv S I).toBool
 
 /-- Render a probe for a human. A generated probe arrives as an unevaluated
 `table ((fun v => …) x)`; reducing *the table's list* (and nothing else) turns
@@ -726,7 +892,7 @@ def throwClash (positive : Bool) (source : String) (x y : Expr) : TacticM α := 
 end Classify
 
 /-- **The verdict tactic.** On `IConfluent I` it tries the selection, one-key
-selection, monotone-closure and exhaustive-decision routes; on `¬ IConfluent I`
+selection, monotone-closure and bounded exhaustive-decision routes; on `¬ IConfluent I`
 it searches a probe pool for a clash and emits the witness refutation. It
 closes the goal with a kernel-checked term or it fails — loudly, naming the
 clash when it found one. Covered fragment and failure modes: the file header.
@@ -735,7 +901,7 @@ clash when it found one. Covered fragment and failure modes: the file header.
 small values; a budget of 10 needs states with a 10 in them).
 
 For a `Verdict I` **term** rather than a closed proposition, see `verdict` in
-`Uwueave.Tactics`. -/
+`Uwueave.Tactics.Verdict`. -/
 syntax "classify" (" using " term)? : tactic
 
 open Lean Meta Elab Tactic Classify in
@@ -761,8 +927,10 @@ elab_rules : tactic
     | none => pure none
   if let some (S, inst, I) := iconfArgs? goal then
     -- Positive: try each route; a route that closes the goal is the verdict.
-    if ← tryPositiveRoutes S I then
-      return
+    match ← tryPositiveRoutesOutcome S I with
+    | .applied => return
+    | .inapplicable _ _ => pure ()
+    | outcome => discard outcome.toBool
     -- No route worked. Say why, with the clash if there is one.
     let (pool, source) ← getPool S explicit?
     match ← Classify.findClash S inst I pool with
@@ -782,8 +950,10 @@ elab_rules : tactic
       | throwError "classify: expected `IConfluent I` or `¬ IConfluent I`, got{indentExpr goal}"
     -- Refutation: exhaustive decision first (it is a proof), then clash search.
     if explicit?.isNone then
-      if ← tryRoute (Unhygienic.run `(tactic| decide)) then
-        return
+      match ← tryAutomaticFiniteOutcome S with
+      | .applied => return
+      | .inapplicable _ _ => pure ()
+      | outcome => discard outcome.toBool
     let (pool, source) ← getPool S explicit?
     match ← Classify.findClash S inst I pool with
     | .ok (x, y) =>
@@ -826,13 +996,29 @@ macro_rules
   | `(tactic| iconf_intro $xs*) => `(tactic| (intro $xs*; merge_unfold))
 
 /-- **The concrete-witness refutation.** `clash x, y` proves `¬ IConfluent I`
-from a pair you name, discharging `I x`, `I y` and `¬ I (x ⊔ y)` by `decide`.
-This is `classify`'s negative route with the search skipped — use it when the
-witness is the point (it belongs in the docstring), or when the invariant is
-outside any probe pool. -/
-macro "clash " x:term ", " y:term : tactic =>
-  `(tactic| exact @Uwueave.Tactics.not_iconfluent_of_clash _ _ _ $x $y
-      (by decide) (by decide) (by decide))
+from a pair you name. It uses the same `clashProof`/`decideProof` path as the
+searched route, so named invariants whose `Decidable` instance appears only
+after head reduction work exactly like their expanded forms. -/
+syntax "clash " term ", " term : tactic
+
+open Lean Meta Elab Tactic Classify in
+elab_rules : tactic
+  | `(tactic| clash $xStx, $yStx) => withMainContext do
+      let goal ← instantiateMVars (← (← getMainGoal).getType)
+      let goal ← whnfR goal
+      let some inner := negArg? goal
+        | throwError "clash: expected a goal of the form `¬ IConfluent I`, got{indentExpr goal}"
+      let inner ← whnfR inner
+      let some (S, inst, I) := iconfArgs? inner
+        | throwError "clash: expected a goal of the form `¬ IConfluent I`, got{indentExpr goal}"
+      let x ← Term.elabTerm xStx (some S)
+      let y ← Term.elabTerm yStx (some S)
+      Term.synthesizeSyntheticMVars
+      let x ← instantiateMVars x
+      let y ← instantiateMVars y
+      let prf ← clashProof S inst I x y
+      (← getMainGoal).assign prf
+      replaceMainGoal []
 
 /-- Case-split a hypothesis that is a (possibly nested) disjunction of
 equations, substituting each. Arity is discovered, not declared. -/
@@ -842,8 +1028,8 @@ macro_rules
     `(tactic|
       focus
         (have hEq := $h
-         rcases hEq with hEq | hEq | hEq | hEq | hEq | hEq | hEq | hEq
-         all_goals (try subst hEq)))
+         repeat' rcases hEq with hEq | hEq
+         all_goals subst_vars))
 
 /-- **"This merged set holds exactly these elements."** Given
 `h : (s₁ ⊔ … ⊔ sₙ) w = true` where each `sᵢ` is a singleton `fun w => w == cᵢ`,

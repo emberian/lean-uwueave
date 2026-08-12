@@ -52,16 +52,16 @@ def actionChoices {A : Type} : List A → List (List A)
       let tail := actionChoices rest
       tail ++ tail.map (action :: ·)
 
-@[simp] theorem actionChoices_nil {A : Type} :
+theorem actionChoices_nil {A : Type} :
     actionChoices ([] : List A) = [[]] := rfl
 
-@[simp] theorem actionChoices_cons {A : Type} (action : A) (rest : List A) :
+theorem actionChoices_cons {A : Type} (action : A) (rest : List A) :
     actionChoices (action :: rest) =
       actionChoices rest ++ (actionChoices rest).map (action :: ·) := rfl
 
 /-- Exact characterization: `actionChoices` enumerates every order-preserving
 sublist, no more and no less. -/
-theorem mem_actionChoices_iff_sublist {A : Type} {source choice : List A} :
+@[simp] theorem mem_actionChoices_iff_sublist {A : Type} {source choice : List A} :
     choice ∈ actionChoices source ↔ choice.Sublist source := by
   induction source generalizing choice with
   | nil => simp [actionChoices]
@@ -88,6 +88,25 @@ cost inspectable before search. -/
   | cons head tail ih =>
       simp [actionChoices, ih, Nat.pow_succ]
       omega
+
+/-! The recursive equations above are deliberately not global simp rules.
+`actionChoices_cons` duplicates its recursive result, so eager simplification
+materializes the entire powerset even when a caller asks only a semantic
+membership question.  The membership and length theorems are the canonical
+normal forms instead.  Fifteen actions is large enough to make the old eager
+normal form exceed the default simplifier recursion depth. -/
+
+private def simpRegressionActions : List Nat :=
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+
+private theorem actionChoices_fifteen_empty_mem :
+    [] ∈ actionChoices simpRegressionActions := by
+  simp [simpRegressionActions]
+
+private theorem actionChoices_fifteen_sublist_mem :
+    [2, 4, 8, 14] ∈ actionChoices simpRegressionActions := by
+  simp [simpRegressionActions]
+  decide
 
 /-- Every generated choice contains only actions from the source scope. -/
 theorem mem_of_mem_actionChoice {A : Type} {source choice : List A}

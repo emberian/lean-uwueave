@@ -153,8 +153,8 @@ identity seam and refutes it at `Exits.balTotal`.
     `MenuTotality.synth`, and the worked-menu comparisons take it through
     `Exits.lean`'s own proofs. `#print axioms` on the two headline theorems,
     `menu_price_is_projection` and `menu_delta_is_projection`, reports
-    `[propext, Quot.sound]` — neither needs choice, and neither needs `sorryAx`
-    or `Lean.ofReduceBool`.
+    `[propext, Quot.sound]` — neither needs choice, `sorryAx`, nor the pinned
+    Lean 4.30 `native_decide` axiom family `_native.native_decide.ax_…`.
 
 ## TRANSPORTS row (VIII, repairs and menus)
 

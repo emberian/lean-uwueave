@@ -124,11 +124,14 @@ schedule witnesses coverage, and five currencies remain separate. Its exact
 2-crossings→1-meeting, 0→1, and 1→2 examples prove there is no scalar
 conversion in either direction. The standalone `preo_budget` command now
 accepts an existing five-currency `ProfileUpperBound` for an exact generated
-session. What remains unbuilt is schedule search and the prettier inline budget
-block—not witnessed budget acceptance, the protocol AST, its proof-carrying
-elaboration, or the scheduling judgement. `Protocol.Term` carries the bounded
-operation/sequence/parallel/choice/repeat/sync language, and the Preo surface
-accepts typed terms in that AST.
+session. What remains unbuilt is *unbounded* schedule discovery and the prettier
+inline budget block—not witnessed budget acceptance, the bounded authored search
+in `Preo.Planning`, the protocol AST, its proof-carrying elaboration, or the
+scheduling judgement. `Protocol.Term` carries the bounded
+operation/sequence/parallel/choice/repeat/sync language. An inline `preo`
+protocol accepts a typed term in that AST; the standalone `preo_protocol`
+command gives all six constructors a parser-safe native spelling and expands to
+that same semantic API.
 
 ### 4.4 Prices are records, not numbers
 
@@ -282,6 +285,30 @@ preo Swarm where
   session Wave under TeamEra runs WaveProtocol at chosenStrategy := chosen_is_admissible
 ```
 
+The typed-term form above is the expert escape hatch. The native spelling is a
+separate command with a punctuation-delimited recursive body:
+
+```
+preo_protocol WaveNative over TeamStrategy at chosenStrategy :=
+  .seq [
+    .operation { id := 1, crossings := 0, needs := [] },
+    .repeat {
+      count := 2,
+      body := .sync {
+        currency := .userPrompt,
+        participants := [0],
+        scope := 0,
+        epoch := 0,
+        evidence := .none,
+        round := 0,
+        barrier := 0 } } ]
+```
+
+It emits predictable `Term`, `Elaboration`, `Session`, `Plan`, `Limits`, and
+`ProfileUpperBound` constants. Choice is nonempty and selected by an explicit
+natural in this first deterministic fragment; crossing origins are bounded by
+the operation's written crossing count.
+
 Note what the session result carries that our first sketch did not: a checked
 **schedule/plan**, a **multi-currency cost profile**, and an actual **protocol
 shape**. The standalone `preo_budget` surface now accepts a limit only by
@@ -307,13 +334,15 @@ Malformed operators,
 out-of-range fields and raw `.custom` fail the entire row before any typed term
 or analysis is emitted. A future must name its full
 `Preo.Future.WorldModel`, so no declaration can be inferred from materialized
-state alone. A protocol body is currently a typed Lean term of
-`Protocol.Term TeamStrategy`; this is the deliberate opaque escape hatch into
-the six-constructor deep AST, not a second parser that might drift from its
-semantics. The session calls `Protocol.elaborate`/`elaborateProfilePlan` once
-and exposes their checked schedule and upper bound. Certificates and budgets
-remain parser-safe standalone commands whose dependent types are ordinary Lean
-terms:
+state alone. An inline protocol body remains a typed Lean term of
+`Protocol.Term TeamStrategy`, the deliberate opaque escape hatch. The native
+`preo_protocol` parser does not duplicate protocol semantics: it expands its
+six data-shaped forms into that same `Protocol.Term`, calls
+`Protocol.elaborate` once, and exposes the checked schedule and exact
+five-currency bound. Inline sessions call
+`Protocol.elaborate`/`elaborateProfilePlan` once and expose their checked
+schedule and upper bound. Certificates and budgets remain parser-safe
+standalone commands whose dependent types are ordinary Lean terms:
 
 ```
 preo_certificate Quiesced :
@@ -386,6 +415,49 @@ are not silently identified with the surrounding declaration's generated
 `State → Expr.Env Schema` projection and calls the emitted `.Eval`. The
 elaborator currently makes no field-name/type coercion claim.
 
+### 7.2 Robust proof and work boundaries
+
+Production code that only needs the proposition-closing `classify` tactic,
+finite enumerations, probe search, or the small proof idioms may import
+`Uwueave.Tactics.Core`. Code that needs `Spec.Verdict` values,
+`classifyIn?`/`classify?`/`classifyFinite`, or the `verdict` tactic should
+import `Uwueave.Tactics.Verdict`; it already imports `Core`. The larger
+`Uwueave.Tactics` module is the demonstration suite and deliberately imports
+additional domains.
+
+Automatic tactic work is bounded. The exhaustive route used implicitly by
+`classify` and `verdict` accepts at most 64 enumerated states and 4096 ordered
+pairs. An over-cap or nontransparent `FinEnum` spine is a loud typed resource
+refusal, not a route miss; unexpected internal failures are likewise not
+silently converted to inapplicability. The explicit value function
+`classifyFinite` remains logically total and has no implicit work cap. “Total”
+describes its result type, not its compile-time cost.
+
+There is one narrower current Preo caveat: an invariant over a carrier with
+both `FinEnum` and `DecidablePred` makes the elaborator emit the explicit,
+uncapped `classifyFinite` result as an accumulated facet. A supplied verdict
+does not suppress that route, because applicable facets are accumulated rather
+than chosen first-match. Until the elaborator shares the tactic work gate, keep
+automatically enumerable Preo carriers small or avoid installing `FinEnum` for
+a large carrier.
+
+Two recursive generators also have semantic simp interfaces on purpose:
+
+- For `Preo.Planning.actionChoices`, use
+  `mem_actionChoices_iff_sublist` and `actionChoices_length`. Do not normalize
+  `actionChoices_cons` across a large action list: it materializes `2^n`
+  candidates. Runtime-facing construction should use `checkActionUniverse`,
+  which rejects duplicates and a caller-supplied `maxChoices` bound before
+  materialization. That bound is authored policy, not a global system ceiling.
+- For bounded protocols, use `repeatSession_crossings` and
+  `repeatSession_demands` to simplify observations. The structural
+  `repeatSession_zero`/`repeatSession_succ` and
+  `repeatDemands_zero`/`repeatDemands_succ` equations are explicit `rw` tools,
+  not global simp rules. Avoid
+  `simp [repeatSession]` at large literal bounds. These observation laws avoid
+  proof-normalization blowups; exact denotation still retains the real linear
+  repeated demand stream.
+
 ## 8. Why it is a UI substrate
 
 The epistemic status of a value determines its widget: `Exact` renders a value;
@@ -447,13 +519,13 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | future-indexed exactness | `Evidence`, `WorldFuture`, `Preo/Future` | **proved and surfaced**: declarations retain the world model/index; checked stability and certificates project proofs, and only extension→delivery restriction exists |
 | coordination floor | `Cost.coordination_forced` | proved |
 | cost profiles + composition | `CoordEffect`, `Scheduling` | **proved**: pointwise composition precedes one global strategy choice; schedules retain five currencies |
-| budget trichotomy | `Budget` | **proved**; explicit finite plan spaces additionally compute an exact witnessed minimum without claiming to enumerate arbitrary seams |
+| budget trichotomy | `Budget`, `Preo.Planning` | **proved**; explicit duplicate-free, pre-capped authored action universes additionally compute an exact witnessed minimum without claiming to enumerate arbitrary schedules or seams |
 | merge models | `MergeModel` | **proved** for join, ancestral and op-replay models, now universe-polymorphic at the generic model layer |
 | seam synthesis | `SeamColoring`, `MenuTotality` | **proved for explicit finite carriers/palettes**, including exhaustive refusal and a least-width certificate; infinite search remains outside the result |
 | summary synthesis | `MinimalSummary`, `TextSummary` | **proved semantically** through contextual quotients; the fixed text window now has an exact iff, while executable quotient construction for arbitrary evaluators remains open |
 | arbitrary refined outcomes | `Specification` | **proved semantically**: under totality, coordination-freedom is exactly history monotonicity plus fiber directedness, and `IConfluent` is the singleton-outcome instance |
-| classification → `Verdict` term | `Tactics.classifyFinite` | proved |
-| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo` | **built**: built-in and explicit-seed application carriers, invariants/ordinary derives, intrinsically typed derives with exact dependencies + checked incremental/result/report artifacts, keyed fields, named world futures/certificates, typed protocols, proof-carrying sessions, five-currency budgets and explicit checked export manifests |
+| classification → `Verdict` term | `Tactics.classifyFinite` (`Uwueave.Tactics.Verdict`) | **proved**; the explicit total function is uncapped, while automatic tactic routing has a 64-state/4096-pair work gate |
+| surface syntax + elaborator | `Preo/Syntax`, `Preo/Elab`, `Preo/Demo`, `Preo/ProtocolSurface` | **built**: built-in and explicit-seed application carriers, invariants/ordinary derives, intrinsically typed derives with exact dependencies + checked incremental/result/report artifacts, keyed fields, named world futures/certificates, typed-term and native protocols, proof-carrying sessions, five-currency budgets and explicit checked export manifests |
 | classification ACCUMULATES facets | `Preo/Classification` | **built**: `Classification` holds `global`/`seams`/`mergeability`/`obligations` as *lists*; rules add, never replace |
 | route-order invariance | `Preo.run_answer_congr` | **proved**: two registries with the same rules in any order certify the same answer. Bottoms out in `Preo.verdict_agree` (two verdicts for one invariant cannot disagree — the pair is uninhabitable), not in bookkeeping. `run_answer_of_perm` is the permutation corollary. |
 | ✅ seam verdicts in the surface | `Preo.budgetSeam`, `Preo.seamAlong`, `Segmented.budget_segmented` | **CLOSED** (was "inexpressible"). A globally clashing invariant now carries a `SegVerdict` facet *alongside* its clash — `Preo.seam_forces_clash` proves a seam is not a third alternative but forces the ESCALATES column. `Demo`'s `LoomDoc2.in_budget.seam` **is** `WeaveState.quotaVerdict`, by `rfl`. `seamAlong` lifts it to the whole declared document, using the emitted section (`<field>.plant`) that fragment 1 said the elaborator could not synthesize. |
@@ -463,11 +535,11 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | ✅ **seam composition in the surface** | `SegVerdict.selfSeam`, `liftFst`/`liftSnd`, `andSeams`, `absorbFree`, `prependFree` | **CLOSED at the general surface/combinator layer.** `TwinQuota.documentSeam` is the existing product seam by `rfl`; `NestedSurface` finds two seam rows through eight right-nested fields and absorbs six checked FREE rows; the general algebra reconstructs `WeaveState.weaveDocSeamVerdict` as the same value. `GroupedCarrierSurface.State` now **is** `WeaveDoc` by `rfl`, with the explicit `core₀` seed. The remaining exact full-surface obstruction is narrower: built-in `Quota` plants structural zero, which is not `BudgetInv 10`; the surface cannot silently substitute the invariant-specific `quota₀`. |
 | ✅ **`per` / keyed families in the surface** | `Confluence.keyed_cross_iconfluent`, pointwise `MergeState` | **CLOSED for field carriers and keyed referential integrity.** `field bookmarks per Bool : GrowSet Nat` emits `Bool → GSet Nat`; `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Unsupported keyed relations remain obligations, and automatic keyed clash seams still require a concrete key/default witness. |
 | ✅ **named world futures in the surface** | `Preo.Future.FutureDecl`, `WorldIndex`, `CheckedStability`, `CheckedCertificate` | **CLOSED.** `future N on M := D` checks `D : FutureDecl M`; `preo_certificate N : CheckedCertificate ... := proof` retains the complete world index and is whole-value `rfl` to the hand certificate. Same-state/different-world refusal and one-way delivery⊆extension variance remain theorem-visible in `Demo`. |
-| ✅ **protocol/session surface** | `Protocol.Term`, `Protocol.Elaboration`, `elaborateProfilePlan`, `elaborateComposedProfilePlan` | **CLOSED with a typed opaque protocol body.** Sessions expose checked plans/upper bounds and composed profiles select one global strategy. Reports name semantic artifacts and deliberately contain no invented verdict bit or meeting scalar. A dedicated pretty protocol parser remains optional UI. |
-| ✅ **five-currency budget surface** | `Scheduling.ProfileUpperBound`, `preo_budget` | **CLOSED for witnessed acceptance.** A standalone command consumes one real plan satisfying `Currency → Nat` pointwise at the exact generated session. `Demo` rediscovers `coalescedProfileUpperBound` by `rfl`; separate theorems refute acceptance from crossings or a peer-meeting floor. **Unbuilt:** schedule synthesis and a pretty inline budget block. |
+| ✅ **protocol/session surface** | `Protocol.Term`, `Protocol.Elaboration`, `Preo.ProtocolSurface`, `elaborateProfilePlan`, `elaborateComposedProfilePlan` | **CLOSED with both a typed opaque body and native `preo_protocol`.** The native command covers operation/sequence/parallel/nonempty choice/bounded repeat/sync and emits the exact elaboration, session, plan and five-currency bound. Inline sessions expose checked plans/upper bounds and composed profiles select one global strategy. Reports name semantic artifacts and deliberately contain no invented verdict bit or meeting scalar. |
+| ✅ **five-currency budget surface** | `Scheduling.ProfileUpperBound`, `preo_budget`, `Preo.Planning` | **CLOSED for witnessed acceptance and bounded authored search.** A standalone command consumes one real plan satisfying `Currency → Nat` pointwise at the exact generated session. `Demo` rediscovers `coalescedProfileUpperBound` by `rfl`; separate theorems refute acceptance from crossings or a peer-meeting floor. `Preo.Planning` searches only a duplicate-free, pre-capped authored action universe. **Unbuilt:** arbitrary schedule discovery and a pretty inline budget block. |
 | ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export`, `Preo.ArtifactDurable`, `Preo.ProjectionV2`, `preo_export` | **BUILT AND SURFACED.** Private proof-indexed builders project answered classifications, certified world futures, ordinary/profile protocol elaborations and exact-plan five-currency budgets into one canonical first-order artifact. The manifest supplies every stable ID, witness codec and budget plan equality explicitly; it emits canonical durable bytes and must pass V2 structural/resource validation before rendering. Unresolved invariants, wrong certificates, wrong-plan budgets and duplicate IDs fail closed. Published V1 remains the budget-empty legacy schema. Composed profile plans wait for a dedicated checked export builder; decoded wire tags have no path back to semantic proof constructors. |
 | **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
-| ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, and exact crossing/meeting non-function refutations. **Unbuilt:** schedule synthesis and the pretty inline budget block. |
+| ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term`, `Preo.Planning` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, bounded authored action-subset search, and exact crossing/meeting non-function refutations. **Unbuilt:** arbitrary schedule discovery and the pretty inline budget block. |
 | recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |
 | durable artifacts | `Durable` | **proved logical codec/journal rung** with canonical roundtrip and torn-tail recovery; no filesystem, flush or crash-atomicity guarantee is claimed |
 

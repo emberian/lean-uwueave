@@ -328,15 +328,75 @@ def Term.holes : Term Γ t → List Hole
 are never silently erased. -/
 def Term.reads (term : Term Γ t) : List Nat := term.holes.map Hole.field
 
+/-! These constructor rules normalize the read observation without unfolding
+the positional tree at every use.  Their right-hand sides contain only strict
+subterms, while `Term.holes` remains the single source of dependency truth. -/
+
 @[simp] theorem Term.reads_litBool (b : Bool) : (litBool ( Γ := Γ) b).reads = [] := rfl
 @[simp] theorem Term.reads_litNat (n : Nat) : (litNat ( Γ := Γ) n).reads = [] := rfl
 @[simp] theorem Term.reads_var (v : Var Γ t) : (var v).reads = [v.index] := rfl
 @[simp] theorem Term.reads_pair (a : Term Γ s) (b : Term Γ t) :
     (pair a b).reads = a.reads ++ b.reads := by
-  simp [Term.reads, Term.holes]
+  change (prefixHoles 0 a.holes ++ prefixHoles 1 b.holes).map Hole.field =
+    a.holes.map Hole.field ++ b.holes.map Hole.field
+  rw [List.map_append, fields_prefixHoles, fields_prefixHoles]
+@[simp] theorem Term.reads_fst (p : Term Γ (.pair a b)) :
+    (fst p).reads = p.reads := by
+  exact fields_prefixHoles 0 p.holes
+@[simp] theorem Term.reads_snd (p : Term Γ (.pair a b)) :
+    (snd p).reads = p.reads := by
+  exact fields_prefixHoles 0 p.holes
+@[simp] theorem Term.reads_none :
+    (none (Γ := Γ) (a := a)).reads = [] := rfl
+@[simp] theorem Term.reads_some (p : Term Γ a) :
+    (some p).reads = p.reads := by
+  exact fields_prefixHoles 0 p.holes
+@[simp] theorem Term.reads_isSome (p : Term Γ (.option a)) :
+    (isSome p).reads = p.reads := by
+  exact fields_prefixHoles 0 p.holes
+@[simp] theorem Term.reads_boolOr (a b : Term Γ .bool) :
+    (boolOr a b).reads = a.reads ++ b.reads := by
+  change (prefixHoles 0 a.holes ++ prefixHoles 1 b.holes).map Hole.field =
+    a.holes.map Hole.field ++ b.holes.map Hole.field
+  rw [List.map_append, fields_prefixHoles, fields_prefixHoles]
+@[simp] theorem Term.reads_boolAnd (a b : Term Γ .bool) :
+    (boolAnd a b).reads = a.reads ++ b.reads := by
+  change (prefixHoles 0 a.holes ++ prefixHoles 1 b.holes).map Hole.field =
+    a.holes.map Hole.field ++ b.holes.map Hole.field
+  rw [List.map_append, fields_prefixHoles, fields_prefixHoles]
+@[simp] theorem Term.reads_boolNot (p : Term Γ .bool) :
+    (boolNot p).reads = p.reads := by
+  exact fields_prefixHoles 0 p.holes
+@[simp] theorem Term.reads_natMax (a b : Term Γ .nat) :
+    (natMax a b).reads = a.reads ++ b.reads := by
+  change (prefixHoles 0 a.holes ++ prefixHoles 1 b.holes).map Hole.field =
+    a.holes.map Hole.field ++ b.holes.map Hole.field
+  rw [List.map_append, fields_prefixHoles, fields_prefixHoles]
+@[simp] theorem Term.reads_natAdd (a b : Term Γ .nat) :
+    (natAdd a b).reads = a.reads ++ b.reads := by
+  change (prefixHoles 0 a.holes ++ prefixHoles 1 b.holes).map Hole.field =
+    a.holes.map Hole.field ++ b.holes.map Hole.field
+  rw [List.map_append, fields_prefixHoles, fields_prefixHoles]
+@[simp] theorem Term.reads_natSucc (p : Term Γ .nat) :
+    (natSucc p).reads = p.reads := by
+  exact fields_prefixHoles 0 p.holes
+@[simp] theorem Term.reads_natEq (a b : Term Γ .nat) :
+    (natEq a b).reads = a.reads ++ b.reads := by
+  change (prefixHoles 0 a.holes ++ prefixHoles 1 b.holes).map Hole.field =
+    a.holes.map Hole.field ++ b.holes.map Hole.field
+  rw [List.map_append, fields_prefixHoles, fields_prefixHoles]
 @[simp] theorem Term.reads_custom (o : CustomNode Γ t) :
     (custom o).reads = o.dependencies := by
-  simp [Term.reads, Term.holes, List.map_map, Function.comp_def]
+  change List.map Hole.field
+      (List.map (fun n => { path := [], field := n, kind := HoleKind.opaque })
+        o.dependencies) = o.dependencies
+  induction o.dependencies with
+  | nil => rfl
+  | cons n ns ih =>
+      change n :: List.map Hole.field
+        (List.map (fun k => { path := [], field := k, kind := HoleKind.opaque }) ns) =
+          n :: ns
+      rw [ih]
 
 theorem Env.agreeOn_append_left {a b : List Nat} {x y : Env Γ}
     (h : AgreeOn (a ++ b) x y) : AgreeOn a x y := by
@@ -354,73 +414,61 @@ only because their constructors require exactly this evidence. -/
 theorem Term.eval_ext (term : Term Γ t) (x y : Env Γ)
     (h : Env.AgreeOn term.reads x y) : term.eval x = term.eval y := by
   induction term with
-  | litBool | litNat | none => simp [Term.eval]
+  | litBool | litNat | none => rfl
   | var v =>
-      simpa [Term.eval] using
-        Env.get_eq_of_agreeAt v x y (h v.index (by simp))
+      rw [Term.reads_var] at h
+      exact Env.get_eq_of_agreeAt v x y (h v.index List.mem_cons_self)
   | pair a b iha ihb =>
-      have hall : Env.AgreeOn (a.reads ++ b.reads) x y := by
-        simpa [Term.reads, Term.holes] using h
-      simpa only [Term.eval] using congrArgTwo Prod.mk
-        (iha (Env.agreeOn_append_left hall))
-        (ihb (Env.agreeOn_append_right hall))
+      rw [Term.reads_pair] at h
+      exact congrArgTwo Prod.mk
+        (iha (Env.agreeOn_append_left h))
+        (ihb (Env.agreeOn_append_right h))
   | fst p ih =>
-      have hp : Env.AgreeOn p.reads x y := by
-        simpa [Term.reads, Term.holes] using h
-      simpa only [Term.eval] using congrArg Prod.fst (ih hp)
+      rw [Term.reads_fst] at h
+      exact congrArg Prod.fst (ih h)
   | snd p ih =>
-      have hp : Env.AgreeOn p.reads x y := by
-        simpa [Term.reads, Term.holes] using h
-      simpa only [Term.eval] using congrArg Prod.snd (ih hp)
+      rw [Term.reads_snd] at h
+      exact congrArg Prod.snd (ih h)
   | some p ih =>
-      have hp : Env.AgreeOn p.reads x y := by
-        simpa [Term.reads, Term.holes] using h
-      simpa only [Term.eval] using congrArg Option.some (ih hp)
+      rw [Term.reads_some] at h
+      exact congrArg Option.some (ih h)
   | isSome p ih =>
-      have hp : Env.AgreeOn p.reads x y := by
-        simpa [Term.reads, Term.holes] using h
-      simpa only [Term.eval] using congrArg Option.isSome (ih hp)
+      rw [Term.reads_isSome] at h
+      exact congrArg Option.isSome (ih h)
   | boolNot p ih =>
-      have hp : Env.AgreeOn p.reads x y := by
-        simpa [Term.reads, Term.holes] using h
-      simpa only [Term.eval] using congrArg Bool.not (ih hp)
+      rw [Term.reads_boolNot] at h
+      exact congrArg Bool.not (ih h)
   | natSucc p ih =>
-      have hp : Env.AgreeOn p.reads x y := by
-        simpa [Term.reads, Term.holes] using h
-      simpa only [Term.eval] using congrArg Nat.succ (ih hp)
+      rw [Term.reads_natSucc] at h
+      exact congrArg Nat.succ (ih h)
   | boolOr a b iha ihb =>
-      have ha : Env.AgreeOn a.reads x y := by
-        exact Env.agreeOn_append_left (by simpa [Term.reads, Term.holes] using h)
-      have hb : Env.AgreeOn b.reads x y := by
-        exact Env.agreeOn_append_right (by simpa [Term.reads, Term.holes] using h)
-      simpa only [Term.eval] using congrArgTwo Bool.or (iha ha) (ihb hb)
+      rw [Term.reads_boolOr] at h
+      exact congrArgTwo Bool.or
+        (iha (Env.agreeOn_append_left h))
+        (ihb (Env.agreeOn_append_right h))
   | boolAnd a b iha ihb =>
-      have ha : Env.AgreeOn a.reads x y :=
-        Env.agreeOn_append_left (by simpa [Term.reads, Term.holes] using h)
-      have hb : Env.AgreeOn b.reads x y :=
-        Env.agreeOn_append_right (by simpa [Term.reads, Term.holes] using h)
-      simpa only [Term.eval] using congrArgTwo Bool.and (iha ha) (ihb hb)
+      rw [Term.reads_boolAnd] at h
+      exact congrArgTwo Bool.and
+        (iha (Env.agreeOn_append_left h))
+        (ihb (Env.agreeOn_append_right h))
   | natMax a b iha ihb =>
-      have ha : Env.AgreeOn a.reads x y :=
-        Env.agreeOn_append_left (by simpa [Term.reads, Term.holes] using h)
-      have hb : Env.AgreeOn b.reads x y :=
-        Env.agreeOn_append_right (by simpa [Term.reads, Term.holes] using h)
-      simpa only [Term.eval] using congrArgTwo Nat.max (iha ha) (ihb hb)
+      rw [Term.reads_natMax] at h
+      exact congrArgTwo Nat.max
+        (iha (Env.agreeOn_append_left h))
+        (ihb (Env.agreeOn_append_right h))
   | natAdd a b iha ihb =>
-      have ha : Env.AgreeOn a.reads x y :=
-        Env.agreeOn_append_left (by simpa [Term.reads, Term.holes] using h)
-      have hb : Env.AgreeOn b.reads x y :=
-        Env.agreeOn_append_right (by simpa [Term.reads, Term.holes] using h)
-      simpa only [Term.eval] using congrArgTwo Nat.add (iha ha) (ihb hb)
+      rw [Term.reads_natAdd] at h
+      exact congrArgTwo Nat.add
+        (iha (Env.agreeOn_append_left h))
+        (ihb (Env.agreeOn_append_right h))
   | natEq a b iha ihb =>
-      have ha : Env.AgreeOn a.reads x y :=
-        Env.agreeOn_append_left (by simpa [Term.reads, Term.holes] using h)
-      have hb : Env.AgreeOn b.reads x y :=
-        Env.agreeOn_append_right (by simpa [Term.reads, Term.holes] using h)
-      simpa only [Term.eval] using congrArgTwo Nat.beq (iha ha) (ihb hb)
+      rw [Term.reads_natEq] at h
+      exact congrArgTwo Nat.beq
+        (iha (Env.agreeOn_append_left h))
+        (ihb (Env.agreeOn_append_right h))
   | custom o =>
-      apply o.respects x y
-      simpa using h
+      rw [Term.reads_custom] at h
+      exact o.respects x y h
 
 /-- Every positional occurrence contributes its field to the dependency set. -/
 theorem Term.hole_implies_dependency (term : Term Γ t) (hole : Hole)
@@ -494,36 +542,33 @@ theorem MergeSafe.sound {term : Term Γ t} (safe : MergeSafe term) :
     PreservesMerge term := by
   intro x y
   induction safe with
-  | litBool b => simpa [Term.eval] using (Ty.merge_idem .bool b).symm
-  | litNat n => simpa [Term.eval] using (Ty.merge_idem .nat n).symm
-  | var v =>
-      change (Env.merge x y).get v = Ty.merge _ (x.get v) (y.get v)
-      exact Env.get_merge x y v
-  | pair ha hb iha ihb =>
-      simp only [Term.eval, Ty.merge]
-      rw [iha, ihb]
-  | fst hp ih =>
-      simpa [Term.eval, Ty.merge] using congrArg Prod.fst ih
-  | snd hp ih =>
-      simpa [Term.eval, Ty.merge] using congrArg Prod.snd ih
-  | none => simp [Term.eval, Ty.merge]
-  | some ha ih =>
-      simp only [Term.eval, Ty.merge]
-      rw [ih]
-  | isSome ha ih =>
-      simp only [Term.eval]
+  | litBool b => exact (Ty.merge_idem .bool b).symm
+  | litNat n => exact (Ty.merge_idem .nat n).symm
+  | var v => exact Env.get_merge x y v
+  | pair ha hb iha ihb => exact congrArgTwo Prod.mk iha ihb
+  | fst hp ih => exact congrArg Prod.fst ih
+  | snd hp ih => exact congrArg Prod.snd ih
+  | none => rfl
+  | some ha ih => exact congrArg Option.some ih
+  | @isSome ty a ha ih =>
+      change (a.eval (x.merge y)).isSome =
+        ((a.eval x).isSome || (a.eval y).isSome)
       rw [ih]
       exact option_isSome_merge _ _ _
-  | boolOr ha hb iha ihb =>
-      simp only [Term.eval, Ty.merge]
+  | @boolOr a b ha hb iha ihb =>
+      change (a.eval (x.merge y) || b.eval (x.merge y)) =
+        ((a.eval x || b.eval x) || (a.eval y || b.eval y))
       rw [iha, ihb]
       exact bool_or_interchange _ _ _ _
-  | natMax ha hb iha ihb =>
-      simp only [Term.eval, Ty.merge]
+  | @natMax a b ha hb iha ihb =>
+      change Nat.max (a.eval (x.merge y)) (b.eval (x.merge y)) =
+        Nat.max (Nat.max (a.eval x) (b.eval x))
+          (Nat.max (a.eval y) (b.eval y))
       rw [iha, ihb]
       exact nat_max_interchange _ _ _ _
-  | natSucc ha ih =>
-      simp only [Term.eval, Ty.merge]
+  | @natSucc a ha ih =>
+      change Nat.succ (a.eval (x.merge y)) =
+        Nat.max (Nat.succ (a.eval x)) (Nat.succ (a.eval y))
       rw [ih]
       exact (Nat.succ_max_succ _ _).symm
   | custom o h => exact h x y
@@ -870,7 +915,6 @@ def sumRight : Env [.nat, .nat] := .cons (0 : Nat) (.cons (1 : Nat) .nil)
 theorem summedFields_not_preservesMerge : ¬ PreservesMerge summedFields := by
   intro h
   have bad := h sumLeft sumRight
-  simp [summedFields, sumLeft, sumRight, Term.eval, Env.get, Env.merge, Ty.merge] at bad
   exact (by decide : (2 : Nat) ≠ 1) bad
 
 theorem summedFields_not_classified_mergeSafe :

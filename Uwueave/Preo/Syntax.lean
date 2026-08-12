@@ -90,16 +90,22 @@ route order (`Preo.run_answer_congr`).
 The custom field form requires an existing `MergeState` for the carrier and an
 explicit planting seed; the elaborator never guesses an inhabitant of an
 application type. The future form is explicitly indexed by a
-`Preo.Future.WorldModel`; it cannot
-silently fall back to a relation on materialized state. Protocol bodies are
-typed `Protocol.Term` values: the six-constructor semantic AST is deep, while
-the first surface deliberately keeps its body as an ordinary checked Lean term.
-Sessions call `Protocol.elaborate`, `elaborateProfilePlan`, or
+`Preo.Future.WorldModel`; it cannot silently fall back to a relation on
+materialized state. Protocol bodies inside `preo` are typed `Protocol.Term`
+values: the six-constructor semantic AST is deep, while this declaration
+surface deliberately keeps its body as an ordinary checked Lean term. The
+standalone `Preo.ProtocolSurface.preo_protocol` command now provides a
+punctuation-delimited native spelling for all six constructors and expands to
+that same AST and one `Protocol.elaborate` call. Sessions call
+`Protocol.elaborate`, `elaborateProfilePlan`, or
 `elaborateComposedProfilePlan` once and expose their proof-carrying results.
 
-*Still* not in the fragment: a custom parser for protocol expressions, budget
-search or a pretty in-declaration budget block, invariants over three or more
-fields, and general declaration composition. Ordinary Lean `derive` remains a
+*Still* not in this declaration fragment: native protocol bodies inline among
+the repeated `preo` items (the separate `preo_protocol` command owns that
+grammar), arbitrary schedule discovery, a pretty in-declaration budget block,
+invariants over three or more fields, and general declaration composition.
+`Preo.Planning` does provide bounded search over a duplicate-free,
+caller-capped authored action universe. Ordinary Lean `derive` remains a
 one-field escape hatch; `typed derive` is the multi-input first-order program
 surface, with its exact positional reads and checked incremental adapter.
 Each update result promotes directly to the next cache; generated reports
@@ -110,16 +116,25 @@ Lean term: the command checks that its reduced head is
 `Future.CheckedCertificate` but does not invent a state-indexed shorthand.
 `preo_budget` is equally thin: it consumes a real five-currency
 `Scheduling.ProfileUpperBound` at one emitted session and does no synthesis.
-The typed Lean-term escape hatches reach every current protocol constructor,
-certificate index and schedule plan without duplicating their semantics in the
-parser. `preo_export` is likewise a thin checked manifest: its rows call the
+The typed Lean-term escape hatches still reach every protocol constructor,
+certificate index and schedule plan. The native protocol parser duplicates no
+semantics: it expands to `Protocol.Term` and the existing elaborator.
+`preo_export` is likewise a thin checked manifest: its rows call the
 proof-indexed `Export.DeclarationBundle` builders immediately, then expose only
 their canonical artifact, durable bytes, and validated V2 projection. IDs are
 literal manifest data, never hashes of source names. A composed profile plan is
 not a `Protocol.Elaboration`, so it has no session row in this first export
 surface.
+
+One operational boundary is intentionally visible. The `classify` and
+`verdict` tactics cap their implicit exhaustive route at 64 states / 4096
+ordered pairs, but this declaration elaborator's finite facet is the explicit,
+logically total `Tactics.classifyFinite` function and has no implicit work cap.
+It is attempted whenever `FinEnum` and `DecidablePred` synthesize, even if an
+author-supplied facet already exists, because applicable facets accumulate.
+Keep such carriers small until the declaration route shares the tactic gate.
 -/
-import Uwueave.Tactics
+import Uwueave.Tactics.Verdict
 
 namespace Uwueave.Preo
 
@@ -183,11 +198,12 @@ theorem proj_iconfluent {S : Type u} {T : Type v} [MergeState S] [MergeState T]
 
 /-! ## §3. The non-answer, named
 
-`Uwueave.Tactics`'s discipline is that a search may fail but may never report
-a wrong verdict, and that `none` is **no verdict** rather than freedom
-(`classifyIn?_never_free`). A DSL inherits that obligation the moment it puts a
-table on the screen: the third column needs a cell that is not FREE and not
-ESCALATES. -/
+`Uwueave.Tactics.Verdict`'s discipline is that a search may fail but may never
+report a wrong verdict, and that `none` is **no verdict** rather than freedom
+(`classifyIn?_never_free`). A DSL inherits that obligation the moment it puts
+a table on the screen: the third column needs a cell that is not FREE and not
+ESCALATES. Production consumers import that leaf; the larger
+`Uwueave.Tactics` module is its demonstration suite. -/
 
 /-- **What the elaborator produces when no route reaches a verdict.**
 

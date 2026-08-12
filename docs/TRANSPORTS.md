@@ -19,7 +19,9 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 115 numbered transport rows.**
+**Ledger total: 115 numbered transport rows.** Wave 23's module splits and
+generic proof APIs change owners and proof routes, not source/target judgements,
+so they update existing rows rather than manufacture new crossings.
 
 ---
 
@@ -262,7 +264,12 @@ merge **result** is not op-reachable from the base. **The break is the closure,
 not the merge.**
 ⚠ *partial repair* `Histories.History.Coherent.sound` (sufficient, not proved
 necessary) and `HistoryBase.coherent_sound_of_runRealized` (needs **no** merge
-law, no closure, no confluence).
+law, no closure, no confluence). Their repeated rank/origin reasoning is now
+factored through `VersionDag.rank_induction` and
+`History.Coherent.induction`; generic `spend_run` / `spend_reachable` /
+`spend_reach_add` / `spend_reach` / `spend_locally_safe` live in `Histories`,
+with the old `HistoryBase` names retained as compatibility wrappers. These are
+proof routes inside the existing crossing, not additional judgements.
 
 **16a. Local extension safety → safety of every coherent history node** ✅
 *source* `Histories.HistorySafeFrom M impl I rho`, the origin-indexed
@@ -956,7 +963,10 @@ wrong-magic request (including `ByteArray.empty`), while `Exec.replay` returns
 an empty response; and the total `opsOfTypedWords` / `grantsOfTypedWords`
 definitions ignore a trailing partial record, making the shim's exact-width
 promise load-bearing. No theorem here upgrades arbitrary bytes into a typed
-request.
+request. The proof is shared, not copied: carrier-polymorphic
+`Exec.WordCodec.foldlPushWord_size` / `_get_lt` / `_get` and width-polymorphic
+`Exec.FixedWidth.flatMap_length` / `_getElem?_eq` feed the view, request, and
+ERA wrapper theorems without adding a second encoder or a second transport.
 
 **43. Growing revocations → shrinking applied set** ✗ **REFUTED**
 *without it* `Exec.applied_set_not_antitone` — revoking a grant can **add** an
@@ -1096,9 +1106,10 @@ world-indexing counterexample: equal materialized state does not license a
 state-only checked certificate because the issued pools differ.
 
 **44j. Checked semantic declaration → canonical first-order artifact** ⚠
-*source* private checked terms such as `Preo.Artifact.CheckedInvariant I` and
-`CheckedPlan checkedSession plan` · *target* the public first-order
-`Preo.Artifact.ArtifactEncoding` with a structural roundtrip · *transport*
+*source* private checked terms in `Preo/ArtifactChecked`, such as
+`Preo.Artifact.CheckedInvariant I` and `CheckedPlan checkedSession plan` ·
+*target* the public first-order `Preo.Artifact.ArtifactEncoding` defined in
+the minimal `Preo/ArtifactData` leaf, with a structural roundtrip · *transport*
 the `Checked*.toArtifact` projections and
 `Preo.Artifact.ArtifactEncoding.decode_canonicalEncoding` · *needs* the checked
 constructors to originate semantic meaning: an invariant source carries an
@@ -1110,7 +1121,9 @@ only an `Artifact`, never a `Spec.Verdict` or `Scheduling.Plan`. The concrete
 nonempty boundary is `Preo.Artifact.Examples.bundle`; it contains every list, a
 real plan, and both verdict tags, while `Examples.atMostOneBoolVerdict` is the
 actual two-witness clash that an arbitrarily authored wire `.free` tag cannot
-replace.
+replace. `Preo/Artifact.lean` remains the compatibility umbrella and example
+owner; moving these declarations between leaves changes no public namespace or
+direction of authority.
 
 **44k. Proof-indexed declaration bundle → one artifact and canonical wire image** ⚠
 *source* `Preo.Export.DeclarationBundle State`, populated only through its
@@ -1170,8 +1183,9 @@ instantiates the boundary. The two positive branches are exact:
 to direct checked-verdict export.
 
 **44n. Neutral artifact encoding → canonical durable frame** ⚠
-*source* `Preo.Artifact.ArtifactEncoding` · *target* canonical `List UInt8`
-inside the version/domain-separated `Durable` frame · *transport*
+*source* `Preo.Artifact.ArtifactEncoding` from `Preo/ArtifactData` · *target*
+canonical `List UInt8` inside the version/domain-separated `Durable` frame ·
+*transport* the data-only `Preo/ArtifactDurableCore` theorem
 `Preo.ArtifactDurable.decodeProjection_projectionBytes_append`, preserving
 arbitrary following journal bytes; `decodeProjection_projectionBytes` is the
 exact one-frame form · *needs* the compositional `WireCodec` roundtrip, exact
@@ -1181,7 +1195,8 @@ five-currency budgets and therefore refuses superseded v1 bytes · *without exac
 surplus bytes (`parseArtifact_encode_append`) while
 `Examples.overlong_artifact_refused` rejects the same surplus as one artifact;
 *without the exact tag* `wrong_version_refused` and `wrong_domain_refused`
-fail closed. `Examples.two_frames_then_torn_third` adds logical journal recovery
+fail closed. The `Preo/ArtifactDurable` umbrella's
+`Examples.two_frames_then_torn_third` adds logical journal recovery
 under an explicit `Durable.TornFrame`; it is not a filesystem or flush
 refinement, and decoded bytes remain first-order data rather than proof.
 
@@ -1349,11 +1364,15 @@ distinguishes. No globally canonical or bit-optimal encoding follows.
 **44x. Finite six-status reach → least honest status effect** ⚠
 *source* a finite reachable-state list and a status evaluator · *target* the
 least downward-closed `StatusEffects.Effect` supporting every observed shape ·
-*transport* `StatusEffects.infer_is_least`; `fromLegacy_matches` separately
+*transport* `ResultStatus.statusOf_eq_iff` first gives the exact semantic
+inversion of the canonical evaluator, then `StatusEffects.infer_is_least`
+computes the effect; `fromLegacy_matches` separately
 embeds the historical three-flag capability exactly on every status · *needs*
 the explicit finite reach, because inference claims nothing outside it. For
 semantic soundness, `statusOf_totalSound6` inhabits
-`TotalSoundEvaluator6`, whose clauses cover all six cells · *without the total
+`TotalSoundEvaluator6`, whose clauses cover all six cells by reusing that same
+inversion; `RenderSix` consumes it as well, rather than owning a duplicate
+decision tree · *without the total
 contract* `closedForkAsOpen_old_sound` accepts a concrete evaluator that calls
 a settled fork open, while `closedForkAsOpen_not_total` rejects it. And without
 an explicit resolution constructor, `explicit_resolution_is_load_bearing`
@@ -1423,7 +1442,8 @@ neither allowed outcome. `snapshot_only_recovery_unsafe` exhibits two distinct
 authoritative logs with the same snapshot, so a snapshot cannot replace replay.
 
 **45b. Canonical ArtifactDurable-v2 journal → exact scan boundary** ⚠
-*source* concatenated canonical `Preo.ArtifactDurable` format-v2 frames ·
+*source* concatenated canonical `Preo.ArtifactDurable` format-v2 frames from
+the data-only `Preo/ArtifactDurableCore` leaf ·
 *target* their exact decoded values and half-open offsets, a first-stop
 classification, and a narrow one-frame host validator · *transport*
 `Preo.ArtifactJournalKernel.scan_stops_at_first_refusal` makes the first
@@ -1437,7 +1457,11 @@ version/domain/length/checksum facts · *without canonical framing* the
 `wrong_domain_fixture`, `unknown_body_tag_fixture`, and
 `noncanonical_payload_fixture` stop rather than truncate. Lean supplies neither
 a digest nor filesystem semantics, and no theorem says the host physical
-journal refines this kernel.
+journal refines this kernel. Native linkage follows the same narrow boundary:
+the declaration-free `RuntimeInit` imports this kernel alongside `Exec`,
+`SeqKernel`, and `EraKernel`; Lake derives that root's transitive object closure,
+while `ArtifactJournalDiagnostics`, artifact `Repr` instances, checked
+constructors, and examples remain outside unless a kernel imports them.
 
 **45c. Bounded authored action universe → coupled schedule and repair result** ⚠
 *source* a `Preo.Planning.Problem` with an `ActionUniverse`, session, limits,
@@ -1517,10 +1541,13 @@ execution, append, or durability.
 root and **outside `#audit_floor`** for a full wave, beneath four
 "total by construction" claims, while the vacuity tripwire cleared by a factor
 of twelve.
-⚠ *the repair* `#gate_covers_root` **reads `Uwueave.lean` from disk** and fails
-the build on any root module the gate cannot reach. The root cannot be imported
-(it imports the gate), so coverage is *checked*, never inherited. Verified
-refutable.
+⚠ *the repair* `TrustFloor` owns the single `allowedAxioms` policy,
+`offFloor`, Lean-parser-backed `directImports`, and reusable nonvacuous
+`#audit_floor_prefix`; `Audit` applies `#audit_floor` to this repository and
+`#gate_covers_root` **reads `Uwueave.lean` from disk**, failing the build on any
+root module the gate cannot reach. The root cannot be imported (it imports the
+gate), so coverage is *checked*, never inherited. Policy extraction changes the
+owner, not the claimed gate coverage. Verified refutable.
 
 ---
 

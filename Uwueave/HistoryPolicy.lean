@@ -928,6 +928,33 @@ def SameShape {V : Type} : Origin V → Origin V → Prop
   | .merged _ x y, .merged _ x' y' => x = x' ∧ y = y'
   | _, _ => False
 
+/-- Eliminate origin-shape agreement without repeating the nine-way constructor
+cross-product. Bases remain intentionally unrelated in the merge case. -/
+theorem SameShape.classify {V : Type} {o₁ o₂ : Origin V} (h : SameShape o₁ o₂) :
+    (o₁ = .root ∧ o₂ = .root) ∨
+      (∃ p, o₁ = .ran p ∧ o₂ = .ran p) ∨
+      (∃ l₁ l₂ x y, o₁ = .merged l₁ x y ∧ o₂ = .merged l₂ x y) := by
+  cases o₁ with
+  | root =>
+      cases o₂ with
+      | root => exact Or.inl ⟨rfl, rfl⟩
+      | ran _ => exact h.elim
+      | merged _ _ _ => exact h.elim
+  | ran p =>
+      cases o₂ with
+      | root => exact h.elim
+      | ran q =>
+          subst q
+          exact Or.inr (Or.inl ⟨p, rfl, rfl⟩)
+      | merged _ _ _ => exact h.elim
+  | merged l₁ x₁ y₁ =>
+      cases o₂ with
+      | root => exact h.elim
+      | ran _ => exact h.elim
+      | merged l₂ x₂ y₂ =>
+          obtain ⟨rfl, rfl⟩ := h
+          exact Or.inr (Or.inr ⟨l₁, l₂, x₁, y₁, rfl, rfl⟩)
+
 /-- **The same append-only record.** Same version graph, same root, the same
 origin shape at every version, the same state wherever nobody merged, and the
 same genesis. The two records may disagree at **every** merge node they contain —
@@ -1091,50 +1118,36 @@ theorem viewOf_eq_state {V S Op : Type} {P : HistoryMerge V S Op}
     {H : History V S Op} {M : AncestralMerge S} {impl : Impl S Op}
     (hco : H.Coherent M impl) (hanc : SelectsAncestors P H)
     (hgen : PolicyGenerated P H) : ∀ v, viewOf P H v = H.state v := by
-  have step : ∀ v : V, (∀ w, H.dag.rank w < H.dag.rank v → viewOf P H w = H.state w) →
-      viewOf P H v = H.state v := by
-    intro v ih
-    have hnode := hco.nodes v
-    cases hor : H.origin v with
-    | root =>
-        have hv' : v = H.root := hco.root_unique v hor
-        cases hr : H.dag.rank v with
-        | zero => rw [viewOf, hr, derive_zero, hv']
-        | succ m => rw [viewOf, hr, derive_root_case P H m hor]
-    | ran p =>
-        simp only [OriginOK, hor] at hnode
-        have hlt := H.dag.rank_lt _ _ hnode.1
-        cases hr : H.dag.rank v with
-        | zero => rw [hr] at hlt; exact absurd hlt (Nat.not_lt_zero _)
-        | succ m => rw [viewOf, hr, derive_ran_case P H m hor]
-    | merged l x y =>
-        simp only [OriginOK, hor] at hnode
-        have hltx := H.dag.rank_lt _ _ hnode.1
-        have hlty := H.dag.rank_lt _ _ hnode.2.1
-        cases hr : H.dag.rank v with
-        | zero => rw [hr] at hltx; exact absurd hltx (Nat.not_lt_zero _)
-        | succ m =>
-            have hx : H.dag.rank x ≤ m := by omega
-            have hy : H.dag.rank y ≤ m := by omega
-            have hbases : ∀ b, b ∈ (P.select H x y).bases →
-                derive P H m b = H.state b := by
-              intro b hb
-              have hrb : H.dag.rank b ≤ m :=
-                Nat.le_trans (Reaches.rank_le (hanc x y b hb).1) hx
-              rw [derive_eq_viewOf hco hanc m b hrb]
-              exact ih b (by omega)
-            rw [viewOf, hr, derive_merged_case P H m hor,
-              stateDecisionOf_congr _ hbases, derive_eq_viewOf hco hanc m x hx,
-              derive_eq_viewOf hco hanc m y hy, ih x (by omega), ih y (by omega),
-              stateDecisionOf_state]
-            exact (hgen v l x y hor).symm
-  have key : ∀ (n : Nat) (v : V), H.dag.rank v ≤ n → viewOf P H v = H.state v := by
-    intro n
-    induction n with
-    | zero => intro v _; exact step v (fun w hw => absurd hw (by omega))
-    | succ n ih => intro v hv; exact step v (fun w hw => ih w (by omega))
-  intro v
-  exact key (H.dag.rank v) v (Nat.le_refl _)
+  refine hco.induction (P := fun v => viewOf P H v = H.state v) ?_ ?_ ?_
+  · intro v hor
+    have hv' : v = H.root := hco.root_unique v hor
+    cases hr : H.dag.rank v with
+    | zero => rw [viewOf, hr, derive_zero, hv']
+    | succ m => rw [viewOf, hr, derive_root_case P H m hor]
+  · intro v _ hor hpar _ _
+    have hlt := H.dag.rank_lt _ _ hpar
+    cases hr : H.dag.rank v with
+    | zero => rw [hr] at hlt; exact absurd hlt (Nat.not_lt_zero _)
+    | succ m => rw [viewOf, hr, derive_ran_case P H m hor]
+  · intro v l x y hor hpx hpy _ _ _ ihx ihy ihbase
+    have hltx := H.dag.rank_lt _ _ hpx
+    have hlty := H.dag.rank_lt _ _ hpy
+    cases hr : H.dag.rank v with
+    | zero => rw [hr] at hltx; exact absurd hltx (Nat.not_lt_zero _)
+    | succ m =>
+        have hx : H.dag.rank x ≤ m := by omega
+        have hy : H.dag.rank y ≤ m := by omega
+        have hbases : ∀ b, b ∈ (P.select H x y).bases →
+            derive P H m b = H.state b := by
+          intro b hb
+          have hrb : H.dag.rank b ≤ m :=
+            Nat.le_trans (Reaches.rank_le (hanc x y b hb).1) hx
+          rw [derive_eq_viewOf hco hanc m b hrb]
+          exact ihbase b (hanc x y b hb)
+        rw [viewOf, hr, derive_merged_case P H m hor,
+          stateDecisionOf_congr _ hbases, derive_eq_viewOf hco hanc m x hx,
+          derive_eq_viewOf hco hanc m y hy, ihx, ihy, stateDecisionOf_state]
+        exact (hgen v l x y hor).symm
 
 /-! ### §7.3 Convergence
 
@@ -1161,36 +1174,14 @@ theorem derive_sameRecord {V S Op : Type} {P : HistoryMerge V S Op}
   | zero => intro v; exact hs.genesis
   | succ n ih =>
       intro v
-      have hsh := hs.shape v
-      cases h1 : H₁.origin v with
-      | root =>
-          rw [h1] at hsh
-          cases h2 : H₂.origin v with
-          | root =>
-              rw [derive_root_case P H₁ n h1, derive_root_case P H₂ n h2]
-              exact hs.states v (by rw [h1]; rfl)
-          | ran q => rw [h2] at hsh; exact hsh.elim
-          | merged l' x' y' => rw [h2] at hsh; exact hsh.elim
-      | ran p =>
-          rw [h1] at hsh
-          cases h2 : H₂.origin v with
-          | root => rw [h2] at hsh; exact hsh.elim
-          | ran q =>
-              rw [derive_ran_case P H₁ n h1, derive_ran_case P H₂ n h2]
-              exact hs.states v (by rw [h1]; rfl)
-          | merged l' x' y' => rw [h2] at hsh; exact hsh.elim
-      | merged l x y =>
-          rw [h1] at hsh
-          cases h2 : H₂.origin v with
-          | root => rw [h2] at hsh; exact hsh.elim
-          | ran q => rw [h2] at hsh; exact hsh.elim
-          | merged l' x' y' =>
-              rw [h2] at hsh
-              obtain ⟨hxx, hyy⟩ := hsh
-              subst hxx
-              subst hyy
-              rw [derive_merged_case P H₁ n h1, derive_merged_case P H₂ n h2,
-                hrd H₁ H₂ hs x y, funext ih]
+      rcases (hs.shape v).classify with ⟨h1, h2⟩ | ⟨p, h1, h2⟩ |
+          ⟨l₁, l₂, x, y, h1, h2⟩
+      · rw [derive_root_case P H₁ n h1, derive_root_case P H₂ n h2]
+        exact hs.states v (by rw [h1]; rfl)
+      · rw [derive_ran_case P H₁ n h1, derive_ran_case P H₂ n h2]
+        exact hs.states v (by rw [h1]; rfl)
+      · rw [derive_merged_case P H₁ n h1, derive_merged_case P H₂ n h2,
+          hrd H₁ H₂ hs x y, funext ih]
 
 /-- ⚑ **THE CROWN: same record, same policy, same view.** Two replicas whose
 append-only records agree — same DAG, same origin shapes, same states wherever

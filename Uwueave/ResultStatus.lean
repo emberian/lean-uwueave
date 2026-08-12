@@ -184,6 +184,39 @@ def statusTag {α : Type} : Status α → Nat
   | .absent => 4
   | .pending => 5
 
+/-- **The semantic meaning of all six status constructors.**  This is the
+stable API for reasoning about a status: callers see candidate cardinality and
+settledness, never `statusOf`'s nested decidable conditionals.
+
+The predicate is intentionally generic in the answer set and the settledness
+proposition. `statusOf_semantics` instantiates them with `Evidence.values e`
+and `Evidence.Closed e`. `StatusEffects.TotalSoundEvaluator6` supplies the
+other five complete rows and the pending row's openness, but not yet its
+empty-answer clause. -/
+def Status.Semantics {α : Type} (answer : GSet α) (settled : Prop) : Status α → Prop
+  | .exact a => answer a = true ∧ Holes.SealsTo answer a ∧ settled
+  | .provisional a => answer a = true ∧ Holes.SealsTo answer a ∧ ¬ settled
+  | .forkedClosed =>
+      (∃ a b, answer a = true ∧ answer b = true ∧ a ≠ b) ∧ settled
+  | .forkedOpen =>
+      (∃ a b, answer a = true ∧ answer b = true ∧ a ≠ b) ∧ ¬ settled
+  | .absent => (∀ a, answer a = false) ∧ settled
+  | .pending => (∀ a, answer a = false) ∧ ¬ settled
+
+/-- A nonempty Boolean candidate set which is not a singleton contains two
+distinct candidates.  This is the cardinality step shared by the two fork
+rows of `Status.Semantics`. -/
+theorem exists_two_of_nonunique {α : Type} {answer : GSet α}
+    (hne : ∃ a, answer a = true)
+    (hnu : ¬ ∃ a, answer a = true ∧ ∀ b, answer b = true → b = a) :
+    ∃ a b, answer a = true ∧ answer b = true ∧ a ≠ b := by
+  obtain ⟨a, ha⟩ := hne
+  have hnot : ¬ ∀ b, answer b = true → b = a := fun hall => hnu ⟨a, ha, hall⟩
+  rw [Classical.not_forall] at hnot
+  obtain ⟨b, hb⟩ := hnot
+  rw [Classical.not_imp] at hb
+  exact ⟨a, b, ha, hb.1, fun hab => hb.2 hab.symm⟩
+
 /-- Statuses with different tags are different statuses. -/
 theorem status_ne_of_tag {α : Type} {a b : Status α} (h : statusTag a ≠ statusTag b) :
     a ≠ b := fun heq => h (congrArg statusTag heq)
@@ -238,11 +271,12 @@ theorem forget_statusOf {α : Type} (e : Evidence.ResultEvidence α) :
           if_neg hne]
         rfl
 
-/-! ### The six inversion lemmas
+/-! ### The six introduction lemmas
 
-Each says which evidence produces which status. They are `Evidence.lean`'s
-`render_*` lemmas with the zero row split; the four non-empty ones are proved
-the same way, and the two new ones are what §3 needs. -/
+Each gives sufficient evidence for one status. They are `Evidence.lean`'s
+`render_*` lemmas with the zero row split. `statusOf_eq_iff` below assembles
+them with one implementation-facing proof to provide the converse for all six
+rows without six duplicated decision trees. -/
 
 theorem statusOf_exact {α : Type} {e : Evidence.ResultEvidence α} {a : α}
     (hm : Evidence.values e a = true) (hs : Holes.SealsTo (Evidence.values e) a)
@@ -299,6 +333,69 @@ theorem statusOf_pending {α : Type} {e : Evidence.ResultEvidence α}
     rintro ⟨a, ha, _⟩
     exact hne ⟨a, ha⟩
   simp only [statusOf, dif_neg hnu, if_neg hne, if_neg hc]
+
+/-- **`statusOf` satisfies the semantic six-row table.**  This is the only
+proof which opens the implementation's nested conditionals.  Every inversion
+and refusal theorem below factors through this result or its iff form, so a
+future implementation of `statusOf` can change without exporting its branch
+structure to callers. -/
+theorem statusOf_semantics {α : Type} (e : Evidence.ResultEvidence α) :
+    (statusOf e).Semantics (Evidence.values e) (Evidence.Closed e) := by
+  by_cases hu : ∃ a, Evidence.values e a = true ∧
+      ∀ b, Evidence.values e b = true → b = a
+  · have hchosen := Classical.choose_spec hu
+    by_cases hc : Evidence.Closed e
+    · simp only [statusOf, dif_pos hu, if_pos hc, Status.Semantics]
+      exact ⟨hchosen.1, hchosen.2, hc⟩
+    · simp only [statusOf, dif_pos hu, if_neg hc, Status.Semantics]
+      exact ⟨hchosen.1, hchosen.2, hc⟩
+  · by_cases hne : ∃ a, Evidence.values e a = true
+    · have hfork := exists_two_of_nonunique hne hu
+      by_cases hc : Evidence.Closed e
+      · simp only [statusOf, dif_neg hu, if_pos hne, if_pos hc, Status.Semantics]
+        exact ⟨hfork, hc⟩
+      · simp only [statusOf, dif_neg hu, if_pos hne, if_neg hc, Status.Semantics]
+        exact ⟨hfork, hc⟩
+    · have hempty : ∀ a, Evidence.values e a = false := by
+        intro a
+        cases ha : Evidence.values e a with
+        | false => rfl
+        | true => exact absurd ⟨a, ha⟩ hne
+      by_cases hc : Evidence.Closed e
+      · simp only [statusOf, dif_neg hu, if_neg hne, if_pos hc, Status.Semantics]
+        exact ⟨hempty, hc⟩
+      · simp only [statusOf, dif_neg hu, if_neg hne, if_neg hc, Status.Semantics]
+        exact ⟨hempty, hc⟩
+
+/-- **Complete six-way characterization.**  Equality with `statusOf e` is
+equivalent to the corresponding semantic row.  The reverse direction reuses
+the six public constructor lemmas; no caller needs to unfold `statusOf`. -/
+theorem statusOf_eq_iff {α : Type} (e : Evidence.ResultEvidence α) (status : Status α) :
+    statusOf e = status ↔
+      status.Semantics (Evidence.values e) (Evidence.Closed e) := by
+  constructor
+  · intro h
+    rw [← h]
+    exact statusOf_semantics e
+  · intro h
+    cases status with
+    | exact a => exact statusOf_exact h.1 h.2.1 h.2.2
+    | provisional a => exact statusOf_provisional h.1 h.2.1 h.2.2
+    | forkedClosed =>
+        obtain ⟨⟨a, b, ha, hb, hab⟩, hc⟩ := h
+        exact statusOf_forkedClosed ha hb hab hc
+    | forkedOpen =>
+        obtain ⟨⟨a, b, ha, hb, hab⟩, hc⟩ := h
+        exact statusOf_forkedOpen ha hb hab hc
+    | absent => exact statusOf_absent h.1 h.2
+    | pending => exact statusOf_pending h.1 h.2
+
+/-- The refusal form of `statusOf_eq_iff`: refuting a semantic row refutes the
+corresponding status without constructor tags or implementation unfolding. -/
+theorem statusOf_ne_iff {α : Type} (e : Evidence.ResultEvidence α) (status : Status α) :
+    statusOf e ≠ status ↔
+      ¬ status.Semantics (Evidence.values e) (Evidence.Closed e) :=
+  not_congr (statusOf_eq_iff e status)
 
 /-! ## §2. The static axis — a capability, and what it declares.
 
@@ -380,8 +477,19 @@ theorem declares_weakens {S β : Type} {c : Capability}
 `Evidence.lean`'s own witnesses, evaluated by `statusOf`. -/
 
 theorem statusOf_exactW : statusOf Evidence.exactW = Status.exact 47 :=
-  statusOf_exact (Evidence.values_cand47 (e := Evidence.exactW) rfl).1
-    (Evidence.values_cand47 (e := Evidence.exactW) rfl).2 Evidence.closed_exactW
+  (statusOf_eq_iff Evidence.exactW (Status.exact 47)).2
+    ⟨(Evidence.values_cand47 (e := Evidence.exactW) rfl).1,
+      (Evidence.values_cand47 (e := Evidence.exactW) rfl).2,
+      Evidence.closed_exactW⟩
+
+/-- The refusal half of the semantic API rejects a cell whose candidate row is
+false, without unfolding `statusOf` or comparing constructor tags. -/
+theorem statusOf_exactW_ne_pending : statusOf Evidence.exactW ≠ Status.pending := by
+  apply (statusOf_ne_iff Evidence.exactW Status.pending).2
+  intro h
+  have hfalse := h.1 47
+  rw [(Evidence.values_cand47 (e := Evidence.exactW) rfl).1] at hfalse
+  exact Bool.noConfusion hfalse
 
 theorem statusOf_openW : statusOf Evidence.openW = Status.provisional 47 :=
   statusOf_provisional (Evidence.values_cand47 (e := Evidence.openW) rfl).1

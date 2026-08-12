@@ -116,6 +116,7 @@ dense order is id-sorted, replica-independent) and get the same document.
 -/
 import Uwueave.Exec
 import Uwueave.ExecRefine
+import Uwueave.ListProofs
 
 namespace Uwueave.SeqKernel
 
@@ -853,37 +854,23 @@ private theorem count_flatMap_le_one_K {r : Nat → Nat} {anchor : Array Int}
     ∀ cs : List Nat, cs.Nodup →
       (∀ c ∈ cs, c < anchor.size ∧ anchorAt anchor c = p) → ∀ j,
       (cs.flatMap (fun c => c :: emitK anchor fuel ((c : Int)))).count j ≤ 1 := by
-  intro cs
-  induction cs with
-  | nil => intro _ _ j; simp
-  | cons c cs ihcs =>
-    intro hnodup hanchor j
-    rw [List.flatMap_cons, List.count_append]
-    obtain ⟨hcnotin, hnodup'⟩ := List.nodup_cons.mp hnodup
-    have hrest := ihcs hnodup'
-      (fun c' hc' => hanchor c' (List.mem_cons_of_mem c hc')) j
-    have hchunk := count_chunk_le_one_K hgr ih c j
-    by_cases hz : (cs.flatMap (fun c => c :: emitK anchor fuel ((c : Int)))).count j = 0
-    · omega
-    · have hmem : j ∈ cs.flatMap (fun c => c :: emitK anchor fuel ((c : Int))) :=
-        List.count_pos_iff.mp (by omega)
-      obtain ⟨c', hc'in, hjc'⟩ := List.mem_flatMap.mp hmem
-      have hnot : j ∉ c :: emitK anchor fuel ((c : Int)) := by
-        intro hjc
-        have h1 := chunk_mem_belowK hjc
-        have h2 := chunk_mem_belowK hjc'
-        have hcc' : c ≠ c' := fun h => hcnotin (h.symm ▸ hc'in)
-        obtain ⟨hca_sz, hca⟩ := hanchor c List.mem_cons_self
-        obtain ⟨hc'a_sz, hc'a⟩ := hanchor c' (List.mem_cons_of_mem c hc'in)
-        rcases h1 with rfl | hb1
-        · rcases h2 with rfl | hb2
-          · exact hcc' rfl
-          · exact not_belowK_sibling hgr hca hc'a hb2
-        · rcases h2 with rfl | hb2
-          · exact not_belowK_sibling hgr hc'a hca hb1
-          · exact belowK_sibling_disjoint hgr hca_sz hca hc'a_sz hc'a hcc' j hb1 hb2
-      rw [List.count_eq_zero_of_not_mem hnot]
-      omega
+  intro cs hnodup hanchor
+  apply ListProofs.flatMap_count_le_one_of_nodup_of_pairwise_disjoint
+    (fun c => c :: emitK anchor fuel ((c : Int))) hnodup
+  · intro c _ j
+    exact count_chunk_le_one_K hgr ih c j
+  · intro c hc c' hc' hcc' j hj hj'
+    have h1 := chunk_mem_belowK hj
+    have h2 := chunk_mem_belowK hj'
+    obtain ⟨hca_sz, hca⟩ := hanchor c hc
+    obtain ⟨hc'a_sz, hc'a⟩ := hanchor c' hc'
+    rcases h1 with rfl | hb1
+    · rcases h2 with rfl | hb2
+      · exact hcc' rfl
+      · exact not_belowK_sibling hgr hca hc'a hb2
+    · rcases h2 with rfl | hb2
+      · exact not_belowK_sibling hgr hc'a hca hb1
+      · exact belowK_sibling_disjoint hgr hca_sz hca hc'a_sz hc'a hcc' j hb1 hb2
 
 /-- Every id is emitted at most once, from any anchor, at any fuel — under
 groundedness alone. -/
@@ -900,22 +887,8 @@ theorem emitK_count_le_one {r : Nat → Nat} {anchor : Array Int}
       (childrenK_nodup anchor p) (fun c hc => mem_childrenK.mp hc) j
 
 private theorem nodup_of_count_le_one :
-    ∀ {l : List Nat}, (∀ j, l.count j ≤ 1) → l.Nodup := by
-  intro l
-  induction l with
-  | nil => intro _; exact List.nodup_nil
-  | cons a t ih =>
-    intro h
-    rw [List.nodup_cons]
-    refine ⟨fun hmem => ?_, ih fun j => ?_⟩
-    · have h1 := h a
-      rw [List.count_cons] at h1
-      have h2 : 0 < t.count a := List.count_pos_iff.mpr hmem
-      simp at h1
-      omega
-    · have := h j
-      rw [List.count_cons] at this
-      split at this <;> omega
+    ∀ {l : List Nat}, (∀ j, l.count j ≤ 1) → l.Nodup :=
+  List.nodup_iff_count.mpr
 
 /-- The full document order is duplicate-free on a grounded forest. -/
 theorem emitAll_nodup {r : Nat → Nat} {anchor : Array Int}
@@ -934,16 +907,8 @@ theorem linearizeK_nodup {r : Nat → Nat} {anchor : Array Int}
 /-! ## §8. Ancestors precede, and tombstones only filter -/
 
 private theorem sublist_flatMap_of_mem {α β : Type} (f : α → List β) :
-    ∀ (cs : List α) (c : α), c ∈ cs → (f c).Sublist (cs.flatMap f) := by
-  intro cs
-  induction cs with
-  | nil => intro c hc; cases hc
-  | cons c' cs ihcs =>
-    intro c hc
-    rw [List.flatMap_cons]
-    cases hc with
-    | head => exact List.sublist_append_left _ _
-    | tail _ hc => exact (ihcs c hc).trans (List.sublist_append_right _ _)
+    ∀ (cs : List α) (c : α), c ∈ cs → (f c).Sublist (cs.flatMap f) :=
+  ListProofs.sublist_flatMap_of_mem f
 
 /-- Inside any emission that reaches `g`, the element `g` is emitted and
 everything below it follows it: `[g, i]` is a subsequence whenever the fuel

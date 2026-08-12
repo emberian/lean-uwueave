@@ -20,7 +20,8 @@ This is the delta audit after the execution encoder, durability, authenticity,
 Byzantine, recursive-choreography, structured-evidence, frontier, outcome-spec,
 protocol, world-context, and preoscript artifact work landed, followed by the
 Cycle-20 authoring foundations, Cycle-21 checked-manifest/result foundations,
-and the Cycle-22 language-consumer and runtime/persistence foundations. The new
+the Cycle-22 language-consumer and runtime/persistence foundations, and the
+Wave-23 automation/trust/native-closure work. The new
 modules, their root/gate wiring, and their MAP and TRANSPORTS entries are
 checkpointed together: a clean checkout cannot receive only one side of that
 assembly.
@@ -32,13 +33,14 @@ was repaired during this audit and is now complete in the live working tree.
 
 | Surface | Live evidence | Current verdict |
 |---|---|---|
-| Root → gate | `#gate_covers_root` at `Uwueave/Audit.lean:175-191` checks every direct root import is in the gate environment; `Choreo` is in both (`Uwueave.lean:71`, `Uwueave/Audit.lean:62`). | **The original A.1 defect is closed.** |
-| Disk → root → gate | There are **107** Lean module files under `Uwueave/`; both the `Uwueave.lean` and `Uwueave/Audit.lean` transitive closures reach **107/107**. The live gate reports **101** direct root modules (excluding `Audit`) and audits **17,559** constants. `lake build` and the fail-closed Cargo suite pass. | **The current-wave assembly defect is closed.** |
+| Root → gate | `#gate_covers_root` at `Uwueave/Audit.lean:174-203` parses `Uwueave.lean` with Lean's own header parser and checks every direct root import is in the gate environment; the intentionally indented `TrustFloor` import (`Uwueave.lean:1-3`) is an executable regression. `Choreo` is in both (`Uwueave.lean:83`, `Uwueave/Audit.lean:64`). | **The original A.1 defect and the brittle line-scanner follow-up are closed.** |
+| Disk → root → gate | There are **123** Lean module files under `Uwueave/`; the root directly imports **117** Uwueave modules excluding `Audit`, while its transitive closure reaches all **123/123**. The live full gate completed **126 jobs**, reports those **117** root modules covered, and audits **20,446** constants. | **The current-wave assembly defect is closed.** |
 | Checkpoint → disk | Cycle 21 adds nine Lean modules and the matching root, audit, MAP, TRANSPORTS, census, and surface changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
-| MAP → disk → gate | The module table has **107 rows for 107 files**, and every module is inside the root and audit closures. The keystone ledger says **433 rows**. | **The former 34-row exposure remains closed.** The table is a reading aid, not a per-name trust gate. |
-| TRANSPORTS | The ledger has **108** rows, including checked manifests, budget-bearing V2 validation, communicated choice, composite deltas, contextual compilation, differential evaluation, status effects, temporal fairness, and typed edits. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
+| MAP → disk → gate | The MAP file table has **123 rows for 123 files**, including the nine Wave-23 modules, and every module is inside the root/gate closure. Its keystone table currently contains **477** theorem rows. | **The former 34-row exposure remains closed.** The table is a reading aid, not a per-name trust gate. |
+| TRANSPORTS | The ledger has **115** numbered rows, including checked manifests, budget-bearing V2 validation, communicated choice, composite deltas, contextual compilation, differential evaluation, status effects, temporal fairness, and typed edits. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
 | Runtime persistence | `ArtifactFrame::new` bounds a frame at `MAX_ARTIFACT_FRAME_BYTES = 1 MiB`, checks its v2 envelope, and asks the exported Lean `Preo.ArtifactJournalKernel.validateOneKernel` for exact semantic canonicality before `ArtifactJournal` stores the unchanged bytes in checksummed `UWARJ001` records. `DocumentJournal` separately stores canonical typed `MoveLog` mutations and prefix-equal checkpoints in `UWDJRN01`. | **A concrete pure-Rust host rung has landed.** It is not a filesystem theorem, authenticated document admission, multi-record atomic commit, or a refinement of `PersistentRuntime`. |
 | Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest` (`Uwueave/Exec.lean:772-782`); Rust supplies typed records (`rust/src/ffi.rs:34-53,85-115`) and no longer owns FORMAT-v3 bytes. `RuntimeAuthV4` now specifies canonical signed-move bytes and layered admission premises, but is deliberately not wired into that shipping path. | The v3 wire-encoder decision is closed; ABI, shim, runtime and codegen remain open. Host persistence has a tested narrow implementation, while formal filesystem/refinement and authenticated v4 admission remain open. |
+| Native closure and initialization | The data-free `RuntimeInit` directly imports `Exec`, `SeqKernel`, `EraKernel`, and `Preo.ArtifactJournalKernel` (`Uwueave/RuntimeInit.lean:1-18`). `build.rs` takes Lake's setup description as the sole transitive-closure authority, snapshots and stages the exact native objects, verifies the archive member set and bytes, then rechecks Lake paths, setup, objects, every Lean source, and build configuration (`rust/build.rs:43-150,358-438,575-722`). The shim calls only the RuntimeInit initializer (`rust/shim.c:14-17,54-70`). The full gate observed **13** Lake objects / **655,368 bytes**, a **14**-member archive including the shim / **798,968 bytes**, and **132** Rust tests. | Stale, extra, missing, or mixed-generation native objects and initializer drift now fail closed. Code generation, compiler/linker correctness, ABI, ownership, runtime behavior, and filesystem semantics remain execution-TCB obligations. |
 
 Cycle 20 adds:
 
@@ -57,6 +59,18 @@ The Cycle-22 runtime/persistence portion adds:
 pure-Rust `ArtifactJournal` and `DocumentJournal` stores. `PersistentRuntime`
 and `RuntimeAuthV4` are contracts/foundations; only the two explicitly bounded,
 unauthenticated journal surfaces are host implementations.
+
+Wave 23 adds the trust/build and language-automation layer:
+
+`TrustFloor` · `ListProofs` · `Tactics.Verdict` ·
+`Preo.ArtifactData` · `Preo.ArtifactChecked` · `Preo.ArtifactDiagnostics` ·
+`Preo.ArtifactDurableCore` · `Preo.ArtifactJournalDiagnostics` · `RuntimeInit`.
+The tactic core now distinguishes applied, inapplicable, resource-refused, and
+internal-error routes; automatic finite classification is capped at 64 states /
+4,096 ordered pairs while explicit `classifyFinite` remains total. The native
+`preo_protocol` surface spells all six `Protocol.Term` constructors and emits
+the exact term, elaboration, session, plan, five limits, and witnessed profile
+bound rather than accepting only an opaque Lean term.
 
 The previous checkpoint's twelve modules were:
 
@@ -224,9 +238,10 @@ The implementation, source headers, MAP and `docs/TRUST.md` now agree:
   obligations and two paid controls.
 - The Rust byte marshaller is gone; production obtains canonical FORMAT-v3
   bytes from `Exec.encodeRequestKernel` over typed lanes.
-- `rust/shim.c` records that SeqKernel, EraKernel, and
-  `Preo.ArtifactJournalKernel` are root-reachable and retains explicit
-  idempotent initialization as an FFI robustness measure.
+- `Uwueave.RuntimeInit` is the data-free native root for `Exec`, `SeqKernel`,
+  `EraKernel`, and `Preo.ArtifactJournalKernel`. Lake reports that exact
+  transitive closure, `build.rs` archives and byte-verifies only its objects plus
+  the shim, and `rust/shim.c` calls only the RuntimeInit initializer.
 
 The FFI surface is still closed by name, but the old count is obsolete. There
 are now **six** Lean exports: request encoding, replay, canonical compatibility
@@ -242,10 +257,10 @@ is proved.”
 
 **P1 — turn landed foundations into end-to-end consumers**
 
-1. Wire `Preo.Expr`, `Preo.Incremental`, `ContextCompiler`, and `StatusEffects`
-   through one typed query/derive surface and into the checked export. They are
-   individually proved but remain foundation modules rather than one language
-   path.
+1. Carry the native `preo_protocol` product (exact term, elaboration, session,
+   plan, limits, and profile bound) into checked export/planning consumers. Its
+   six-constructor authoring grammar is now real; arbitrary schedule synthesis
+   and a pretty inline budget block remain separate work.
 2. Generate useful repair and schedule catalogs instead of searching only
    caller-supplied entries; keep full prices/profiles and exhaustive refusal
    evidence through the surface.

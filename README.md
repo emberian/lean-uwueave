@@ -49,7 +49,10 @@ short and honest rather than a list of vague possibilities.
 Those two phones are a program. You need [elan](https://elan.lean-lang.org) on
 your `PATH` — the decision layers are compiled from the Lean, so the Rust build
 insists on a working Lean toolchain rather than linking whatever was on disk
-last time. The first build is slow; after that it's incremental.
+last time. A data-free `RuntimeInit` module names the four native-kernel modules;
+the build takes their exact transitive closure from Lake, byte-snapshots it, and
+refuses stale, extra, missing, or mixed-generation archive members. The first
+build is slow; after that it's incremental.
 
 ```sh
 git clone https://github.com/emberian/lean-uwueave && cd lean-uwueave/rust
@@ -183,8 +186,13 @@ is a bigger, real schema that deliberately contains one.
 - **A checked language surface.** `preo` declarations now cover ordinary and
   keyed fields, application carriers with explicit planting seeds, invariants,
   derived summaries, retained-world futures, typed protocol terms, and
-  proof-carrying sessions. Standalone commands name fully indexed certificates
-  and accept five-currency budgets only through one witnessed plan. The checked
+  proof-carrying sessions. The native `preo_protocol` grammar spells all six
+  protocol constructors and emits the exact semantic term, elaboration,
+  session, plan, five limits, and witnessed profile bound. Standalone commands
+  name fully indexed certificates and accept five-currency budgets only through
+  one witnessed plan. Automatic finite verdict search refuses work above its
+  explicit 64-state / 4,096-pair caps rather than disguising resource failure as
+  an inapplicable route; explicit `classifyFinite` remains total. The checked
   `preo_export` manifest projects those meanings to canonical first-order
   artifacts, format-v2 framed bytes, and a validated budget-bearing data-only
   Rust representation; none of those transport layers can manufacture a
@@ -238,10 +246,13 @@ not something you crash on.
   with diagrams, for people who like diagrams.
 - **[Trust](docs/TRUST.md)** — three separate ledgers of what this rests on:
   logic, execution, and environment. Including what our own build gate *cannot*
-  prove.
+  prove. The shared `TrustFloor` policy is also exercised by subprocess canaries
+  that must reject a custom axiom, `sorry`, `native_decide`, and a vacuous
+  namespace.
 - **[Runtime architecture](docs/RUNTIME.md)** — the shipping FORMAT-v3 path,
-  Cycle-22 pure-Rust journals, exact durability assumptions, and the canonical
-  but not-yet-shipping authenticated FORMAT-v4 foundation.
+  exact RuntimeInit/Lake native closure, Cycle-22 pure-Rust journals, exact
+  durability assumptions, and the canonical but not-yet-shipping authenticated
+  FORMAT-v4 foundation.
 - **[The bibliography](docs/BIBLIOGRAPHY.md)** — every paper behind this, what it
   established, what we took, what we declined. Several entries exist to record
   claims of *ours* that the literature refuted.
@@ -250,7 +261,8 @@ not something you crash on.
 
 ```sh
 lake build              # every proof + the total axiom gate (Lean core only, no mathlib)
-cd rust && cargo test   # compiles the Lean decision layers to C and links them (needs elan)
+./scripts/trust-canaries.sh # acceptance tests: the trust gate must also go red
+cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
 
 ## How to read our claims

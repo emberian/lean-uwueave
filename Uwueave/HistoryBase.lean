@@ -166,11 +166,12 @@ universe u v
 
 open Uwueave Uwueave.Ancestral Uwueave.Necessity Uwueave.Histories
 
-/-! ## §0. Two graph lemmas and a budget generalization
+/-! ## §0. Two graph lemmas and compatibility names for budget lemmas
 
 Everything below needs to say "this version is a leaf" and "a replica can spend
-its way from here to there", and neither is available at the generality the file
-needs. `Histories.lean` proves the second only at budget `2`. -/
+its way from here to there". The graph lemmas are local; the budget-polymorphic
+results now live beside `Histories.spend_tryApply`, and the names below preserve
+the original `HistoryBase` API for downstream clients. -/
 
 /-- **An ancestry path starts with an edge.** The working form of "this version
 is a leaf": if nothing leaves `a`, nothing is downstream of it. -/
@@ -188,71 +189,30 @@ theorem reaches_of_leaf {V : Type} {D : VersionDag V} {a b : V}
   · obtain ⟨c, hc⟩ := ancestry_has_first_edge ha
     exact Bool.noConfusion (hc.symm.trans (hleaf c))
 
-/-- **What a replica can reach under budget `B`**, at every budget:
-`Histories.spend2_run` with the `2` released. -/
+/-- Compatibility name for `Histories.spend_run`. -/
 theorem spend_run (B : Nat) : ∀ (ops : List Unit) (l x : Nat),
-    run (spendOps B).impl l ops = some x → x = l ∨ (l ≤ x ∧ x ≤ B) := by
-  intro ops
-  induction ops with
-  | nil => intro l x h; exact Or.inl (Option.some.inj h).symm
-  | cons op ops ih =>
-    intro l x h
-    by_cases hl : l + 1 ≤ B
-    · have htry : (spendOps B).impl.tryApply op l = some (l + 1) := by
-        rw [spend_tryApply]; exact if_pos hl
-      rw [run_cons_some _ _ _ _ htry] at h
-      rcases ih (l + 1) x h with he | ⟨h1, h2⟩
-      · exact Or.inr ⟨by omega, by omega⟩
-      · exact Or.inr ⟨by omega, h2⟩
-    · have htry : (spendOps B).impl.tryApply op l = none := by
-        rw [spend_tryApply]; exact if_neg hl
-      rw [run_cons_none _ _ _ _ htry] at h
-      exact absurd h (by simp)
+    run (spendOps B).impl l ops = some x → x = l ∨ (l ≤ x ∧ x ≤ B) :=
+  Histories.spend_run B
 
-/-- The same, in `Reachable` form. -/
+/-- Compatibility name for `Histories.spend_reachable`. -/
 theorem spend_reachable (B : Nat) {l x : Nat} (h : Reachable (spendOps B).impl l x) :
-    x = l ∨ (l ≤ x ∧ x ≤ B) := by
-  obtain ⟨ops, hr⟩ := h
-  exact spend_run B ops l x hr
+    x = l ∨ (l ≤ x ∧ x ≤ B) :=
+  Histories.spend_reachable B h
 
-/-- Spending `n` units, when the budget allows. -/
+/-- Compatibility name for `Histories.spend_reach_add`. -/
 theorem spend_reach_add (B : Nat) : ∀ (n l : Nat), l + n ≤ B →
-    Reachable (spendOps B).impl l (l + n) := by
-  intro n
-  induction n with
-  | zero => intro l _; exact Reachable.refl _ _
-  | succ n ih =>
-    intro l h
-    have htry : (spendOps B).impl.tryApply () l = some (l + 1) := by
-      rw [spend_tryApply]; exact if_pos (by omega)
-    have hstep : Reachable (spendOps B).impl l (l + 1) := by
-      refine ⟨[()], ?_⟩
-      show run (spendOps B).impl l [()] = some (l + 1)
-      rw [run_cons_some _ _ _ _ htry]
-      rfl
-    have hcomp := Reachable.trans hstep (ih (l + 1) (by omega))
-    rw [show l + 1 + n = l + (n + 1) from by omega] at hcomp
-    exact hcomp
+    Reachable (spendOps B).impl l (l + n) :=
+  Histories.spend_reach_add B
 
-/-- **The converse of `spend_reachable`**: everything between here and the budget
-is reachable. -/
+/-- Compatibility name for `Histories.spend_reach`. -/
 theorem spend_reach (B : Nat) {l x : Nat} (h1 : l ≤ x) (h2 : x ≤ B) :
-    Reachable (spendOps B).impl l x := by
-  have h := spend_reach_add B (x - l) l (by omega)
-  rw [show l + (x - l) = x from by omega] at h
-  exact h
+    Reachable (spendOps B).impl l x :=
+  Histories.spend_reach B h1 h2
 
-/-- Spending never breaks the budget — `LocallySafe` at every `B`. -/
+/-- Compatibility name for `Histories.spend_locally_safe`. -/
 theorem spend_locally_safe (B : Nat) :
-    LocallySafe (spendOps B).impl (fun n => n ≤ B) := by
-  intro op s s' h _
-  rw [spend_tryApply] at h
-  by_cases hb : s + 1 ≤ B
-  · rw [if_pos hb] at h
-    have he : s + 1 = s' := Option.some.inj h
-    rw [← he]; exact hb
-  · rw [if_neg hb] at h
-    exact absurd h (by simp)
+    LocallySafe (spendOps B).impl (fun n => n ≤ B) :=
+  Histories.spend_locally_safe B
 
 /-! ## §1. What the state-level condition cannot see
 
@@ -1051,12 +1011,8 @@ theorem w_branch_commonAncestors (v : WVer)
   cases v
   · rfl
   · exact absurd (reaches_of_leaf wDag_quiesced_is_a_leaf h.2) (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
-  · rcases h.1.eq_or_rank_lt with he | hr
-    · exact absurd he (by decide)
-    · exact absurd hr (by decide)
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
+  · exact (not_reaches_of_ne_of_rank_ge (by decide) (by decide) h.1).elim
 
 /-- **The fork point is the lowest common base of the two siblings.** -/
 theorem w_start_lowest : LowestCommonBase wDag .quiesced .pending .start := by
@@ -1272,11 +1228,8 @@ theorem counter_decision_iconfluentIn :
   cases c with
   | selected l =>
     have hl : l ≤ 4 := hobs l (by show l ∈ [l]; exact List.Mem.head _)
-    have hrx := spend_reachable 2 hv.1
-    have hry := spend_reachable 2 hv.2
     show counterMerge l x y ≤ 4
-    unfold counterMerge
-    rcases hrx with h | ⟨h1, h2⟩ <;> rcases hry with h' | ⟨h1', h2'⟩ <;> omega
+    exact counterMerge_le_four_of_spend_reachable hl hv.1 hv.2
   | ambiguous _ _ =>
     show joinResolve x y ≤ 4
     unfold joinResolve

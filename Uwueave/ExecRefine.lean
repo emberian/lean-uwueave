@@ -781,9 +781,11 @@ private theorem lexLt_negtrans : ∀ {l₁ l₂ l₃ : List Int},
 
 private theorem opLt_eq_lexLt (a b : Op) : opLt a b = lexLt (opKey a) (opKey b) := by
   simp only [opLt, opKey, lexLt, UInt64.lt_iff_toNat_lt, Int.ofNat_lt]
-  repeat' split
-  all_goals simp_all
-  all_goals omega
+  have hlast : decide (a.cite < b.cite) =
+      (if a.cite < b.cite then true
+       else if b.cite < a.cite then false else false) := by
+    by_cases h : a.cite < b.cite <;> simp [h]
+  rw [hlast]
 
 private theorem opKey_inj {a b : Op} (h : opKey a = opKey b) : a = b := by
   simp only [opKey, List.cons.injEq, and_true] at h
@@ -1144,15 +1146,65 @@ theorem getWord_pushWord_lt (b : ByteArray) (u : UInt64) {i : Nat}
       byteAt_foldl_push_lt _ _ _ (by omega), byteAt_foldl_push_lt _ _ _ (by omega),
       byteAt_foldl_push_lt _ _ _ (by omega), byteAt_foldl_push_lt _ _ _ (by omega)]
 
-private theorem size_foldl_pushWord (l : List Int) :
+/-! These three lemmas are the codec proof once, for an arbitrary source
+carrier and word projection. `encodeView`, canonical requests, and the ERA
+kernel retain their domain-specific theorem names as wrappers below and in
+`EraKernel`; none of them needs to re-run the same induction. -/
+
+namespace WordCodec
+
+theorem foldlPushWord_size {α : Type _} (encode : α → UInt64) (values : List α) :
     ∀ b : ByteArray,
-      (l.foldl (fun acc v => pushWord acc (ofI v)) b).size = b.size + 8 * l.length := by
-  induction l with
+      (values.foldl (fun acc value => pushWord acc (encode value)) b).size =
+        b.size + 8 * values.length := by
+  induction values with
   | nil => intro b; simp
-  | cons x t ih =>
+  | cons value rest ih =>
     intro b
     rw [List.foldl_cons, ih, size_pushWord, List.length_cons]
     omega
+
+theorem foldlPushWord_get_lt {α : Type _} (encode : α → UInt64)
+    (values : List α) :
+    ∀ (b : ByteArray) (i : Nat), 8 * (i + 1) ≤ b.size →
+      getWord (values.foldl (fun acc value => pushWord acc (encode value)) b) i =
+        getWord b i := by
+  induction values with
+  | nil => intro b i _; rfl
+  | cons value rest ih =>
+    intro b i h
+    rw [List.foldl_cons, ih _ _ (by rw [size_pushWord]; omega),
+        getWord_pushWord_lt _ _ h]
+
+theorem foldlPushWord_get {α : Type _} (encode : α → UInt64) (values : List α) :
+    ∀ (b : ByteArray) (w : Nat), b.size = 8 * w →
+      ∀ (j : Nat) (hj : j < values.length),
+        getWord
+          (values.foldl (fun acc value => pushWord acc (encode value)) b)
+          (w + j) = encode values[j] := by
+  induction values with
+  | nil => intro b w _ j hj; simp at hj
+  | cons value rest ih =>
+    intro b w hb j hj
+    rw [List.foldl_cons]
+    match j with
+    | 0 =>
+      rw [Nat.add_zero,
+          foldlPushWord_get_lt encode rest _ _ (by rw [size_pushWord, hb]; omega),
+          getWord_pushWord _ _ hb]
+      rfl
+    | j + 1 =>
+      have hget := ih (pushWord b (encode value)) (w + 1)
+        (by rw [size_pushWord, hb]; omega) j (by simpa using hj)
+      rw [show w + (j + 1) = w + 1 + j by omega, hget]
+      rfl
+
+end WordCodec
+
+private theorem size_foldl_pushWord (l : List Int) :
+    ∀ b : ByteArray,
+      (l.foldl (fun acc v => pushWord acc (ofI v)) b).size = b.size + 8 * l.length :=
+  WordCodec.foldlPushWord_size ofI l
 
 /-- The encoded view is exactly one word per entry. -/
 theorem size_encodeView (ov : Array Int) : (encodeView ov).size = 8 * ov.size := by
@@ -1162,34 +1214,14 @@ theorem size_encodeView (ov : Array Int) : (encodeView ov).size = 8 * ov.size :=
 
 private theorem getWord_foldl_pushWord_lt (l : List Int) :
     ∀ (b : ByteArray) (i : Nat), 8 * (i + 1) ≤ b.size →
-      getWord (l.foldl (fun acc v => pushWord acc (ofI v)) b) i = getWord b i := by
-  induction l with
-  | nil => intro b i _; rfl
-  | cons x t ih =>
-    intro b i h
-    rw [List.foldl_cons, ih _ _ (by rw [size_pushWord]; omega),
-        getWord_pushWord_lt _ _ h]
+      getWord (l.foldl (fun acc v => pushWord acc (ofI v)) b) i = getWord b i :=
+  WordCodec.foldlPushWord_get_lt ofI l
 
 private theorem getWord_foldl_pushWord (l : List Int) :
     ∀ (b : ByteArray) (w : Nat), b.size = 8 * w →
       ∀ (j : Nat) (hj : j < l.length),
-        getWord (l.foldl (fun acc v => pushWord acc (ofI v)) b) (w + j) = ofI l[j] := by
-  induction l with
-  | nil => intro b w _ j hj; simp at hj
-  | cons x t ih =>
-    intro b w hb j hj
-    rw [List.foldl_cons]
-    match j with
-    | 0 =>
-      rw [Nat.add_zero,
-          getWord_foldl_pushWord_lt t _ _ (by rw [size_pushWord, hb]; omega),
-          getWord_pushWord _ _ hb]
-      rfl
-    | j + 1 =>
-      have := ih (pushWord b (ofI x)) (w + 1)
-        (by rw [size_pushWord, hb]; omega) j (by simpa using hj)
-      rw [show w + (j + 1) = w + 1 + j by omega, this]
-      rfl
+        getWord (l.foldl (fun acc v => pushWord acc (ofI v)) b) (w + j) = ofI l[j] :=
+  WordCodec.foldlPushWord_get ofI l
 
 /-- Word `i` of the encoded view is entry `i`, encoded. -/
 theorem getWord_encodeView (ov : Array Int) {i : Nat} (h : i < ov.size) :
@@ -1659,43 +1691,18 @@ marshaller emits `encodeRequest`'s exact bytes: a finite, testable claim
 
 private theorem size_foldl_pushWords (l : List UInt64) :
     ∀ b : ByteArray, (l.foldl pushWord b).size = b.size + 8 * l.length := by
-  induction l with
-  | nil => simp
-  | cons x t ih =>
-    intro b
-    rw [List.foldl_cons, ih, size_pushWord, List.length_cons]
-    omega
+  simpa only using WordCodec.foldlPushWord_size (fun word : UInt64 => word) l
 
 private theorem getWord_foldl_pushWords_lt (l : List UInt64) :
     ∀ (b : ByteArray) (i : Nat), 8 * (i + 1) ≤ b.size →
       getWord (l.foldl pushWord b) i = getWord b i := by
-  induction l with
-  | nil => intro b i _; rfl
-  | cons x t ih =>
-    intro b i h
-    rw [List.foldl_cons, ih _ _ (by rw [size_pushWord]; omega),
-        getWord_pushWord_lt _ _ h]
+  simpa only using WordCodec.foldlPushWord_get_lt (fun word : UInt64 => word) l
 
 private theorem getWord_foldl_pushWords (l : List UInt64) :
     ∀ (b : ByteArray) (w : Nat), b.size = 8 * w →
       ∀ (j : Nat), (hj : j < l.length) →
         getWord (l.foldl pushWord b) (w + j) = l[j] := by
-  induction l with
-  | nil => intro b w _ j hj; simp at hj
-  | cons x t ih =>
-    intro b w hb j hj
-    rw [List.foldl_cons]
-    match j with
-    | 0 =>
-      rw [Nat.add_zero,
-          getWord_foldl_pushWords_lt t _ _ (by rw [size_pushWord, hb]; omega),
-          getWord_pushWord _ _ hb]
-      rfl
-    | j + 1 =>
-      have := ih (pushWord b x) (w + 1)
-        (by rw [size_pushWord, hb]; omega) j (by simpa using hj)
-      rw [show w + (j + 1) = w + 1 + j by omega, this]
-      rfl
+  simpa only using WordCodec.foldlPushWord_get (fun word : UInt64 => word) l
 
 /-- Word `j` of the canonical request is word `j` of `requestWords`. -/
 private theorem getWord_encodeRequest (fp : Array Int) (ops : Array Op)
@@ -1708,65 +1715,64 @@ private theorem getWord_encodeRequest (fp : Array Int) (ops : Array Op)
 
 /-! ### Block lengths and block-local indexing -/
 
-private theorem length_flatMap_quint {α : Type _} (f : α → List UInt64)
-    (hk : ∀ x, (f x).length = 5) :
-    ∀ l : List α, (l.flatMap f).length = 5 * l.length := by
+namespace FixedWidth
+
+theorem flatMap_length {α β : Type _} (width : Nat) (f : α → List β)
+    (hk : ∀ x, (f x).length = width) :
+    ∀ l : List α, (l.flatMap f).length = width * l.length := by
   intro l
   induction l with
   | nil => simp
   | cons a t ih =>
     simp only [List.flatMap_cons, List.length_append, hk, ih, List.length_cons]
+    rw [Nat.mul_succ]
     omega
+
+theorem flatMap_getElem?_eq {α β : Type _} (width : Nat) (f : α → List β)
+    (hk : ∀ x, (f x).length = width) :
+    ∀ (l : List α) (q i : Nat) (hq : q < l.length), i < width →
+      (l.flatMap f)[width * q + i]? = (f (l[q]'hq))[i]? := by
+  intro l
+  induction l with
+  | nil => intro q i hq _; simp at hq
+  | cons a t ih =>
+    intro q i hq hi
+    match q with
+    | 0 =>
+      simp only [List.flatMap_cons, Nat.mul_zero, Nat.zero_add,
+        List.getElem_cons_zero]
+      rw [List.getElem?_append_left (by rw [hk]; exact hi)]
+    | q + 1 =>
+      simp only [List.flatMap_cons, List.getElem_cons_succ]
+      rw [List.getElem?_append_right (by rw [hk, Nat.mul_succ]; omega)]
+      rw [show width * (q + 1) + i - (f a).length = width * q + i by
+        rw [hk, Nat.mul_succ]
+        omega]
+      exact ih q i (by simpa using hq) hi
+
+end FixedWidth
+
+private theorem length_flatMap_quint {α : Type _} (f : α → List UInt64)
+    (hk : ∀ x, (f x).length = 5) :
+    ∀ l : List α, (l.flatMap f).length = 5 * l.length :=
+  FixedWidth.flatMap_length 5 f hk
 
 private theorem getElem?_flatMap_quint {α : Type _} (f : α → List UInt64)
     (hk : ∀ x, (f x).length = 5) :
     ∀ (l : List α) (q i : Nat) (hq : q < l.length), i < 5 →
-      (l.flatMap f)[5 * q + i]? = (f (l[q]'hq))[i]? := by
-  intro l
-  induction l with
-  | nil => intro q i hq _; simp at hq
-  | cons a t ih =>
-    intro q i hq hi
-    match q with
-    | 0 =>
-      simp only [List.flatMap_cons, Nat.mul_zero, Nat.zero_add,
-        List.getElem_cons_zero]
-      rw [List.getElem?_append_left (by rw [hk]; exact hi)]
-    | q + 1 =>
-      simp only [List.flatMap_cons, List.getElem_cons_succ]
-      rw [List.getElem?_append_right (by rw [hk]; omega)]
-      rw [show 5 * (q + 1) + i - (f a).length = 5 * q + i by rw [hk]; omega]
-      exact ih q i (by simpa using hq) hi
+      (l.flatMap f)[5 * q + i]? = (f (l[q]'hq))[i]? :=
+  FixedWidth.flatMap_getElem?_eq 5 f hk
 
 private theorem length_flatMap_triple {α : Type _} (f : α → List UInt64)
     (hk : ∀ x, (f x).length = 3) :
-    ∀ l : List α, (l.flatMap f).length = 3 * l.length := by
-  intro l
-  induction l with
-  | nil => simp
-  | cons a t ih =>
-    simp only [List.flatMap_cons, List.length_append, hk, ih, List.length_cons]
-    omega
+    ∀ l : List α, (l.flatMap f).length = 3 * l.length :=
+  FixedWidth.flatMap_length 3 f hk
 
 private theorem getElem?_flatMap_triple {α : Type _} (f : α → List UInt64)
     (hk : ∀ x, (f x).length = 3) :
     ∀ (l : List α) (q i : Nat) (hq : q < l.length), i < 3 →
-      (l.flatMap f)[3 * q + i]? = (f (l[q]'hq))[i]? := by
-  intro l
-  induction l with
-  | nil => intro q i hq _; simp at hq
-  | cons a t ih =>
-    intro q i hq hi
-    match q with
-    | 0 =>
-      simp only [List.flatMap_cons, Nat.mul_zero, Nat.zero_add,
-        List.getElem_cons_zero]
-      rw [List.getElem?_append_left (by rw [hk]; exact hi)]
-    | q + 1 =>
-      simp only [List.flatMap_cons, List.getElem_cons_succ]
-      rw [List.getElem?_append_right (by rw [hk]; omega)]
-      rw [show 3 * (q + 1) + i - (f a).length = 3 * q + i by rw [hk]; omega]
-      exact ih q i (by simpa using hq) hi
+      (l.flatMap f)[3 * q + i]? = (f (l[q]'hq))[i]? :=
+  FixedWidth.flatMap_getElem?_eq 3 f hk
 
 theorem length_baseWords (fp : Array Int) : (baseWords fp).length = fp.size := by
   simp [baseWords]

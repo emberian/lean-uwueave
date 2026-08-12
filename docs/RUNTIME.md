@@ -81,6 +81,51 @@ composition. They explicitly do not authenticate the shipping FORMAT-v3/FFI
 path. Their `SignatureScheme`/`AuthenticIssuer` premises are not an EUF-CMA
 proof for a deployed primitive.
 
+### 1.1 Native closure and initialization
+
+**Implemented as a fail-closed build control, not a compiler proof.**
+`Uwueave/RuntimeInit.lean` is a deliberately data-free native root. It directly
+imports exactly the four exported-kernel modules:
+
+- `Uwueave.Exec`
+- `Uwueave.SeqKernel`
+- `Uwueave.EraKernel`
+- `Uwueave.Preo.ArtifactJournalKernel`
+
+That import list owns two decisions together: the one generated initializer the
+C shim calls and the transitive native-object closure the Rust crate links.
+`rust/build.rs` does not scan `.lake/build/ir` or compile whatever C happens to
+be present. It requires a full `lake build`, queries the exact RuntimeInit C
+target, reads and validates Lake's generated setup description, and asks Lake
+for one native object for every module in that declared closure. The build
+rejects a wrong setup identity/schema, plugins/dynamic libraries it has no
+policy for, missing required kernels, foreign or duplicate modules, escaped or
+mismatched paths, duplicate object results, and cross-compilation. Native macOS
+and Linux are the only admitted targets.
+
+Before archiving, each Lake object is read through a stability check, retained
+as bytes, and copied to a stable staging path. `cc` compiles exactly one C
+source, `shim.c`, and archives that object with only the staged Lake objects.
+The postcondition lists the archive, requires exactly one shim member plus the
+complete unique Lake member set, extracts every Lake member, and compares its
+bytes to the staged snapshot. A final `lake --no-build build` and exact no-build
+queries must return the same RuntimeInit target and object paths; the setup,
+closure, every object, every Lean source, `Uwueave.lean`, Lake/toolchain files,
+shim, build script, Cargo manifest, and lockfile must also be unchanged.
+
+`rust/shim.c` first calls `lean_initialize_runtime_module`, then only
+`initialize_uwueave_Uwueave_RuntimeInit(1)`. Rust serializes that process-global
+initialization with `Once`; failure aborts rather than exposing a partly
+initialized runtime. The current full gate observed 13 Lake-owned objects
+(655,368 bytes before archiving), 14 archive members including the shim
+(798,968 bytes), and 132 passing Rust tests.
+
+This closes stale, extra, missing, and mixed-generation object selection plus
+initializer drift. It does **not** prove Lean's IR-to-C lowering, either native
+compiler or the linker, C/Rust/Lean ABI agreement, reference ownership, runtime
+behavior, or filesystem semantics. Those remain the separate execution-TCB
+rows in `docs/TRUST.md`.
+
 ## 2. The Cycle 22 persistence surfaces
 
 Cycle 22 adds two deliberately different pure-Rust journals under

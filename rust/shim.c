@@ -2,8 +2,8 @@
  *
  * Everything that must touch lean.h's static-inline helpers lives here, so the
  * Rust side links plain C functions and no Lean object layout. The Lean runtime is
- * initialized once via the root module initializer (which pulls in the whole
- * import closure, Exec included).
+ * initialized once via the data-free RuntimeInit module. Its Lake-reported
+ * import closure is exactly the object graph archived by build.rs.
  */
 #include <lean/lean.h>
 #include <stddef.h>
@@ -14,11 +14,7 @@
 /* Exported by libleanshared but not declared in lean.h. */
 extern void lean_initialize_runtime_module(void);
 
-extern lean_object *initialize_uwueave_Uwueave(uint8_t builtin);
-extern lean_object *initialize_uwueave_Uwueave_SeqKernel(uint8_t builtin);
-extern lean_object *initialize_uwueave_Uwueave_EraKernel(uint8_t builtin);
-extern lean_object *initialize_uwueave_Uwueave_Preo_ArtifactJournalKernel(
-    uint8_t builtin);
+extern lean_object *initialize_uwueave_Uwueave_RuntimeInit(uint8_t builtin);
 extern lean_object *uwueave_encode_request(lean_object *first_parent_words,
                                            lean_object *op_fields,
                                            lean_object *grant_fields,
@@ -63,38 +59,7 @@ void shim_uweave_init(void) {
   if (g_initialized)
     return;
   lean_initialize_runtime_module();
-  lean_object *res = initialize_uwueave_Uwueave(1);
-  if (lean_io_result_is_ok(res)) {
-    lean_dec_ref(res);
-  } else {
-    lean_io_result_show_error(res);
-    abort();
-  }
-  /* SeqKernel is already in the root module's import closure. Keep its
-   * initializer explicit at this FFI boundary: Lean module initialization is
-   * idempotently guarded, and the direct call makes this shim robust if the
-   * root aggregation is reorganized. */
-  res = initialize_uwueave_Uwueave_SeqKernel(1);
-  if (lean_io_result_is_ok(res)) {
-    lean_dec_ref(res);
-  } else {
-    lean_io_result_show_error(res);
-    abort();
-  }
-  /* EraKernel is likewise already in the root closure. Its explicit,
-   * idempotently guarded initialization is retained for the same local FFI
-   * robustness as SeqKernel above. */
-  res = initialize_uwueave_Uwueave_EraKernel(1);
-  if (lean_io_result_is_ok(res)) {
-    lean_dec_ref(res);
-  } else {
-    lean_io_result_show_error(res);
-    abort();
-  }
-  /* Rust classifies outer framing faults, while this Lean module decides
-   * whether the opaque payload is exactly canonical ArtifactEncoding v2.
-   * Its initializer is idempotently guarded, like Seq/Era above. */
-  res = initialize_uwueave_Uwueave_Preo_ArtifactJournalKernel(1);
+  lean_object *res = initialize_uwueave_Uwueave_RuntimeInit(1);
   if (lean_io_result_is_ok(res)) {
     lean_dec_ref(res);
   } else {

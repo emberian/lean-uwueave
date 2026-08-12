@@ -10,10 +10,10 @@ depends on an axiom outside Lean's own floor:
 That floor is what "a Lean proof" already means; the gate exists for what it
 EXCLUDES. `sorry` compiles to `sorryAx` (a plain `lake build` only *warns* on
 sorry — without a gate, a hole in a proof ships green). `native_decide`
-compiles to `Lean.ofReduceBool`/`ofReduceNat` (trusting the compiled
-evaluator). Any future custom axiom lands the same way. All of them are hard
-build failures here, for every theorem — including ones written five minutes
-ago that no list was updated to mention.
+introduces a generated axiom bridging the compiled evaluator (on the pinned
+Lean it is named under `_native.native_decide.ax_…`). Any future custom axiom
+lands the same way. All of them are hard build failures here, for every theorem
+— including ones written five minutes ago that no list was updated to mention.
 
 ## Why this replaced 113 per-theorem `#guard_msgs` pins (2026-08-10)
 
@@ -59,6 +59,8 @@ logical TCB, execution TCB, environment/model premises — each row classified a
 an irreducible premise or a transmutable obligation with a named next step.
 -/
 import Lean
+import Uwueave.TrustFloor
+import Uwueave.ListProofs
 import Uwueave.Choreo
 import Uwueave.Weave
 import Uwueave.ORSet
@@ -147,6 +149,9 @@ import Uwueave.Durable
 import Uwueave.PersistentRuntime
 import Uwueave.EvidenceGraph
 import Uwueave.Preo.Future
+import Uwueave.Preo.ArtifactData
+import Uwueave.Preo.ArtifactChecked
+import Uwueave.Preo.ArtifactDiagnostics
 import Uwueave.Preo.Artifact
 import Uwueave.Preo.Export
 import Uwueave.Preo.Expr
@@ -154,61 +159,43 @@ import Uwueave.Preo.Incremental
 import Uwueave.Preo.ResultProgram
 import Uwueave.Preo.ProtocolSurface
 import Uwueave.Preo.Planning
+import Uwueave.Preo.ArtifactDurableCore
 import Uwueave.Preo.ArtifactDurable
 import Uwueave.Preo.ArtifactJournalKernel
+import Uwueave.Preo.ArtifactJournalDiagnostics
 import Uwueave.Preo.ProjectionV1
 import Uwueave.Preo.ProjectionV2
 import Uwueave.RepairSynthesis
 import Uwueave.RuntimeAuthV4
+import Uwueave.RuntimeInit
+import Uwueave.Tactics.Verdict
 import Uwueave.Tactics
-
-open Lean Elab Command in
-/-- Fail the build unless every constant in the `Uwueave` namespace stays
-within the axiom floor `{propext, Classical.choice, Quot.sound}`. Offenders
-are named (first 20) in the error. This is logical hygiene, not semantic
-adequacy: see the header and `docs/TRUST.md` for what a green gate does not
-say. -/
-elab "#audit_floor" : command => do
-  let env ← getEnv
-  let allowed : List Name := [``propext, ``Classical.choice, ``Quot.sound]
-  let targets := env.constants.toList.filterMap fun (n, _) =>
-    if (`Uwueave).isPrefixOf n then some n else none
-  let mut blamed : Array String := #[]
-  for n in targets do
-    let axs ← collectAxioms n
-    for ax in axs do
-      unless allowed.contains ax do
-        if blamed.size < 20 then
-          blamed := blamed.push s!"{n} ← {ax}"
-  unless blamed.isEmpty do
-    throwError "audit floor violated — first offenders: {blamed.toList}"
-  if targets.length < 300 then
-    throwError "audit vacuity tripwire: only {targets.length} constants in the Uwueave namespace — the walk is not seeing the tree"
-  logInfo m!"#audit_floor: {targets.length} constants audited, all within the floor"
 
 open Lean Elab Command in
 /-- Fail the build if any module the ROOT (`Uwueave.lean`) imports is absent
 from this file's environment — i.e. if the gate's walk does not cover the
 library. `#audit_floor` can only see constants from modules it has imported, so
 a module in the root and not here is silently unaudited. The root cannot be
-imported (it imports this file), so coverage is *checked against the file on
-disk* rather than inherited. Found by `docs/COHERENCE.md`: `Choreo` sat in the
-root and outside the gate for a full wave, beneath four "total by construction"
-claims, and a hand-maintained import list reproduces that gap once per wave. -/
+imported (it imports this file), so coverage is checked against the source
+header with Lean's own parser rather than inherited or approximated by a line
+scanner. Found by `docs/COHERENCE.md`: `Choreo` sat in the root and outside the
+gate for a full wave, beneath four "total by construction" claims, and a
+hand-maintained import list reproduces that gap once per wave. -/
 elab "#gate_covers_root" : command => do
   let env ← getEnv
-  let root ← IO.FS.readFile "Uwueave.lean"
-  let wanted := root.splitOn "\n" |>.filterMap fun l =>
-    if l.startsWith "import Uwueave" && l != "import Uwueave.Audit" then
-      some (l.drop "import ".length).toString
-    else none
-  let loaded := env.header.moduleNames.toList.map toString
+  let imports ← liftIO <| Uwueave.TrustFloor.directImports "Uwueave.lean"
+  let wanted := imports.toList.filterMap fun imp =>
+    if (`Uwueave).isPrefixOf imp.module && imp.module != `Uwueave.Audit then
+      some imp.module
+    else
+      none
+  let loaded := env.header.moduleNames.toList
   let missing := wanted.filter fun m => !(loaded.contains m)
   unless missing.isEmpty do
     throwError "gate coverage hole: the root imports {missing} which this file does not \
       reach, so #audit_floor cannot see their constants. Add the import(s) here."
   if wanted.length < 20 then
-    throwError "gate-coverage tripwire: parsed only {wanted.length} root imports — the parse is broken"
+    throwError "gate-coverage tripwire: Lean parsed only {wanted.length} Uwueave root imports"
   logInfo m!"#gate_covers_root: {wanted.length} root modules, all reached by the gate"
 
 #gate_covers_root
