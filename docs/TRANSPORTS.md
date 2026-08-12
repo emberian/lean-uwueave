@@ -19,10 +19,13 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 116 numbered transport rows.** Wave 24's elaborator and
-projection splits change owners and proof routes, not source/target judgements,
-so they update existing rows; the explicit canonical-byte emitter adds the one
-new checked-export-to-host crossing.
+**Ledger total: 121 numbered transport rows.** Wave 24's elaborator and
+projection splits changed owners and proof routes without changing the earlier
+judgements. Wave 25 adds five crossings: application state into typed query
+semantics; checked state results into exact world futures/certificates; checked
+semantic values into neutral V3 rows; validated V3 data into deterministic
+Rust/canonical bytes/diagnostics; and finite coherent histories into logical
+persistence plus the separately tested pure-Rust journal.
 
 ---
 
@@ -1577,9 +1580,109 @@ whole-value equality, the canonical durable codec, and explicit execution of
 `tools/uwueave-preo-artifact`; importing `ArtifactEmit` performs no I/O ·
 *without the equalities* an independently maintained computable mirror or fast
 framer could silently drift from the proof-generated value or canonical wire
-format. `ArtifactEmitMain` is an audited executable but not a proof-root import;
-its `writeBinFile` boundary proves no atomic replacement, fsync, permission,
+format. `ArtifactEmitMain` is an executable-only leaf, mapped and separately
+built/run but not imported by the root or Audit aggregates: its root-level
+`main` cannot coexist in one Lean environment with `ArtifactInspectionMain.main`.
+The pure `ArtifactEmit` library remains root-imported and trust-gated. The
+CLI's `writeBinFile` boundary proves no atomic replacement, fsync, permission,
 path-hardening, or logical-journal refinement.
+
+**45h. Authored application state → typed query environment and checked report** ⚠
+*source* an application `State`, one intrinsically typed `Expr.Program Γ`, an
+explicit `State → Expr.Env Γ` projection, and an authored finite state reach ·
+*target* exact typed evaluation, cache construction, the projected-environment
+equality future, a six-status checked declaration, and a membership-gated
+`ReachReport` · *transport* `StateProgram.mem_envReach_iff` characterizes the
+environment reach as exactly the image of the authored state reach;
+`project_mem_envReach`, `buildCache_value`, `totalSound`, `declaration_evaluate`,
+and `reportAt` carry the same projection through evaluation and reporting.
+`preo_program` emits this boundary transactionally after `Raw.infer`, required
+command, and trust-floor checks · *needs* the author-written projection and an
+explicit membership proof for reports; equality of projected environments is
+the admitted pure-query future, not a deployment transition · *without it* the
+wrong-projection, wrong-schema, malformed-program, out-of-reach, and rollback
+fixtures refuse. There is intentionally no state-membership converse from an
+environment image without projection injectivity, and neither runtime reach
+discovery nor external-state authenticity is inferred.
+
+**45i. Checked state result → exact named world future and certificate-gated report** ⚠
+*source* a `ResultProgram.CheckedDeclaration` over application state plus an
+exact `FutureDecl`, explicit world-to-state projection, authored world reach,
+reach-preservation proof, and fresh six-status world soundness · *target* a
+world-indexed checked declaration/report whose certificate is about that
+declaration's exact answer function at the exact retained `WorldIndex` ·
+*transport* `BoundResult.WorldBinding.declaration`, `reportAtWorld`, and
+`certifiedReportAtWorld`; `CertifiedReport.certificate_answers_declaration`
+pins the answer function, while `ExactBranch.says` and `.disclosure_exact`
+permit scalar disclosure only for a proof-selected exact value · *needs* the
+explicit world projection/reach/soundness and a `CheckedCertificate` indexed by
+the same future, answer, and world · *without it*
+`refuses_wrong_certificate_answer`, `refuses_different_world`, and
+`refuses_out_of_world_reach` reject relabelled answers, same-state/different-
+world reuse, and excluded sites. Projected-state equality never becomes
+delivery, extension, or certificate authority.
+
+**45j. Proof-indexed typed query/result/certificate → neutral V3 rows** ⚠
+*source* an exact `StateProgram`, checked V2 base/future, `BoundResult` certified
+report and exact branch, plus authored stable identities · *target* first-order
+`QueryRow`, `ResultRow`, `CertificateRow`, and append-only
+`ArtifactV3Encoding` · *transport* `CheckedQuery.toRow` derives reads, holes,
+and positive analyses from the exact program; `CheckedQuery.read_field_mem`
+ties every used stable field ID to the exact base; `CheckedResult` derives
+query/result/future/world identity, resolution, status, visibility and
+disclosure; `mem_effectOfDeclaration_iff` proves its canonical six-shape list
+is exactly the semantic declaration effect; `CheckedCertificate` retains the
+same report/future/world indices. Checked appenders require exact base/schema
+and query/future/world registry premises · *needs* stable ID assignments and
+the explicit membership/equality premises—the IDs are authoritative names, not
+inferred hashes · *without it* no public checked builder accepts caller-authored
+reads, holes, analysis/effect/status/disclosure lists or mismatched row
+identities; neutral decoding has no data-to-proof constructor. Later V3
+validation still refuses malformed untrusted rows.
+
+**45k. Neutral V3 aggregate → validated Rust DTO, canonical bytes, and bounded diagnostics** ⚠
+*source* untrusted `ArtifactV3Encoding` over an unchanged V2 base · *target* a
+private `ValidatedProjectionV3`, deterministic Rust DTO source, canonical
+format-v3 bytes, and diagnostic-only JSON after reopen · *transport*
+`ProjectionV3.validate` reuses V2 validation and checks every V3 bound,
+identity/reference, canonical-analysis/effect, field dependency, status and
+exact-disclosure rule; `ValidatedProjectionV3.base_exact` ties the rendered V2
+base to the accepted V3 encoding; `renderRustSource_eq_of_encoding_eq` pins
+determinism; `ArtifactV3Durable.decodeProjection_projectionBytes_append` pins
+canonical framed reopen; `ArtifactInspectionV1.inspectFrame`/`inspectJournal`
+decode with the Lean-owned codecs and validate before emitting JSON · *needs*
+consumer-selected resource bounds, canonical bytes, exact cross-row
+references, and explicit invocation of the inspection CLI · *without it* the
+schema/reference/read/disclosure/bound fixtures refuse, V2 and V3 mutually
+reject the other's version, and torn/corrupt journals return no partial JSON.
+The renderer and inspector reconstruct no proof or permit; the separately run
+`ArtifactInspectionMain` establishes no host authenticity, denial-of-service,
+atomic-write, fsync, or filesystem-durability theorem.
+
+**45l. Finite coherent history decision → logical persistent history and durable host journal** ⚠
+*source* an explicitly finite covered `VersionDag`/history policy or a causal
+event with stable ID, duplicate-free parent list, and payload (the Rust wire
+boundary additionally requires strictly increasing canonical parent order) · *target* a total
+finite merge decision, proof-carrying selected child, convergent event-set
+view, `PersistentRuntime` cursor/checkpoint replay, and a pure-Rust append-only
+history journal · *transport* `HistoryRuntime.refused_impossible`,
+`decideTotal_valid`, `higherSweep_complete`, `appendDag_reaches_inl`, and
+`sameEventSet_converges`; `PersistentHistoryRuntime.historySchema_step_eq_some_iff`
+ties persistent replay to exact causal append, while
+`checkpoint_suffix_replay` and `fork_arrival_orders_converge` pin logical
+reopen and order-independent event-set views. The Rust `HistoryJournal` uses
+the existing checksummed/locked/sync-capable `RawJournal` and is exercised by
+retry, collision, missing-parent, reopen, torn/corrupt, and arrival-order tests ·
+*needs* a caller-supplied finite covering enumeration for total policy search,
+stable unique event identities, duplicate-free/non-self parents, and causal
+parent availability; the Rust boundary additionally needs strictly canonical
+parent order, while authentication or content-addressed collision resistance
+remains an application premise. Host guarantees additionally depend on the chosen
+lock, checksum, sync, and torn-tail policy · *without it* refusal remains an
+honest finite decision, ID/content collisions and orphan/self/noncanonical
+parents reject, and corrupt or torn recovery follows the configured policy.
+No theorem yet refines host bytes or the Rust journal into the proof-indexed
+Lean `History`/cursor, and arbitrary or infinite DAG synthesis remains open.
 
 ---
 
@@ -1637,8 +1740,11 @@ temporal fairness, and checked woven edits. Rows 45–45g connect the covered
 history engine, logical persistent runtime, canonical artifact journal,
 bounded planning generator, native protocol syntax, total result/report
 program, staged authenticated-v4 boundary, and the explicit canonical-byte
-emitter. What remains is different work:
+emitter. Rows 45h–45l add explicit application-state query semantics, exact
+world/certificate binding, proof-indexed V3 erasure, validated V3
+rendering/durability/inspection, and finite causal-history persistence. What
+remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives
 and three-or-more-field invariants are refused, and neither logical persistence
-model proves the host filesystem implementation refines it.
+model proves the host filesystem or Rust journal implementation refines it.

@@ -120,28 +120,33 @@ its witness.
     `any_selector_has_a_sound_policy` proves *every* selector has a
     `selectSound` policy — declare the empty scope. Each witness therefore proves
     its scope contains the pair its judgement is asked at.
-  * ⟨UNDONE, narrowed to higher semantic whole-history judgements⟩ **Declared
-    policy decisions are now swept; the higher judgements are not.** Downstream
+  * ⟨UNDONE, narrowed to automatic semantic decision synthesis⟩ **Declared
+    policy decisions and higher judgements are now swept.** Downstream
     `HistoryEngine.semanticSweep` evaluates `HistoryMerge.select` and `apply`
     over every ordered pair of an explicitly enumerated history, returning
     selected/ambiguous/unavailable evidence inside scope and a proved refusal
     outside it. `SemanticDecision.graph_kind_eq` proves agreement with finite
-    DAG classification on every claimed pair. What remains is an executable
-    all-pairs sweep of `BaseRobust`, `SelectorSafe`, and protocol-level
-    convergence obligations; `HistoryConvergent` itself is still the same-record
-    derived-view theorem, not a delivery protocol.
-  * ⟨UNDONE, narrowed to a total `HistoryMerge` selector⟩ **No total selector is
-    computed into this model from a DAG.** Downstream
+    DAG classification on every claimed pair. `HistoryRuntime.higherSweep`
+    now retains proof-carrying `BaseRobustAt` and pairwise `SelectorSafe`
+    decisions for every ordered pair, while `classifyHigher` retains the
+    whole-policy judgements. Their semantic decision procedures are explicit
+    inputs; automatically synthesizing them, and tying `HistoryConvergent` to
+    an authenticated/out-of-order delivery protocol, remain open.
+  * ⟨UNDONE, narrowed to unrestricted selection and kernel synthesis⟩ **A
+    total finite selector is now computed from a covered DAG.** Downstream
     `HistoryEngine.decidePair` performs proof-carrying four-way search under an
     explicit finite enumeration and computes selected, ambiguous, unavailable,
     or exact refusal evidence. `semanticSweep` applies an already-declared
-    policy and refuses pairs outside its scope. Neither operation synthesizes a
-    `HistoryMerge.select`, its scope, reconciliation kernel, or their laws;
-    `ccSelect*`/`lvSelect` here are still written down and proved sound.
-  * ⟨UNDONE⟩ **`SelectorSymmetric` is proved sufficient for order-agreement, not
-    necessary.** `replicas_agree_on_order` uses it; no theorem here says an
-    asymmetric selector must diverge — `swap_never_converges` exhibits one that
-    does.
+    policy and refuses pairs outside its scope. `HistoryRuntime.finiteExplicit`
+    eliminates refusal and supplies an all-pairs `HistoryMerge.select` and
+    scope from an explicit finite enumeration, caller-provided reconciliation
+    kernel, and conflict function. Discovering coverage for unrestricted DAGs
+    and synthesizing those semantic reconciliation inputs remain open.
+  * ⟨DONE⟩ **`SelectorSymmetric` is sufficient but not unconditionally
+    necessary.** `HistoryRuntime.asymmetric_but_convergent` is the missing
+    counterexample, while `orderAgreement_iff_selector_symmetric_at` gives the
+    exact necessity theorem under named reconcile-symmetry and
+    decision-separation premises.
   * ⟨UNDONE⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
     `Histories`.
 

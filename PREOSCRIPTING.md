@@ -7,6 +7,119 @@ in place as we learn we were wrong.*
 
 ---
 
+## Quickstart: one checked query from source to bytes
+
+[`Uwueave.Preo.Quickstart`](Uwueave/Preo/Quickstart.lean) is the smallest
+complete, executable journey through the current surface. The companion
+[`scripts/preo-quickstart-canaries.sh`](scripts/preo-quickstart-canaries.sh)
+checks the positive path, five deliberate type errors, canonical V3 bytes,
+reopen, a two-frame logical journal, and bounded Lean inspection. From the
+repository root, this block is copy-pastable:
+
+```sh
+# Compile the checked example and run its green/red/runtime canaries.
+lake build Uwueave.Preo.Quickstart Uwueave.Preo.ArtifactInspectionMain
+scripts/preo-quickstart-canaries.sh
+
+# Materialize the Quickstart's exact V3 bytes, then inspect one frame and the
+# two-frame logical artifact journal. Keep the directory printed at the end.
+quick_dir="$(mktemp -d "${TMPDIR:-/tmp}/preo-quickstart-doc.XXXXXX")"
+lake env lean --run tests/preo-quickstart/Runtime.lean "$quick_dir"
+tools/uwueave-preo-inspect --frame "$quick_dir/quickstart-v3.frame"
+tools/uwueave-preo-inspect --journal "$quick_dir/quickstart-v3.journal"
+printf 'quickstart artifacts: %s\n' "$quick_dir"
+
+# The production emitter has a finite registry of real Lean-owned artifacts.
+tools/uwueave-preo-artifact --list
+tools/uwueave-preo-artifact \
+  semantic-export --output "$quick_dir/semantic.preo"
+tools/uwueave-preo-inspect --frame "$quick_dir/semantic.preo"
+
+# stdout mode emits binary only, so redirect it before inspecting it.
+tools/uwueave-preo-artifact full-export --stdout \
+  > "$quick_dir/full.preo"
+tools/uwueave-preo-inspect --frame "$quick_dir/full.preo"
+```
+
+The source path is deliberately explicit:
+
+1. `preo_program Journey` binds the application `AppState` to the typed
+   `AppSchema` through `project`, evaluates one typed expression, and retains
+   the authored state and projected-environment reaches. Its generated
+   `.Eval`, `.Future`, `.Result`, `.Report`, reads, holes, and analyses all come
+   from that one checked term.
+2. `QueryFuture` names equality of the projected environment over an
+   `AppWorld`, and `preo_certificate QueryCertificate` is indexed by that exact
+   future, acceptance predicate, and `startIndex`. The resulting certified
+   report retains the exact world; a certificate for another future or world
+   does not typecheck.
+3. `preo_protocol JourneyProtocol` elaborates the two written crossings.
+   `preo_plan JourneyPlan` searches only its duplicate-free, capped, authored
+   action universe and retains the selected plan proof. `preo_budget
+   JourneyBudget` then consumes that plan's `ProfileUpperBound`; a floor or a
+   number alone cannot accept the budget.
+4. Proof-indexed builders produce checked V3 query, result, world, certificate,
+   plan, and budget rows with written stable IDs. In this fixture the query
+   reads only `count`, the result is exact/inspectable/shown, and the certificate
+   points to the same future and world. `v3Artifact` is assembled only through
+   checked additions, `v3_bytes_reopen_exact` proves canonical decode, and
+   `v3_bytes_executable_exact` proves the stack-safe emitted bytes equal those
+   canonical bytes.
+
+Three boundaries are load-bearing:
+
+- `Journey.StateReach = [start, later]` and `worldBinding.worldReach =
+  [startWorld]` are **authored analysis reaches**. They are not observations of
+  runtime reachability and are not authenticated deployment facts. The
+  world-bound certificate proves its proposition assuming the named world and
+  future relation; it does not discover that the running process inhabits that
+  index.
+- `uwueave-preo-inspect` returns bounded, decoded JSON with
+  `"authority":"diagnostic-only"`. Successful decoding and reference
+  validation do not reconstruct a Lean verdict, certificate, plan, or proof.
+  Proof authority remains in the checked source values from which the bytes
+  were projected.
+- The Quickstart's `quickstart-v3.journal` is just two concatenated logical
+  artifact frames for the inspector. Rust `ArtifactJournal` is a separate
+  checksummed physical store for exact artifact payloads. Rust
+  `HistoryJournal` is different again: it stores explicit-ID causal application
+  events with parents and opaque payloads. Neither journal is the application's
+  materialized state, and no current refinement theorem turns a
+  `HistoryJournal` payload into a proof-indexed Lean `History`.
+
+All emission commands above cross an ordinary host-I/O boundary. Direct output
+uses `IO.FS.writeBinFile`; redirected output uses the shell. Neither path
+promises atomic replacement, `fsync`, directory durability, permission/path
+hardening, or recovery after a crash. The Rust journals add concrete locking,
+checksums, sync policy, reopen validation, and torn-tail policy, but those are
+deployment evidence—not a theorem that a filesystem or device honors its
+premises.
+
+### Finite history runtime: exactly what became executable
+
+[`Uwueave.HistoryRuntime`](Uwueave/HistoryRuntime.lean) proves that the
+`PairDecision.refused` branch is impossible under an explicit covering finite
+`Enumeration`, and uses that result to construct a total selector whose scope
+contains every pair on the same enumerated DAG. The merge kernel and conflict
+reconciler are still caller-supplied. Its higher-judgement sweep is finite and
+proof-carrying, but semantic `Decidable` procedures are explicit inputs rather
+than synthesized from arbitrary state, observation, or protocol types.
+
+The same module can materialize one selected admission as a fresh `V ⊕ Unit`
+merge version with a `Coherent` extended history. It does not yet allocate an
+unbounded sequence of fresh names or construct arbitrary repeated criss-cross
+growth. Its causal event endpoint makes exact retry idempotent, refuses ID
+collisions, self/duplicate parents, and missing parents immediately, and states
+event-set convergence independently of arrival order; it deliberately has no
+hidden out-of-order buffer.
+
+[`Uwueave.PersistentHistoryRuntime`](Uwueave/PersistentHistoryRuntime.lean)
+instantiates checked replay and checkpoints for those events, while Rust
+`HistoryJournal` supplies a pure-Rust `RawJournal` host rung with reopen and
+fault tests. None of this enumerates arbitrary or infinite DAGs, lifts the
+current history model beyond its `Type 0` boundary, authenticates event IDs, or
+bridges opaque stored bytes back to `SelectedAdmission`/`Coherent` proofs.
+
 ## 1. The thesis
 
 > **preoscript rejects a budget using a semantic lower bound, accepts one only

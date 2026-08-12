@@ -174,10 +174,14 @@ is a bigger, real schema that deliberately contains one.
 - **A Rust crate.** An append-only content-addressed document store,
   collaborative text, node moving, membership and roles — where the delicate
   decisions are compiled from the proofs rather than reimplemented.
-- **Two explicit persistence surfaces.** `ArtifactJournal` keeps exact,
+- **Three explicit persistence surfaces.** `ArtifactJournal` keeps exact,
   Lean-validated Preoscript artifact-v2 frames inside a checksummed physical
   log; `DocumentJournal` separately persists the current unauthenticated typed
-  `MoveLog` subset and validates checkpoints against their mutation prefix.
+  `MoveLog` subset and validates checkpoints against their mutation prefix;
+  `HistoryJournal` stores canonical explicit-id events whose strictly ordered
+  parents must already be present, so every accepted prefix is causally closed.
+  Exact retries are idempotent, while missing parents and same-id/different-event
+  collisions fail loudly.
   They provide per-record bounds, sequence-addressed retry, locking, sync
   policy, and torn-tail/corruption handling. They do not provide authenticated
   v4 admission, whole-journal resource bounds, multi-record transactions,
@@ -204,7 +208,15 @@ is a bigger, real schema that deliberately contains one.
   `preo_export` manifest projects those meanings to canonical first-order
   artifacts, format-v2 framed bytes, and a validated budget-bearing data-only
   Rust representation; none of those transport layers can manufacture a
-  verdict, certificate, plan, or permit.
+  verdict, certificate, plan, or permit. `Uwueave.Preo.Quickstart` is the
+  executable end-to-end example: one custom application state is explicitly
+  projected into a typed environment, bound to one named future and exact-world
+  certificate, planned through the native protocol surface, and exported as a
+  checked V3 query/result/certificate artifact. Its 71,011-byte canonical frame
+  is written, reopened byte-for-byte, concatenated as a two-record logical
+  journal, and inspected by the bounded diagnostic-only Lean inspector. The
+  companion red gates reject a wrong projection, future, certificate, plan, or
+  world at their typed boundaries.
 
 ## Some things we found that surprised us
 
@@ -259,9 +271,9 @@ not something you crash on.
   namespace; the Preoscript acceptance suite repeats the forbidden-proof cases
   at generated declarations and covers failure honesty and resource caps.
 - **[Runtime architecture](docs/RUNTIME.md)** — the shipping FORMAT-v3 path,
-  exact RuntimeInit/Lake native closure, Cycle-22 pure-Rust journals, exact
-  durability assumptions, and the canonical but not-yet-shipping authenticated
-  FORMAT-v4 foundation.
+  exact RuntimeInit/Lake native closure, three pure-Rust journals, checked V3
+  Quickstart and bounded diagnostic inspection, exact durability assumptions,
+  and the canonical but not-yet-shipping authenticated FORMAT-v4 foundation.
 - **[The bibliography](docs/BIBLIOGRAPHY.md)** — every paper behind this, what it
   established, what we took, what we declined. Several entries exist to record
   claims of *ours* that the literature refuted.
@@ -272,8 +284,16 @@ not something you crash on.
 lake build              # every proof + the total axiom gate (Lean core only, no mathlib)
 ./scripts/trust-canaries.sh # acceptance tests: the trust gate must also go red
 ./scripts/preo-automation-canaries.sh # positive/red tactic and transactional gates
+./scripts/preo-quickstart-canaries.sh # coherent V3 journey + five typed refusals
 cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
+
+The current checkpoint is **170** Lean source modules (**147** direct proof-root
+imports excluding `Audit`, **171** full-build jobs), **23,138** audited
+constants, **580** MAP keystones, **121** documented transports, and **140**
+passing Rust tests. The generated work ledger records **159** `⟨UNDONE⟩`
+markers in **157** blocks across **43** source files. Counts are checkpoints;
+the commands and fail-closed gates are the durable contract.
 
 ## How to read our claims
 

@@ -1,6 +1,6 @@
 //! Filesystem persistence with explicit recovery and synchronization policies.
 //!
-//! The two stores in this module intentionally do not share a wire format:
+//! The three stores in this module intentionally do not share a wire format:
 //!
 //! * [`ArtifactJournal`] stores the exact bytes produced by Lean's
 //!   `Preo.ArtifactDurable.projectionBytes` as unchanged payloads inside a
@@ -11,6 +11,10 @@
 //! * [`DocumentJournal`] owns a separate, checksummed operation/event and
 //!   checkpoint log. Its byte records are a runtime storage format, not a
 //!   Preoscript artifact schema.
+//! * [`HistoryJournal`] stores a causally closed set of explicit-id history
+//!   events. Canonical parent sets, immediate missing-parent refusal, and
+//!   collision checks make every accepted physical prefix a valid causal
+//!   prefix while full event-set equality ignores arrival order.
 //!
 //! These implementations and their fault-injection tests are deployment
 //! evidence. They are not a theorem about a filesystem, a drive write cache,
@@ -18,7 +22,7 @@
 //!
 //! ## Physical contract
 //!
-//! Both physical files use distinct eight-byte markers and checksum domains.
+//! Each physical format uses a distinct eight-byte marker and checksum domain.
 //! A record is `marker | sequence:u64le | length:u64le | header-blake3 |
 //! body | body-blake3`. Sequences start at zero and are contiguous. The
 //! configured maximum is checked before allocating the body. An append names
@@ -50,11 +54,12 @@
 //! directly exercises the proved complete-prefix/torn-tail model while making
 //! every physical decision visible. A future transactional backend (for
 //! example `redb`) should implement a separate `AtomicCommitStore`-style
-//! adapter and differential tests; it must not silently reuse either wire
+//! adapter and differential tests; it must not silently reuse any wire
 //! format or turn a database transaction into a durability theorem.
 
 mod artifact;
 mod document;
+mod history;
 mod record;
 
 pub use artifact::{
@@ -66,11 +71,15 @@ pub use document::{
     DocumentEntry, DocumentEntryKind, DocumentJournal, DocumentJournalError, DocumentOpenReport,
     DocumentReplay, DocumentReplayError,
 };
+pub use history::{
+    HistoryEvent, HistoryEventError, HistoryEventId, HistoryJournal, HistoryJournalError,
+    HistoryOpenReport,
+};
 
 /// Default maximum size of one physical journal record (64 MiB).
 pub const DEFAULT_MAX_RECORD_BYTES: u64 = 64 * 1024 * 1024;
 
-/// Common opening and append policy for both physical journals.
+/// Common opening and append policy for the physical journals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JournalOptions {
     /// What to do with one syntactically torn final physical record.

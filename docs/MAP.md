@@ -10,7 +10,7 @@ that policy to every constant in this namespace. A stray `sorry` or
 [ledger](#keystone-ledger) below is a reading aid, not a trust mechanism.)
 
 ✅ **Coverage, 2026-08-11.** The file table below has one row for each of the
-148 Lean module files under `Uwueave/`, including the nested `Preo` and
+170 Lean module files under `Uwueave/`, including the nested `Preo` and
 `Tactics` modules. This is a documentation invariant rather than a trust
 mechanism: the root aggregator and `#gate_covers_root` remain the authorities
 for transitive gate coverage. Re-derive the table's coverage instead of
@@ -26,7 +26,7 @@ source = re.split(
 mapped = set(re.findall(r"^\| `([^`]+\.lean)` \|", source, re.MULTILINE))
 present = {str(path) for path in Path("Uwueave").rglob("*.lean")}
 assert mapped == present, (sorted(present - mapped), sorted(mapped - present))
-assert len(mapped) == 148
+assert len(mapped) == 170
 PY
 ```
 
@@ -203,7 +203,9 @@ curiosity.)
 | `Uwueave/Preo/ProjectionV2Examples.lean` | Opt-in proof-originated full export and executable validation/refusal examples: action-profile lies, uncovered obligations, dangling/mismatched/duplicate budget references, malformed profiles, bounds, and exceeded limits. |
 | `Uwueave/Preo/ProjectionV2Fixtures.lean` | Opt-in giant budget-renderer equality and unbounded-decimal fixture, keeping the `maxRecDepth 10000` proof outside production projection closure. |
 | `Uwueave/HistoryEngine.lean` | An executable finite history boundary joining covered DAG search, scoped semantic policies, and explicit composite patches. `decidePair` has selected, ambiguous, unavailable, and proof-backed refused branches; the graph and semantic sweeps cover every ordered pair without making a partial policy total. `admitSelected` turns a certified base plus caller-supplied patch-labelled branches and a residual algebra into a legal policy-identical diamond. One residual delivery always converges; arbitrary positive duplicates additionally require `ReplayStable`. The length-two counter cannot supply that algebra. |
+| `Uwueave/HistoryRuntime.lean` | Total finite history decisions and causal append. `refused_impossible` eliminates the finite engine's proof-backed refusal under coherent higher judgement, `decideTotal_valid` and `higherSweep_complete` cover the authored finite pair space without manufacturing an infinite enumeration, and `appendDag_reaches_inl` materializes a selected merge as a fresh proof-carrying child. The event layer admits only duplicate-free, non-self, causally closed parent lists: exact retries are idempotent, ID/content collisions and missing parents refuse, and `sameEventSet_converges` is independent of arrival order. `orderAgreement_iff_selector_symmetric_at` states the exact conditioned symmetry requirement; `asymmetric_but_convergent` prevents it being over-read as a universal necessity. |
 | `Uwueave/PersistentRuntime.lean` | A pure authoritative-log and recovery contract. Checked replay treats exact nonce retries idempotently and conflicting nonce content as refusal; a `CheckedBatch` plus the explicit `AtomicBatchObservation` premise reopens only before or after the complete batch. Validated checkpoints replay their suffix exactly like the whole log, and derived caches are irrelevant to reopen. `strict_prefix_not_atomic` and `snapshot_only_recovery_unsafe` make atomicity and record identity load-bearing. No filesystem, checksum, lock, flush, rename, or power-loss refinement is claimed. |
+| `Uwueave/PersistentHistoryRuntime.lean` | The causal event admission function lifted into `PersistentRuntime`'s authoritative cursor/checkpoint contract. `historySchema_step_eq_some_iff` pins accepted steps exactly to `HistoryRuntime.append`; retry and collision theorems preserve the same event identity boundary; `checkpoint_suffix_replay` equates validated checkpoint-plus-suffix replay with whole-log replay; and `fork_arrival_orders_converge` proves the event-set view agrees across two causally legal sibling orders. This remains a logical schema: it does not prove that the Rust journal, host filesystem, locks, sync calls, or crash recovery refine the Lean cursor. |
 | `Uwueave/Preo/ArtifactJournalKernel.lean` | The executable scanner for concatenated canonical ArtifactDurable-v2 frames, importing the narrow `ArtifactDurableCore` rather than checked examples or pretty printers. It returns exact record offsets and stops at the first clean EOF, syntactically torn final frame, or corrupt frame; `scan_stops_at_first_refusal` and `scan_torn_final` pin those boundaries. A narrow exported kernel returns one validation byte for exactly one canonical frame. `PhysicalRecord.Valid` names outer version/domain/length/digest obligations parametrically; it implements neither the digest nor stable storage, and opaque payload mutations detectable only by authentication remain outside framing. |
 | `Uwueave/Preo/ArtifactJournalDiagnostics.lean` | Optional `Repr` instances for journal faults, refusals, inspections, records, stop reasons, scan results, and physical records. Operator/test diagnostics retain their public instances without pulling generated display code into the exported validator's native object closure. |
 | `Uwueave/Preo/Planning.lean` | The bounded planning surface. `actionChoices` enumerates exactly the `2^n` canonical sublists of a duplicate-free, pre-capped action universe; `generatedPlans` retains exactly the covering schedules. A `Problem` runs the existing five-currency schedule and eight-axis repair engines under explicit ranking policies and a universal structural compatibility proof, returning a coupled selection or exact finite-scope refusal. The Boolean quota generator enumerates every exact partition and selects only nonstarving rows. No currency conversion or claim beyond the authored action/repair universes is made. |
@@ -211,7 +213,27 @@ curiosity.)
 | `Uwueave/Preo/ResultProgram.lean` | Checked six-status programs and reports. A `CheckedDeclaration` fixes its future and explicit resolution in the type, retains a finite reach, infers its least effect, and exposes the exact semantic row through `semanticsAt`. `CheckedReport.says_semantics` connects any carrier claim to that row and refuses impossible status or resolution claims. `ReachReport` retains authored-reach membership and proves effect support; `ObservedReport` additionally carries a caller-supplied `ObservationBoundary.Authentic` witness to the rendered site. None of these wrappers discovers reachability or authenticates a world itself. |
 | `Uwueave/StatusSemanticsAcceptance.lean` | Focused six-row acceptance/refusal suite. It reaches every `Status.Semantics` constructor, proves the old partial contract admits a pending-with-candidate liar rejected by total semantics, exercises reach-admitted typed snapshots, named-resolution refusal, and an explicit observation boundary that refuses the wrong state. |
 | `Uwueave/Preo/ArtifactEmit.lean` | Opt-in, I/O-free registry from stable artifact names to exact canonical durable bytes. `semanticEncoding_eq_generated` pins the whole computable reification to the checked export; the tail-recursive implementation is proved equal to canonical framing, `bytesImpl_eq_bytes` connects native execution to the noncomputable named values, and `byteArray_data_toList` pins the host buffer byte-for-byte. |
-| `Uwueave/Preo/ArtifactEmitMain.lean` | Executable-only CLI entry point for `--list`, `--stdout`, and `--output PATH`. Merely importing `ArtifactEmit` performs no I/O; this `main` writes only when explicitly invoked. `Audit` imports it so the executable is checked by the trust gate, while the proof-root aggregate deliberately does not. It claims no atomic write, fsync, permissions, or path hardening. |
+| `Uwueave/Preo/ArtifactEmitMain.lean` | Executable-only CLI entry point for `--list`, `--stdout`, and `--output PATH`. Merely importing `ArtifactEmit` performs no I/O; this `main` writes only when explicitly invoked. Like `ArtifactInspectionMain`, it is mapped and separately built/run but is not imported by either aggregate: two root-level `main` declarations cannot coexist in one Lean environment. The pure `ArtifactEmit` library remains root-imported and trust-gated. This host boundary claims no atomic write, fsync, permissions, or path hardening. |
+| `Uwueave/Preo/StateProgram.lean` | The explicit application-state binding for a typed query: an author supplies `State → Expr.Env Γ` and a finite `stateReach`; `envReach` is exactly its image, `mem_envReach_iff` characterizes membership, and `project_mem_envReach` deliberately has no converse without injectivity. Evaluation, cache construction, equality of projected environments, singleton exact results, six-status soundness, declaration, and reach-gated reporting all use that same projection. The list is authored analysis scope, not discovered or authenticated deployment reach. |
+| `Uwueave/Preo/StateProgramSurface.lean` | Transactional parser-hard `preo_program`. `elabPreoProgramCore` emits predictable state/schema/raw/program/projection/reach/evaluation/cache/result/report names only after `Raw.infer`, required-command, and trust-floor checks succeed; malformed typing or any late failure restores the environment. Every projection, reach, future ID, resolution, and surface policy remains explicit—field names and runtime reach are never inferred. |
+| `Uwueave/Preo/StateProgramSurfaceTests.lean` | Focused surface acceptance/refusal leaf. `journey_is_hand_program` pins the generated whole value to its hand-written `StateProgram`; fixtures exercise exact evaluation/cache/report membership, malformed and wrong-schema/projection refusals, out-of-reach report refusal, and transactional name reuse after failure. It is a test module imported by Audit, not a new production command facade. |
+| `Uwueave/Preo/PlanningSurface.lean` | Transactional parser-hard `preo_plan` over one explicit bounded action universe and repair catalog. Selected mode retains the engine witness, exact plan/profile, all five schedule currencies, all eight repair-price axes, structural coupling, and a budget over that exact selected plan; refusal mode retains the schedule/repair evidence for the same finite problem. Duplicate/oversized universes, wrong selections/names, and late failures roll back. No scalar price conversion, liveness claim, or search outside the authored catalogs is introduced. |
+| `Uwueave/Preo/DerivedProgram.lean` | The positive semantic bridge from intrinsically typed expressions to the repository's reusable judgements. A retained `MergeSafe` proof is exactly a `JoinHom`; `Program.specification` is total without claiming singleton outcomes coordinate freely; explicit `WorldDecoder` locality carries reads/holes into `DerivedDocument`; and the existing incremental cache supplies proof-tied updates and zero-work off-dependency reuse. Negative Boolean/aggregation/opaque fixtures refuse the missing merge/locality proof rather than widening the language silently. |
+| `Uwueave/Preo/BoundResult.lean` | Binds one checked state declaration to an exact named world future only through an explicit world-to-state projection, authored world reach, reach-preservation proof, and fresh six-status world soundness. `CertifiedReport` retains a certificate for the declaration's exact answer function and exact `WorldIndex`; selected disclosure exists only through `ExactBranch`. Wrong answer, different world, and out-of-reach reports are refuted. Projected-state equality never relabels delivery/extension or reuses a certificate across worlds. |
+| `Uwueave/Preo/ArtifactV3Data.lean` | Neutral append-only V3 data: distinct stable IDs for schema/query/result/program/certificate/world/resolution/surface/reason, exact positional query reads and holes, positive analysis tags, value-erased six-status/effect rows, visibility, optional exact-branch disclosure, and certificate future/world identity over an unchanged V2 base. These rows are first-order coordination metadata, not reconstructed programs, certificates, worlds, or proofs. |
+| `Uwueave/Preo/ArtifactV3Diagnostics.lean` | Opt-in `Repr` instances for every neutral V3 ID and row. Diagnostics remain outside the data, validator, durable-codec, and renderer production closures. |
+| `Uwueave/Preo/ArtifactV3Durable.lean` | Canonical format-v3 durable framing for `ArtifactV3Encoding`. `decodeArtifactV3_encode` and `decodeProjection_projectionBytes_append` pin payload and framed roundtrips including trailing journal bytes; V2 and V3 decoders mutually refuse the other's version. Decoding yields first-order data only, with no data-to-proof promotion or host persistence theorem. |
+| `Uwueave/Preo/ArtifactV3Checked.lean` | The one-way proof-indexed V3 builder boundary. Query reads, holes, and positive analyses come from the exact `StateProgram`; used stable field IDs must exist in the exact checked base. Results are indexed by the exact query/future/world/certified report, derive status, canonical semantic effect (`mem_effectOfDeclaration_iff`), visibility, resolution, and disclosure, and checked append requires base/schema/query/future/world registry equalities. Certificates share that exact future, world, and report. No caller-authored semantic lists and no decode-to-proof route exist. |
+| `Uwueave/Preo/ArtifactV3Examples.lean` | Opt-in nonempty canonical V3 durable example over the full proof-originated V2 base. `full_roundtrip` pins reopen and `v2_refuses_full_v3` pins the version boundary without putting examples in the codec closure. |
+| `Uwueave/Preo/ArtifactV3Fixtures.lean` | Small exact durable V3 framing goldens: the format tag is `(3, 161)` and `full_bytes_are_v3_only` combines canonical V3 reopen with V2 refusal. It is an audited theorem fixture, not a second codec. |
+| `Uwueave/Preo/ProjectionV3Core.lean` | Data-only bounded V3 validation over the unchanged V2 validator. It checks unique IDs, schema and bidirectional query/result references, field/read/hole consistency, canonical positive analyses/effects, effect downward closure, status admission, exact-only disclosure, and certificate future/world registries. Private `ValidatedProjectionV3` carries `base_exact`, so the separately validated V2 base cannot drift from the accepted V3 encoding. Validation reconstructs no semantic source. |
+| `Uwueave/Preo/ProjectionV3.lean` | Deterministic Rust DTO renderer over only `ValidatedProjectionV3`, reusing the exact validated V2 renderer and adding typed query/result/certificate rows. `renderRustSource_eq_of_encoding_eq` depends on the stored `base_exact` invariant; validation refusal is preserved. The production closure contains neutral data/core validation/rendering, not diagnostics, proof-indexed builders, examples, or giant fixtures. |
+| `Uwueave/Preo/ProjectionV3Diagnostics.lean` | Opt-in `Repr` instances for V3 projections, bounds, errors, and validated values, explicitly composed from V2 and ArtifactV3 diagnostics rather than leaking them into `ProjectionV3Core`. |
+| `Uwueave/Preo/ProjectionV3Examples.lean` | Opt-in V3 acceptance/refusal suite. The full encoding validates and exposes `full_validated_base_exact`; fixtures reject wrong query schema, query/result mismatch, reads/holes disagreement, dangling result/certificate futures and worlds, missing or inapplicable disclosure, duplicate worlds, and resource-bound overflow. All decisions are kernel-evaluated. |
+| `Uwueave/Preo/ProjectionV3Fixtures.lean` | Exact small Rust row goldens for query, result, and certificate DTOs plus kernel-only full-renderer acceptance. Large full-source equality remains in the host compile gate to avoid max-recursion/proof-term blowups; no `native_decide` enters the audit floor. |
+| `Uwueave/Preo/ArtifactInspectionV1.lean` | Pure bounded inspection of canonical V2/V3 frames and concatenated journals. A stack-safe outer-envelope scan delegates payload decoding to the Lean-owned durable codecs and structural admission to `ProjectionV2`/`ProjectionV3`, then returns deterministic diagnostic-only JSON with offsets and typed V3 rows. Input/record/reference bounds, torn/corrupt suffixes, wrong formats, and structural invalidity refuse the whole request. It proves neither denial-of-service resistance nor host-file authenticity/durability. |
+| `Uwueave/Preo/ArtifactInspectionMain.lean` | Explicit binary-input CLI for frame/journal inspection via file or stdin. It is mapped and separately built/run but excluded from root and Audit aggregates because its root-level `main` cannot coexist with `ArtifactEmitMain.main`; the pure inspection library is root-imported and trust-gated. File reads and printed diagnostics confer no proof, permit, atomicity, fsync, permissions, or path-hardening guarantee. |
+| `Uwueave/Preo/Quickstart.lean` | One executable custom-state journey: `preo_program` binds state to a typed derived query; `BoundResult` attaches the exact named world future and certificate; native protocol/planning produce one exact five-currency plan and budget; proof-indexed V3 builders retain stable query/result/future/world/certificate identity; ProjectionV3 validates; canonical bytes reopen and inspect. `v3_bytes_executable_exact` proves the stack-safe emitted bytes equal the logical durable frame. The 71,011-byte canary writes/reopens a frame and two-record journal and rejects wrong projection/future/certificate/plan/world, but host I/O remains a test, not a filesystem refinement theorem. |
 | `Uwueave/RuntimeAuthV4.lean` | A staged authenticated FORMAT-v4 record model, deliberately not wired into the shipping v3 entry point. Canonical signed bytes bind document/genesis, algorithm, issuer/epoch/nonce, stable ids, and every projected `Exec.Op` field; bounded decoding, shape checks, exact replay/collision classification, verification and resolver premises, layered outcomes, and nonempty versioned responses stay separate. Substitution and collision fixtures are concrete. No cryptographic hardness, authorization, membership, actual execution, append, or durability theorem is claimed. |
 | `Uwueave/RuntimeInit.lean` | The declaration- and data-free native initializer root. Its four imports (`Exec`, `SeqKernel`, `EraKernel`, and `Preo/ArtifactJournalKernel`) are the single source of truth for the Rust-linked Lean object graph; Lake derives their transitive module/object closure, and the C shim calls only this root initializer. Diagnostics, checked artifact constructors, examples, and unrelated proof modules stay outside that closure unless a runtime kernel imports them. |
 
@@ -224,7 +246,7 @@ each `Live` / `LatticeOnly` tag cites nothing beyond the named module's own
 docstrings (upgraded by `CausalReach` theorems where those supersede them);
 `—` marks rows the axis does not apply to. Every row is covered by
 `#audit_floor`'s total gate — there is no per-row trust column to read. The
-table currently holds 500 rows:
+table currently holds 580 rows:
 
 | Theorem | Module | Generality | Reachability |
 |---|---|---|---|
@@ -728,6 +750,86 @@ table currently holds 500 rows:
 | `updateProgramCache_correct` | Preo/Incremental | ∀-general | — |
 | `TypedResult.totalSound` | Preo/Incremental | ∀-general | — |
 | `semanticSurface_next_report_policy_exact` | Preo/Demo | finite-story | — |
+| `refused_impossible` | HistoryRuntime | ∀-general | — |
+| `decideTotal_valid` | HistoryRuntime | ∀-general | — |
+| `higherSweep_complete` | HistoryRuntime | ∀-general | — |
+| `appendDag_reaches_inl` | HistoryRuntime | ∀-general | — |
+| `lockForkAppended_coherent` | HistoryRuntime | finite-story | — |
+| `sameEventSet_converges` | HistoryRuntime | ∀-general | — |
+| `orderAgreement_iff_selector_symmetric_at` | HistoryRuntime | ∀-general | — |
+| `asymmetric_but_convergent` | HistoryRuntime | finite-story | — |
+| `historySchema_step_eq_some_iff` | PersistentHistoryRuntime | ∀-general | — |
+| `applyEvent_retry` | PersistentHistoryRuntime | ∀-general | — |
+| `applyEvent_collision` | PersistentHistoryRuntime | ∀-general | — |
+| `checkpoint_suffix_replay` | PersistentHistoryRuntime | ∀-general | — |
+| `fork_arrival_orders_converge` | PersistentHistoryRuntime | finite-story | — |
+| `mem_envReach_iff` | Preo/StateProgram | ∀-general | — |
+| `project_mem_envReach` | Preo/StateProgram | ∀-general | — |
+| `totalSound` | Preo/StateProgram | ∀-general | — |
+| `declaration_evaluate` | Preo/StateProgram | ∀-general | — |
+| `elabPreoProgramCore` (def) | Preo/StateProgramSurface | ∀-general | — |
+| `journey_is_hand_program` | Preo/StateProgramSurfaceTests | finite-story | — |
+| `selected_is_engine_witness` | Preo/PlanningSurface | finite-story | — |
+| `selected_profile_is_exact` | Preo/PlanningSurface | finite-story | — |
+| `selected_price_is_full` | Preo/PlanningSurface | finite-story | — |
+| `selected_coupling_is_exact` | Preo/PlanningSurface | finite-story | — |
+| `budget_is_selected_profile` | Preo/PlanningSurface | finite-story | — |
+| `schedule_refusal_is_exact` | Preo/PlanningSurface | finite-story | — |
+| `repair_refusal_is_exact` | Preo/PlanningSurface | finite-story | — |
+| `preservesMerge_iff_joinHom` | Preo/DerivedProgram | ∀-general | — |
+| `Program.joinHom` | Preo/DerivedProgram | ∀-general | — |
+| `Program.specification_total` | Preo/DerivedProgram | ∀-general | — |
+| `Program.evalWorld_eq_of_agreeOnReads` | Preo/DerivedProgram | ∀-general | — |
+| `Program.document_joinHom` | Preo/DerivedProgram | ∀-general | — |
+| `Program.update_correct` | Preo/DerivedProgram | ∀-general | — |
+| `Program.update_off_dependency_zero` | Preo/DerivedProgram | ∀-general | — |
+| `liftResolution_identity` | Preo/BoundResult | ∀-general | — |
+| `WorldBinding.declaration_evaluate` | Preo/BoundResult | ∀-general | — |
+| `WorldBinding.CertifiedReport.certificate_answers_declaration` | Preo/BoundResult | ∀-general | — |
+| `WorldBinding.CertifiedReport.refuses_different_world` | Preo/BoundResult | ∀-general | — |
+| `WorldBinding.CertifiedReport.ExactBranch.says` | Preo/BoundResult | ∀-general | — |
+| `WorldBinding.CertifiedReport.ExactBranch.disclosure_exact` | Preo/BoundResult | ∀-general | — |
+| `WorldBinding.refuses_wrong_certificate_answer` | Preo/BoundResult | ∀-general | — |
+| `WorldBinding.refuses_out_of_world_reach` | Preo/BoundResult | ∀-general | — |
+| `decodeArtifactV3_encode` | Preo/ArtifactV3Durable | ∀-general | — |
+| `decodeProjection_projectionBytes_append` | Preo/ArtifactV3Durable | ∀-general | — |
+| `v2_decoder_refuses_v3` | Preo/ArtifactV3Durable | ∀-general | — |
+| `v3_decoder_refuses_v2` | Preo/ArtifactV3Durable | ∀-general | — |
+| `CheckedQuery.toRow_reads` | Preo/ArtifactV3Checked | ∀-general | — |
+| `CheckedQuery.toRow_holes` | Preo/ArtifactV3Checked | ∀-general | — |
+| `CheckedQuery.read_field_mem` | Preo/ArtifactV3Checked | ∀-general | — |
+| `mem_effectOfDeclaration_iff` | Preo/ArtifactV3Checked | ∀-general | — |
+| `CheckedResult.toExactRow_status` | Preo/ArtifactV3Checked | ∀-general | — |
+| `full_roundtrip` | Preo/ArtifactV3Examples | finite-story | — |
+| `v2_refuses_full_v3` | Preo/ArtifactV3Examples | finite-story | — |
+| `format_golden` | Preo/ArtifactV3Fixtures | finite-story | — |
+| `full_bytes_are_v3_only` | Preo/ArtifactV3Fixtures | finite-story | — |
+| `ValidatedProjectionV3.base_exact` | Preo/ProjectionV3Core | ∀-general | — |
+| `renderRustSource_eq_of_encoding_eq` | Preo/ProjectionV3 | ∀-general | — |
+| `validateAndRender_error` | Preo/ProjectionV3 | ∀-general | — |
+| `Examples.full_validates` | Preo/ProjectionV3Examples | finite-story | — |
+| `Examples.full_validated_base_exact` | Preo/ProjectionV3Examples | finite-story | — |
+| `Examples.wrong_query_schema_refused` | Preo/ProjectionV3Examples | finite-story | — |
+| `Examples.mismatched_query_result_refused` | Preo/ProjectionV3Examples | finite-story | — |
+| `Examples.query_reads_mismatch_refused` | Preo/ProjectionV3Examples | finite-story | — |
+| `Examples.exact_without_disclosure_refused` | Preo/ProjectionV3Examples | finite-story | — |
+| `Examples.pending_with_disclosure_refused` | Preo/ProjectionV3Examples | finite-story | — |
+| `Examples.query_rust_golden` | Preo/ProjectionV3Fixtures | finite-story | — |
+| `Examples.result_rust_golden` | Preo/ProjectionV3Fixtures | finite-story | — |
+| `Examples.certificate_rust_golden` | Preo/ProjectionV3Fixtures | finite-story | — |
+| `Examples.full_renderer_accepts` | Preo/ProjectionV3Fixtures | finite-story | — |
+| `inspectJournal` (def) | Preo/ArtifactInspectionV1 | ∀-general | — |
+| `inspectFrame` (def) | Preo/ArtifactInspectionV1 | ∀-general | — |
+| `journey_exact` | Preo/Quickstart | finite-story | — |
+| `journey_eval_exact` | Preo/Quickstart | finite-story | — |
+| `certificate_is_for_exact_future_and_world` | Preo/Quickstart | finite-story | — |
+| `protocol_is_exact` | Preo/Quickstart | finite-story | — |
+| `plan_and_budget_are_exact` | Preo/Quickstart | finite-story | — |
+| `checked_query_row_exact` | Preo/Quickstart | finite-story | — |
+| `checked_result_and_certificate_rows_exact` | Preo/Quickstart | finite-story | — |
+| `v3_artifact_validates` | Preo/Quickstart | finite-story | — |
+| `v3_bytes_reopen_exact` | Preo/Quickstart | finite-story | — |
+| `v3_bytes_executable_exact` | Preo/Quickstart | finite-story | — |
 
 Ledger rows grow with the tree; reachability is derived from module docstrings
 **and** from `CausalReach` theorems where those supersede older caution notes.

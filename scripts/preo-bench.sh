@@ -127,7 +127,7 @@ capture_goldens() {
     LC_ALL=C awk '/^(CONST|ROW)\t/' >"$out/names-types-rows.tsv"
 
   run_lean "$root" --json tests/preo-bench/golden/Report.lean >"$report_json"
-  jq -r 'select(.severity == "information" and
+  jq -j 'select(.severity == "information" and
       (.data | startswith("preo PreoBench.Golden.Report.Subject\n"))) | .data' \
     "$report_json" >"$out/report.txt"
 

@@ -159,8 +159,8 @@ replaced.
     that they need not: `base_accident_decides_the_invariant` (results 5 vs 4)
     and `swap_never_converges` (an eternal two-cycle under a state-level base
     policy `MergeModel.BaseDecision.Valid` fully licenses).
-  * ⟨UNDONE, narrowed to unrestricted/total selection⟩ **No total merge-base
-    procedure for an arbitrary `VersionDag`.** Downstream
+  * ⟨UNDONE, narrowed to unrestricted/infinite selection⟩ **No total
+    merge-base procedure for an arbitrary `VersionDag`.** Downstream
     `FiniteHistory.Enumeration` makes finiteness an explicit coverage premise;
     under it, `FiniteHistory.reaches_iff_bounded` and
     `Enumeration.decideReaches` decide this `Prop`-valued reachability, while
@@ -169,9 +169,10 @@ replaced.
     is found. Downstream `HistoryEngine.decidePair` is total as an operational
     **four-way** answer: selected, ambiguous, unavailable, or a refusal carrying
     proofs that none of those exact predicates was established. It sweeps every
-    ordered pair of the enumeration. What remains here is the
-    unrestricted/infinite-DAG claim and a theorem excluding the refusal case if
-    every covered finite pair is to produce a `BaseSelection`.
+    ordered pair of the enumeration. `HistoryRuntime.refused_impossible` now
+    excludes its fourth branch under finite coverage, and `decideTotal` returns
+    a `BaseSelection` for every covered pair. What remains is discovering or
+    deciding adequate coverage for unrestricted/infinite DAGs.
   * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
     theorems in §4 target `MergeModel.BaseDecision.Valid`, which is fixed at
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
@@ -182,8 +183,9 @@ replaced.
     root-reachable set is not merge-closed. The exact replacement is
     `HistorySafeFrom`, characterized by `historySafeFrom_iff`; the ceiling
     counter refutes it and the lock satisfies it.
-  * ⟨UNDONE, narrowed to append-only version materialization⟩ **The selected-pair
-    patch seam is now operational.** Downstream `HistoryEngine.VersionPatch`
+  * ⟨UNDONE, narrowed to repeated/generalized version growth⟩ **The
+    selected-pair patch seam is now operational.** Downstream
+    `HistoryEngine.VersionPatch`
     ties a `VersionDag` reachability witness to the exact admitted patch between
     two labelled history states. `SelectedRequest.graph_selected` connects the
     finite base search to a declared `HistoryMerge`, and `admitSelected`
@@ -191,10 +193,13 @@ replaced.
     policy-identical `ResidualDiamond`. One delivery converges unconditionally;
     arbitrary duplicate delivery converges under the named `ReplayStable` law,
     proved for the concrete cheap-lock fixture. The length-two counter remains
-    an exact algebra refusal. What remains is allocation of a fresh version and
-    construction of an extended `History`/`Origin.merged` record (including
-    repeated criss-cross growth); no endpoint-only patch reconstruction is
-    claimed.
+    an exact algebra refusal. `HistoryRuntime.appendSelected` now allocates one
+    fresh `V ⊕ Unit` version, constructs its `Origin.merged`, and proves the
+    extended history coherent; its causal event boundary also proves exact
+    retry and event-set convergence. What remains is a generic succession of
+    fresh types/identifiers supporting repeated criss-cross growth and a
+    host-byte-to-proof-indexed-history refinement; no endpoint-only patch
+    reconstruction is claimed.
 
 Literature: Kaki, Priya, Sivaramakrishnan, Jagannathan, "Mergeable Replicated
 Data Types", OOPSLA 2019 (the version-store/LCA model whose *repeated* merge is

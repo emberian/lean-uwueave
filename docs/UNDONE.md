@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 167
-- **Extracted blocks (marker-bearing source lines):** 165
-- **Lean files containing markers:** 44
+- **Marker occurrences:** 159
+- **Extracted blocks (marker-bearing source lines):** 157
+- **Lean files containing markers:** 43
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -277,16 +277,7 @@ values in one round while replicas do occupy the intermediate states. -/
     *between* derivations, which is a different graph.
 ````
 
-### [`Uwueave/DerivedDocument.lean:113`](../Uwueave/DerivedDocument.lean#L113)
-
-````text
-  * **§4's evaluation is total but not incremental.** ⟨UNDONE⟩ `materialize`
-    recomputes each slot from scratch through `matFuel`; nothing here says a
-    replica recomputes only what an arriving delta touched. Same gap
-    `Holes.lean` names ("nothing here is incremental"), inherited unchanged.
-````
-
-### [`Uwueave/DerivedDocument.lean:118`](../Uwueave/DerivedDocument.lean#L118)
+### [`Uwueave/DerivedDocument.lean:120`](../Uwueave/DerivedDocument.lean#L120)
 
 ````text
     ⟨UNDONE⟩ `BoundedHeight` is a *hypothesis* — a
@@ -297,14 +288,6 @@ values in one round while replicas do occupy the intermediate states. -/
     applies to is finite-height derived views — a bit, a threshold, a bounded
     fork grade. Constructing a bound for a general derived document is unbuilt,
     and no theorem here suggests one exists.
-````
-
-### [`Uwueave/DerivedDocument.lean:127`](../Uwueave/DerivedDocument.lean#L127)
-
-````text
-    language.** ⟨UNDONE⟩ `F : S → S` is an arbitrary monotone map. There is
-    still no expression language (`Holes.lean` and `JoinHom.lean` name the same
-    gap), so "which derivations are monotone" is decided per instance by hand.
 ````
 
 ## `Uwueave/Durable.lean`
@@ -459,16 +442,7 @@ clothes.
     manufacture closure or eventual delivery in a running system.
 ````
 
-### [`Uwueave/Evidence.lean:185`](../Uwueave/Evidence.lean#L185)
-
-````text
-    ⟨UNDONE⟩ Inherited verbatim from `Holes.lean`: there is still no expression
-    language, so "at that result position" is modelled as "at this evidence
-    value", one position at a time. A per-position analysis needs a syntax to
-    recurse over and none exists in this library.
-````
-
-### [`Uwueave/Evidence.lean:817`](../Uwueave/Evidence.lean#L817)
+### [`Uwueave/Evidence.lean:819`](../Uwueave/Evidence.lean#L819)
 
 ````text
 what may still arrive) and listed the bridge to a real closure as ⟨UNDONE⟩.
@@ -649,8 +623,8 @@ file is the frontier it named.
 ### [`Uwueave/Histories.lean:162`](../Uwueave/Histories.lean#L162)
 
 ````text
-  * ⟨UNDONE, narrowed to unrestricted/total selection⟩ **No total merge-base
-    procedure for an arbitrary `VersionDag`.** Downstream
+  * ⟨UNDONE, narrowed to unrestricted/infinite selection⟩ **No total
+    merge-base procedure for an arbitrary `VersionDag`.** Downstream
     `FiniteHistory.Enumeration` makes finiteness an explicit coverage premise;
     under it, `FiniteHistory.reaches_iff_bounded` and
     `Enumeration.decideReaches` decide this `Prop`-valued reachability, while
@@ -659,12 +633,13 @@ file is the frontier it named.
     is found. Downstream `HistoryEngine.decidePair` is total as an operational
     **four-way** answer: selected, ambiguous, unavailable, or a refusal carrying
     proofs that none of those exact predicates was established. It sweeps every
-    ordered pair of the enumeration. What remains here is the
-    unrestricted/infinite-DAG claim and a theorem excluding the refusal case if
-    every covered finite pair is to produce a `BaseSelection`.
+    ordered pair of the enumeration. `HistoryRuntime.refused_impossible` now
+    excludes its fourth branch under finite coverage, and `decideTotal` returns
+    a `BaseSelection` for every covered pair. What remains is discovering or
+    deciding adequate coverage for unrestricted/infinite DAGs.
 ````
 
-### [`Uwueave/Histories.lean:175`](../Uwueave/Histories.lean#L175)
+### [`Uwueave/Histories.lean:176`](../Uwueave/Histories.lean#L176)
 
 ````text
   * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
@@ -672,11 +647,12 @@ file is the frontier it named.
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
 ````
 
-### [`Uwueave/Histories.lean:185`](../Uwueave/Histories.lean#L185)
+### [`Uwueave/Histories.lean:186`](../Uwueave/Histories.lean#L186)
 
 ````text
-  * ⟨UNDONE, narrowed to append-only version materialization⟩ **The selected-pair
-    patch seam is now operational.** Downstream `HistoryEngine.VersionPatch`
+  * ⟨UNDONE, narrowed to repeated/generalized version growth⟩ **The
+    selected-pair patch seam is now operational.** Downstream
+    `HistoryEngine.VersionPatch`
     ties a `VersionDag` reachability witness to the exact admitted patch between
     two labelled history states. `SelectedRequest.graph_selected` connects the
     finite base search to a declared `HistoryMerge`, and `admitSelected`
@@ -684,10 +660,13 @@ file is the frontier it named.
     policy-identical `ResidualDiamond`. One delivery converges unconditionally;
     arbitrary duplicate delivery converges under the named `ReplayStable` law,
     proved for the concrete cheap-lock fixture. The length-two counter remains
-    an exact algebra refusal. What remains is allocation of a fresh version and
-    construction of an extended `History`/`Origin.merged` record (including
-    repeated criss-cross growth); no endpoint-only patch reconstruction is
-    claimed.
+    an exact algebra refusal. `HistoryRuntime.appendSelected` now allocates one
+    fresh `V ⊕ Unit` version, constructs its `Origin.merged`, and proves the
+    extended history coherent; its causal event boundary also proves exact
+    retry and event-set convergence. What remains is a generic succession of
+    fresh types/identifiers supporting repeated criss-cross growth and a
+    host-byte-to-proof-indexed-history refinement; no endpoint-only patch
+    reconstruction is claimed.
 ````
 
 ## `Uwueave/HistoryBase.lean`
@@ -776,41 +755,36 @@ harmlessness are always anti-correlated. -/
 ### [`Uwueave/HistoryPolicy.lean:123`](../Uwueave/HistoryPolicy.lean#L123)
 
 ````text
-  * ⟨UNDONE, narrowed to higher semantic whole-history judgements⟩ **Declared
-    policy decisions are now swept; the higher judgements are not.** Downstream
+  * ⟨UNDONE, narrowed to automatic semantic decision synthesis⟩ **Declared
+    policy decisions and higher judgements are now swept.** Downstream
     `HistoryEngine.semanticSweep` evaluates `HistoryMerge.select` and `apply`
     over every ordered pair of an explicitly enumerated history, returning
     selected/ambiguous/unavailable evidence inside scope and a proved refusal
     outside it. `SemanticDecision.graph_kind_eq` proves agreement with finite
-    DAG classification on every claimed pair. What remains is an executable
-    all-pairs sweep of `BaseRobust`, `SelectorSafe`, and protocol-level
-    convergence obligations; `HistoryConvergent` itself is still the same-record
-    derived-view theorem, not a delivery protocol.
+    DAG classification on every claimed pair. `HistoryRuntime.higherSweep`
+    now retains proof-carrying `BaseRobustAt` and pairwise `SelectorSafe`
+    decisions for every ordered pair, while `classifyHigher` retains the
+    whole-policy judgements. Their semantic decision procedures are explicit
+    inputs; automatically synthesizing them, and tying `HistoryConvergent` to
+    an authenticated/out-of-order delivery protocol, remain open.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:133`](../Uwueave/HistoryPolicy.lean#L133)
+### [`Uwueave/HistoryPolicy.lean:135`](../Uwueave/HistoryPolicy.lean#L135)
 
 ````text
-  * ⟨UNDONE, narrowed to a total `HistoryMerge` selector⟩ **No total selector is
-    computed into this model from a DAG.** Downstream
+  * ⟨UNDONE, narrowed to unrestricted selection and kernel synthesis⟩ **A
+    total finite selector is now computed from a covered DAG.** Downstream
     `HistoryEngine.decidePair` performs proof-carrying four-way search under an
     explicit finite enumeration and computes selected, ambiguous, unavailable,
     or exact refusal evidence. `semanticSweep` applies an already-declared
-    policy and refuses pairs outside its scope. Neither operation synthesizes a
-    `HistoryMerge.select`, its scope, reconciliation kernel, or their laws;
-    `ccSelect*`/`lvSelect` here are still written down and proved sound.
+    policy and refuses pairs outside its scope. `HistoryRuntime.finiteExplicit`
+    eliminates refusal and supplies an all-pairs `HistoryMerge.select` and
+    scope from an explicit finite enumeration, caller-provided reconciliation
+    kernel, and conflict function. Discovering coverage for unrestricted DAGs
+    and synthesizing those semantic reconciliation inputs remain open.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:141`](../Uwueave/HistoryPolicy.lean#L141)
-
-````text
-  * ⟨UNDONE⟩ **`SelectorSymmetric` is proved sufficient for order-agreement, not
-    necessary.** `replicas_agree_on_order` uses it; no theorem here says an
-    asymmetric selector must diverge — `swap_never_converges` exhibits one that
-    does.
-````
-
-### [`Uwueave/HistoryPolicy.lean:145`](../Uwueave/HistoryPolicy.lean#L145)
+### [`Uwueave/HistoryPolicy.lean:150`](../Uwueave/HistoryPolicy.lean#L150)
 
 ````text
   * ⟨UNDONE⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
@@ -825,22 +799,7 @@ harmlessness are always anti-correlated. -/
 remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
 ````
 
-### [`Uwueave/Holes.lean:156`](../Uwueave/Holes.lean#L156)
-
-````text
-  * **There is no expression language.** ⟨UNDONE⟩ `f : World → α` is an
-    arbitrary Lean function. That is exactly why `evalSet_hom` holds for
-    *every* computation with no side conditions — and exactly why nothing
-    here can *classify* one. The design memo's three verdicts (deterministic?
-    coordination-free? does my invariant survive?) want a syntax to recurse
-    over: monotone operators, a negation case, a per-position hole analysis.
-    §4's `monadicEval₂` is the smallest stand-in that makes the phantom
-    theorem statable (one binary operator over two register reads) and it is
-    not a language. Everything downstream of "which subexpression names the
-    coordination point" is unbuilt.
-````
-
-### [`Uwueave/Holes.lean:166`](../Uwueave/Holes.lean#L166)
+### [`Uwueave/Holes.lean:164`](../Uwueave/Holes.lean#L164)
 
 ````text
   * **`f` may read the representation, not just the valuation.** ⟨UNDONE⟩ A
@@ -855,18 +814,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     itself.
 ````
 
-### [`Uwueave/Holes.lean:184`](../Uwueave/Holes.lean#L184)
-
-````text
-  * **Nothing here is incremental.** ⟨UNDONE⟩ `evalSet_hom` says the *answer*
-    is compositional; it does not say any implementation recomputes cheaply.
-    An incremental/differential evaluator (recompute only what the arriving
-    delta touched) is precisely what the homomorphism licenses and precisely
-    what is not built. `Delta.lean`'s delta discipline is the shape it would
-    take.
-````
-
-### [`Uwueave/Holes.lean:199`](../Uwueave/Holes.lean#L199)
+### [`Uwueave/Holes.lean:197`](../Uwueave/Holes.lean#L197)
 
 ````text
   * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE, and narrowed⟩ §6's
@@ -882,7 +830,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     not the licence in general.
 ````
 
-### [`Uwueave/Holes.lean:217`](../Uwueave/Holes.lean#L217)
+### [`Uwueave/Holes.lean:215`](../Uwueave/Holes.lean#L215)
 
 ````text
   * **Provenance is whatever `p` computes.** ⟨UNDONE⟩ §7 lands
@@ -952,15 +900,6 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     `incrementallyMergeable_iff_resultDetermined` is built from
     `Classical.choice` and is not an algorithm. A verdict that also priced the
     combiner is what an implementation would want and is not here.
-````
-
-### [`Uwueave/JoinHom.lean:98`](../Uwueave/JoinHom.lean#L98)
-
-````text
-  * **No syntax, so no classifier.** ⟨UNDONE⟩ Exactly as in `Holes.lean`: `f` is
-    an arbitrary Lean function, so the fourth verdict is *stated* per
-    computation and proved by hand. Deciding it by recursion over an expression
-    language is the unbuilt part, and it is the same unbuilt part.
 ````
 
 ## `Uwueave/LiveBudget.lean`
@@ -1491,16 +1430,6 @@ clothes.
   * ⟨UNDONE⟩ **Clique lower bounds.** §6 proves the two-stream floor from a
     single edge. The graph-theoretic generalisation — a `k`-clique in the clash
     graph forces `k` fibers, hence `k-1` crossings — is not here.
-````
-
-## `Uwueave/Specification.lean`
-
-### [`Uwueave/Specification.lean:43`](../Uwueave/Specification.lean#L43)
-
-````text
-⟨UNDONE⟩ A later language layer can quote a first-order execution and outcome
-syntax into `Specification`.  This file deliberately starts with its semantic
-target, so serialization cannot silently choose the refinement relation.
 ````
 
 ## `Uwueave/TextSummary.lean`

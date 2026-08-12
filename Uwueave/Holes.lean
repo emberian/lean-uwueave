@@ -153,16 +153,14 @@ one and the earlier one never learns it was superseded. So, from this side:
 Each item is labelled ⟨TERMINAL⟩ (a theorem *of the model* — no work would
 remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
 
-  * **There is no expression language.** ⟨UNDONE⟩ `f : World → α` is an
-    arbitrary Lean function. That is exactly why `evalSet_hom` holds for
-    *every* computation with no side conditions — and exactly why nothing
-    here can *classify* one. The design memo's three verdicts (deterministic?
-    coordination-free? does my invariant survive?) want a syntax to recurse
-    over: monotone operators, a negation case, a per-position hole analysis.
-    §4's `monadicEval₂` is the smallest stand-in that makes the phantom
-    theorem statable (one binary operator over two register reads) and it is
-    not a language. Everything downstream of "which subexpression names the
-    coordination point" is unbuilt.
+  * **The generic carrier accepts arbitrary functions; a typed expression
+    adapter now exists.** ⟨DONE for `Preo.Expr`, terminal for arbitrary `f`⟩
+    `Preo.DerivedProgram` connects the intrinsically typed expression language
+    to this world semantics, exposes exact child-path holes and erased reads,
+    proves locality through an explicit `WorldDecoder`, and carries the
+    merge/monotonicity classifier's positive and negative cases. `f : World → α`
+    here remains intentionally unrestricted and therefore cannot itself be
+    classified by syntax inspection.
   * **`f` may read the representation, not just the valuation.** ⟨UNDONE⟩ A
     `World` is a `List Val` — register `r` reads `read w r`, everything past
     the end reads `0` (`read_beyond`), so finite support is structural. But
@@ -181,12 +179,12 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     given as an explicit **list** of worlds — which is what a replica actually
     holds — `evalSet_ofList` proves the classical image equals a computable
     `List.map`, and every theorem above applies to it verbatim.
-  * **Nothing here is incremental.** ⟨UNDONE⟩ `evalSet_hom` says the *answer*
-    is compositional; it does not say any implementation recomputes cheaply.
-    An incremental/differential evaluator (recompute only what the arriving
-    delta touched) is precisely what the homomorphism licenses and precisely
-    what is not built. `Delta.lean`'s delta discipline is the shape it would
-    take.
+  * **`evalSet` itself is not a differential evaluator.** ⟨NARROWED⟩
+    `Preo.Incremental`, re-exposed for certified expressions by
+    `Preo.DerivedProgram`, proves fresh-evaluation correctness and zero root
+    recomputations for an off-dependency typed environment delta. Incremental
+    maintenance of this file's arbitrary candidate-world image remains
+    unbuilt; `evalSet_hom` alone is still only an answer-level equation.
   * **Choreography and endpoint projection.** ⟨DONE — see `Uwueave/Choreo.lean`⟩
     *choreography : computation :: CRDT : data* — one global program, projected
     per replica, with I-confluence deciding which projections need a
@@ -1086,5 +1084,4 @@ theorem evalSet_ofList {α : Type} [DecidableEq α] (f : World → α)
     exact ⟨w, decide_eq_true hw, hf⟩
 
 end Uwueave.Holes
-
 

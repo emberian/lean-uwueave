@@ -181,11 +181,13 @@ clothes.
     nowhere (`completeness_is_load_bearing`). So the iff of §10 is stated under
     a `CanonicalEvaluator` premise, and that premise is discharged for `render`
     (`render_canonical`) rather than left hanging.
-  * **Nothing here says which *positions* of an expression are holes.**
-    ⟨UNDONE⟩ Inherited verbatim from `Holes.lean`: there is still no expression
-    language, so "at that result position" is modelled as "at this evidence
-    value", one position at a time. A per-position analysis needs a syntax to
-    recurse over and none exists in this library.
+  * **Typed expression positions now have an adapter.** ⟨DONE for `Preo.Expr`;
+    terminal for arbitrary evidence producers⟩ `Preo.DerivedProgram` exposes
+    exact child-path holes and their erased field reads, proves evaluation
+    locality from either view, and materializes the result through this
+    evidence carrier with an exact candidate/source membership theorem.
+    `ResultEvidence` itself remains producer-agnostic and therefore carries no
+    syntax tree internally.
 -/
 import Uwueave.Holes
 

@@ -118,7 +118,7 @@ shim, build script, Cargo manifest, and lockfile must also be unchanged.
 initialization with `Once`; failure aborts rather than exposing a partly
 initialized runtime. The current full gate observed 13 Lake-owned objects
 (655,368 bytes before archiving), 14 archive members including the shim
-(798,968 bytes), and 133 passing Rust tests.
+(798,968 bytes), and 140 passing Rust tests.
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native
@@ -126,9 +126,9 @@ compiler or the linker, C/Rust/Lean ABI agreement, reference ownership, runtime
 behavior, or filesystem semantics. Those remain the separate execution-TCB
 rows in `docs/TRUST.md`.
 
-## 2. The Cycle 22 persistence surfaces
+## 2. The pure-Rust persistence and inspection surfaces
 
-Cycle 22 adds two deliberately different pure-Rust journals under
+The runtime now has three deliberately different pure-Rust journals under
 `rust/src/persistence/`. They share a private physical record mechanism, not a
 semantic wire format.
 
@@ -186,7 +186,38 @@ remains exact: the Lean equality covers the logical bytes; Rust tests the
 command, validator, journal, and reopen behavior; neither proves stdout,
 `writeBinFile`, `sync_data`, or the host filesystem correct under a crash.
 
-### 2.2 DocumentJournal: the typed MoveLog journal
+The checked V3 path is exercised separately by `Uwueave.Preo.Quickstart`.
+Unlike a row fixture, it begins with one custom `AppState`, an explicit
+`State → Expr.Env` projection, and an inferred typed query; binds the result to
+one named world future and exact-index certificate; consumes the native
+protocol/planning/budget surfaces; and constructs V3 query, result, and
+certificate rows only from proof-indexed builders. Its stack-safe executable
+frame is proved equal to `ArtifactV3Durable.projectionBytes`; the gate writes
+and byte-reopens the exact **71,011-byte** frame and the exact **142,022-byte**
+two-frame logical journal. Wrong projection, future, certificate, plan, and
+world fixtures must all fail to compile.
+
+### 2.2 Bounded diagnostic-only artifact inspection
+
+**Implemented as pure inspection, not authority.**
+`ArtifactInspectionV1.inspectFrame` and `inspectJournal` accept canonical
+logical V2/V3 frames, version-dispatch through the existing Lean codecs, run
+the bounded Projection V2/V3 validators, and return deterministic JSON with
+schema `uwueave/preo-inspection/v1` and authority `diagnostic-only`. Caller
+bounds cover input bytes (default 1 MiB), records (64), rows (256), and
+references per row (256). A torn/corrupt suffix, wrong version, resource excess,
+or structurally invalid decoded artifact refuses the whole request; no partial
+JSON or checked source is reconstructed.
+
+`tools/uwueave-preo-inspect` invokes `ArtifactInspectionMain` explicitly in
+frame or logical-journal mode. The thin Rust wrapper may extract exact logical
+frame bodies from an `ArtifactJournal`, but it has no semantic decoder. The
+proof root and `Audit` import only `ArtifactInspectionV1` and `ArtifactEmit`:
+`ArtifactInspectionMain` and `ArtifactEmitMain` are separate executable build
+boundaries with root-level `main` declarations and must not be aggregated into
+one proof module.
+
+### 2.3 DocumentJournal: the typed MoveLog journal
 
 **Implemented, with intentionally narrow coverage.**
 `rust/src/persistence/document.rs::DocumentJournal` stores canonical typed
@@ -209,7 +240,32 @@ unauthenticated legacy/runtime inputs. Causal nodes, sequence edits, ERA
 events/cuts, key changes, bookmarks, activation, spend, and seam changes do
 not yet have `DocumentEntry` variants.
 
-### 2.3 Shared physical record format
+### 2.4 HistoryJournal: causally closed explicit-id events
+
+**Implemented, with identity deliberately separated from authenticity.**
+`rust/src/persistence/history.rs::HistoryJournal` stores events containing one
+application-assigned 32-byte ID, a strictly increasing (therefore duplicate-
+free and canonical) parent list, and opaque payload bytes. A parent must
+already occur in the accepted prefix before its child can be appended. The
+implementation keeps no hidden out-of-order buffer, so every accepted physical
+prefix is causally closed.
+
+An exact retry is a no-write idempotent success. A self-parent, reordered or
+duplicate parents, a missing parent, malformed bytes, or the same ID with
+different parents/payload is refused. Recovery rechecks those conditions from
+the complete checksummed prefix, and independent journals receiving a causally
+valid event set in different topological orders converge to the same
+`id → event` map. The physical marker/domain are `UWHIST01` and
+`uwueave.history-journal.v1`.
+
+The Lean `PersistentHistoryRuntime` layer separately proves finite causal
+append, exact checkpoint/suffix replay, and event-set convergence. No theorem
+yet refines the Rust host bytes or filesystem observations to that model. The
+32-byte host ID is a uniqueness claim, not a signature or proved content hash;
+a deployment needing unforgeable history identity must authenticate or
+content-address a canonical event representation before admission.
+
+### 2.5 Shared physical record format
 
 **Implemented.** `rust/src/persistence/record.rs::RawJournal` wraps each
 semantic body in:
@@ -225,7 +281,8 @@ body bytes
 
 The artifact marker/domain are `UWARJ001` and
 `uwueave.artifact-journal.v1`; the document marker/domain are `UWDJRN01` and
-`uwueave.document-journal.v1`. The BLAKE3 dependency is an integrity control,
+`uwueave.document-journal.v1`; the history marker/domain are `UWHIST01` and
+`uwueave.history-journal.v1`. The BLAKE3 dependency is an integrity control,
 not an authenticity claim or a proof that corruption is impossible.
 
 The sequence-addressed append API has useful retry semantics:
@@ -259,6 +316,8 @@ These layers must remain explicit:
 | Artifact physical file | Checksummed `UWARJ001` records containing unchanged logical frames | Physical recovery evidence only |
 | Document logical journal | Ordered typed `DocumentEntry` values | Presently MoveLog mutations; checkpoint is validated acceleration |
 | Document physical file | Checksummed `UWDJRN01` records containing canonical entry bodies | Physical recovery evidence only |
+| History logical journal | Canonical explicit-id events whose parents are already accepted | Causally closed host prefix; IDs remain unauthenticated |
+| History physical file | Checksummed `UWHIST01` records containing canonical event bodies | Physical recovery evidence only |
 | FORMAT v3 request | Lean-owned execution request bytes | Derived execution input, never journal authority |
 | FORMAT v4 request | Canonical signed-request bytes from `RuntimeAuthV4` | Future authenticated admission record; not wired today |
 | Derived views/statuses | replay outputs, roles, trees, traces | Cache/output only; never recovery authority |
@@ -493,8 +552,8 @@ power-loss theorem.
 
 ## 8. Operator checklist
 
-- Give `ArtifactJournal` and `DocumentJournal` different files; never decode a
-  physical file as a logical artifact stream.
+- Give `ArtifactJournal`, `DocumentJournal`, and `HistoryJournal` different
+  files; never decode a physical file as a logical artifact stream.
 - Keep artifact frames within the fixed 1 MiB Lean-validation ceiling, and set
   operational limits for total file bytes and record count outside this API.
 - Place journals in a trusted directory with an explicit permission and

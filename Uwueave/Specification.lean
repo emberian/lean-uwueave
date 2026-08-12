@@ -40,9 +40,12 @@ equivalence, or the existence of a distributed implementation.  Those require
 the additional hypotheses carried by `Necessity`, `CausalReach`, and the history
 modules; no modal implementation claim is manufactured here.
 
-⟨UNDONE⟩ A later language layer can quote a first-order execution and outcome
-syntax into `Specification`.  This file deliberately starts with its semantic
-target, so serialization cannot silently choose the refinement relation.
+⟨DONE for typed snapshot expressions; still open for general histories⟩
+`Preo.DerivedProgram.Program.specification` now quotes an intrinsically typed
+`Preo.Expr` evaluation into `Specification` and proves totality.  It deliberately
+does not manufacture a refinement relation or a coordination-free verdict.
+Operation/history syntax beyond one typed environment evaluation remains a
+separate language problem.
 -/
 import Uwueave.Catalog
 

@@ -8,11 +8,12 @@ ever been timed.*
 > in §9 are now implemented. Section 10 records a post-fix
 > `BENCH_MAX=1000` rerun made on 2026-08-11; it is deliberately separate from
 > the baseline and does not replace the original full-range sweep. Section 12
-> separately records Wave 23 proof-elaboration and build-closure engineering;
-> those figures are not kernel-runtime benchmarks. Current
+> separately records Wave 23 proof-elaboration and build-closure engineering,
+> and §§13–14 do the same for Waves 24–25; those figures are not kernel-runtime
+> benchmarks. Current
 > complexity statements come from proved equivalence where applicable, source
 > inspection, successful builds, and generated-C inspection; only the rows in
-> §10 are new timings.
+> §10 are new runtime-kernel timings.
 
 Every decision this crate makes crosses an FFI boundary into Lean-compiled C:
 move replay (`Uwueave/Exec.lean`), sequence linearization
@@ -975,3 +976,120 @@ field constants, so an identical declaration name could not be reused. The
 current transactional command rolls back both declarations and report rows,
 and the same-name reuse golden passes. That correctness fix is the primary
 result even where the command medians are nearly flat.
+
+---
+
+## 14. Wave 25 typed-query, world-binding, and V3 engineering — 2026-08-11
+
+Wave 25 extended the typed-query path through explicit application-state
+projection, named world futures, certificate-gated reports, proof-indexed V3
+rows, canonical V3 bytes, and an end-to-end Quickstart. The measurements in
+this section are elaboration, artifact-size, static-closure, and functional
+acceptance evidence. They do not update the runtime-kernel timings in
+§§10–11, measure filesystem durability, or establish that an authored reach is
+the set of states a deployment will visit.
+
+### Typed scaling and exact surface pins
+
+The Wave 25 comparison reused §13's serialized Preoscript benchmark protocol
+and, crucially, the same typed-scaling definition: subtract the `Typed0`
+control from `Typed4` and `Typed16` peak RSS before dividing by the number of
+typed declarations. The resulting N=4→16 RSS slope fell from **4.713 to 3.946
+MiB per item** (**−16.3%**), below the hard 4 MiB/item ceiling and therefore a
+pass. `Typed16.olean` fell from **854,024 B to 736,048 B** (**−13.8%**).
+
+The exact names/types golden now pins **88 generated constants**. It passed
+together with row-order, rollback/reuse, constructor, projection, and report
+API checks. Six compiler-generated `ReachReport` metadata constants were
+intentionally retired; this is why the pin count itself is not a performance
+metric. The RSS slope is a benchmark-runner measurement, while the olean delta
+is a file-size observation; neither is evidence about generated query runtime.
+
+### New checked-program surfaces
+
+The following are present-cost diagnostics. Except for the typed slope above,
+there is no paired pre-Wave-25 implementation of these modules, so the table
+does not claim speedups or compare one module's wall time with another's. Lean
+profiler categories are cumulative and nested and must not be summed.
+
+| surface | observed source-profile evidence | artifact / qualification |
+|---|---|---|
+| `StateProgram` core | import **924 ms**; elaboration **50.2 ms** | explicit `State → Env` projection and authored finite reach; no retained wall/RSS sample |
+| `StateProgramSurface` | import **1.05 s**; elaboration **355 ms**; LCNF-base **1.07 s** | command elaborator over the checked core; no retained wall/RSS sample |
+| `PlanningSurface` | wall **4.58 s**; user **3.82 s**; import **883 ms**; elaboration **582 ms**; tactics **137 ms**; type checking **144 ms**; LCNF-base **1.94 s**; peak RSS **1,339,424,768 B** | olean **2,642,792 B**; generated C **1,037,142 B** |
+| `DerivedProgram` | import **990 ms**; elaboration **79.7 ms**; tactics **65.0 ms**; `simp` **22.2 ms**; type checking **25.6 ms** | direct source diagnostic; duplicated roughly 55-line range-proof bodies are wrappers over foundational `Expr` theorems; no retained wall/RSS sample |
+| `BoundResult` | direct warning-free source check **0.88 s** | **232 LOC**; exact future, declaration-answer, certificate, and world-index binding |
+
+These are mixed single-shot/source-profile observations collected during the
+Wave 25 swarm, with warm imports and varying contention. They are useful for
+locating future elaboration work, not publishable medians. In particular, the
+PlanningSurface wall/RSS row must not be compared with a category-only row.
+
+### V3 production closure
+
+Static closure counts come from project-module import closure with exact olean
+and generated-C byte totals. Direct profile times are one-shot source
+diagnostics, not runtime or clean-build measurements.
+
+| V3 root | project modules | olean bytes | generated-C bytes | direct profile wall |
+|---|---:|---:|---:|---:|
+| production Rust renderer | **7** | **6,947,616** | **1,100,478** | **0.33 s** |
+| structural validator core | **5** | **6,319,784** | **808,390** | **0.63 s** |
+| canonical durable V3 codec | — | — | — | **0.49 s** |
+
+The renderer is deliberately one module and about 1.95 MB (1.63 MiB) of olean above the
+provisional six-module / 5 MiB target because it reuses the unchanged V2
+renderer instead of duplicating its DTO logic. Its generated-C closure remains
+below the separate 1.2 MB target. That is a target caveat, not a claimed
+regression against a retained V3 baseline. The focused V3 suite passed
+**76/76** checks, the generated Rust was **11,364 B** and compiled with
+`rustc`, and V2 fixtures remained unchanged and green.
+
+### End-to-end Quickstart bytes
+
+`lake build Uwueave.Preo.Quickstart` completed **98/98** jobs; its last warm
+compile was **1.7 s**. One warm `preo-quickstart-canaries.sh` run took **8.4 s**
+and covered one positive compilation, five expected compile refusals, and the
+runtime path. These are warm validation durations, not cold-build benchmarks.
+
+The runtime fixture wrote the exact stack-safe frame proved equal to
+`ArtifactV3Durable.projectionBytes`: **71,011 B** for one frame and **142,022
+B** for the concatenated two-frame logical journal. It read the bytes back
+exactly and exercised both pure-Lean frame/journal inspection and the external
+inspection CLI. Exact byte equality and successful reopen are functional codec
+evidence; they do not measure I/O throughput, prove stable-media persistence,
+or authenticate a journal.
+
+### History runtime and host journal evidence
+
+`HistoryRuntime.lean` is **568 LOC / 25,266 source bytes** with a **1,883,936 B**
+olean; `PersistentHistoryRuntime.lean` is **170 LOC / 7,227 source bytes** with
+a **178,416 B** olean. One warm-cache profiled source check under active swarm
+contention reported:
+
+| module | wall | import | cumulative elaboration |
+|---|---:|---:|---:|
+| `HistoryRuntime` | **2.11 s** | **1.39 s** | **301 ms** |
+| `PersistentHistoryRuntime` | **1.62 s** | **1.35 s** | **65.1 ms** |
+
+The focused Lean build passed **36/36** jobs. The pure-Rust history journal
+implementation is **761 LOC / 26,380 source bytes**; its focused library test
+selection passed **6/6** tests. On the recorded run the test bodies reported
+**0.00 s**, while command wall was **2.85 s**, including **2.60 s** of
+compilation. That split is why this is focused correctness evidence, not a
+journal-latency number. Owned-file `rustfmt --check` and diff checks passed;
+workspace-wide `cargo fmt --check` still observed unrelated formatting drift
+and is not reported as green.
+
+### Final Wave 25 closure
+
+The final aggregate Lean build completed **171 jobs**. The audit traversed
+**147 direct root imports excluding `Audit`** and checked **23,138 constants**
+against the trust floor. The final Rust accounting passed **140 tests**:
+87 library, 13 CLI, one artifact-emission, one inspection, four ergonomics,
+15 persistence, 11 property, six closure, and two census tests.
+
+Those counts establish final source/build/test coverage on the frozen Wave 25
+tree. As throughout this document, a green aggregate duration would mix cache,
+link, compiler, and test work, so no aggregate wall-speedup is inferred from
+the job or test totals.

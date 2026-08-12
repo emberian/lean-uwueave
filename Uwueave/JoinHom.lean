@@ -95,10 +95,13 @@ filtered views answer `fromResults`; counting answers `needsEvidence`.
     `incrementallyMergeable_iff_resultDetermined` is built from
     `Classical.choice` and is not an algorithm. A verdict that also priced the
     combiner is what an implementation would want and is not here.
-  * **No syntax, so no classifier.** ⟨UNDONE⟩ Exactly as in `Holes.lean`: `f` is
-    an arbitrary Lean function, so the fourth verdict is *stated* per
-    computation and proved by hand. Deciding it by recursion over an expression
-    language is the unbuilt part, and it is the same unbuilt part.
+  * **The general judgement remains semantic; a typed fragment now has a
+    classifier.** ⟨DONE for `Preo.Expr`, terminal for arbitrary `f`⟩
+    `Preo.DerivedProgram.preservesMerge_iff_joinHom` identifies the expression
+    equation with this `JoinHom`, and `Preo.Expr.certifyMergeSafe` recursively
+    produces proofs for its safe fragment while refusing negation, addition,
+    malformed syntax, and unproved custom nodes. No total classifier for an
+    arbitrary Lean function is possible or claimed.
   * **The provenance theorem is about one summary shape.**
     `count_summary_must_distinguish` shows a join-homomorphic summary computing
     the count must separate `sawA` from `sawB`; it does not characterise the

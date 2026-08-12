@@ -155,6 +155,14 @@ def Var.index : Var Γ t → Nat
   | .here => 0
   | .there v => v.index + 1
 
+/-- Erasing a typed field position always produces an index within its
+schema.  This foundational bound belongs beside `Var.index`, so artifact and
+decoder layers need not import the heavier derived-program bridge. -/
+theorem Var.index_lt_length (field : Var Γ t) : field.index < Γ.length := by
+  induction field with
+  | here => simp [Var.index]
+  | there field ih => simpa [Var.index] using Nat.succ_lt_succ ih
+
 /-- A typed heterogeneous environment for a schema. -/
 inductive Env : Schema → Type where
   | nil : Env []
@@ -397,6 +405,58 @@ subterms, while `Term.holes` remains the single source of dependency truth. -/
         (List.map (fun k => { path := [], field := k, kind := HoleKind.opaque }) ns) =
           n :: ns
       rw [ih]
+
+/-- Every erased position reported by a typed term is within its schema.
+Custom terms carry this fact as part of their honest dependency boundary. -/
+theorem Term.reads_in_range (term : Term Γ t) :
+    ∀ field ∈ term.reads, field < Γ.length := by
+  intro field hfield
+  induction term with
+  | litBool | litNat | none => simp at hfield
+  | var v =>
+      change field ∈ [v.index] at hfield
+      have hfield := List.mem_singleton.mp hfield
+      subst field
+      exact Var.index_lt_length v
+  | pair left right ihLeft ihRight =>
+      rw [Term.reads_pair] at hfield
+      rcases List.mem_append.mp hfield with hfield | hfield
+      · exact ihLeft hfield
+      · exact ihRight hfield
+  | boolOr left right ihLeft ihRight =>
+      rw [Term.reads_boolOr] at hfield
+      rcases List.mem_append.mp hfield with hfield | hfield
+      · exact ihLeft hfield
+      · exact ihRight hfield
+  | boolAnd left right ihLeft ihRight =>
+      rw [Term.reads_boolAnd] at hfield
+      rcases List.mem_append.mp hfield with hfield | hfield
+      · exact ihLeft hfield
+      · exact ihRight hfield
+  | natMax left right ihLeft ihRight =>
+      rw [Term.reads_natMax] at hfield
+      rcases List.mem_append.mp hfield with hfield | hfield
+      · exact ihLeft hfield
+      · exact ihRight hfield
+  | natAdd left right ihLeft ihRight =>
+      rw [Term.reads_natAdd] at hfield
+      rcases List.mem_append.mp hfield with hfield | hfield
+      · exact ihLeft hfield
+      · exact ihRight hfield
+  | natEq left right ihLeft ihRight =>
+      rw [Term.reads_natEq] at hfield
+      rcases List.mem_append.mp hfield with hfield | hfield
+      · exact ihLeft hfield
+      · exact ihRight hfield
+  | fst inner ih => exact ih (Term.reads_fst inner ▸ hfield)
+  | snd inner ih => exact ih (Term.reads_snd inner ▸ hfield)
+  | some inner ih => exact ih (Term.reads_some inner ▸ hfield)
+  | isSome inner ih => exact ih (Term.reads_isSome inner ▸ hfield)
+  | boolNot inner ih => exact ih (Term.reads_boolNot inner ▸ hfield)
+  | natSucc inner ih => exact ih (Term.reads_natSucc inner ▸ hfield)
+  | custom node =>
+      rw [Term.reads_custom] at hfield
+      exact node.dependenciesInRange field hfield
 
 theorem Env.agreeOn_append_left {a b : List Nat} {x y : Env Γ}
     (h : AgreeOn (a ++ b) x y) : AgreeOn a x y := by

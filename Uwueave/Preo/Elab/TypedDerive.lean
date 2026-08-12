@@ -13,6 +13,10 @@ namespace Uwueave.Preo.Elab.TypedDerive
 
 open Lean Elab Command
 
+private def withoutAuxiliaryStructureMetadata (scope : Scope) : Scope :=
+  let options := (scope.opts.setBool `genSizeOf false).setBool `genInjectivity false
+  { scope with opts := options.setBool `genCtorIdx false }
+
 /-- Emit one intrinsically typed query and all declarations derived from its
 single checked `Expr.Program` witness.
 
@@ -159,13 +163,16 @@ def emit (ctx : Future.Context) (typedDer : Syntax) : CommandElabM Row := do
     abbrev $resultCarrierId :=
       Uwueave.RenderSix.stdCarrier6 $resultFutureId
         (Uwueave.Preo.Expr.Ty.denote $typeId)))
-  Internal.emitRequired (← `(command|
-    /-- A checked report that retains proof its evaluated site belongs to the
-    finite reach used by effect inference. -/
-    structure $reachReportId where
-      checked :
-        Uwueave.Preo.ResultProgram.CheckedReport $resultId $resultCarrierId
-      inReach : checked.state ∈ $reachId))
+  Command.withScope withoutAuxiliaryStructureMetadata do
+    Internal.emitRequired (← `(command|
+      /-- A checked report that retains proof its evaluated site belongs to the
+      finite reach used by effect inference. Compiler-generated `SizeOf` and
+      injectivity metadata are intentionally suppressed: the constructor,
+      projections, recursors, and semantic report API remain public. -/
+      structure $reachReportId where
+        checked :
+          Uwueave.Preo.ResultProgram.CheckedReport $resultId $resultCarrierId
+        inReach : checked.state ∈ $reachId))
   Internal.emitRequired (← `(command|
     /-- A checked report whose site, status, future, resolution, visibility
     and disclosure are all computed from the generated result declaration. -/

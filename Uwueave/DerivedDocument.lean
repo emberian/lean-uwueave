@@ -110,10 +110,12 @@ which is what the impossibility said the escape route would have to look like.
     the price of the house technique, and `Acyclicity.acyclicity_not_iconfluent`
     is why the price is worth paying: the acyclic class is not closed under
     merge and the grounded class is.
-  * **§4's evaluation is total but not incremental.** ⟨UNDONE⟩ `materialize`
-    recomputes each slot from scratch through `matFuel`; nothing here says a
-    replica recomputes only what an arriving delta touched. Same gap
-    `Holes.lean` names ("nothing here is incremental"), inherited unchanged.
+  * **§4's recursive materializer is total but not incremental.** ⟨NARROWED⟩
+    `Preo.DerivedProgram` gives a certified non-recursive typed derivation an
+    incremental cache/update path with fresh-evaluation correctness and a
+    zero-recomputation theorem off its exact dependencies. `materialize` for a
+    rank-grounded multi-slot pipeline still recomputes through `matFuel`; no
+    differential scheduler for that recursive graph is claimed.
   * **§5 needs a height bound handed in, and it does NOT hold at §1's carrier.**
     ⟨UNDONE⟩ `BoundedHeight` is a *hypothesis* — a
     strictly-increasing-along-strict-ascents height with a global ceiling.
@@ -124,9 +126,11 @@ which is what the impossibility said the escape route would have to look like.
     fork grade. Constructing a bound for a general derived document is unbuilt,
     and no theorem here suggests one exists.
   * **Self-dependence in §5 is a monotone endofunction, not a derivation
-    language.** ⟨UNDONE⟩ `F : S → S` is an arbitrary monotone map. There is
-    still no expression language (`Holes.lean` and `JoinHom.lean` name the same
-    gap), so "which derivations are monotone" is decided per instance by hand.
+    language.** ⟨NARROWED⟩ `Preo.Expr` now classifies a first-order typed
+    non-recursive fragment and `Preo.DerivedProgram` connects its positive
+    proofs here. The fixed-point input `F : S → S` remains an arbitrary
+    monotone map; no syntax or classifier for self-dependent programs is
+    manufactured by that adapter.
   * **§6 reuses `RenderSix`'s carrier; it does not prove a UI exists.**
     ⟨TERMINAL for the claim made⟩ `docStatus_sound6` says the six-status
     honesty contract holds at the document carrier, so one `Carrier6` consumer
