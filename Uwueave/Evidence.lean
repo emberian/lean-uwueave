@@ -152,9 +152,12 @@ clothes.
     range retirement, the flat-model separation, and — under explicit world
     well-formedness, completeness, and settlement hypotheses — stability of
     `Evidence.values`. ⟨UNDONE for this old carrier and deployment⟩
-    `ResultEvidence` still stores no timestamp, progress messages are neither
-    generated nor authenticated, and the successor proves neither full `render`
-    stability nor that a runtime honestly advances its frontier.
+    `ResultEvidence` still stores no timestamp. `AuthenticatedFrontier` now
+    authenticates an accepted-and-issued progress record and binds its decoded
+    sets to a lawful advance; `AuthenticatedWorldContext` binds that advance to
+    an exact typed consuming delivery. No theorem generates those messages or
+    proves a runtime honestly advances its frontier, and full `render`
+    stability is still not claimed.
   * **A certificate is trusted, not verified.** ⟨UNDONE⟩ Nothing here says a
     certificate was *earned*: `certify` adds one unconditionally, exactly as
     `Era.advance` announces a cut unconditionally, and the price is the same
@@ -187,6 +190,9 @@ clothes.
     locality from either view, and materializes exact candidate/source/position
     attribution through this carrier. The proof-gated entry point separately
     requires the deployment's source-authenticity relation.
+    `AuthenticatedWorldContext` adds exact signed world/value/position binding,
+    signed-decoded causal/version checks, roster membership, active holder-bound
+    capability use, and a grow-only one-use receipt for every new candidate.
     `ResultEvidence` itself remains producer-agnostic and therefore carries no
     syntax tree internally.
 -/

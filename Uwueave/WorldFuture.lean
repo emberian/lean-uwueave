@@ -162,9 +162,13 @@ clothes.
     them.** `Uwueave.WorldContext` adds outstanding active grants, a
     downward-closed `CausalReach.Cut`, and a known version base/head in a real
     history, with projection and conditional lift theorems back to this world.
-    ⟨UNDONE at the remaining boundary⟩ The context is supplied rather than
-    authenticated, and `origin`/`versionOf` attribution is still external;
-    `ResultEvidence` carries neither id automatically.
+    `Uwueave.AuthenticatedWorldContext` now closes the model-level successor
+    boundary with accepted-and-issued signed typed-position claims, exact
+    signed world/value/position binding, signed-decoded origin/version checks,
+    authenticated lawful frontier progress, and grow-only capability-use
+    receipts. ⟨UNDONE at deployment boundaries⟩
+    the decoder and signature security premise remain external, and
+    `ResultEvidence` still carries neither id automatically.
   * **The frontier here is still a flat set of sources.**
     `Uwueave.Frontier` now supplies the Timely-style antichain whose advance
     retires a timestamp range and a narrow theorem transporting complete,

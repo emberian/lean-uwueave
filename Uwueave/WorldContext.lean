@@ -40,13 +40,18 @@ capability set, causal cut, or known base differs.
     `Histories.Reaches` in a real labelled `History`.  Turning a base into a
     state-level merge decision additionally requires `Histories.RunRealized`
     and a genuine `CommonAncestor`; `known_base_selected_valid` exposes both.
-  * ⟨UNDONE⟩ **No authentication protocol or capability consumption.** The
-    outstanding set is context supplied.  `Authority.lean` already prices
-    signature verification outside its model, and nothing here invents it.
-  * ⟨UNDONE⟩ **No automatic origin/version attribution.** The future takes
-    `origin` and `versionOf` functions. Existing `ResultEvidence` stores neither
-    causal operation ids nor version ids, so any implicit reconstruction would
-    be fiction.
+  * ⟨DONE in the proof-carrying successor; UNDONE for deployment crypto⟩
+    **Authentication and capability consumption remain outside this carrier.**
+    `Uwueave.AuthenticatedWorldContext` adds accepted-and-issued signed typed
+    position claims and grow-only consumption tombstones while projecting its
+    distinct consuming step to `WorldFuture`.  This file still neither verifies
+    a deployed scheme nor deletes an outstanding grant.
+  * ⟨DONE with an explicit signed decoder; TERMINAL against automatic recovery⟩
+    **Origin/version attribution is not implicit.** `ResultEvidence` stores
+    neither causal operation ids nor version ids.  The authenticated successor
+    therefore retains a caller-supplied decoder, exact signed
+    world/value/position binding, and signed-decoded origin/version admission
+    checks against the cut and base, rather than inventing defaults.
   * ⟨TERMINAL⟩ **Projection is lossy.** The three witness pairs prove that the
     extra axes change allowed futures while every `WorldFuture` field agrees.
 -/

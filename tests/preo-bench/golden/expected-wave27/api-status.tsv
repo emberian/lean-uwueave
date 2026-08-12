@@ -1,0 +1,5 @@
+api	status	basis
+v3_export_command	AVAILABLE	preo_export_v3 transactional syntax
+authenticated_context	AVAILABLE	AuthenticatedWorldContext module
+frontier_builder	AVAILABLE	AuthenticatedFrontier module
+v4_checked_builder	AVAILABLE	RuntimeAuthV4Checked module

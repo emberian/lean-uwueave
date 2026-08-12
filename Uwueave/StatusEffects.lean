@@ -71,6 +71,24 @@ def Refines : Shape → Shape → Prop
 
 infix:50 " ⊑ₛ " => Refines
 
+/-- The six shapes in the canonical order used by executable artifacts. -/
+def allShapes : List Shape :=
+  [.exact, .provisional, .forkedClosed, .forkedOpen, .absent, .pending]
+
+/-- Refinement is decidable because the shape basis is finite. -/
+instance (left right : Shape) : Decidable (Refines left right) := by
+  cases left <;> cases right <;> unfold Refines <;> infer_instance
+
+/-- Executable reflection of the semantic refinement relation. -/
+def refinesBool (left right : Shape) : Bool := decide (Refines left right)
+
+@[simp] theorem refinesBool_eq_true_iff (left right : Shape) :
+    refinesBool left right = true ↔ Refines left right := by
+  simp [refinesBool]
+
+theorem mem_allShapes (shape : Shape) : shape ∈ allShapes := by
+  cases shape <;> decide
+
 theorem refines_refl (a : Shape) : a ⊑ₛ a := by
   cases a <;> trivial
 
@@ -197,6 +215,23 @@ shapes actually observed there. -/
 def infer {S β : Type} (reach : List S) (peval : S → Status β) : Effect where
   Allows := fun sh => ∃ s, s ∈ reach ∧ sh ⊑ₛ shapeOf (peval s)
   downward := fun h ⟨s, hs, hshape⟩ => ⟨s, hs, refines_trans h hshape⟩
+
+/-- Canonical executable representation of the least effect inferred over a
+finite reach.  Order is fixed by `allShapes`; duplicates cannot occur. -/
+def inferredShapes {S β : Type} (reach : List S) (peval : S → Status β) :
+    List Shape :=
+  allShapes.filter fun candidate =>
+    reach.any fun state => refinesBool candidate (shapeOf (peval state))
+
+/-- Executable finite reification agrees exactly with semantic effect
+membership. -/
+theorem mem_inferredShapes_iff {S β : Type} (reach : List S)
+    (peval : S → Status β) (shape : Shape) :
+    shape ∈ inferredShapes reach peval ↔ (infer reach peval).Allows shape := by
+  unfold inferredShapes
+  rw [List.mem_filter]
+  simp only [mem_allShapes, true_and, List.any_eq_true, refinesBool_eq_true_iff]
+  rfl
 
 theorem infer_sound {S β : Type} (reach : List S) (peval : S → Status β) :
     Supports (infer reach peval) reach peval := by

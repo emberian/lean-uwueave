@@ -1,0 +1,113 @@
+/-
+# Uwueave.Preo.RuntimeAuthV4Projection — deterministic Rust sidecar DTO
+
+Rendering accepts only the private validated boundary.  Generated Rust is a
+neutral DTO and lookup convenience, never a verifier, permit, membership
+oracle, or proof API.  Numeric identities use decimal strings; byte identities
+remain exact byte slices.
+-/
+import Uwueave.Preo.RuntimeAuthV4ProjectionCore
+
+namespace Uwueave.Preo.RuntimeAuthV4Projection
+
+open Uwueave.Preo.RuntimeAuthV4
+
+set_option autoImplicit false
+
+private def rustDecimal (value : Nat) : String :=
+  "\"" ++ toString value ++ "\""
+
+private def rustSlice {alpha : Type} (render : alpha → String)
+    (values : List alpha) : String :=
+  "&[" ++ String.intercalate ", " (values.map render) ++ "]"
+
+private def rustBytes (values : Bytes) : String :=
+  rustSlice (fun byte => toString byte.toNat ++ "u8") values
+
+private def renderNode (node : NodeRow) : String :=
+  "UwueavePreoRuntimeAuthNodeV4 { stable: " ++ rustBytes node.stable ++
+    ", kernel_index_decimal: " ++ rustDecimal node.kernelIndex ++ " }"
+
+private def renderDestination : Option NodeRow → String
+  | none => "None"
+  | some node => "Some(" ++ renderNode node ++ ")"
+
+private def renderGrant (grant : GrantScopeRow) : String :=
+  "UwueavePreoRuntimeAuthGrantV4 { id_decimal: " ++ rustDecimal grant.id ++
+    ", parent_decimal: " ++ rustDecimal grant.parent ++
+    ", scope_decimal: " ++ rustDecimal grant.scope ++ " }"
+
+private def renderMove (move : SignedMoveRow) : String :=
+  "UwueavePreoRuntimeAuthMoveV4 { document: " ++ rustBytes move.document ++
+    ", genesis: " ++ rustBytes move.genesis ++
+    ", signature_algorithm_decimal: " ++ rustDecimal move.signatureAlgorithm ++
+    ", issuer_decimal: " ++ rustDecimal move.issuer ++
+    ", key_epoch_decimal: " ++ rustDecimal move.keyEpoch ++
+    ", nonce: " ++ rustBytes move.nonce ++
+    ", operation_id: " ++ rustBytes move.operationId ++
+    ", lamport_decimal: " ++ rustDecimal move.lamport ++
+    ", child: " ++ renderNode move.child ++
+    ", destination: " ++ renderDestination move.destination ++
+    ", cite_decimal: " ++ rustDecimal move.cite ++
+    ", signature: " ++ rustBytes move.signature ++ " }"
+
+private def renderContext (context : ContextRow) : String :=
+  "UwueavePreoRuntimeAuthContextV4 { cited_grant: " ++
+      renderGrant context.citedGrant ++
+    ", substrate_digest: " ++ rustBytes context.substrateDigest ++
+    ", history_head_digest: " ++ rustBytes context.historyHeadDigest ++
+    ", origin_id: " ++ rustBytes context.originId ++
+    ", version_id: " ++ rustBytes context.versionId ++
+    ", roster_decimal: " ++ rustSlice rustDecimal context.roster ++
+    ", participants_decimal: " ++ rustSlice rustDecimal context.participants ++ " }"
+
+private def rustTypeDeclarations : List String :=
+  ["    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+   "    pub struct UwueavePreoRuntimeAuthNodeV4 { pub stable: &'static [u8], pub kernel_index_decimal: &'static str }",
+   "    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+   "    pub struct UwueavePreoRuntimeAuthGrantV4 { pub id_decimal: &'static str, pub parent_decimal: &'static str, pub scope_decimal: &'static str }",
+   "    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+   "    pub struct UwueavePreoRuntimeAuthMoveV4 { pub document: &'static [u8], pub genesis: &'static [u8], pub signature_algorithm_decimal: &'static str, pub issuer_decimal: &'static str, pub key_epoch_decimal: &'static str, pub nonce: &'static [u8], pub operation_id: &'static [u8], pub lamport_decimal: &'static str, pub child: UwueavePreoRuntimeAuthNodeV4, pub destination: Option<UwueavePreoRuntimeAuthNodeV4>, pub cite_decimal: &'static str, pub signature: &'static [u8] }",
+   "    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+   "    pub struct UwueavePreoRuntimeAuthContextV4 { pub cited_grant: UwueavePreoRuntimeAuthGrantV4, pub substrate_digest: &'static [u8], pub history_head_digest: &'static [u8], pub origin_id: &'static [u8], pub version_id: &'static [u8], pub roster_decimal: &'static [&'static str], pub participants_decimal: &'static [&'static str] }",
+   "    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+   "    pub struct UwueavePreoRuntimeAuthManifestV4 { pub schema: &'static str, pub signed_move: UwueavePreoRuntimeAuthMoveV4, pub context: UwueavePreoRuntimeAuthContextV4 }",
+   "    impl UwueavePreoRuntimeAuthManifestV4 {",
+   "        // Neutral equality lookup only; this is not proof of membership.",
+   "        pub fn roster_contains(&self, issuer_decimal: &str) -> bool { self.context.roster_decimal.contains(&issuer_decimal) }",
+   "        pub fn participant_is_listed(&self, participant_decimal: &str) -> bool { self.context.participants_decimal.contains(&participant_decimal) }",
+   "    }"]
+
+def renderRustSource (validated : ValidatedProjection) : String :=
+  let manifest := validated.manifest
+  String.intercalate "\n" <|
+    ["// @generated by RuntimeAuthV4Projection.renderRustSource; do not edit.",
+     "// Validated neutral sidecar data only; no verifier or permit API.",
+     "", "pub mod uwueave_preo_runtime_auth_v4 {",
+     "    pub const UWUEAVE_PREO_RUNTIME_AUTH_V4_SCHEMA: &str = \"uwueave/preo-runtime-auth/v4\";",
+     ""] ++ rustTypeDeclarations ++
+    ["", "    pub static UWUEAVE_PREO_RUNTIME_AUTH_V4: UwueavePreoRuntimeAuthManifestV4 =",
+     "        UwueavePreoRuntimeAuthManifestV4 {",
+     "            schema: UWUEAVE_PREO_RUNTIME_AUTH_V4_SCHEMA,",
+     "            signed_move: " ++ renderMove manifest.move ++ ",",
+     "            context: " ++ renderContext manifest.context ++ ",",
+     "        };", "}", ""]
+
+def validateAndRender (config : ValidationConfig) (projection : Projection) :
+    ValidationResult String :=
+  (validate config projection).map renderRustSource
+
+theorem renderRustSource_eq_of_manifest_eq
+    {left right : ValidatedProjection} (same : left.manifest = right.manifest) :
+    renderRustSource left = renderRustSource right := by
+  simp only [renderRustSource]
+  rw [same]
+
+theorem validateAndRender_error {config : ValidationConfig}
+    {projection : Projection} {error : ValidationError}
+    (refused : validate config projection = .error error) :
+    validateAndRender config projection = .error error := by
+  rw [validateAndRender, refused]
+  rfl
+
+end Uwueave.Preo.RuntimeAuthV4Projection

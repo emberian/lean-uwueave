@@ -4,8 +4,8 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 158
-- **Extracted blocks (marker-bearing source lines):** 156
+- **Marker occurrences:** 156
+- **Extracted blocks (marker-bearing source lines):** 154
 - **Lean files containing markers:** 43
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
@@ -413,12 +413,15 @@ clothes.
 
 ````text
     `Evidence.values`. ⟨UNDONE for this old carrier and deployment⟩
-    `ResultEvidence` still stores no timestamp, progress messages are neither
-    generated nor authenticated, and the successor proves neither full `render`
-    stability nor that a runtime honestly advances its frontier.
+    `ResultEvidence` still stores no timestamp. `AuthenticatedFrontier` now
+    authenticates an accepted-and-issued progress record and binds its decoded
+    sets to a lawful advance; `AuthenticatedWorldContext` binds that advance to
+    an exact typed consuming delivery. No theorem generates those messages or
+    proves a runtime honestly advances its frontier, and full `render`
+    stability is still not claimed.
 ````
 
-### [`Uwueave/Evidence.lean:158`](../Uwueave/Evidence.lean#L158)
+### [`Uwueave/Evidence.lean:161`](../Uwueave/Evidence.lean#L161)
 
 ````text
   * **A certificate is trusted, not verified.** ⟨UNDONE⟩ Nothing here says a
@@ -430,7 +433,7 @@ clothes.
     unbuilt and this file narrows it to one component rather than closing it.
 ````
 
-### [`Uwueave/Evidence.lean:166`](../Uwueave/Evidence.lean#L166)
+### [`Uwueave/Evidence.lean:169`](../Uwueave/Evidence.lean#L169)
 
 ````text
     ⟨UNDONE⟩ as deployment⟩ The retraction theorem shows why the restriction is
@@ -442,7 +445,7 @@ clothes.
     manufacture closure or eventual delivery in a running system.
 ````
 
-### [`Uwueave/Evidence.lean:857`](../Uwueave/Evidence.lean#L857)
+### [`Uwueave/Evidence.lean:863`](../Uwueave/Evidence.lean#L863)
 
 ````text
 what may still arrive) and listed the bridge to a real closure as ⟨UNDONE⟩.
@@ -1537,23 +1540,6 @@ clothes.
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = deliberately outside it.
 ````
 
-### [`Uwueave/WorldContext.lean:43`](../Uwueave/WorldContext.lean#L43)
-
-````text
-  * ⟨UNDONE⟩ **No authentication protocol or capability consumption.** The
-    outstanding set is context supplied.  `Authority.lean` already prices
-    signature verification outside its model, and nothing here invents it.
-````
-
-### [`Uwueave/WorldContext.lean:46`](../Uwueave/WorldContext.lean#L46)
-
-````text
-  * ⟨UNDONE⟩ **No automatic origin/version attribution.** The future takes
-    `origin` and `versionOf` functions. Existing `ResultEvidence` stores neither
-    causal operation ids nor version ids, so any implicit reconstruction would
-    be fiction.
-````
-
 ## `Uwueave/WorldFuture.lean`
 
 ### [`Uwueave/WorldFuture.lean:145`](../Uwueave/WorldFuture.lean#L145)
@@ -1580,15 +1566,15 @@ clothes.
     be; `Temporal` states explicitly which scheduler premise makes one occur.
 ````
 
-### [`Uwueave/WorldFuture.lean:165`](../Uwueave/WorldFuture.lean#L165)
+### [`Uwueave/WorldFuture.lean:169`](../Uwueave/WorldFuture.lean#L169)
 
 ````text
-    ⟨UNDONE at the remaining boundary⟩ The context is supplied rather than
-    authenticated, and `origin`/`versionOf` attribution is still external;
-    `ResultEvidence` carries neither id automatically.
+    receipts. ⟨UNDONE at deployment boundaries⟩
+    the decoder and signature security premise remain external, and
+    `ResultEvidence` still carries neither id automatically.
 ````
 
-### [`Uwueave/WorldFuture.lean:171`](../Uwueave/WorldFuture.lean#L171)
+### [`Uwueave/WorldFuture.lean:175`](../Uwueave/WorldFuture.lean#L175)
 
 ````text
     settled worlds to stability of `Evidence.values`. ⟨UNDONE for this carrier
@@ -1598,7 +1584,7 @@ clothes.
     but a roster is not an antichain.
 ````
 
-### [`Uwueave/WorldFuture.lean:176`](../Uwueave/WorldFuture.lean#L176)
+### [`Uwueave/WorldFuture.lean:180`](../Uwueave/WorldFuture.lean#L180)
 
 ````text
   * **A seal is still trusted, not verified.** ⟨UNDONE⟩ `epoch` and `sealed`
@@ -1611,7 +1597,7 @@ clothes.
     rather than an unremarked one; it does not make the arbiter honest.
 ````
 
-### [`Uwueave/WorldFuture.lean:184`](../Uwueave/WorldFuture.lean#L184)
+### [`Uwueave/WorldFuture.lean:188`](../Uwueave/WorldFuture.lean#L188)
 
 ````text
   * **`Wf` and `RosterKnown` are hypotheses, not invariants.** ⟨UNDONE⟩
@@ -1622,7 +1608,7 @@ clothes.
     none is built.
 ````
 
-### [`Uwueave/WorldFuture.lean:193`](../Uwueave/WorldFuture.lean#L193)
+### [`Uwueave/WorldFuture.lean:197`](../Uwueave/WorldFuture.lean#L197)
 
 ````text
   * **The separation is one witness, not a classification.** ⟨UNDONE⟩ §3 proves

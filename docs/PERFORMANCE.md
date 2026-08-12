@@ -9,7 +9,7 @@ ever been timed.*
 > `BENCH_MAX=1000` rerun made on 2026-08-11; it is deliberately separate from
 > the baseline and does not replace the original full-range sweep. Section 12
 > separately records Wave 23 proof-elaboration and build-closure engineering,
-> and §§13–15 do the same for Waves 24–26; those figures are not kernel-runtime
+> and §§13–16 do the same for Waves 24–27; those figures are not kernel-runtime
 > benchmarks. Current
 > complexity statements come from proved equivalence where applicable, source
 > inspection, successful builds, and generated-C inspection; only the rows in
@@ -1288,3 +1288,157 @@ was 89 library, 13 check-CLI, one artifact-emission, one artifact-inspection,
 four ergonomics, 15 persistence/history, 11 property, six runtime-closure, and
 two UNDONE-census tests. The fail-closed closure check repeated the exact
 **13 objects / 659,152 B** warning line above.
+
+---
+
+## 16. Wave 27 authenticated progress, durable arrival, and an honest V3 no-go — 2026-08-12
+
+Wave 27 added an authenticated frontier-progress envelope, a signed
+world-context adapter, a one-way RuntimeAuthV4 sidecar, and a durable bounded
+arrival journal. It also centralized V3 effect-shape proofs and subjected the
+full V3 export command to a serialized scaling protocol. The evidence classes
+remain separate below: proof/module profiles, artifact sizes, subprocess
+acceptance, a repeated RSS benchmark, and host-runtime integration tests.
+Signatures do not make a progress claim true, persistence does not authenticate
+opaque bytes, and none of these rows updates the decision-kernel timings in
+§10.
+
+### Authenticated frontier and world context
+
+`AuthenticatedFrontier` is **237 LOC / 10,096 source bytes**, with a **279,384
+B** olean and **20,111 B** generated C. Its final focused build completed
+**37/37** jobs; the changed target took 0.973 s on that run. It retains the
+exact accepted signed event, received-trace membership, issuer-log issuance,
+issuer/source and finite-roster binding, timestamp, before/after frontiers,
+and issued/old-delivered/new-delivered sets. The semantic
+`Frontier.DeliveryAdvance` proof is independent of signature acceptance and
+uses those exact signed-event codec projections. The codec is authored model
+semantics: an external or running state must separately prove equality to its
+projections. No signature primitive, issuance log, network trace, or runtime
+state is manufactured here.
+
+`AuthenticatedWorldContext` is **914 LOC / 42,183 source bytes**; approximately
+316 lines are theorem/example bodies. Its current artifacts are **2,229,360 B
+olean / 69,469 B generated C**. One post-change direct source profile, with no
+warmup, cache reset, repetition, or before sample, reported:
+
+| category | one-source diagnostic |
+|---|---:|
+| import | **1.33 s** |
+| elaboration | **250 ms** |
+| tactic execution | **89.1 ms** |
+| `simp` | **29.0 ms** |
+| type checking | **159 ms** |
+| typeclass inference | **46.4 ms** |
+
+These nested profiler categories are workload-location evidence, not an
+elapsed-time sum or benchmark. The focused downstream build passed **73/73**.
+Positive and refusal proofs cover exact typed positions, lawful frontier
+progress, forgery, stale base, wrong origin, and one-use token reuse. The
+strict one-use grant invariant intentionally rejects same-grant
+multi-candidate batches. External EUF-style security, observed deployment
+state, and cryptographic construction remain explicit premises.
+
+### RuntimeAuthV4 checked sidecar
+
+The one-way RuntimeAuthV4 path is split into **7 isolated Lean leaves**, now
+**1,111 LOC / 44,655 source bytes** in aggregate. Its focused build passed
+**61/61**. The canonical fixture is exactly **369 B**, SHA-256
+`a9f32051b0e1e328ab08b253a808ba54cc5c4a4e9cb2b5d2550c3811cf03b819`, and
+the generated Rust compiled and passed lookup checks. The checked builder,
+bounded validator, framing, and adversarial negatives establish one-way
+construction and byte-level rejection behavior; they do not reconstruct Lean
+proofs from decoded bytes, prove signature hardness, infer a capability holder,
+or claim wire compatibility with the existing `UWV4` request format.
+
+### Canonical effect-shape proof reuse
+
+The six finite effect probes and their canonical ordering now live once in
+`StatusEffects`; V3 consumes that reification rather than carrying a duplicate
+six-shape relation and reconstruction tree. One declaration-profiler proof-path
+diagnostic fell from **153.311 ms to 22.584 ms** (**−85.27%**). This is proof
+elaboration, not query evaluation or module wall time. All **36 refinement
+cases**, canonical order, Quickstart rows, exact bytes, and reopen behavior
+passed; the focused/downstream build completed **103/103** jobs.
+
+### Full V3 export scaling: improved, still over budget
+
+The authoritative protocol serialized **16/16 benchmark rows** covering V3
+export, authenticated context, frontier, and V4 checked controls at
+`N = 0/1/4/16`. Each row used two warmups followed by five measured runs and
+reported the median. This cohort recorded zero noise classifications and zero
+retries. Per-item slope subtracts the `N=0` process/import control before
+dividing by the item count.
+
+| measured slope | retained baseline | current | hard gate |
+|---|---:|---:|---:|
+| V3 peak RSS | **13,557,760 B/item** | **7,031,808 B/item = 6.7060546875 MiB/item** | **4 MiB/item: FAIL_SCALE** |
+| V3 elaboration | **14.1425 ms/item** | **8.254375 ms/item** | diagnostic, no hard gate |
+
+The independent controls pass comfortably: **36,864 B/item** for
+authenticated world context, **84,992 B/item** for frontier, and **28,672
+B/item** for V4 checked. Thus the remaining slope is localized to full V3
+export rather than those imported semantic adapters. Improvement against the
+retained baseline is real, but **6.706 MiB/item still fails** the 4 MiB cap and
+is not reported as a pass.
+
+The production `ArtifactV3Surface` was therefore restored exactly, with no
+experimental patch retained: **527 LOC**, all **8 trust-floor checks**, the
+exact **48-prefix audit**, and the **112-declaration golden** remain green.
+Current artifacts are **4,331,056 B olean / 1,332,355 B generated C**; the
+monolithic core accounts for **1,100,064 B / 82.57%** of C and 341 closed
+helpers. `noncomputable`, `abbrev`, a reusable encoding helper, closed
+extraction, and floor isolation either failed compatibility or produced no
+admissible win. The strongest structural helper exposed only **41 prefix
+constants**, removing seven required generated constants; it was rejected and
+the exact 48-prefix surface restored. This is an engineering no-go result, not
+a disguised optimization claim.
+
+### Durable bounded arrival and runtime end to end
+
+`PersistentHistoryRuntime` is now **338 LOC**, a net +42 from Wave 26, while
+the Rust history implementation is **2,023 LOC / 73,599 source bytes**, a net
++950 lines. The new `HistoryArrivalJournal` has a distinct `UWHARR01` marker
+and `uwueave.history-arrival-journal.v1` domain, versioned event/checkpoint
+records, append-before-memory ordering, bounded pending state, deterministic
+drain, no-write retry, and atomic collision/cap refusal. The focused Rust
+history selection passed **12/12** tests with 81 filtered; its latest run spent
+2.08 s compiling and 0.03 s in test bodies. One warm direct Lean source check
+of `PersistentHistoryRuntime` took about 0.94 s. Neither is a throughput
+benchmark.
+
+The cross-language runtime integration passed **1/1** focused Cargo test in
+**49.95 s**. The 369-byte V4 sidecar survives reopen exactly; retry, collision,
+and cap refusals preserve file bytes and the state digest; parent arrival drains
+deterministically; and reopened reverse-order and causal journals converge.
+The native closure remains **13 objects / 659,152 B**, with no `RuntimeInit`,
+build, shim, initializer, or FFI widening. A deliberately mutated sidecar also
+survives as opaque payload. That negative is load-bearing evidence that this
+layer persists bytes but does **not** authenticate them. Durability remains
+relative to the configured sync policy and host filesystem; checkpoints are
+integrity assertions, IDs remain unauthenticated, and no Lean↔Rust journal-byte
+refinement theorem is claimed.
+
+### Wave 27 aggregate acceptance and Lean closure
+
+The frozen aggregate completed **182 Lean jobs**. An immediate cache replay
+took **0.15 s**; that number is cache validation, not clean-build throughput.
+The root audit traversed **158 modules**, found **181 Lean files** on disk, and
+checked **24,921 constants** against the trust floor.
+
+Wave-owned authentication/V4 acceptance comprised **3 positive fixtures and 18
+standalone expected refusals**; the AF/AWC/V4 trust floors covered **17 / 284 /
+30 constants** respectively. Delegated transactional V3 acceptance retained
+**3 positives, 14 standalone expected refusals, and one guarded rollback
+refusal** (**15 red command cases**). Durable-arrival acceptance passed **4/4**.
+These counts establish checked coverage of the named positive and adversarial
+surfaces; they are not statistical security or runtime-performance samples.
+
+The final `cargo test --manifest-path rust/Cargo.toml --all-targets` gate passed
+**147 tests / 0 failures** in **24.08 s real**, including **2.59 s** of
+compilation. The accounting was 93 library, 13 `uwueave-check`, one artifact
+emission, one artifact inspection, four ergonomics, 15 persistence, 11
+properties, one runtime-auth arrival, six runtime-build closure, and two UNDONE
+census tests. This is aggregate validation-path duration, not test-body or
+journal throughput. Its fail-closed native warning remained exactly **13
+objects / 659,152 B**.

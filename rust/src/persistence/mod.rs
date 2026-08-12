@@ -17,6 +17,10 @@
 //!   prefix while full event-set equality ignores arrival order.
 //!   [`BufferedHistoryJournal`] adds an explicitly bounded non-durable arrival
 //!   buffer; reopening loses pending arrivals and recovers only that prefix.
+//!   [`HistoryArrivalJournal`] is a distinct authoritative-arrival wire: it
+//!   durably records bounded missing-parent arrivals and deterministic replay,
+//!   with canonical state checkpoints that are assertions rather than authority
+//!   replacement.
 //!
 //! These implementations and their fault-injection tests are deployment
 //! evidence. They are not a theorem about a filesystem, a drive write cache,
@@ -74,8 +78,10 @@ pub use document::{
     DocumentReplay, DocumentReplayError,
 };
 pub use history::{
-    BufferedHistoryJournal, HistoryDeliveryReceipt, HistoryDeliveryStatus, HistoryEvent,
-    HistoryEventError, HistoryEventId, HistoryJournal, HistoryJournalError, HistoryOpenReport,
+    BufferedHistoryJournal, HistoryArrivalCheckpoint, HistoryArrivalJournal,
+    HistoryArrivalJournalError, HistoryArrivalOpenReport, HistoryArrivalReceipt,
+    HistoryDeliveryReceipt, HistoryDeliveryStatus, HistoryEvent, HistoryEventError, HistoryEventId,
+    HistoryJournal, HistoryJournalError, HistoryOpenReport,
 };
 
 /// Default maximum size of one physical journal record (64 MiB).

@@ -12,10 +12,12 @@ They are accelerators, not authority; the suffix theorem below is the existing
 full-replay equality specialized to causal history events.
 
 No theorem here claims a filesystem, authenticated network endpoint, or
-infinite-history enumeration. The pure-Rust `HistoryJournal` supplies one
-concrete checksummed host rung separately. Its optional pending buffer is
-non-durable, unlike this Lean model's authoritative arrival list, and no
-refinement theorem identifies the two.
+infinite-history enumeration. Rust now has two separate host rungs: the older
+`BufferedHistoryJournal` loses pending events on reopen, while
+`HistoryArrivalJournal` durably replays its canonical accepted-arrival records.
+The explicit callback contract below specifies the typed transition a host must
+match. It does not prove that the Rust bytes, checksums, or filesystem implement
+that contract, and no cross-language refinement theorem identifies them.
 -/
 import Uwueave.HistoryRuntime
 import Uwueave.PersistentRuntime
@@ -209,6 +211,36 @@ def emptyDeliveryCursor (Id Payload : Type) (capacity : Nat) :
     DeliveryCursor Id Payload :=
   emptyCursor (DeliveryState.empty Id Payload capacity)
 
+/-- Typed callback boundary for a durable-arrival host adapter.
+
+The proof fields require a callback to agree with authoritative single-record
+admission and full arrival replay. They deliberately say nothing about codecs,
+checksums, I/O, or crash durability. A Rust/FFI implementation must establish
+that separate representation relation before this contract can be used as a
+refinement theorem. -/
+structure DurableArrivalCallbacks (Id Payload : Type)
+    [DecidableEq Id] [DecidableEq Payload] where
+  receive : DeliveryCursor Id Payload → Event Id Payload →
+    Option (DeliveryCursor Id Payload)
+  reopen : Nat → List (Event Id Payload) →
+    Option (DeliveryCursor Id Payload)
+  receive_eq : ∀ cursor event,
+    receive cursor event = applyRecord (deliverySchema Id Payload) cursor event
+  reopen_eq : ∀ capacity arrivals,
+    reopen capacity arrivals = replay (deliverySchema Id Payload)
+      (emptyDeliveryCursor Id Payload capacity) arrivals
+
+/-- The Lean schema itself supplies the reference implementation of the host
+callback contract. -/
+def schemaArrivalCallbacks (Id Payload : Type)
+    [DecidableEq Id] [DecidableEq Payload] :
+    DurableArrivalCallbacks Id Payload where
+  receive := applyRecord (deliverySchema Id Payload)
+  reopen := fun capacity => replay (deliverySchema Id Payload)
+    (emptyDeliveryCursor Id Payload capacity)
+  receive_eq := fun _ _ => rfl
+  reopen_eq := fun _ _ => rfl
+
 theorem emptyDeliveryCursor_coherent (Id Payload : Type)
     [DecidableEq Id] [DecidableEq Payload] (capacity : Nat) :
     DeliveryCursorCoherent (emptyDeliveryCursor Id Payload capacity) := by
@@ -237,6 +269,16 @@ theorem stable_causal_replay_exact :
 theorem stable_reverse_replay_exact :
     replay (deliverySchema Nat String) (emptyDeliveryCursor Nat String 5)
       runtimeReverseOrder = some stableReverseCursor := rfl
+
+/-- Every host callback implementation of the typed contract must recover the
+same reverse-order fixture cursor. This is a callback-level obligation, not a
+claim that the current Rust wire has been related to Lean values. -/
+theorem durableCallbacks_reverse_reopen_exact
+    (callbacks : DurableArrivalCallbacks Nat String) :
+    callbacks.reopen 5 runtimeReverseOrder =
+      some stableReverseCursor := by
+  rw [callbacks.reopen_eq]
+  exact stable_reverse_replay_exact
 
 theorem stableCausalCursor_coherent :
     DeliveryCursorCoherent stableCausalCursor := by

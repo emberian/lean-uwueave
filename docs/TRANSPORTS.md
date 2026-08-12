@@ -19,7 +19,7 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 124 numbered transport rows.** Wave 24's elaborator and
+**Ledger total: 129 numbered transport rows.** Wave 24's elaborator and
 projection splits changed owners and proof routes without changing the earlier
 judgements. Wave 25 adds five crossings: application state into typed query
 semantics; checked state results into exact world futures/certificates; checked
@@ -29,6 +29,13 @@ persistence plus the separately tested pure-Rust journal. Wave 26 adds three
 crossings: typed hole positions into explicitly attributed documents, an
 externally authenticated running observation into one exact certified report,
 and those proof-indexed values through a transactional checked V3 export.
+Wave 27 adds five crossings: signed and genuinely issued progress/position
+claims into an exact one-use consuming delivery; the existing checked `UWV4`
+request into a distinct neutral manifest sidecar; that sidecar through bounded
+validation, deterministic Rust, and its own canonical durable frame; semantic
+six-status effects into one shared executable canonical list; and authoritative
+arrival replay into a typed host-callback obligation plus a separately tested
+durable Rust queue.
 
 ---
 
@@ -1755,6 +1762,91 @@ failure leaves no declarations and the same prefix is reusable. The command
 does not authenticate a deployment, discover reach, authorize an operation,
 perform I/O, or prove host durability.
 
+**45p. Signed and genuinely issued progress/position claims → exact one-use consuming delivery** ⚠
+*source* `AuthenticatedFrontier.AuthenticatedProgress` plus
+`AuthenticatedPositionClaim`, an actual before/after `ConsumedContext`, and a
+`ConsumptionReceipt` · *target*
+`AuthenticatedWorldContext.AuthenticatedConsumingDelivery` and its projected
+`WorldFuture.DeliveryFuture` · *transport*
+`AuthenticatedProgress.ofAuthenticIssuer` derives `WasIssued` only from the
+explicit authentic-issuer premise; `AuthenticatedAdvance.toDeliveryAdvance`
+retains the independent semantic frontier proof; and
+`AuthenticatedConsumingDelivery.projects_world_delivery` forgets the richer
+step · *needs* every issued/frontier/delivered set decoded from the same signed
+progress event to equal the actual before/after world sets, the progress signer
+to belong to the actual roster, every newly delivered candidate to carry an
+exact signed typed-position/context witness, every used grant to justify such a
+new candidate, and `grant_unique` for literal one-use consumption · *without
+issuance* `accepted_forgery_not_promoted` refuses the toy scheme's accepted but
+unissued record; *without the cut/base/token premises*
+`wrong_origin_refuses_position`, `stale_base_refuses_position`, and
+`consumed_token_not_reusable` refuse the same typed claim. Authenticated codec
+output remains signer-authored until these exact state equalities are supplied;
+no theorem observes a network or proves deployed cryptography. The strict
+one-grant/one-candidate contract intentionally rejects batch-capability use.
+
+**45q. Checked canonical `UWV4` request → neutral runtime-auth manifest sidecar** ⚠
+*source* one exact `RuntimeAuthV4.SignedRequest` with
+`ReadyForExecution`, `Preo.RuntimeAuthV4.GrantReceipt`, and
+`ContextReceipt` · *target* neutral `Preo.RuntimeAuthV4.Manifest` data ·
+*transport* `CheckedManifest.toManifest`; the four `SignedMoveRow.ofRequest_*`
+theorems pin widening-only numeric projection, `GrantReceipt.toRow_id` pins the
+signed citation, and `CheckedManifest.sourceSigningBytes_exact` retains the
+old request's canonical signing message · *needs* the exact ready request,
+resolver/freshness, independent caller authority and membership predicates, an
+active cited grant covering the signed child, and explicit finite context
+membership · *without these premises* there is no public neutral-data-to-checked
+constructor. The grant receipt does not prove signer possession; context
+digests/origin/version are authored opaque bytes; and the manifest is a
+sidecar, not a new `UWV4` decoder or execution permit.
+
+**45r. Neutral runtime-auth sidecar → bounded DTO, canonical sidecar bytes, and opaque durable arrival payload** ⚠
+*source* untrusted `Preo.RuntimeAuthV4.Manifest`/`Projection` data · *target* a
+private `ValidatedProjection`, deterministic Rust DTO source, canonical
+`RuntimeAuthV4Durable` frame, and—at the host rung—opaque history payload bytes
+· *transport* `RuntimeAuthV4Projection.validate`,
+`renderRustSource_eq_of_manifest_eq`,
+`decodeManifest_manifestBytes_append`, and
+`decodeManifestExact_manifestBytes`; the 369-byte fixture pins prefix
+`[213,74,4,162]` · *needs* schema, complete byte/list/Nat/UInt bounds,
+nonempty identities, canonical roster/participant order, cite/grant/scope and
+membership consistency, plus the separate durable `(4,162)` format · *without
+them* the examples reject wrong schema/grant/scope, noncanonical or outsider
+membership, empty fields, width overflow, and inconsistent nodes; changed
+version/domain and trailing exact frames refuse. The sidecar frame is **not**
+the existing tagged `UWV4` request/signing wire. Rust persistence accepts a
+mutated sidecar as opaque payload by design: storage neither authenticates nor
+reconstructs the checked producer, and none of these theorems proves fsync or
+filesystem durability.
+
+**45s. Semantic six-status effect → canonical executable artifact effect list** ✅
+*source* `StatusEffects.infer reach evaluate` · *target* the canonical finite
+`List StatusEffects.Shape` used by the checked V3 result row · *transport*
+`StatusEffects.mem_inferredShapes_iff`, with `allShapes` fixing order and
+`refinesBool_eq_true_iff` reflecting the semantic relation; the V3 wrapper
+`Preo.ArtifactV3.mem_effectOfDeclaration_iff` maps that shared list through the
+first-order row enum · *needs* only the explicit finite authored reach and
+evaluator · *without it* — n/a: this is exact membership in the least inferred
+effect. It centralizes executable reification and removes V3's former duplicate
+six-shape relation; it does not discover reach or authorize an effect.
+
+**45t. Authoritative arrival replay → typed host callback obligation and durable Rust queue** ⚠
+*source* `PersistentHistoryRuntime.deliverySchema`, its authoritative arrival
+cursor, capacity, and canonical event list · *target* a host receive/reopen API
+with the same logical result · *transport*
+`DurableArrivalCallbacks.receive_eq` / `.reopen_eq`, inhabited by
+`schemaArrivalCallbacks`; `durableCallbacks_reverse_reopen_exact` pins the
+reverse-order fixture · *needs* a host implementation to establish those exact
+typed equations. The separately tested Rust `HistoryArrivalJournal` appends
+each accepted arrival before the infallible in-memory transition, replays
+bounded pending state, validates capacity-bound canonical checkpoint digests,
+drains deterministically, and refuses collisions, torn/corrupt records, and
+capacity mismatch · *without a representation proof* those tests do **not**
+identify Rust bytes with Lean events or establish a refinement. Rust requires
+strictly increasing parent bytes where Lean requires only `Nodup`; durability
+depends on the selected sync policy; caller-supplied equality IDs and opaque
+payload bytes are not authentication.
+
 ---
 
 ## The meta-row
@@ -1811,11 +1903,13 @@ temporal fairness, and checked woven edits. Rows 45–45g connect the covered
 history engine, logical persistent runtime, canonical artifact journal,
 bounded planning generator, native protocol syntax, total result/report
 program, staged authenticated-v4 boundary, and the explicit canonical-byte
-emitter. Rows 45h–45o add explicit application-state query semantics, exact
+emitter. Rows 45h–45t add explicit application-state query semantics, exact
 world/certificate binding, proof-indexed V3 erasure, validated V3
 rendering/durability/inspection, finite causal-history persistence, typed
 position attribution, authenticated running observation, and transactional V3
-export. What
+export, then authenticated one-use context delivery, the checked `UWV4`-to-
+sidecar boundary, bounded sidecar rendering/framing, shared canonical effect
+reification, and the durable-arrival callback/host separation. What
 remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives

@@ -175,38 +175,21 @@ private def StatusShape.toStatusEffects : StatusShape → StatusEffects.Shape
   | .absent => .absent
   | .pending => .pending
 
-private def canonicalStatusShapes : List StatusShape :=
-  [.exact, .provisional, .forkedClosed, .forkedOpen, .absent, .pending]
-
-private def statusRefines : StatusShape → StatusShape → Bool
-  | .exact, _ => true
-  | .provisional, .provisional | .provisional, .pending
-  | .provisional, .forkedOpen => true
-  | .forkedClosed, .forkedClosed | .forkedClosed, .forkedOpen => true
-  | .forkedOpen, .forkedOpen => true
-  | .absent, .absent | .absent, .pending => true
-  | .pending, .pending => true
-  | _, _ => false
-
 /-- Canonical six-shape downset computed from the exact checked declaration's
 finite reach.  Callers never supply an effect list. -/
 private def effectOfDeclaration {S β : Type} {F : Evidence.Future S}
     {resolution : StatusEffects.Resolution S β}
     (declaration : ResultProgram.CheckedDeclaration S β F resolution) :
     List StatusShape :=
-  let observed := declaration.reach.map fun state =>
-    StatusShape.ofStatusEffects (StatusEffects.shapeOf (declaration.evaluate state))
-  canonicalStatusShapes.filter fun candidate =>
-    observed.any fun shape => statusRefines candidate shape
-
-private theorem statusRefines_eq_true_iff (left right : StatusShape) :
-    statusRefines left right = true ↔
-      StatusEffects.Refines left.toStatusEffects right.toStatusEffects := by
-  cases left <;> cases right <;>
-    simp [statusRefines, StatusShape.toStatusEffects, StatusEffects.Refines]
+  (StatusEffects.inferredShapes declaration.reach declaration.evaluate).map
+    StatusShape.ofStatusEffects
 
 private theorem statusShape_roundtrip (shape : StatusEffects.Shape) :
     (StatusShape.ofStatusEffects shape).toStatusEffects = shape := by
+  cases shape <;> rfl
+
+private theorem statusShape_other_roundtrip (shape : StatusShape) :
+    StatusShape.ofStatusEffects shape.toStatusEffects = shape := by
   cases shape <;> rfl
 
 /-- The computed list is exactly the semantic effect of the checked
@@ -218,32 +201,16 @@ theorem mem_effectOfDeclaration_iff {S β : Type} {F : Evidence.Future S}
     shape ∈ effectOfDeclaration declaration ↔
       declaration.effect.Allows shape.toStatusEffects := by
   unfold effectOfDeclaration
-  rw [List.mem_filter]
-  have canonical : shape ∈ canonicalStatusShapes := by
-    cases shape <;> decide
-  simp only [canonical, true_and, List.any_eq_true]
-  change
-    (∃ observed,
-      observed ∈ declaration.reach.map (fun state =>
-        StatusShape.ofStatusEffects
-          (StatusEffects.shapeOf (declaration.evaluate state))) ∧
-      statusRefines shape observed = true) ↔
-    ∃ state, state ∈ declaration.reach ∧
-      StatusEffects.Refines shape.toStatusEffects
-        (StatusEffects.shapeOf (declaration.evaluate state))
+  rw [List.mem_map]
   constructor
-  · rintro ⟨observed, observedMem, refines⟩
-    rw [List.mem_map] at observedMem
-    obtain ⟨state, stateMem, rfl⟩ := observedMem
-    refine ⟨state, stateMem, ?_⟩
+  · rintro ⟨semantic, semanticMem, rfl⟩
     simpa only [statusShape_roundtrip] using
-      (statusRefines_eq_true_iff _ _).mp refines
-  · rintro ⟨state, stateMem, refines⟩
-    refine ⟨StatusShape.ofStatusEffects
-      (StatusEffects.shapeOf (declaration.evaluate state)), ?_, ?_⟩
-    · exact List.mem_map.mpr ⟨state, stateMem, rfl⟩
-    · apply (statusRefines_eq_true_iff _ _).mpr
-      simpa [statusShape_roundtrip] using refines
+      (StatusEffects.mem_inferredShapes_iff
+        declaration.reach declaration.evaluate semantic).mp semanticMem
+  · intro allowed
+    refine ⟨shape.toStatusEffects, ?_, statusShape_other_roundtrip shape⟩
+    exact (StatusEffects.mem_inferredShapes_iff declaration.reach
+      declaration.evaluate shape.toStatusEffects).mpr allowed
 
 private def VisibilityRow.ofResultProgram (reasonId : String → ReasonId) :
     ResultProgram.Visibility → VisibilityRow

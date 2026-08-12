@@ -6,6 +6,9 @@
 //! [`BufferedHistoryJournal`] optionally adds a visible bounded out-of-order
 //! endpoint whose pending events are deliberately non-durable and vanish on
 //! reopen; only ready events enter the physical journal.
+//! [`HistoryArrivalJournal`] is the durable alternative: every accepted
+//! arrival is checksummed before it becomes materialized or pending, and reopen
+//! deterministically replays the authoritative arrival sequence.
 //!
 //! Event ids are uniqueness claims, not authentication. Repeating the exact
 //! event is idempotent, while resolving one id to different parents or payload
@@ -15,6 +18,7 @@
 use super::record::{RawJournal, RawJournalError, RecordSpec};
 use super::{AppendReceipt, AppendStatus, JournalOptions, SyncPolicy};
 use crate::NodeIdDisplay;
+use blake3::Hasher;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
 use std::io;
@@ -25,7 +29,16 @@ const RECORD_SPEC: RecordSpec = RecordSpec {
     hash_domain: b"uwueave.history-journal.v1",
 };
 
+const ARRIVAL_RECORD_SPEC: RecordSpec = RecordSpec {
+    marker: *b"UWHARR01",
+    hash_domain: b"uwueave.history-arrival-journal.v1",
+};
+
 const EVENT_FORMAT_VERSION: u8 = 1;
+const ARRIVAL_FORMAT_VERSION: u8 = 1;
+const ARRIVAL_KIND_EVENT: u8 = 1;
+const ARRIVAL_KIND_CHECKPOINT: u8 = 2;
+const ARRIVAL_STATE_HASH_DOMAIN: &[u8] = b"uwueave.history-arrival-state.v1";
 const ID_BYTES: usize = 32;
 const U64_BYTES: usize = 8;
 
@@ -143,7 +156,7 @@ pub enum HistoryJournalError {
     /// One buffered id resolves to different event content. Buffered events do
     /// not yet have a physical sequence.
     PendingIdCollision { id: HistoryEventId },
-    /// The explicit non-durable out-of-order buffer has no free slot.
+    /// The endpoint's explicit out-of-order buffer has no free slot.
     BufferFull { capacity: usize },
     /// The configured per-record allocation bound was exceeded.
     RecordTooLarge { actual: u64, maximum: u64 },
@@ -413,9 +426,10 @@ impl HistoryJournal {
 /// Outcome of one delivery to [`BufferedHistoryJournal`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HistoryDeliveryStatus {
-    /// The event was appended to the causally closed physical journal.
+    /// The event was accepted and causally materialized.
     Appended,
-    /// The event is waiting in the bounded, non-durable missing-parent buffer.
+    /// The event is waiting in the endpoint's bounded missing-parent buffer.
+    /// Durability depends on the concrete endpoint.
     Buffered,
     /// The exact complete event was already accepted or buffered.
     Retry,
@@ -439,11 +453,9 @@ pub struct HistoryDeliveryReceipt {
 /// parent events live in `pending` until a later delivery makes them ready.
 /// The buffer is intentionally in-memory and non-authoritative: reopening
 /// reconstructs the causally closed physical prefix and starts with no pending
-/// events. A transport which needs pending durability must journal its arrival
-/// queue separately and define that queue's own authority/recovery contract.
-/// That durable arrival queue is not implemented here. In particular, this is
-/// not a refinement of Lean `PersistentHistoryRuntime.deliverySchema`, whose
-/// authoritative arrival cursor can replay/checkpoint buffered arrivals.
+/// events. Use the distinct [`HistoryArrivalJournal`] wire when the complete
+/// arrival queue must be authoritative and durable. Neither endpoint is a
+/// proved refinement of Lean `PersistentHistoryRuntime.deliverySchema`.
 #[derive(Debug)]
 pub struct BufferedHistoryJournal {
     journal: HistoryJournal,
@@ -590,6 +602,634 @@ impl BufferedHistoryJournal {
             drained += 1;
         }
     }
+}
+
+/// Canonical summary of one durable arrival checkpoint.
+///
+/// The digest binds the configured capacity and the complete accepted,
+/// materialized, and pending maps in deterministic id order. A checkpoint is
+/// an accelerator/integrity assertion inside the authoritative arrival log;
+/// it does not replace or truncate earlier arrival records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryArrivalCheckpoint {
+    /// Bound recorded by every arrival record and checkpoint.
+    pub capacity: usize,
+    /// Number of distinct authoritative arrivals.
+    pub accepted_events: usize,
+    /// Number of causally materialized events.
+    pub materialized_events: usize,
+    /// Number of missing-parent events.
+    pub pending_events: usize,
+    /// Domain-separated digest of the complete canonical state.
+    pub state_digest: [u8; 32],
+}
+
+/// Result metadata from opening a durable arrival journal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryArrivalOpenReport {
+    /// Number of complete physical arrival/checkpoint records recovered.
+    pub recovered_records: usize,
+    /// Number of distinct authoritative event arrivals replayed.
+    pub recovered_arrivals: usize,
+    /// Number of causally materialized events after replay.
+    pub recovered_materialized: usize,
+    /// Number of bounded pending events after replay.
+    pub recovered_pending: usize,
+    /// Number of validated checkpoint records encountered.
+    pub recovered_checkpoints: usize,
+    /// Number of bytes discarded from one physical torn tail.
+    pub truncated_bytes: u64,
+    /// Whether opening created the journal file.
+    pub created: bool,
+}
+
+/// Receipt for one authoritative durable arrival.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryArrivalReceipt {
+    /// Whether the arrival materialized, remained pending, or was an exact
+    /// already-authoritative retry.
+    pub status: HistoryDeliveryStatus,
+    /// Physical sequence of the authoritative arrival (original on retry).
+    pub arrival_sequence: u64,
+    /// Number of older pending events materialized after this arrival.
+    pub drained: usize,
+}
+
+/// Why a durable arrival journal operation failed.
+#[derive(Debug)]
+pub enum HistoryArrivalJournalError {
+    /// The underlying physical or event operation failed.
+    Journal(HistoryJournalError),
+    /// A checksummed record has a malformed/noncanonical arrival body.
+    CorruptArrival { sequence: u64, reason: &'static str },
+    /// A record was written for a different pending bound.
+    CapacityMismatch {
+        sequence: u64,
+        configured: usize,
+        recorded: u64,
+    },
+    /// A checksummed checkpoint does not describe its replayed prefix.
+    CheckpointMismatch { sequence: u64 },
+    /// The host cannot encode its `usize` capacity in this wire's `u64` field.
+    CapacityTooLarge { capacity: usize },
+}
+
+impl fmt::Display for HistoryArrivalJournalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Journal(source) => write!(f, "history arrival journal failed: {source}"),
+            Self::CorruptArrival { sequence, reason } => write!(
+                f,
+                "history arrival record {sequence} is invalid: {reason}"
+            ),
+            Self::CapacityMismatch {
+                sequence,
+                configured,
+                recorded,
+            } => write!(
+                f,
+                "history arrival record {sequence} has capacity {recorded}, not configured capacity {configured}"
+            ),
+            Self::CheckpointMismatch { sequence } => write!(
+                f,
+                "history arrival checkpoint {sequence} does not match its replayed prefix"
+            ),
+            Self::CapacityTooLarge { capacity } => write!(
+                f,
+                "history arrival capacity {capacity} cannot be encoded as u64"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for HistoryArrivalJournalError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Journal(source) => Some(source),
+            _ => None,
+        }
+    }
+}
+
+impl From<HistoryJournalError> for HistoryArrivalJournalError {
+    fn from(source: HistoryJournalError) -> Self {
+        Self::Journal(source)
+    }
+}
+
+impl From<RawJournalError> for HistoryArrivalJournalError {
+    fn from(source: RawJournalError) -> Self {
+        Self::Journal(source.into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum HistoryArrivalRecord {
+    Event {
+        capacity: u64,
+        event: HistoryEvent,
+    },
+    Checkpoint {
+        capacity: u64,
+        accepted_events: u64,
+        materialized_events: u64,
+        pending_events: u64,
+        state_digest: [u8; 32],
+    },
+}
+
+/// Checksummed authoritative arrival queue with bounded durable pending state.
+///
+/// Unlike [`BufferedHistoryJournal`], every accepted event is appended to this
+/// journal before its in-memory classification is committed. Reopen replays the
+/// complete canonical arrival sequence, so missing-parent events survive and
+/// later parent delivery drains them deterministically in event-id order.
+///
+/// `receive_at(next_sequence(), event)` accepts a new arrival. For an exact
+/// existing event, that same call is a no-write logical retry and returns the
+/// original arrival sequence. `receive_at(original_sequence, event)` delegates
+/// to byte-exact physical retry; any other occupied sequence or sequence gap
+/// refuses. Collision and capacity failures perform no write and leave the
+/// prior reopenable state unchanged.
+///
+/// IDs remain caller-supplied equality keys, not authentication. This Rust wire
+/// requires strictly increasing parent IDs and has no proved refinement to the
+/// Lean `PersistentHistoryRuntime` schema, whose parent premise is only
+/// duplicate-freedom.
+#[derive(Debug)]
+pub struct HistoryArrivalJournal {
+    raw: RawJournal,
+    capacity: usize,
+    accepted: BTreeMap<HistoryEventId, HistoryEvent>,
+    arrival_sequences: BTreeMap<HistoryEventId, u64>,
+    materialized: BTreeMap<HistoryEventId, HistoryEvent>,
+    pending: BTreeMap<HistoryEventId, HistoryEvent>,
+    report: HistoryArrivalOpenReport,
+}
+
+impl HistoryArrivalJournal {
+    /// Open/create, lock, recover, and replay an authoritative arrival queue.
+    pub fn open(
+        path: impl AsRef<Path>,
+        options: JournalOptions,
+        capacity: usize,
+    ) -> Result<Self, HistoryArrivalJournalError> {
+        let encoded_capacity = u64::try_from(capacity)
+            .map_err(|_| HistoryArrivalJournalError::CapacityTooLarge { capacity })?;
+        let raw = RawJournal::open(path, ARRIVAL_RECORD_SPEC, options)?;
+        let mut accepted = BTreeMap::new();
+        let mut arrival_sequences = BTreeMap::new();
+        let mut materialized = BTreeMap::new();
+        let mut pending = BTreeMap::new();
+        let mut checkpoints = 0;
+
+        for (sequence, bytes) in raw.records().iter().enumerate() {
+            let sequence = sequence as u64;
+            let record =
+                decode_arrival_record(bytes).ok_or(HistoryArrivalJournalError::CorruptArrival {
+                    sequence,
+                    reason: "malformed or noncanonical history arrival",
+                })?;
+            match record {
+                HistoryArrivalRecord::Event {
+                    capacity: recorded,
+                    event,
+                } => {
+                    check_arrival_capacity(sequence, capacity, encoded_capacity, recorded)?;
+                    replay_arrival(
+                        capacity,
+                        sequence,
+                        event,
+                        &mut accepted,
+                        &mut arrival_sequences,
+                        &mut materialized,
+                        &mut pending,
+                    )?;
+                }
+                HistoryArrivalRecord::Checkpoint {
+                    capacity: recorded,
+                    accepted_events,
+                    materialized_events,
+                    pending_events,
+                    state_digest,
+                } => {
+                    check_arrival_capacity(sequence, capacity, encoded_capacity, recorded)?;
+                    let expected =
+                        checkpoint_from_state(capacity, &accepted, &materialized, &pending);
+                    if usize::try_from(accepted_events).ok() != Some(expected.accepted_events)
+                        || usize::try_from(materialized_events).ok()
+                            != Some(expected.materialized_events)
+                        || usize::try_from(pending_events).ok() != Some(expected.pending_events)
+                        || state_digest != expected.state_digest
+                    {
+                        return Err(HistoryArrivalJournalError::CheckpointMismatch { sequence });
+                    }
+                    checkpoints += 1;
+                }
+            }
+        }
+
+        let raw_report = raw.report();
+        let report = HistoryArrivalOpenReport {
+            recovered_records: raw.records().len(),
+            recovered_arrivals: accepted.len(),
+            recovered_materialized: materialized.len(),
+            recovered_pending: pending.len(),
+            recovered_checkpoints: checkpoints,
+            truncated_bytes: raw_report.truncated_bytes,
+            created: raw_report.created,
+        };
+        Ok(Self {
+            raw,
+            capacity,
+            accepted,
+            arrival_sequences,
+            materialized,
+            pending,
+            report,
+        })
+    }
+
+    /// Backing path.
+    pub fn path(&self) -> &Path {
+        self.raw.path()
+    }
+
+    /// Opening scan/replay result.
+    pub fn open_report(&self) -> HistoryArrivalOpenReport {
+        self.report
+    }
+
+    /// Written maximum number of unresolved accepted events.
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Next physical arrival/checkpoint record sequence.
+    pub fn next_sequence(&self) -> u64 {
+        self.raw.next_sequence()
+    }
+
+    /// Number of distinct authoritative arrivals.
+    pub fn accepted_len(&self) -> usize {
+        self.accepted.len()
+    }
+
+    /// Number of causally materialized events.
+    pub fn materialized_len(&self) -> usize {
+        self.materialized.len()
+    }
+
+    /// Number of durable missing-parent events.
+    pub fn pending_len(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// Whether every authoritative arrival has materialized.
+    pub fn is_settled(&self) -> bool {
+        self.pending.is_empty()
+    }
+
+    /// Authoritative arrivals in canonical id order.
+    pub fn accepted(&self) -> impl Iterator<Item = &HistoryEvent> {
+        self.accepted.values()
+    }
+
+    /// Materialized events in canonical id order.
+    pub fn materialized(&self) -> impl Iterator<Item = &HistoryEvent> {
+        self.materialized.values()
+    }
+
+    /// Durable pending events in canonical id order.
+    pub fn pending(&self) -> impl Iterator<Item = &HistoryEvent> {
+        self.pending.values()
+    }
+
+    /// Look up one authoritative event whether materialized or pending.
+    pub fn accepted_event(&self, id: &HistoryEventId) -> Option<&HistoryEvent> {
+        self.accepted.get(id)
+    }
+
+    /// Look up one materialized event.
+    pub fn materialized_event(&self, id: &HistoryEventId) -> Option<&HistoryEvent> {
+        self.materialized.get(id)
+    }
+
+    /// Look up one pending event.
+    pub fn pending_event(&self, id: &HistoryEventId) -> Option<&HistoryEvent> {
+        self.pending.get(id)
+    }
+
+    /// Compare the complete authoritative arrival set, ignoring arrival order.
+    pub fn same_accepted_event_set(&self, other: &Self) -> bool {
+        self.accepted == other.accepted
+    }
+
+    /// Compare settled materialized event sets, ignoring arrival order.
+    pub fn settled_same_event_set(&self, other: &Self) -> bool {
+        self.is_settled() && other.is_settled() && self.materialized == other.materialized
+    }
+
+    /// Current domain-separated checkpoint data without performing I/O.
+    pub fn checkpoint_data(&self) -> HistoryArrivalCheckpoint {
+        checkpoint_from_state(
+            self.capacity,
+            &self.accepted,
+            &self.materialized,
+            &self.pending,
+        )
+    }
+
+    /// Current state digest, suitable for exact reopen comparisons.
+    pub fn state_digest(&self) -> [u8; 32] {
+        self.checkpoint_data().state_digest
+    }
+
+    /// Append one authoritative event at the next physical sequence.
+    pub fn receive(
+        &mut self,
+        event: HistoryEvent,
+    ) -> Result<HistoryArrivalReceipt, HistoryArrivalJournalError> {
+        self.receive_at(self.next_sequence(), event)
+    }
+
+    /// Sequence-addressed, idempotently retryable durable arrival.
+    pub fn receive_at(
+        &mut self,
+        sequence: u64,
+        event: HistoryEvent,
+    ) -> Result<HistoryArrivalReceipt, HistoryArrivalJournalError> {
+        if let Some(existing) = self.accepted.get(&event.id) {
+            let original_sequence = self.arrival_sequences[&event.id];
+            if existing != &event {
+                return Err(HistoryJournalError::IdCollision {
+                    id: event.id,
+                    existing_sequence: original_sequence,
+                    incoming_sequence: sequence,
+                }
+                .into());
+            }
+            if sequence != self.next_sequence() {
+                let bytes = encode_arrival_record(&HistoryArrivalRecord::Event {
+                    capacity: self.capacity_u64()?,
+                    event,
+                });
+                self.raw.append_at(sequence, &bytes)?;
+            }
+            return Ok(HistoryArrivalReceipt {
+                status: HistoryDeliveryStatus::Retry,
+                arrival_sequence: original_sequence,
+                drained: 0,
+            });
+        }
+
+        let ready = event
+            .parents
+            .iter()
+            .all(|parent| self.materialized.contains_key(parent));
+        if !ready && self.pending.len() >= self.capacity {
+            return Err(HistoryJournalError::BufferFull {
+                capacity: self.capacity,
+            }
+            .into());
+        }
+
+        let record = HistoryArrivalRecord::Event {
+            capacity: self.capacity_u64()?,
+            event: event.clone(),
+        };
+        let receipt = self
+            .raw
+            .append_at(sequence, &encode_arrival_record(&record))?;
+        if receipt.status != AppendStatus::Appended {
+            return Err(HistoryJournalError::SequenceConflict { sequence }.into());
+        }
+
+        self.arrival_sequences.insert(event.id, sequence);
+        self.accepted.insert(event.id, event.clone());
+        let (status, drained) = if ready {
+            self.materialized.insert(event.id, event);
+            (HistoryDeliveryStatus::Appended, self.drain_arrivals())
+        } else {
+            self.pending.insert(event.id, event);
+            (HistoryDeliveryStatus::Buffered, 0)
+        };
+        Ok(HistoryArrivalReceipt {
+            status,
+            arrival_sequence: receipt.sequence,
+            drained,
+        })
+    }
+
+    /// Append a canonical assertion of the complete replayed state.
+    pub fn append_checkpoint(&mut self) -> Result<AppendReceipt, HistoryArrivalJournalError> {
+        self.append_checkpoint_at(self.next_sequence())
+    }
+
+    /// Sequence-addressed, byte-idempotent checkpoint append.
+    pub fn append_checkpoint_at(
+        &mut self,
+        sequence: u64,
+    ) -> Result<AppendReceipt, HistoryArrivalJournalError> {
+        let checkpoint = self.checkpoint_data();
+        let record = HistoryArrivalRecord::Checkpoint {
+            capacity: self.capacity_u64()?,
+            accepted_events: checkpoint.accepted_events as u64,
+            materialized_events: checkpoint.materialized_events as u64,
+            pending_events: checkpoint.pending_events as u64,
+            state_digest: checkpoint.state_digest,
+        };
+        self.raw
+            .append_at(sequence, &encode_arrival_record(&record))
+            .map_err(Into::into)
+    }
+
+    /// Strengthen durability independently of the configured append policy.
+    pub fn sync(&mut self, policy: SyncPolicy) -> Result<(), HistoryArrivalJournalError> {
+        self.raw.sync(policy).map_err(Into::into)
+    }
+
+    fn capacity_u64(&self) -> Result<u64, HistoryArrivalJournalError> {
+        u64::try_from(self.capacity).map_err(|_| HistoryArrivalJournalError::CapacityTooLarge {
+            capacity: self.capacity,
+        })
+    }
+
+    fn drain_arrivals(&mut self) -> usize {
+        drain_arrival_maps(&mut self.materialized, &mut self.pending)
+    }
+}
+
+fn check_arrival_capacity(
+    sequence: u64,
+    configured: usize,
+    encoded_configured: u64,
+    recorded: u64,
+) -> Result<(), HistoryArrivalJournalError> {
+    if recorded != encoded_configured {
+        return Err(HistoryArrivalJournalError::CapacityMismatch {
+            sequence,
+            configured,
+            recorded,
+        });
+    }
+    Ok(())
+}
+
+fn replay_arrival(
+    capacity: usize,
+    sequence: u64,
+    event: HistoryEvent,
+    accepted: &mut BTreeMap<HistoryEventId, HistoryEvent>,
+    arrival_sequences: &mut BTreeMap<HistoryEventId, u64>,
+    materialized: &mut BTreeMap<HistoryEventId, HistoryEvent>,
+    pending: &mut BTreeMap<HistoryEventId, HistoryEvent>,
+) -> Result<(), HistoryArrivalJournalError> {
+    if let Some(existing) = accepted.get(&event.id) {
+        if existing != &event {
+            return Err(HistoryJournalError::IdCollision {
+                id: event.id,
+                existing_sequence: arrival_sequences[&event.id],
+                incoming_sequence: sequence,
+            }
+            .into());
+        }
+        return Err(HistoryArrivalJournalError::CorruptArrival {
+            sequence,
+            reason: "duplicate authoritative arrival record",
+        });
+    }
+    let ready = event
+        .parents
+        .iter()
+        .all(|parent| materialized.contains_key(parent));
+    if !ready && pending.len() >= capacity {
+        return Err(HistoryJournalError::BufferFull { capacity }.into());
+    }
+    arrival_sequences.insert(event.id, sequence);
+    accepted.insert(event.id, event.clone());
+    if ready {
+        materialized.insert(event.id, event);
+        drain_arrival_maps(materialized, pending);
+    } else {
+        pending.insert(event.id, event);
+    }
+    Ok(())
+}
+
+fn drain_arrival_maps(
+    materialized: &mut BTreeMap<HistoryEventId, HistoryEvent>,
+    pending: &mut BTreeMap<HistoryEventId, HistoryEvent>,
+) -> usize {
+    let mut drained = 0;
+    loop {
+        let ready = pending
+            .iter()
+            .find(|(_, event)| {
+                event
+                    .parents
+                    .iter()
+                    .all(|parent| materialized.contains_key(parent))
+            })
+            .map(|(id, event)| (*id, event.clone()));
+        let Some((id, event)) = ready else {
+            return drained;
+        };
+        materialized.insert(id, event);
+        pending.remove(&id);
+        drained += 1;
+    }
+}
+
+fn checkpoint_from_state(
+    capacity: usize,
+    accepted: &BTreeMap<HistoryEventId, HistoryEvent>,
+    materialized: &BTreeMap<HistoryEventId, HistoryEvent>,
+    pending: &BTreeMap<HistoryEventId, HistoryEvent>,
+) -> HistoryArrivalCheckpoint {
+    let mut hasher = Hasher::new();
+    hasher.update(ARRIVAL_STATE_HASH_DOMAIN);
+    hasher.update(&(capacity as u64).to_le_bytes());
+    hash_event_map(&mut hasher, 1, accepted);
+    hash_event_map(&mut hasher, 2, materialized);
+    hash_event_map(&mut hasher, 3, pending);
+    HistoryArrivalCheckpoint {
+        capacity,
+        accepted_events: accepted.len(),
+        materialized_events: materialized.len(),
+        pending_events: pending.len(),
+        state_digest: *hasher.finalize().as_bytes(),
+    }
+}
+
+fn hash_event_map(
+    hasher: &mut Hasher,
+    section: u8,
+    events: &BTreeMap<HistoryEventId, HistoryEvent>,
+) {
+    hasher.update(&[section]);
+    hasher.update(&(events.len() as u64).to_le_bytes());
+    for event in events.values() {
+        let bytes = encode_event(event);
+        hasher.update(&(bytes.len() as u64).to_le_bytes());
+        hasher.update(&bytes);
+    }
+}
+
+fn encode_arrival_record(record: &HistoryArrivalRecord) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.push(ARRIVAL_FORMAT_VERSION);
+    match record {
+        HistoryArrivalRecord::Event { capacity, event } => {
+            bytes.push(ARRIVAL_KIND_EVENT);
+            bytes.extend_from_slice(&capacity.to_le_bytes());
+            let event_bytes = encode_event(event);
+            bytes.extend_from_slice(&(event_bytes.len() as u64).to_le_bytes());
+            bytes.extend_from_slice(&event_bytes);
+        }
+        HistoryArrivalRecord::Checkpoint {
+            capacity,
+            accepted_events,
+            materialized_events,
+            pending_events,
+            state_digest,
+        } => {
+            bytes.push(ARRIVAL_KIND_CHECKPOINT);
+            bytes.extend_from_slice(&capacity.to_le_bytes());
+            bytes.extend_from_slice(&accepted_events.to_le_bytes());
+            bytes.extend_from_slice(&materialized_events.to_le_bytes());
+            bytes.extend_from_slice(&pending_events.to_le_bytes());
+            bytes.extend_from_slice(state_digest);
+        }
+    }
+    bytes
+}
+
+fn decode_arrival_record(bytes: &[u8]) -> Option<HistoryArrivalRecord> {
+    let mut cursor = Cursor::new(bytes);
+    if cursor.byte()? != ARRIVAL_FORMAT_VERSION {
+        return None;
+    }
+    let record = match cursor.byte()? {
+        ARRIVAL_KIND_EVENT => {
+            let capacity = cursor.u64()?;
+            let event_len = cursor.count(1)?;
+            let event = decode_event(cursor.take(event_len)?)?;
+            HistoryArrivalRecord::Event { capacity, event }
+        }
+        ARRIVAL_KIND_CHECKPOINT => HistoryArrivalRecord::Checkpoint {
+            capacity: cursor.u64()?,
+            accepted_events: cursor.u64()?,
+            materialized_events: cursor.u64()?,
+            pending_events: cursor.u64()?,
+            state_digest: cursor.take(32)?.try_into().ok()?,
+        },
+        _ => return None,
+    };
+    if !cursor.is_empty() || encode_arrival_record(&record) != bytes {
+        return None;
+    }
+    Some(record)
 }
 
 fn validate_parents(
@@ -1068,6 +1708,316 @@ mod tests {
                 existing_sequence: 1,
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn durable_arrival_pending_checkpoint_reopen_and_parent_drain_are_exact() {
+        let path = TempFile::new("arrival-pending-checkpoint");
+        let root = event(1, &[], b"root");
+        let child = event(2, &[1], b"opaque-v4-child");
+        let pending_digest;
+        let pending_file_bytes;
+        {
+            let mut journal =
+                HistoryArrivalJournal::open(&path.0, options(TornTailPolicy::Refuse), 2).unwrap();
+            assert_eq!(
+                journal.receive(child.clone()).unwrap(),
+                HistoryArrivalReceipt {
+                    status: HistoryDeliveryStatus::Buffered,
+                    arrival_sequence: 0,
+                    drained: 0,
+                }
+            );
+            assert_eq!(journal.accepted_len(), 1);
+            assert_eq!(journal.materialized_len(), 0);
+            assert_eq!(journal.pending_len(), 1);
+            assert_eq!(
+                journal.pending_event(&child.id()).unwrap().payload(),
+                b"opaque-v4-child"
+            );
+            pending_digest = journal.state_digest();
+            assert_eq!(
+                journal.append_checkpoint().unwrap(),
+                AppendReceipt {
+                    sequence: 1,
+                    status: AppendStatus::Appended,
+                }
+            );
+            journal.sync(SyncPolicy::SyncData).unwrap();
+            pending_file_bytes = fs::read(&path.0).unwrap();
+        }
+
+        {
+            let mut reopened =
+                HistoryArrivalJournal::open(&path.0, options(TornTailPolicy::Refuse), 2).unwrap();
+            assert_eq!(fs::read(&path.0).unwrap(), pending_file_bytes);
+            assert_eq!(reopened.state_digest(), pending_digest);
+            assert_eq!(reopened.pending_event(&child.id()), Some(&child));
+            assert_eq!(
+                reopened.open_report(),
+                HistoryArrivalOpenReport {
+                    recovered_records: 2,
+                    recovered_arrivals: 1,
+                    recovered_materialized: 0,
+                    recovered_pending: 1,
+                    recovered_checkpoints: 1,
+                    truncated_bytes: 0,
+                    created: false,
+                }
+            );
+
+            // Both the original physical sequence and the current logical
+            // frontier accept exact retry without appending another record.
+            assert_eq!(
+                reopened.receive_at(0, child.clone()).unwrap(),
+                HistoryArrivalReceipt {
+                    status: HistoryDeliveryStatus::Retry,
+                    arrival_sequence: 0,
+                    drained: 0,
+                }
+            );
+            assert_eq!(
+                reopened.receive(child.clone()).unwrap().status,
+                HistoryDeliveryStatus::Retry
+            );
+            assert_eq!(fs::read(&path.0).unwrap(), pending_file_bytes);
+
+            assert_eq!(
+                reopened.receive(root.clone()).unwrap(),
+                HistoryArrivalReceipt {
+                    status: HistoryDeliveryStatus::Appended,
+                    arrival_sequence: 2,
+                    drained: 1,
+                }
+            );
+            assert!(reopened.is_settled());
+            assert_eq!(reopened.materialized_len(), 2);
+            assert_eq!(
+                reopened
+                    .materialized()
+                    .map(HistoryEvent::id)
+                    .collect::<Vec<_>>(),
+                vec![root.id(), child.id()]
+            );
+        }
+
+        let settled =
+            HistoryArrivalJournal::open(&path.0, options(TornTailPolicy::Refuse), 2).unwrap();
+        assert!(settled.is_settled());
+        assert_eq!(settled.accepted_len(), 2);
+        assert_eq!(settled.materialized_len(), 2);
+        assert_eq!(settled.pending_len(), 0);
+    }
+
+    #[test]
+    fn durable_arrival_reverse_criss_cross_reopens_and_converges() {
+        let causal_path = TempFile::new("arrival-criss-cross-causal");
+        let reverse_path = TempFile::new("arrival-criss-cross-reverse");
+        let root = event(1, &[], b"root");
+        let left = event(2, &[1], b"left");
+        let right = event(3, &[1], b"right");
+        let merge_left = event(4, &[2, 3], b"merge-left");
+        let merge_right = event(5, &[2, 3], b"merge-right");
+        let tip = event(6, &[4, 5], b"merge-tip");
+        let causal = [
+            root.clone(),
+            left.clone(),
+            right.clone(),
+            merge_left.clone(),
+            merge_right.clone(),
+            tip.clone(),
+        ];
+        let reverse = [tip, merge_right, merge_left, right, left, root];
+
+        let mut causal_journal =
+            HistoryArrivalJournal::open(&causal_path.0, options(TornTailPolicy::Refuse), 5)
+                .unwrap();
+        for event in causal {
+            assert_eq!(
+                causal_journal.receive(event).unwrap().status,
+                HistoryDeliveryStatus::Appended
+            );
+        }
+
+        {
+            let mut reverse_journal =
+                HistoryArrivalJournal::open(&reverse_path.0, options(TornTailPolicy::Refuse), 5)
+                    .unwrap();
+            for event in &reverse[..3] {
+                assert_eq!(
+                    reverse_journal.receive(event.clone()).unwrap().status,
+                    HistoryDeliveryStatus::Buffered
+                );
+            }
+            reverse_journal.append_checkpoint().unwrap();
+            assert_eq!(reverse_journal.pending_len(), 3);
+        }
+        {
+            let mut reverse_journal =
+                HistoryArrivalJournal::open(&reverse_path.0, options(TornTailPolicy::Refuse), 5)
+                    .unwrap();
+            assert_eq!(reverse_journal.pending_len(), 3);
+            for event in &reverse[3..5] {
+                assert_eq!(
+                    reverse_journal.receive(event.clone()).unwrap().status,
+                    HistoryDeliveryStatus::Buffered
+                );
+            }
+            let receipt = reverse_journal.receive(reverse[5].clone()).unwrap();
+            assert_eq!(receipt.status, HistoryDeliveryStatus::Appended);
+            assert_eq!(receipt.drained, 5);
+            assert!(causal_journal.settled_same_event_set(&reverse_journal));
+            assert!(causal_journal.same_accepted_event_set(&reverse_journal));
+            assert_eq!(
+                causal_journal.state_digest(),
+                reverse_journal.state_digest(),
+                "canonical checkpoint state ignores arrival order"
+            );
+        }
+
+        let reopened =
+            HistoryArrivalJournal::open(&reverse_path.0, options(TornTailPolicy::Refuse), 5)
+                .unwrap();
+        assert!(causal_journal.settled_same_event_set(&reopened));
+        assert_eq!(reopened.open_report().recovered_arrivals, 6);
+        assert_eq!(reopened.open_report().recovered_checkpoints, 1);
+    }
+
+    #[test]
+    fn durable_arrival_retry_collision_and_capacity_refusal_preserve_prefix() {
+        let path = TempFile::new("arrival-refusal-atomic");
+        let child = event(2, &[1], b"child");
+        let mut journal =
+            HistoryArrivalJournal::open(&path.0, options(TornTailPolicy::Refuse), 1).unwrap();
+        journal.receive(child.clone()).unwrap();
+        let prefix = fs::read(&path.0).unwrap();
+        let digest = journal.state_digest();
+
+        assert_eq!(
+            journal.receive(child.clone()).unwrap().status,
+            HistoryDeliveryStatus::Retry
+        );
+        assert!(matches!(
+            journal.receive(event(2, &[1], b"forged")),
+            Err(HistoryArrivalJournalError::Journal(
+                HistoryJournalError::IdCollision { id, .. }
+            )) if id == child.id()
+        ));
+        assert!(matches!(
+            journal.receive(event(3, &[1], b"second")),
+            Err(HistoryArrivalJournalError::Journal(
+                HistoryJournalError::BufferFull { capacity: 1 }
+            ))
+        ));
+        assert_eq!(journal.state_digest(), digest);
+        assert_eq!(fs::read(&path.0).unwrap(), prefix);
+        drop(journal);
+
+        let reopened =
+            HistoryArrivalJournal::open(&path.0, options(TornTailPolicy::Refuse), 1).unwrap();
+        assert_eq!(reopened.state_digest(), digest);
+        assert_eq!(reopened.pending_event(&child.id()), Some(&child));
+        drop(reopened);
+        assert!(matches!(
+            HistoryArrivalJournal::open(&path.0, options(TornTailPolicy::Refuse), 2),
+            Err(HistoryArrivalJournalError::CapacityMismatch {
+                sequence: 0,
+                configured: 2,
+                recorded: 1,
+            })
+        ));
+    }
+
+    #[test]
+    fn durable_arrival_torn_corrupt_version_and_checkpoint_mismatch_refuse() {
+        let torn_path = TempFile::new("arrival-torn");
+        let root = event(1, &[], b"root");
+        let child = event(2, &[1], b"child");
+        let prefix_len;
+        {
+            let mut journal =
+                HistoryArrivalJournal::open(&torn_path.0, options(TornTailPolicy::Refuse), 1)
+                    .unwrap();
+            journal.receive(root.clone()).unwrap();
+            prefix_len = fs::metadata(&torn_path.0).unwrap().len() as usize;
+            journal.receive(child).unwrap();
+        }
+        let complete = fs::read(&torn_path.0).unwrap();
+        fs::write(&torn_path.0, &complete[..prefix_len + 9]).unwrap();
+        assert!(matches!(
+            HistoryArrivalJournal::open(&torn_path.0, options(TornTailPolicy::Refuse), 1),
+            Err(HistoryArrivalJournalError::Journal(
+                HistoryJournalError::TornTail { bytes: 9, .. }
+            ))
+        ));
+        let recovered =
+            HistoryArrivalJournal::open(&torn_path.0, options(TornTailPolicy::Truncate), 1)
+                .unwrap();
+        assert_eq!(recovered.materialized_event(&root.id()), Some(&root));
+        assert_eq!(recovered.open_report().truncated_bytes, 9);
+        drop(recovered);
+
+        let version_path = TempFile::new("arrival-version");
+        {
+            let mut raw = RawJournal::open(
+                &version_path.0,
+                ARRIVAL_RECORD_SPEC,
+                options(TornTailPolicy::Refuse),
+            )
+            .unwrap();
+            raw.append_at(0, &[ARRIVAL_FORMAT_VERSION + 1, ARRIVAL_KIND_EVENT])
+                .unwrap();
+        }
+        assert!(matches!(
+            HistoryArrivalJournal::open(&version_path.0, options(TornTailPolicy::Truncate), 1),
+            Err(HistoryArrivalJournalError::CorruptArrival { sequence: 0, .. })
+        ));
+        assert!(matches!(
+            HistoryJournal::open(&version_path.0, options(TornTailPolicy::Truncate)),
+            Err(HistoryJournalError::CorruptPhysical { sequence: 0, .. })
+        ));
+
+        let checkpoint_path = TempFile::new("arrival-checkpoint-mismatch");
+        {
+            let mut raw = RawJournal::open(
+                &checkpoint_path.0,
+                ARRIVAL_RECORD_SPEC,
+                options(TornTailPolicy::Refuse),
+            )
+            .unwrap();
+            raw.append_at(
+                0,
+                &encode_arrival_record(&HistoryArrivalRecord::Checkpoint {
+                    capacity: 1,
+                    accepted_events: 0,
+                    materialized_events: 0,
+                    pending_events: 0,
+                    state_digest: [0; 32],
+                }),
+            )
+            .unwrap();
+        }
+        assert!(matches!(
+            HistoryArrivalJournal::open(&checkpoint_path.0, options(TornTailPolicy::Truncate), 1),
+            Err(HistoryArrivalJournalError::CheckpointMismatch { sequence: 0 })
+        ));
+
+        let corrupt_path = TempFile::new("arrival-physical-corrupt");
+        {
+            let mut journal =
+                HistoryArrivalJournal::open(&corrupt_path.0, options(TornTailPolicy::Refuse), 1)
+                    .unwrap();
+            journal.receive(event(1, &[], b"payload")).unwrap();
+        }
+        let mut bytes = fs::read(&corrupt_path.0).unwrap();
+        *bytes.last_mut().unwrap() ^= 0x80;
+        fs::write(&corrupt_path.0, bytes).unwrap();
+        assert!(matches!(
+            HistoryArrivalJournal::open(&corrupt_path.0, options(TornTailPolicy::Truncate), 1),
+            Err(HistoryArrivalJournalError::Journal(
+                HistoryJournalError::CorruptPhysical { sequence: 0, .. }
+            ))
         ));
     }
 }

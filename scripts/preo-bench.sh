@@ -24,6 +24,14 @@ Modes:
   wave26-compare BASE CUR   Compare Wave26 profiles. Wall time is informational;
                             work phases and RSS are hard regression gates.
   wave26-all                Run Wave26 goldens, baseline, current, and compare.
+  wave27-golden             Check the exact 48-constant V3 export prefix,
+                            rollback/name reuse, and Wave27 API status.
+  wave27-record-goldens DIR Write freshly canonicalized Wave27 goldens to DIR.
+  wave27-profile [ROOT]     Profile optimized V3 export and available controls.
+  wave27-baseline [COMMIT]  Profile an isolated commit (default: 81aa899).
+  wave27-compare BASE CUR   Compare Wave27 profiles; wall is informational and
+                            the V3 export RSS ceiling is 4 MiB/item.
+  wave27-all                Run Wave27 goldens, baseline, current, and compare.
 
 Profiling uses two warmups and five measured serialized `lean -j1 --profile`
 runs by default. If wall or user MAD exceeds 8%, it retries with nine measured
@@ -45,6 +53,8 @@ expected_dir="$golden_dir/expected"
 baseline_file="$repo_root/tests/preo-bench/baselines/ab4c767.tsv"
 wave26_expected_dir="$golden_dir/expected-wave26"
 wave26_baseline_file="$repo_root/tests/preo-bench/baselines/49881d3-wave26.tsv"
+wave27_expected_dir="$golden_dir/expected-wave27"
+wave27_baseline_file="$repo_root/tests/preo-bench/baselines/81aa899-wave27.tsv"
 
 warmups=${PREO_BENCH_WARMUPS:-2}
 runs=${PREO_BENCH_RUNS:-5}
@@ -112,6 +122,28 @@ wave26_cases=(
   'v3_export_16|tests/preo-bench/perf/wave26/Export16.lean|v3_export|16|v3_export_command'
 )
 
+# The Wave27 baseline begins with the optimized authenticated V3 export. New
+# authenticated-context/frontier/V4 controls are appended only when their
+# production APIs exist; baseline absence is reported as MISSING_API.
+wave27_cases=(
+  'v3_export_0|tests/preo-bench/perf/wave26/Export0.lean|v3_export|0|v3_export_command'
+  'v3_export_1|tests/preo-bench/perf/wave26/Export1.lean|v3_export|1|v3_export_command'
+  'v3_export_4|tests/preo-bench/perf/wave26/Export4.lean|v3_export|4|v3_export_command'
+  'v3_export_16|tests/preo-bench/perf/wave26/Export16.lean|v3_export|16|v3_export_command'
+  'authenticated_context_0|tests/preo-bench/perf/wave27/AuthenticatedContext0.lean|authenticated_context|0|authenticated_context'
+  'authenticated_context_1|tests/preo-bench/perf/wave27/AuthenticatedContext1.lean|authenticated_context|1|authenticated_context'
+  'authenticated_context_4|tests/preo-bench/perf/wave27/AuthenticatedContext4.lean|authenticated_context|4|authenticated_context'
+  'authenticated_context_16|tests/preo-bench/perf/wave27/AuthenticatedContext16.lean|authenticated_context|16|authenticated_context'
+  'frontier_0|tests/preo-bench/perf/wave27/Frontier0.lean|frontier|0|frontier_builder'
+  'frontier_1|tests/preo-bench/perf/wave27/Frontier1.lean|frontier|1|frontier_builder'
+  'frontier_4|tests/preo-bench/perf/wave27/Frontier4.lean|frontier|4|frontier_builder'
+  'frontier_16|tests/preo-bench/perf/wave27/Frontier16.lean|frontier|16|frontier_builder'
+  'v4_checked_0|tests/preo-bench/perf/wave27/V4Checked0.lean|v4_checked|0|v4_checked_builder'
+  'v4_checked_1|tests/preo-bench/perf/wave27/V4Checked1.lean|v4_checked|1|v4_checked_builder'
+  'v4_checked_4|tests/preo-bench/perf/wave27/V4Checked4.lean|v4_checked|4|v4_checked_builder'
+  'v4_checked_16|tests/preo-bench/perf/wave27/V4Checked16.lean|v4_checked|16|v4_checked_builder'
+)
+
 tmp_dir=''
 worktree_path=''
 cleanup() {
@@ -167,6 +199,41 @@ wave26_api_available() {
         grep -Fq '"preo_export_v3 "' "$root/Uwueave/Preo/ArtifactV3Surface.lean" ;;
     *) return 1 ;;
   esac
+}
+
+wave27_api_available() {
+  local root=$1 api=${2:-}
+  case "$api" in
+    '') return 0 ;;
+    v3_export_command)
+      [[ -f $root/Uwueave/Preo/ArtifactV3Surface.lean ]] &&
+        grep -Fq '"preo_export_v3 "' "$root/Uwueave/Preo/ArtifactV3Surface.lean" ;;
+    authenticated_context)
+      [[ -f $root/Uwueave/AuthenticatedWorldContext.lean ]] ;;
+    frontier_builder)
+      [[ -f $root/Uwueave/AuthenticatedFrontier.lean ]] ;;
+    v4_checked_builder)
+      [[ -f $root/Uwueave/Preo/RuntimeAuthV4Checked.lean ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+prepare_wave27_root() {
+  local root=$1
+  if [[ ${PREO_BENCH_SKIP_BUILD:-0} != 1 ]]; then
+    echo "preo-bench: refreshing Wave27 benchmark dependencies in $root" >&2
+    local targets=(Uwueave.Preo.ArtifactV3Surface Uwueave.Preo.Quickstart)
+    if wave27_api_available "$root" authenticated_context; then
+      targets+=(Uwueave.AuthenticatedWorldContext)
+    fi
+    if wave27_api_available "$root" frontier_builder; then
+      targets+=(Uwueave.AuthenticatedFrontier)
+    fi
+    if wave27_api_available "$root" v4_checked_builder; then
+      targets+=(Uwueave.Preo.RuntimeAuthV4Checked Uwueave.Preo.RuntimeAuthV4Examples)
+    fi
+    (cd -- "$root" && lake build "${targets[@]}") >&2
+  fi
 }
 
 run_lean() {
@@ -300,6 +367,72 @@ wave26_golden_check() {
   count=$(LC_ALL=C awk '$1 == "CONST" { n++ } END { print n + 0 }' \
     "$actual/names-types-rows.tsv")
   printf 'gate\tstatus\tdeclarations\nwave26-exact-goldens\tpass\t%s\n' "$count"
+}
+
+wave27_api_status() {
+  local root=$1
+  printf 'api\tstatus\tbasis\n'
+  if wave27_api_available "$root" v3_export_command; then
+    printf 'v3_export_command\tAVAILABLE\tpreo_export_v3 transactional syntax\n'
+  else
+    printf 'v3_export_command\tMISSING_API\tpreo_export_v3 syntax absent\n'
+  fi
+  if wave27_api_available "$root" authenticated_context; then
+    printf 'authenticated_context\tAVAILABLE\tAuthenticatedWorldContext module\n'
+  else
+    printf 'authenticated_context\tMISSING_API\tauthenticated context API absent\n'
+  fi
+  if wave27_api_available "$root" frontier_builder; then
+    printf 'frontier_builder\tAVAILABLE\tAuthenticatedFrontier module\n'
+  else
+    printf 'frontier_builder\tMISSING_API\tfrontier builder API absent\n'
+  fi
+  if wave27_api_available "$root" v4_checked_builder; then
+    printf 'v4_checked_builder\tAVAILABLE\tRuntimeAuthV4Checked module\n'
+  else
+    printf 'v4_checked_builder\tMISSING_API\tchecked V4 builder absent\n'
+  fi
+}
+
+capture_wave27_goldens() {
+  local root=$1 out=$2
+  make_tmp
+  mkdir -p -- "$out"
+  local raw_dir export_json
+  raw_dir=$(mktemp -d "$tmp_dir/wave27-golden-raw.XXXXXX")
+  export_json="$raw_dir/export.json"
+  # #guard_msgs owns the exact late-refusal diagnostic. Successful exact-name
+  # reuse precedes the inspector in the same Lean environment.
+  run_lean "$root" --json tests/preo-bench/golden/Wave27Export.lean \
+    >"$export_json"
+  canonical_json_messages "$export_json" |
+    LC_ALL=C awk '/^CONST\t/' >"$out/export-prefix.tsv"
+  printf 'late-refusal-rollback-name-reuse\tOK\n' >"$out/rollback.tsv"
+  wave27_api_status "$root" >"$out/api-status.tsv"
+}
+
+wave27_golden_check() {
+  make_tmp
+  prepare_wave27_root "$repo_root"
+  local actual="$tmp_dir/wave27-golden" failed=0
+  capture_wave27_goldens "$repo_root" "$actual"
+  local file
+  for file in export-prefix.tsv rollback.tsv api-status.tsv; do
+    if ! cmp -s -- "$wave27_expected_dir/$file" "$actual/$file"; then
+      echo "preo-bench: Wave27 golden mismatch: $file" >&2
+      diff -u -- "$wave27_expected_dir/$file" "$actual/$file" >&2 || true
+      failed=1
+    fi
+  done
+  local count
+  count=$(LC_ALL=C awk '$1 == "CONST" { n++ } END { print n + 0 }' \
+    "$actual/export-prefix.tsv")
+  if [[ $count != 48 ]]; then
+    echo "preo-bench: Wave27 export prefix has $count constants; expected 48" >&2
+    failed=1
+  fi
+  (( failed == 0 )) || exit 1
+  printf 'gate\tstatus\tdeclarations\nwave27-export-golden\tpass\t%s\n' "$count"
 }
 
 median() {
@@ -473,6 +606,32 @@ wave26_profile_root() {
   fi
 }
 
+wave27_profile_root() {
+  local root=${1:-$repo_root}
+  make_tmp
+  prepare_wave27_root "$root"
+  wave27_current_api_rows "$root" >&2
+  printf 'case\tgroup\titems\truns\twarmups\tnoisy\twall_mad_pct\tuser_mad_pct\twall_s\tuser_s\tsys_s\trss_bytes\timport_ms\tinterpretation_ms\telaboration_ms\ttypecheck_ms\ttypeclass_ms\ttactic_ms\tcompile_ms\n'
+  local spec name source group items required_api row saw_noisy=0
+  for spec in "${wave27_cases[@]}"; do
+    IFS='|' read -r name source group items required_api <<<"$spec"
+    if [[ -n $case_filter && $name != "$case_filter" ]]; then
+      continue
+    fi
+    if ! wave27_api_available "$root" "$required_api"; then
+      echo "preo-bench: skipping $name: MISSING_API $required_api" >&2
+      continue
+    fi
+    row=$(measure_case "$root" "$name" "$source" "$group" "$items" "$runs" 1)
+    printf '%s\n' "$row"
+    if [[ $(cut -f6 <<<"$row") == 1 ]]; then saw_noisy=1; fi
+  done
+  if (( saw_noisy )); then
+    echo "preo-bench: one or more Wave27 cases remain infrastructure-noisy" >&2
+    return 3
+  fi
+}
+
 profile_root() {
   local root=${1:-$repo_root}
   make_tmp
@@ -528,6 +687,45 @@ wave26_baseline_profile() {
   git -C "$repo_root" worktree remove --force "$worktree" >&2
   worktree_path=''
   return "$result"
+}
+
+wave27_baseline_profile() {
+  local commit=${1:-81aa899}
+  make_tmp
+  local worktree="$tmp_dir/wave27-baseline-worktree"
+  worktree_path=$worktree
+  git -C "$repo_root" worktree add --detach "$worktree" "$commit" >&2
+  local result=0
+  wave27_profile_root "$worktree" || result=$?
+  git -C "$repo_root" worktree remove --force "$worktree" >&2
+  worktree_path=''
+  return "$result"
+}
+
+wave27_current_api_rows() {
+  local root=$1
+  local api group prefix count
+  for spec in \
+      'authenticated_context|authenticated_context|authenticated_context' \
+      'frontier_builder|frontier|frontier' \
+      'v4_checked_builder|v4_checked|v4_checked'; do
+    IFS='|' read -r api group prefix <<<"$spec"
+    if ! wave27_api_available "$root" "$api"; then
+      printf '%s\tMISSING_API\t%s\n' "$api" "$group"
+      continue
+    fi
+    count=0
+    local case_spec name source case_group items required_api
+    for case_spec in "${wave27_cases[@]}"; do
+      IFS='|' read -r name source case_group items required_api <<<"$case_spec"
+      if [[ $case_group == "$group" ]]; then ((count += 1)); fi
+    done
+    if (( count == 0 )); then
+      printf '%s\tAVAILABLE_UNBENCHMARKED\t%s\n' "$api" "$group"
+    else
+      printf '%s\tAVAILABLE_BENCHMARKED\t%s\n' "$api" "$group"
+    fi
+  done
 }
 
 compare_profiles() {
@@ -713,6 +911,97 @@ compare_wave26_profiles() {
   ' "$baseline" "$current"
 }
 
+compare_wave27_profiles() {
+  local baseline=$1 current=$2
+  [[ -f $baseline ]] || { echo "preo-bench: missing Wave27 baseline: $baseline" >&2; exit 2; }
+  [[ -f $current ]] || { echo "preo-bench: missing Wave27 current profile: $current" >&2; exit 2; }
+  awk -F '\t' '
+    BEGIN {
+      OFS = "\t"
+      print "case", "metric", "baseline", "current", "delta", "percent", "status"
+    }
+    FNR == 1 { next }
+    NR == FNR {
+      for (i = 1; i <= NF; i++) base[$1, i] = $i
+      known[$1] = 1
+      next
+    }
+    {
+      name = $1; group = $2; items = $3
+      user[group,items] = $10
+      elab[group,items] = $15
+      rss[group,items] = $12
+      if (!known[name]) {
+        if (group == "authenticated_context" || group == "frontier" ||
+            group == "v4_checked")
+          print name, "case", "MISSING_API", group, "", "", "NO_BASELINE_MISSING_API"
+        else {
+          print name, "case", "", "", "", "", "FAIL_MISSING_BASELINE"
+          failed = 1
+        }
+        next
+      }
+      # Wall remains observable but never gates under host scheduling noise.
+      info(name, "wall_s", base[name,9], $9)
+      check(name, "user_s", base[name,10], $10, 10, .050, 20, .100)
+      check(name, "import_ms", base[name,13], $13, 10, 50, 20, 100)
+      check(name, "interpretation_ms", base[name,14], $14, 10, 50, 20, 100)
+      check(name, "elaboration_ms", base[name,15], $15, 10, 50, 20, 100)
+      check(name, "typecheck_ms", base[name,16], $16, 10, 50, 20, 100)
+      check(name, "typeclass_ms", base[name,17], $17, 10, 50, 20, 100)
+      check(name, "tactic_ms", base[name,18], $18, 10, 50, 20, 100)
+      check(name, "compile_ms", base[name,19], $19, 10, 50, 20, 100)
+      check(name, "rss_bytes", base[name,12], $12, 5, 67108864, 10, 134217728)
+      if ($6 == 1) {
+        print name, "noise", "0", "1", "1", "", "INFRASTRUCTURE_NOISY"
+        noisy = 1
+      }
+    }
+    END {
+      split("v3_export authenticated_context frontier v4_checked", groups, " ")
+      for (i in groups) {
+        group = groups[i]
+        if (user[group,0] != "" && user[group,4] != "" && user[group,16] != "") {
+          scaling(group "_16", "incremental_user_s_per_item",
+            (user[group,4] - user[group,0]) / 4,
+            (user[group,16] - user[group,0]) / 16, .010)
+          scaling(group "_16", "incremental_elaboration_ms_per_item",
+            (elab[group,4] - elab[group,0]) / 4,
+            (elab[group,16] - elab[group,0]) / 16, 10)
+          rss4 = (rss[group,4] - rss[group,0]) / 4
+          rss16 = (rss[group,16] - rss[group,0]) / 16
+          rssStatus = rss16 > 4194304 ? "FAIL_SCALE" : "PASS"
+          if (rssStatus == "FAIL_SCALE") failed = 1
+          print group "_16", "incremental_rss_bytes_per_item", rss4, rss16,
+            rss16 - rss4, percent(rss4, rss16), rssStatus
+        }
+      }
+      if (failed) exit 1
+      if (noisy) exit 3
+    }
+    function percent(old, new) {
+      if (old == 0) return (new == 0 ? 0 : 999999)
+      return 100 * (new - old) / old
+    }
+    function info(name, metric, old, new, p, d) {
+      d = new - old; p = percent(old, new)
+      print name, metric, old, new, d, p, "INFO"
+    }
+    function check(name, metric, old, new, wp, wa, fp, fa, p, d, status) {
+      d = new - old; p = percent(old, new); status = "PASS"
+      if (p > fp && d > fa) { status = "FAIL"; failed = 1 }
+      else if (p > wp && d > wa) status = "WARN"
+      print name, metric, old, new, d, p, status
+    }
+    function scaling(name, metric, old, new, absolute, p, d, status) {
+      d = new - old; p = percent(old, new)
+      status = (p > 25 && d > absolute) ? "FAIL_SCALE" : "PASS"
+      if (status == "FAIL_SCALE") failed = 1
+      print name, metric, old, new, d, p, status
+    }
+  ' "$baseline" "$current"
+}
+
 mode=${1:-}
 case "$mode" in
   -h|--help|'') usage; [[ -n $mode ]] || exit 2 ;;
@@ -748,6 +1037,27 @@ case "$mode" in
     wave26_baseline_profile 49881d3 >"$wave26_baseline"
     wave26_profile_root "$repo_root" >"$wave26_current"
     compare_wave26_profiles "$wave26_baseline" "$wave26_current"
+    ;;
+  wave27-golden) wave27_golden_check ;;
+  wave27-record-goldens)
+    [[ $# == 2 ]] || { usage >&2; exit 2; }
+    prepare_wave27_root "$repo_root"
+    capture_wave27_goldens "$repo_root" "$2"
+    ;;
+  wave27-profile) wave27_profile_root "${2:-$repo_root}" ;;
+  wave27-baseline) wave27_baseline_profile "${2:-81aa899}" ;;
+  wave27-compare)
+    [[ $# == 3 ]] || { usage >&2; exit 2; }
+    compare_wave27_profiles "$2" "$3"
+    ;;
+  wave27-all)
+    make_tmp
+    wave27_golden_check
+    wave27_current="$tmp_dir/wave27-current.tsv"
+    wave27_baseline="$tmp_dir/wave27-baseline.tsv"
+    wave27_baseline_profile 81aa899 >"$wave27_baseline"
+    wave27_profile_root "$repo_root" >"$wave27_current"
+    compare_wave27_profiles "$wave27_baseline" "$wave27_current"
     ;;
   all)
     make_tmp

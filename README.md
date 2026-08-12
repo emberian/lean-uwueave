@@ -174,7 +174,7 @@ is a bigger, real schema that deliberately contains one.
 - **A Rust crate.** An append-only content-addressed document store,
   collaborative text, node moving, membership and roles — where the delicate
   decisions are compiled from the proofs rather than reimplemented.
-- **Three explicit persistence surfaces.** `ArtifactJournal` keeps exact,
+- **Four explicit persistence surfaces.** `ArtifactJournal` keeps exact,
   Lean-validated Preoscript artifact-v2 frames inside a checksummed physical
   log; `DocumentJournal` separately persists the current unauthenticated typed
   `MoveLog` subset and validates checkpoints against their mutation prefix;
@@ -184,7 +184,10 @@ is a bigger, real schema that deliberately contains one.
   collisions fail loudly. An optional `BufferedHistoryJournal` accepts
   out-of-order delivery into a visible finite in-memory buffer and drains ready
   layers deterministically. Pending entries are deliberately volatile and
-  disappear on reopen; only the causally closed prefix is durable.
+  disappear on reopen; only the causally closed prefix is durable. The separate
+  `HistoryArrivalJournal` is the durable-arrival endpoint: it records every
+  accepted canonical arrival before classification, checkpoints the exact
+  accepted/materialized/pending state, and reconstructs pending work on reopen.
   They provide per-record bounds, sequence-addressed retry, locking, sync
   policy, and torn-tail/corruption handling. They do not provide authenticated
   v4 admission, whole-journal resource bounds, multi-record transactions,
@@ -226,10 +229,20 @@ is a bigger, real schema that deliberately contains one.
   through checked constructors. A bare certified report or structural lookalike
   is refused because neither retains the external authenticity and independent
   running-reach premises. The command is acceptance-green but not yet
-  performance-green: its serialized N=16 benchmark measures **6.732 MiB/item**,
+  performance-green: its serialized N=16 benchmark measures **6.706 MiB/item**,
   above the existing 4 MiB/item RSS ceiling. Typed expression evidence likewise retains exact
   value/source/child-path attribution; its verified entry point still requires
   the deployment to prove its own source-authenticity relation.
+
+- **Authenticated context is now compositional without becoming magical.**
+  Accepted signed events must also occur in an authentic issuance trace.
+  Authenticated frontier progress binds the issuer/source, roster, timestamp,
+  old/new frontiers, issued pool, and delivered pools to one exact signed event;
+  typed-position delivery separately checks causal origin, version reach, and
+  an active one-use grant. A canonical 369-byte V4 sidecar retains those checked
+  request/context facts as bounded neutral data, but decoding it cannot recreate
+  the private checked value. Its `⟨4,162⟩` durable framing is intentionally not
+  the existing `UWV4` signed-request wire and is not a verifier.
 
 ## Some things we found that surprised us
 
@@ -284,7 +297,7 @@ not something you crash on.
   namespace; the Preoscript acceptance suite repeats the forbidden-proof cases
   at generated declarations and covers failure honesty and resource caps.
 - **[Runtime architecture](docs/RUNTIME.md)** — the shipping FORMAT-v3 path,
-  exact RuntimeInit/Lake native closure, three pure-Rust journals, checked V3
+  exact RuntimeInit/Lake native closure, four pure-Rust journals, checked V3
   Quickstart and bounded diagnostic inspection, exact durability assumptions,
   and the canonical but not-yet-shipping authenticated FORMAT-v4 foundation.
 - **[The bibliography](docs/BIBLIOGRAPHY.md)** — every paper behind this, what it
@@ -299,16 +312,18 @@ lake build              # every proof + the total axiom gate (Lean core only, no
 ./scripts/preo-automation-canaries.sh # positive/red tactic and transactional gates
 ./scripts/preo-quickstart-canaries.sh # coherent V3 journey + five typed refusals
 ./scripts/preo-v3-acceptance-canaries.sh # observed V3 export, rollback, floor, caps
+./scripts/wave27-acceptance-canaries.sh # signed context/frontier/V4/durable arrival
 cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
 
-The current checkpoint is **172** Lean source modules (**149** direct proof-root
-imports excluding `Audit`, **173** full-build jobs), **23,757** audited
-constants, **637** MAP keystones, **124** documented transports, and **142**
-passing Rust tests.
-The generated work ledger records **158** `⟨UNDONE⟩`
-markers in **156** blocks across **43** source files. Counts are checkpoints;
-the commands and fail-closed gates are the durable contract.
+The current checkpoint is **181** Lean source modules (**158** direct proof-root
+imports excluding `Audit`, **182** full-build jobs) and **24,921** audited
+constants, with **686** MAP keystones and **129** documented transports. The
+generated work ledger records **156** `⟨UNDONE⟩`
+markers in **154** blocks across **43** source files. The serialized Wave-27
+Rust aggregate passed **147/147** tests in **24.08s** (including **2.59s** of
+compilation). Counts are checkpoints; the commands and fail-closed gates are
+the durable contract.
 
 ## How to read our claims
 

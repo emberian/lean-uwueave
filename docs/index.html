@@ -300,31 +300,31 @@
     face &mdash; the theorem names, the refutations, the prices, and the compiled kernels.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">172</div><div class="l">Lean modules</div>
-        <div class="s">170 library modules plus two separate CLI mains</div></div>
-      <div class="stat"><div class="n">23,757</div><div class="l">constants audited</div>
+      <div class="stat"><div class="n">181</div><div class="l">Lean modules</div>
+        <div class="s">179 library modules plus two separate CLI mains</div></div>
+      <div class="stat"><div class="n">24,921</div><div class="l">constants audited</div>
         <div class="s">the live Lean&nbsp;4.30 floor gate</div></div>
-      <div class="stat"><div class="n">637</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">686</div><div class="l">keystones in the ledger</div>
         <div class="s">each tagged with a generality and a reachability axis</div></div>
       <div class="stat"><div class="n">8</div><div class="l">priced exits</div>
         <div class="s">each with an availability check and a price</div></div>
       <div class="stat"><div class="n">4</div><div class="l">native-kernel modules</div>
         <div class="s">six exports in one exact RuntimeInit closure</div></div>
-      <div class="stat"><div class="n">142</div><div class="l">Rust tests</div>
-        <div class="s">including artifacts, inspection, and causal history storage</div></div>
+      <div class="stat"><div class="n">147</div><div class="l">Rust tests</div>
+        <div class="s">all targets green in the Wave-27 aggregate</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
         <div class="s">Lean core only &mdash; nothing to vendor, nothing to pin</div></div>
     </div>
     <p style="font-size:.9rem;color:var(--muted);max-width:78ch;margin-top:1.1rem"><strong>Check
     every cell.</strong> These commands were run against this repository to produce the numbers
     above &mdash; a stat with no command under it is decoration:</p>
-<pre><code># 172 Lean modules in the assembled worktree
+<pre><code># 181 Lean modules in the assembled worktree
 rg --files Uwueave -g '*.lean' | wc -l
 
-# 637 rows in the keystone ledger
+# 686 rows in the keystone ledger
 awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 
-# 158 UNDONE markers / 156 blocks / 43 source files
+# 156 UNDONE markers / 154 blocks / 43 source files
 ./scripts/undone-census.sh --check
 
 # 8 exits — the constructors of `inductive Exit`
@@ -336,18 +336,19 @@ grep -RFn '@[export ' Uwueave/
 # `"packages": []` — no dependencies, mathlib included
 grep '"packages"' lake-manifest.json
 
-# the root/Audit gate: 173 jobs; prints `#audit_floor: N constants audited`
+# the root/Audit gate: 182 jobs; prints `#audit_floor: N constants audited`
 lake build</code></pre>
     <p style="font-size:.85rem;color:var(--muted);max-width:78ch"><strong>The audit count is a
     moving floor, not a protocol constant.</strong> The number your own <code>lake build</code>
     prints is authoritative. Root coverage is checked separately: Lean parses the real root
-    header, including indented imports. It reports 149 direct root modules excluding
-    <code>Audit</code>; the transitive root/gate closure reaches all 170 import-pure library
+    header, including indented imports. It reports 158 direct root modules excluding
+    <code>Audit</code>; the transitive root/gate closure reaches all 179 import-pure library
     modules. <code>ArtifactEmitMain</code> and <code>ArtifactInspectionMain</code> are compiled
     separately because both own a root-level <code>main</code>; the proof aggregate covers their
-    pure library modules instead. The same checkpoint has 637 MAP keystones, 124 documented
-    transports, 142 passing Rust tests, and 158 UNDONE markers in 156 blocks across 43 source
-    files.</p>
+    pure library modules instead. The same checkpoint has 686 MAP keystones, 129 documented
+    transports and 156 UNDONE markers in 154 blocks across 43 source files. The serialized
+    Wave-27 <code>cargo test --all-targets</code> gate passed all 147 tests in 24.08 seconds,
+    including 2.59 seconds of compilation.</p>
 
     <h2 style="margin-top:2.2rem">The shape of the whole thing</h2>
     <ol class="three">
@@ -1435,7 +1436,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           certificate rows. Its acceptance suite has three green fixtures and fifteen red command
           cases; a bare certified report and a structural lookalike both refuse, and the positive
           prefix audits 48 constants. This surface is not yet scale-green: its serialized N=16
-          benchmark measures 6.732 MiB/item, above the 4 MiB/item ceiling. Typed position evidence similarly retains exact value,
+          benchmark measures 6.706 MiB/item, above the 4 MiB/item ceiling. Typed position evidence similarly retains exact value,
           source, and <code>Expr.Hole</code> child path while requiring an external source-
           authenticity proof at its verified entry point. The serialized typed N=16 regression
           corpus now passes at <strong>3.940 MiB incremental peak RSS per item</strong>, below its
@@ -1823,7 +1824,20 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       any declaration. A failed command leaves the prefix absent and reusable. These facts check
       the dependent construction and transaction; they do not authenticate a process, network,
       device or filesystem observation.</p>
-      <p>The pure-Rust storage layer now has three distinct journals. In addition to artifact and
+      <p>Wave 27 composes the next boundary without collapsing its premises.
+      Accepted signed position and frontier events must also belong to an authentic issuance
+      trace; exact issuer/source, roster, typed path, causal origin, version reach, frontier
+      transition and delivery completeness remain separately visible. Capability use is a
+      grow-only tombstone receipt. The concrete adapter intentionally requires one unique grant
+      per delivered candidate, so same-grant multi-candidate batches remain rejected rather than
+      silently double-spending a token.</p>
+      <p>A new checked V4 sidecar carries these deployment bindings as bounded neutral data.
+      Its canonical fixture is 369 bytes under format/domain <code>&lang;4,162&rang;</code>, not the
+      existing <code>UWV4</code> signed-request wire. Only the proof-indexed builder accepts
+      verification, shape, grant and context receipts; canonical decoding returns a neutral
+      <code>Manifest</code> and cannot reconstruct <code>CheckedManifest</code>, signature validity,
+      authority or membership.</p>
+      <p>The pure-Rust storage layer now has four distinct journal surfaces. In addition to artifact and
       typed MoveLog storage, <code>HistoryJournal</code> stores canonical explicit 32-byte event
       IDs with strictly ordered parents that must already be accepted. Every admitted prefix is
       causally closed; exact retries write nothing, while missing parents and same-ID/different-
@@ -1838,9 +1852,13 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       <code>BufferedHistoryJournal</code> deliberately does something narrower: pending events
       live in a bounded volatile map, only ready events enter the checksummed journal, and reopen
       loses pending entries. A six-event reversed criss-cross test settles and converges, but the
-      volatile endpoint is not a refinement of Lean&rsquo;s durable arrival cursor. A durable Rust
-      arrival queue, parent-order reconciliation, authenticated IDs and a filesystem model remain
-      explicit work.</p>
+      volatile endpoint is not a refinement of Lean&rsquo;s durable arrival cursor. The separate
+      <code>HistoryArrivalJournal</code> now durably appends every accepted arrival before
+      classification, checkpoints accepted/materialized/pending state, restores pending entries
+      on reopen and drains after parent arrival. Its V4 integration deliberately accepts a
+      version-mutated sidecar as an opaque payload: persistence preserves bytes, but does not
+      authenticate or validate them. Lean/Rust refinement, parent-order reconciliation,
+      authenticated IDs and a filesystem model remain explicit work.</p>
     </div>
 
     <figure class="flow">
@@ -1998,7 +2016,7 @@ def replayKernel (input : ByteArray) : ByteArray :=
       <code>Classical.choice</code>, <code>Quot.sound</code>) is fatal: a <code>sorry</code>
       (<code>sorryAx</code>), custom axiom, or Lean-4.30 <code>native_decide</code>
       (<code>_native.native_decide.ax_…</code>) goes red. The whole-tree command retains its
-      300-constant tripwire and currently audits 23,757 constants. Seven trust subprocess fixtures
+      300-constant tripwire and currently audits 24,921 constants. Seven trust subprocess fixtures
       exercise the exact allowed floor, indented/root header parsing, prefix vacuity, and all
       three forbidden dependency classes. They prove the gate can fail, but share its
       <code>collectAxioms</code> implementation and are not an independent checker. A separate
@@ -2060,7 +2078,7 @@ lake build
 cd rust &amp;&amp; cargo test</code></pre>
     <p>Further reading in the repo:
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/MAP.md">docs/MAP.md</a>
-    (every module, what it settles, and the 637-row keystone ledger with its generality and
+    (every module, what it settles, and the 686-row keystone ledger with its generality and
     reachability axes) ·
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/TRUST.md">docs/TRUST.md</a>
     (the three ledgers) ·

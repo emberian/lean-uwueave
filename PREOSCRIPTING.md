@@ -177,6 +177,22 @@ or validation refusal—rolls back every declaration under the export prefix;
 the same name may then be reused by a successful command. This is Lean
 environment rollback, not filesystem or external-service atomicity.
 
+The API is green; its current scaling gate is not. Wave 27 measured the V3
+export peak-RSS slope as
+`(RSS₁₆ − RSS₀) / 16 = 7,031,808 B/item = 6.7060546875 MiB/item`, which is a
+`FAIL_SCALE` against the hard **4 MiB/item** ceiling. The harness used serialized
+`lean -j1 --profile` processes wrapped in `/usr/bin/time -lp`, two unmeasured
+warmups and the median of five runs, without cache clearing or the declaration
+trace profiler; all four V3 rows were below its noise threshold. Exact generated
+prefixes, rollback/reuse, and API-status goldens still pass. This is an
+elaboration-process memory result, not runtime heap usage or evidence that the
+semantic construction is unsound. Reproduce the retained hard surface checks
+without rebuilding dependencies with:
+
+```sh
+PREO_BENCH_SKIP_BUILD=1 scripts/preo-bench.sh wave27-golden
+```
+
 ### Positional holes, attribution, and generic framing
 
 Typed programs retain exact `Expr.Hole` values: syntax-tree child path, field
@@ -203,6 +219,108 @@ domain. V3 uses version `3` in artifact domain `161`, while V2 remains a
 different version. Generic framing therefore does not make V2 accept V3, make
 an arbitrary codec canonical, or promote decoded rows into proofs.
 
+### Authenticated frontier and world-context path
+
+[`AuthenticatedFrontier`](Uwueave/AuthenticatedFrontier.lean) makes frontier
+progress a conjunction, not a signature-shaped shortcut. Its reserved inner
+ERA event kind is `6`. `AuthenticatedProgress` retains the exact accepted
+signed event, membership in the received trace, genuine `WasIssued` evidence,
+actor=issuer, and issuer membership in the written roster.
+`AuthenticatedAdvance` then adds two independent semantic premises: the
+issuer's new frontier point is settled, and the event's decoded before/after
+frontiers and issued/delivered pools form a lawful `Frontier.DeliveryAdvance`.
+The caller supplies the signature scheme, authentic-issuer premise, received
+trace, issuance transcript, roster, and semantic decoder. Signature acceptance
+alone manufactures none of them.
+
+[`AuthenticatedWorldContext`](Uwueave/AuthenticatedWorldContext.lean) (AWC)
+continues the checked path at reserved position-event kind `5`:
+
+```text
+AcceptedEvent + received trace + AuthenticIssuer
+  → IssuedPositionEvent
+  → AuthenticatedPositionClaim (exact world/value/source/Expr.Hole)
+  → ContextualPositionClaim (active grant + causal origin/version)
+  → ConsumptionReceipt (fresh grow-only grant tombstone)
+
+AuthenticatedProgress + lawful AuthenticatedAdvance
+  + one exact contextual position witness per newly delivered candidate
+  → AuthenticatedConsumingDelivery
+  → WorldFuture.DeliveryFuture
+```
+
+The final projection is deliberately `WorldFuture.DeliveryFuture`, not the
+stronger `WorldContext.DeliveryFuture`, because capability consumption grows
+while the underlying context axes stay frozen. The positive fixture also pins
+three refusals: a stale world version, the wrong causal origin, and reuse of a
+consumed grant. AWC proves a model-level relationship from explicit premises;
+it does not deploy a cryptographic verifier, observe a network, or serialize
+those proofs into a sidecar.
+
+The complete green/red boundary suite is copy-pastable from the repository
+root. It includes frontier origin/roster/domain/staleness, AWC
+position/origin/version/capability, V4 sidecar, the unchanged V3 surface, and
+the native durable-arrival tests:
+
+```sh
+scripts/wave27-acceptance-canaries.sh
+```
+
+### Runtime-auth V4: checked sidecar, not the `UWV4` request
+
+Three byte protocols now sit near one another and must remain distinct:
+
+| bytes | framing | purpose |
+|---|---|---|
+| `RuntimeAuthV4.encodeRequestV4 request` | ASCII `UWV4`, then version `4`, request kind `1` | the signed runtime request; `signingBytesV4` covers its content but excludes the signature field |
+| `RuntimeAuthV4Durable.manifestBytes manifest` | durable format `⟨4, 162⟩`; prefix `[213, 74, 4, 162]` | a neutral runtime-auth **sidecar** projected from a checked request, active grant, and finite context |
+| checked artifact V3 bytes | durable format `⟨3, 161⟩` | the typed query/result/certificate artifact described above |
+
+[`RuntimeAuthV4Checked`](Uwueave/Preo/RuntimeAuthV4Checked.lean) is the one-way
+proof-rich producer. `CheckedManifest.ofReady` consumes the exact
+`RuntimeAuthV4.ReadyForExecution`, shape check, active `GrantReceipt`, and
+`ContextReceipt`; its private constructor prevents decoded rows from entering
+that type. `ContextReceipt.ofAuthenticatedProgress` may bind the request issuer
+to an independently authenticated progress issuer by explicit equality. The
+context's substrate/history-head digests and origin/version IDs remain
+caller-authored, nonempty opaque byte bindings. Roster and participant lists
+are finite canonical manifests, not proofs that membership is globally
+complete.
+
+[`RuntimeAuthV4ProjectionCore`](Uwueave/Preo/RuntimeAuthV4ProjectionCore.lean)
+validates the neutral sidecar's schema, resource bounds, canonical lists,
+grant/reference relationships, scope, and listed membership. Only its private
+`ValidatedProjection` may enter
+[`renderRustSource`](Uwueave/Preo/RuntimeAuthV4Projection.lean), which emits a
+neutral Rust DTO plus equality lookup conveniences—not a verifier, permit, or
+membership oracle. `RuntimeAuthV4Durable.decodeManifestExact` likewise returns
+only neutral rows; it cannot reconstruct `CheckedManifest`, signature
+verification, authority, frontier, or storage evidence.
+
+The opt-in fixture is exactly **369 bytes**. Lean proves its length, framing
+prefix, and exact decode; the SHA-256 below is an external regression label,
+not a theorem or authenticity claim. The emitter is intentionally test-only:
+
+```sh
+auth_dir="$(mktemp -d "${TMPDIR:-/tmp}/preo-auth-v4-doc.XXXXXX")"
+lake env lean --run rust/tests/support/RuntimeAuthV4Fixture.lean \
+  > "$auth_dir/runtime-auth-v4.sidecar"
+wc -c < "$auth_dir/runtime-auth-v4.sidecar"       # 369
+od -An -tu1 -N4 "$auth_dir/runtime-auth-v4.sidecar" # 213 74 4 162
+shasum -a 256 "$auth_dir/runtime-auth-v4.sidecar"
+# a9f32051b0e1e328ab08b253a808ba54cc5c4a4e9cb2b5d2550c3811cf03b819
+
+# Kernel-check the checked→manifest→validate→render and exact-decode paths.
+lake env lean Uwueave/Preo/RuntimeAuthV4Examples.lean
+lake env lean Uwueave/Preo/RuntimeAuthV4Fixtures.lean
+```
+
+For library-side rendering, the exact sequence is
+`Projection.ofManifest checked.toManifest`, `validate config projection`, then
+`renderRustSource validated` (or `validateAndRender`). The fixture exposes it as
+`RuntimeAuthV4Examples.fixtureRust`. There is no production sidecar emitter or
+sidecar inspector CLI yet; the artifact inspector does not accept this format.
+
 Three boundaries are load-bearing:
 
 - `Journey.StateReach = [start, later]` and `worldBinding.worldReach =
@@ -220,9 +338,11 @@ Three boundaries are load-bearing:
   artifact frames for the inspector. Rust `ArtifactJournal` is a separate
   checksummed physical store for exact artifact payloads. Rust
   `HistoryJournal` is different again: it stores explicit-ID causal application
-  events with parents and opaque payloads. Neither journal is the application's
-  materialized state, and no current refinement theorem turns a
-  `HistoryJournal` payload into a proof-indexed Lean `History`.
+  events with parents and opaque payloads; `HistoryArrivalJournal` additionally
+  makes out-of-order arrivals authoritative. These stores preserve bytes—they
+  do not validate a runtime-auth sidecar inside an event payload. Neither
+  journal is the application's materialized state, and no current refinement
+  theorem turns its payload into a proof-indexed Lean `History`.
 
 All emission commands above cross an ordinary host-I/O boundary. Direct output
 uses `IO.FS.writeBinFile`; redirected output uses the shell. Neither path
@@ -275,11 +395,26 @@ Rust `HistoryJournal` supplies the pure-Rust `RawJournal` host rung for
 immediately causal events. `BufferedHistoryJournal` is intentionally different:
 only ready events reach the physical journal, its bounded pending map is
 volatile, and reopen loses those pending arrivals. It can converge after two
-successive/criss-cross merges when every event is eventually delivered, but a
-durable Rust arrival queue is still missing. There is no Lean↔Rust refinement
-theorem: the Lean persistent cursor can authoritatively replay pending arrivals,
-whereas the Rust wrapper cannot recover them, and their parent canonicality
-rules differ. None of these runtimes enumerates arbitrary or infinite DAGs,
+successive/criss-cross merges when every event is eventually delivered.
+
+`HistoryArrivalJournal` closes that volatile-pending deployment gap with a
+distinct checksummed wire. Every accepted event record is appended before its
+in-memory materialized/pending transition; bounded missing-parent arrivals
+therefore survive reopen and later drain deterministically in event-ID order.
+Exact retry is no-write, ID collision and buffer overflow refuse before write,
+and canonical checkpoints bind capacity plus the accepted, materialized, and
+pending maps. Torn/corrupt/version/capacity/checkpoint failures are covered by
+focused recovery tests. “Durable” is still relative to the selected
+`SyncPolicy` and the host filesystem's promises.
+
+Lean exposes `DurableArrivalCallbacks` as a typed receive/reopen contract equal
+to `deliverySchema` replay from an empty capacity-bound cursor. No theorem says
+the Rust codec implements it: Lean permits any duplicate-free parent order,
+while Rust requires strictly increasing parent IDs, and no bytes/schema
+relation connects the languages. The cross-boundary V4 fixture proves exact
+opaque bytes survive pending reopen and drain—and deliberately proves that a
+mutated payload under a fresh event ID is stored too. Persistence is not
+authentication. None of these runtimes enumerates arbitrary or infinite DAGs,
 lifts the proof model beyond its `Type 0` boundary, authenticates IDs, proves
 filesystem/device premises, or bridges opaque payload bytes back to
 `SelectedAdmission`/`Coherent` proofs.
@@ -939,11 +1074,13 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | ✅ **five-currency budget surface** | `Scheduling.ProfileUpperBound`, `preo_budget`, `Preo.Planning` | **CLOSED for witnessed acceptance and bounded authored search.** A standalone command consumes one real plan satisfying `Currency → Nat` pointwise at the exact generated session. `Demo` rediscovers `coalescedProfileUpperBound` by `rfl`; separate theorems refute acceptance from crossings or a peer-meeting floor. `Preo.Planning` searches only a duplicate-free, pre-capped authored action universe. **Unbuilt:** arbitrary schedule discovery and a pretty inline budget block. |
 | ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export`, `Preo.ArtifactDurable`, `Preo.ProjectionV2`, `preo_export` | **BUILT AND SURFACED.** Private proof-indexed builders project answered classifications, certified world futures, ordinary/profile protocol elaborations and exact-plan five-currency budgets into one canonical first-order artifact. The manifest supplies every stable ID, witness codec and budget plan equality explicitly; it emits canonical durable bytes and must pass V2 structural/resource validation before rendering. Unresolved invariants, wrong certificates, wrong-plan budgets and duplicate IDs fail closed. Published V1 remains the budget-empty legacy schema. Composed profile plans wait for a dedicated checked export builder; decoded wire tags have no path back to semantic proof constructors. |
 | ✅ **authenticated observed V3 export** | `Preo.ObservedBoundResult`, `Preo.ArtifactV3Checked`, `Preo.ProjectionV3Core`, `Preo.ArtifactV3Surface`, `preo_export_v3` | **BUILT AND SURFACED for one exact observed typed program.** The command consumes separate authenticity, running-reach, authored-reach, certificate, plan and budget proofs; projects checked query/result/world/certificate rows plus positional reads/holes/analyses/effects; enforces work and validator resource caps; and publishes only after the whole environment transaction succeeds. Canonical bytes are generically framed under the distinct V3 format tag. The caller still supplies observation/authenticity and stable name registries; decoded validation cannot reconstruct proofs or check every semantic association. |
+| ✅ authenticated frontier + consuming world context | `AuthenticatedFrontier`, `AuthenticatedWorldContext` | **PROVED for explicit deployment premises.** A signed, received, genuinely issued progress event is conjoined with a lawful delivery advance; exact signed positions, active causal grants and fresh consumption tombstones justify each newly delivered candidate. Stale version, wrong origin and consumed-token reuse refuse. No signature hardness, network observation, roster completeness or host execution is inferred. |
+| ✅ runtime-auth V4 sidecar | `RuntimeAuthV4Checked`, `RuntimeAuthV4Durable`, `RuntimeAuthV4Projection` | **BUILT as a one-way checked projection.** Exact `ReadyForExecution`, active grant and finite context produce neutral canonical format-`⟨4,162⟩` rows/bytes and a validated Rust DTO. The frozen fixture is 369 bytes. This sidecar is not the `UWV4` signed request, and decode/render/storage reconstruct no verifier, authority, membership or frontier proof. |
 | **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
 | ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term`, `Preo.Planning` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, bounded authored action-subset search, and exact crossing/meeting non-function refutations. **Unbuilt:** arbitrary schedule discovery and the pretty inline budget block. |
 | recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |
 | durable artifacts | `Durable`, `ArtifactDurableCore` | **proved logical codec/journal rung** with canonical roundtrip, generic stack-safe framed encoding, and torn-tail recovery; no filesystem, flush or crash-atomicity guarantee is claimed |
-| ✅ bounded finite history delivery | `HistoryRuntime`, `PersistentHistoryRuntime`; Rust `HistoryJournal`/`BufferedHistoryJournal` | **BUILT for caller-ID finite events.** Exact retry/collision, bounded pending delivery, finite drain, criss-cross event-set convergence, replay and checked checkpoints are executable. Lean authoritative arrival replay may retain pending records; Rust buffered pending is volatile and lost on reopen. No cross-language refinement, ID authenticity, infinite enumeration, proof-history reconstruction, or durable Rust arrival queue is claimed. |
+| ✅ bounded finite history delivery | `HistoryRuntime`, `PersistentHistoryRuntime`; Rust `HistoryJournal`/`BufferedHistoryJournal`/`HistoryArrivalJournal` | **BUILT for caller-ID finite events.** Exact retry/collision, bounded pending delivery, finite drain, criss-cross event-set convergence, replay and checked checkpoints are executable. The older Rust buffered wrapper remains volatile; the distinct arrival journal durably retains accepted pending events and canonical state checkpoints across reopen. Opaque payload persistence is not authentication. No cross-language refinement, ID authenticity, infinite enumeration or proof-history reconstruction is claimed. |
 
 ## 11. What would make us abandon this
 

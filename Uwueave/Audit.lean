@@ -146,6 +146,8 @@ import Uwueave.WorldContext
 import Uwueave.Authenticity
 import Uwueave.Byzantine
 import Uwueave.AuthenticatedAdmission
+import Uwueave.AuthenticatedFrontier
+import Uwueave.AuthenticatedWorldContext
 import Uwueave.Durable
 import Uwueave.PersistentRuntime
 import Uwueave.PersistentHistoryRuntime
@@ -200,6 +202,13 @@ import Uwueave.Preo.Quickstart
 import Uwueave.StatusSemanticsAcceptance
 import Uwueave.RepairSynthesis
 import Uwueave.RuntimeAuthV4
+import Uwueave.Preo.RuntimeAuthV4Data
+import Uwueave.Preo.RuntimeAuthV4Checked
+import Uwueave.Preo.RuntimeAuthV4Durable
+import Uwueave.Preo.RuntimeAuthV4ProjectionCore
+import Uwueave.Preo.RuntimeAuthV4Projection
+import Uwueave.Preo.RuntimeAuthV4Examples
+import Uwueave.Preo.RuntimeAuthV4Fixtures
 import Uwueave.RuntimeInit
 import Uwueave.Tactics.Verdict
 import Uwueave.Tactics

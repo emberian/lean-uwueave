@@ -1,0 +1,5 @@
+api	status	basis
+v3_export_command	AVAILABLE	preo_export_v3 transactional syntax
+authenticated_context	MISSING_API	authenticated context API absent
+frontier_builder	MISSING_API	frontier builder API absent
+v4_checked_builder	MISSING_API	checked V4 builder absent

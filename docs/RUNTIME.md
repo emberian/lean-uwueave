@@ -118,8 +118,9 @@ shim, build script, Cargo manifest, and lockfile must also be unchanged.
 initialization with `Once`; failure aborts rather than exposing a partly
 initialized runtime. The current native-closure gate observed 13 Lake-owned
 objects (659,152 bytes before archiving) and 14 archive members including the
-shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The full Wave-26 Cargo
-gate passed 142/142 tests.
+shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The serialized Wave-27
+`cargo test --all-targets` gate passed 147/147 tests in 24.08 seconds, including
+2.59 seconds of compilation.
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native
@@ -129,7 +130,7 @@ rows in `docs/TRUST.md`.
 
 ## 2. The pure-Rust persistence and inspection surfaces
 
-The runtime now has three deliberately different pure-Rust journals under
+The runtime now has four deliberately different pure-Rust journals under
 `rust/src/persistence/`. They share a private physical record mechanism, not a
 semantic wire format.
 
@@ -219,7 +220,7 @@ absence and successful same-name reuse. Its positive generated prefix audits
 48 constants on the repository trust floor. This establishes elaboration
 honesty, not authenticity of any host observation. Nor is acceptance a
 performance claim: the command's serialized N=16 benchmark currently measures
-6.732 MiB incremental peak RSS per item, above the existing 4 MiB/item ceiling.
+6.706 MiB incremental peak RSS per item, above the existing 4 MiB/item ceiling.
 
 ### 2.2 Bounded diagnostic-only artifact inspection
 
@@ -315,15 +316,26 @@ in-memory `BTreeMap`, and appends only ready events. Draining uses deterministic
 ID order; retries, same-ID/different-content collisions, and buffer-full are
 explicit. The buffer is deliberately **volatile**: reopen reconstructs the
 checksummed causal prefix and starts with no pending entries, which the focused
-test asserts. A durable arrival queue is required before this endpoint can
-refine Lean's `deliverySchema`.
+test asserts.
+
+`HistoryArrivalJournal` is the separate durable-arrival endpoint. It appends
+every canonical arrival before classifying it as materialized or pending,
+records the written capacity in each record, and supports exact state-digest
+checkpoints over accepted/materialized/pending maps. Reopen replays the exact
+arrival sequence, validates capacity and checkpoints, restores pending entries,
+and later drains them deterministically when parents arrive. Exact retry is
+no-write; collision, capacity, torn/corrupt/version, and checkpoint mismatch
+refusals preserve the prior reopenable prefix. The focused acceptance suffix
+runs all four recovery/refusal tests. This is a tested host endpoint, not yet a
+Lean↔Rust refinement or filesystem theorem.
 
 The remaining gaps are exact: Lean requires only duplicate-free parent lists,
 where Rust requires strictly increasing canonical parent IDs; application IDs
 are equality keys, not authentication; there is no Lean↔Rust event codec or
 host-byte refinement; and no theorem covers filesystem or power-loss behavior.
-The focused gates are 36/36 Lean jobs and 8/8 Rust history tests; those Rust
-tests are not a newly rerun aggregate crate count.
+The logical callbacks now name exact receive/reopen replay obligations, but no
+byte codec theorem connects them to `HistoryArrivalJournal`. Parent-order and
+authentication differences remain as below.
 
 ### 2.6 Shared physical record format
 
@@ -510,7 +522,40 @@ without upstream success. `ResponseCode` and `encodeResponse` give v4
 nonempty, version-bound outcomes for decode, authenticity, nonce, authority,
 membership, execution, and storage refusal.
 
-### 5.1 Records v4 still needs
+### 5.1 Checked V4 sidecar: a different wire and a one-way boundary
+
+The Preoscript V4 sidecar is a neutral deployment manifest, not a replacement
+for the `UWV4` request above. `RuntimeAuthV4Checked.CheckedManifest.ofReady`
+consumes the exact `ReadyForExecution`, successful shape validation, an active
+grant receipt, and a finite context receipt. The context pins nonempty opaque
+substrate/head/origin/version identities, a canonical roster and participant
+subset, while the grant receipt pins activity, parent ordering, cited id, and
+scope coverage. Only this checked producer projects the signed request into
+neutral rows.
+
+`RuntimeAuthV4Durable` frames those rows under `FormatTag ⟨4,162⟩`; it is
+intentionally incompatible with the `UWV4` signed-request prefix. The canonical
+fixture is 369 bytes (SHA-256
+`a9f32051b0e1e328ab08b253a808ba54cc5c4a4e9cb2b5d2550c3811cf03b819`).
+Bounded projection validation checks schema, byte/list/numeric ceilings,
+canonical lists and grants, cited scope, node-index consistency, issuer roster,
+and participant membership before rendering a diagnostic Rust DTO. Decode
+returns only `Manifest`: it cannot construct `CheckedManifest`, recover a
+signature proof, infer authority, or bless the opaque digests.
+
+The Wave-27 runtime test stores those 369 bytes as an opaque history-arrival
+payload under `SyncData`, reopens them exactly, drains after the parent arrives,
+and converges across causal/reverse order. It also deliberately stores a
+version-mutated sidecar under another event id. That acceptance is the canary:
+`HistoryArrivalJournal` promises durable opaque bytes, not authentication or V4
+validation.
+
+The Wave-27 acceptance runner adds three positive and eighteen standalone-red
+Lean fixtures for authenticated context/frontier and the V4 sidecar, delegates
+the unchanged three-green/fifteen-red-command transactional V3 suite, and runs
+four focused durable-arrival recovery/refusal tests.
+
+### 5.2 Records v4 still needs
 
 The next runtime journal schema should use explicit typed lanes rather than a
 generic byte/event escape hatch:
@@ -535,7 +580,7 @@ four arrays a caller chose to marshal. No such commitment is present in
 `RuntimeAuthV4.SignedContent` today; adding it is a v4 schema revision that
 must receive its own field tag and codec-separation theorems.
 
-### 5.2 Authenticity, authority, membership, and execution
+### 5.3 Authenticity, authority, membership, and execution
 
 Composition is conjunctive, not substitutive:
 
