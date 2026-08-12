@@ -204,62 +204,47 @@ theorem Admissible.mem_of_mem_rest {X : Type u} {A : Admissible X} {x : X}
     (h : x ∈ A.rest) : x ∈ A.toList :=
   List.mem_cons_of_mem _ h
 
-/-- Running minimum of `P` along a list, from an accumulator. Structural on the
-list, so it reduces; `optimum` seeds it with the head strategy's cost, which is
-where nonemptiness is spent. -/
-def minAlong {X : Type u} (P : Profile X) : Nat → List X → Nat
-  | n, [] => n
-  | n, x :: xs => minAlong P (min n (P x)) xs
+/-- The standard finite minimum of an accumulator and the mapped profile.
+`optimum` seeds it with the head strategy's cost, which is where nonemptiness
+is spent. -/
+def minAlong {X : Type u} (P : Profile X) (n : Nat) (xs : List X) : Nat :=
+  ((n :: xs.map P).min?).getD n
 
-theorem minAlong_le_acc {X : Type u} (P : Profile X) :
-    ∀ (n : Nat) (xs : List X), minAlong P n xs ≤ n := by
-  intro n xs
-  induction xs generalizing n with
-  | nil => exact Nat.le_refl n
-  | cons x xs ih =>
-      simp only [minAlong]
-      have := ih (min n (P x))
-      omega
+/-- `minAlong` is the standard minimum of its accumulator and mapped inputs.
+This is the canonical bridge to `List.min?` and its specification library. -/
+theorem minAlong_eq_listMin {X : Type u} (P : Profile X) (n : Nat) (xs : List X) :
+    minAlong P n xs = ((n :: xs.map P).min?).getD n := rfl
 
-theorem minAlong_le_of_mem {X : Type u} (P : Profile X) :
-    ∀ (n : Nat) (xs : List X) (x : X), x ∈ xs → minAlong P n xs ≤ P x := by
-  intro n xs
-  induction xs generalizing n with
-  | nil => intro x hx; cases hx
-  | cons y ys ih =>
-      intro x hx
-      simp only [minAlong]
-      rcases List.mem_cons.mp hx with h | h
-      · subst h
-        have := minAlong_le_acc P (min n (P x)) ys
-        omega
-      · exact ih _ x h
+theorem minAlong_le_acc {X : Type u} (P : Profile X)
+    (n : Nat) (xs : List X) : minAlong P n xs ≤ n := by
+  rw [minAlong_eq_listMin]
+  exact List.min?_getD_le_of_mem List.mem_cons_self
 
-theorem le_minAlong {X : Type u} (P : Profile X) (k : Nat) :
-    ∀ (n : Nat) (xs : List X), k ≤ n → (∀ x ∈ xs, k ≤ P x) → k ≤ minAlong P n xs := by
-  intro n xs
-  induction xs generalizing n with
-  | nil => intro h _; exact h
-  | cons y ys ih =>
-      intro hn hall
-      simp only [minAlong]
-      refine ih _ ?_ (fun x hx => hall x (List.mem_cons_of_mem y hx))
-      have := hall y List.mem_cons_self
-      omega
+theorem minAlong_le_of_mem {X : Type u} (P : Profile X)
+    (n : Nat) (xs : List X) (x : X) (hx : x ∈ xs) : minAlong P n xs ≤ P x := by
+  rw [minAlong_eq_listMin]
+  exact List.min?_getD_le_of_mem
+    (List.mem_cons_of_mem n (List.mem_map.mpr ⟨x, hx, rfl⟩))
 
-theorem minAlong_achieved {X : Type u} (P : Profile X) :
-    ∀ (n : Nat) (xs : List X),
-      minAlong P n xs = n ∨ ∃ x ∈ xs, minAlong P n xs = P x := by
-  intro n xs
-  induction xs generalizing n with
-  | nil => exact Or.inl rfl
-  | cons y ys ih =>
-      simp only [minAlong]
-      rcases ih (min n (P y)) with h | ⟨x, hx, hxe⟩
-      · by_cases hc : n ≤ P y
-        · exact Or.inl (by rw [h]; omega)
-        · exact Or.inr ⟨y, List.mem_cons_self, by rw [h]; omega⟩
-      · exact Or.inr ⟨x, List.mem_cons_of_mem y hx, hxe⟩
+theorem le_minAlong {X : Type u} (P : Profile X) (k n : Nat) (xs : List X)
+    (hn : k ≤ n) (hall : ∀ x ∈ xs, k ≤ P x) : k ≤ minAlong P n xs := by
+  apply (List.le_min?_iff (show (n :: xs.map P).min? = some (minAlong P n xs) by
+    simp [minAlong])).2
+  intro a ha
+  rcases List.mem_cons.mp ha with rfl | ha
+  · exact hn
+  · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp ha
+    exact hall x hx
+
+theorem minAlong_achieved {X : Type u} (P : Profile X) (n : Nat) (xs : List X) :
+    minAlong P n xs = n ∨ ∃ x ∈ xs, minAlong P n xs = P x := by
+  have hm : minAlong P n xs ∈ n :: xs.map P :=
+    List.min?_mem (show (n :: xs.map P).min? = some (minAlong P n xs) by
+      simp [minAlong])
+  rcases List.mem_cons.mp hm with hm | hm
+  · exact Or.inl hm
+  · obtain ⟨x, hx, hPx⟩ := List.mem_map.mp hm
+    exact Or.inr ⟨x, hx, hPx.symm⟩
 
 /-- **The deferred minimum.** Compose profiles for as long as the session runs;
 `optimum` is what you take when it closes. It is a minimum over the *supplied*

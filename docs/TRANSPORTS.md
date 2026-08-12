@@ -19,9 +19,10 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 115 numbered transport rows.** Wave 23's module splits and
-generic proof APIs change owners and proof routes, not source/target judgements,
-so they update existing rows rather than manufacture new crossings.
+**Ledger total: 116 numbered transport rows.** Wave 24's elaborator and
+projection splits change owners and proof routes, not source/target judgements,
+so they update existing rows; the explicit canonical-byte emitter adds the one
+new checked-export-to-host crossing.
 
 ---
 
@@ -1201,10 +1202,10 @@ under an explicit `Durable.TornFrame`; it is not a filesystem or flush
 refinement, and decoded bytes remain first-order data rather than proof.
 
 **44o. Untrusted projection → bounded validated projection** ⚠
-*source* `Preo.ProjectionV1.Projection` plus a caller
+*source* `Preo.ProjectionV1.Projection` (defined in `ProjectionV1Core`) plus a caller
 `ValidationConfig` · *target* the privately constructible
 `Preo.ProjectionV1.ValidatedProjectionV1` · *transport*
-`Preo.ProjectionV1.validate` · *needs* the exact V1 schema, explicit limits for
+`Preo.ProjectionV1.validate`, owned by `ProjectionV1Core` · *needs* the exact V1 schema, explicit limits for
 every variable-length collection, unique stable IDs, matching declaration and
 plan/session references, in-range crossing origins, and the exact ordered
 five-currency plan-profile shape — **plus an empty budget list**. V1 is the
@@ -1215,7 +1216,10 @@ refusals include `duplicate_field_refused`,
 `out_of_range_crossing_refused`, `noncanonical_profile_refused`, the resource
 bound refusals, `nonempty_budgets_refused`, and `wrong_schema_refused`.
 Positive acceptances `artifact_example_validates` and
-`export_example_validates` are deliberately budget-empty. Validation
+`export_example_validates` live in opt-in `ProjectionV1Examples` and are
+deliberately budget-empty. The core validator imports only `ArtifactData`;
+diagnostic `Repr`, checked examples, rendering, and giant fixtures are separate
+modules. Validation
 transports structural well-shapedness only: its public encoding still contains
 no `Spec.Verdict`, authorization, admission token, or permit.
 
@@ -1229,24 +1233,28 @@ function of the validated encoding by `renderRustSource_eq_of_encoding_eq`,
 and `validateAndRender_error` preserves every validation refusal · *needs* the
 private validated type, deterministic list order, Rust string escaping, and
 arbitrary-precision decimal rendering of Lean naturals;
-`Examples.unbounded_decimal_fixture` checks a value beyond machine-word range
-and `Examples.empty_projection_rust_fixture` pins one complete source file ·
+`ProjectionV1.Examples.unbounded_decimal_fixture` in `ProjectionV1Fixtures` checks a value beyond
+machine-word range and `Examples.empty_projection_lines_fixture` pins one
+complete source file ·
 *without validation* no renderer theorem accepts an arbitrary projection.
 This is a data renderer only: there is no theorem that the emitted Rust
 compiles, reconstructs semantic proofs, or issues authorization or a permit,
 and caller-local validation limits are intentionally not serialized.
+The renderer facade's production closure excludes `Preo.Export`, checked
+examples, diagnostic `Repr`, and large exact-string fixtures.
 
 **44q. Budget-bearing neutral projection → privately validated V2 projection** ⚠
-*source* `Preo.ProjectionV2.Projection` plus a caller-supplied
+*source* `Preo.ProjectionV2.Projection` (defined in `ProjectionV2Core`) plus a caller-supplied
 `ValidationConfig` · *target* the private
 `Preo.ProjectionV2.ValidatedProjectionV2` · *transport*
-`Preo.ProjectionV2.validate` · *needs* all V1 declaration/reference/resource
+`Preo.ProjectionV2.validate`, owned by `ProjectionV2Core` · *needs* all V1 declaration/reference/resource
 checks on the budget-cleared base, then exact action histograms, coverage of
 every session obligation by the referenced plan, unique budget IDs, existing
 session and plan references, plan/session agreement, canonical five-currency
 limits and realized profiles, equality with the plan profile, and pointwise
-realized ≤ promised limits. `Examples.full_export_validates` accepts the
-nonempty proof-originated export · *without those hypotheses* the concrete
+realized ≤ promised limits. `ProjectionV2Core` reuses `ProjectionV1Core`, not
+the renderer facade; `ProjectionV2.Examples.full_export_validates` in `ProjectionV2Examples`
+accepts the nonempty proof-originated export · *without those hypotheses* the concrete
 refusals include `action_profile_lie_refused`,
 `uncovered_obligation_refused`, `duplicate_budget_refused`, the dangling and
 mismatched budget-reference fixtures, `noncanonical_budget_limits_refused`,
@@ -1259,11 +1267,16 @@ not reconstruct the checked plan, budget proof, verdict, permit, or authority.
 answered classifications, exact-world certificates, protocol elaborations,
 and exact-plan `preo_budget` witnesses · *target* the generated
 `Bundle`, `Artifact`, canonical `Encoding`, format-v2 `ArtifactDurableBytes`,
-V2 `Validated`, and data-only `Rendered` constants · *transport* the
-`elabPreoExport` builder fold invokes `DeclarationBundle.addField`,
+V2 `Validated`, and data-only `Rendered` constants · *transport* the thin
+`Preo.elabPreoExport` registration delegates to
+`Preo.Elab.Export.elabPreoExportCore`; its heterogeneous builder fold invokes `DeclarationBundle.addField`,
 `addClassification`, `addCertifiedFuture`, `addElaboration`, or
 `addElaborationWithBudget` at each row, then requires the generated
-`validation_ok` theorem before extracting the private validated value · *needs*
+`validation_ok` theorem before extracting the private validated value. Every
+mandatory nested declaration uses `Internal.emitRequired`, and the whole core
+is wrapped by `Internal.withEnvTransaction`, so any failure rolls back all
+generated declarations and report rows while preserving their established
+names, types, and order · *needs*
 literal stable/type/kind/relation IDs, an explicit witness codec, the
 classification answer equality, the certificate's full dependent type, an
 actual generated `Protocol.Elaboration`, the budget's exact plan equality, and
@@ -1371,10 +1384,15 @@ embeds the historical three-flag capability exactly on every status · *needs*
 the explicit finite reach, because inference claims nothing outside it. For
 semantic soundness, `statusOf_totalSound6` inhabits
 `TotalSoundEvaluator6`, whose clauses cover all six cells by reusing that same
-inversion; `RenderSix` consumes it as well, rather than owning a duplicate
-decision tree · *without the total
-contract* `closedForkAsOpen_old_sound` accepts a concrete evaluator that calls
-a settled fork open, while `closedForkAsOpen_not_total` rejects it. And without
+inversion. In particular, pending requires both empty answer candidates
+(`pending_correct`) and openness (`pending_open`), and
+`TotalSoundEvaluator6.semanticsAt` exposes the constructor-accurate semantic
+proposition for every state; `RenderSix` consumes the contract rather than
+owning a duplicate decision tree · *without the total contract*
+`StatusSemanticsAcceptance.not_total` proves a pending-with-candidate evaluator
+can satisfy the old partial interface but cannot inhabit the total one, while
+`closedForkAsOpen_old_sound`/`closedForkAsOpen_not_total` give the settled-fork
+counterexample. And without
 an explicit resolution constructor, `explicit_resolution_is_load_bearing`
 shows preserve-fork and select-one descriptors differ; no hidden Boolean
 resolution policy is transported.
@@ -1482,7 +1500,9 @@ finite lists. The transport performs no arbitrary action discovery or currency
 conversion.
 
 **45d. Native protocol syntax → exact typed protocol surface** ⚠
-*source* the parser-safe `Preo.ProtocolSurface` grammar covering all six
+*source* the parser-safe `Preo.ProtocolSurface` grammar, now owned with its
+non-registered `Preo.ProtocolSurface.elabNativeProtocolCore` handler by
+`Preo/Elab/Protocol`, covering all six
 `Protocol.Term` constructors · *target* exact generated `Term`, `Elaboration`,
 `Session`, `Plan`, `Limits`, and `ProfileUpperBound` constants · *transport*
 `native_fixture_exact_shape`, `native_fixture_exact_five_currency_profile`,
@@ -1495,7 +1515,8 @@ are finite and nonempty · *without those syntax conditions* the guarded
 `crossings_can_still_exceed_meetings` and
 `meetings_can_still_exceed_crossings` refute collapsing those axes. This is a
 typed construction boundary, not a theorem of deadlock freedom, message
-delivery, liveness, or runtime execution.
+delivery, liveness, or runtime execution. The sole command registration remains
+the thin `Preo.ProtocolSurface.elabNativeProtocol` facade delegate.
 
 **45e. Total six-status declaration → least effect and policy-exact report** ⚠
 *source* a `Preo.ResultProgram.CheckedDeclaration` carrying finite reach,
@@ -1503,14 +1524,23 @@ future, resolution, answer/settled/evaluate functions, a surface, and
 `TotalSoundEvaluator6` · *target* its least status effect, an honest renderer,
 and a site/status/future/resolution/surface/policy-exact `CheckedReport` ·
 *transport* `CheckedDeclaration.effect_least` and
-`CheckedDeclaration.renderer_honest`; `renderAt` and the report projection
-theorems pin the rendered observation · *needs* the total six-cell proof, the
-explicit finite reach, and exact visibility/disclosure equations · *without
-those policy equalities* `CheckedReport.refuses_wrong_site`,
+`CheckedDeclaration.renderer_honest`; `CheckedDeclaration.semanticsAt`,
+`CheckedReport.semanticsAt`, and `CheckedReport.says_semantics` connect each
+reported status to its complete semantic row. `ReachReport` retains the
+explicit reach-membership witness and exposes `effect_supports`;
+`ObservedReport` retains a caller-supplied `ObservationBoundary.Authentic`
+witness and exposes `authentic_site`. These adapters discover neither
+reachability nor authenticity · *needs* the total six-cell proof, the explicit
+finite reach, exact visibility/disclosure equations, and a real boundary
+witness · *without those policy equalities* `CheckedReport.refuses_wrong_site`,
 `refuses_wrong_visibility`, `refuses_wrong_disclosure`, and
-`open_report_refuses_lie_about_disclosure` reject concrete false reports. The
-older liar accepted by the legacy contract remains the row 44x counterexample;
-no pixel-level salience or claim outside the declared reach follows.
+`CheckedReport.refuses_wrong_resolution` reject false named reports;
+`ReachReport.refuses_out_of_reach` and `ObservedReport.refuses_inauthentic`
+reject invented reach and observation evidence. `StatusSemanticsAcceptance`
+exercises all six rows, typed snapshots, and the wrong-state observation
+refusal. The older liar accepted by the legacy contract remains the row 44x
+counterexample; no pixel-level salience, host-state authentication, or claim
+outside the declared reach follows.
 
 **45f. Canonical authenticated v4 request → execution-ready exact operation** ⚠
 *source* bounded canonical `RuntimeAuthV4` bytes plus separate `Verified`,
@@ -1531,6 +1561,25 @@ algorithm/epoch/nonce/stable-child substitution fixtures, nonce collision,
 `oversized_refused` are concrete failures. V4 is staged rather than the
 shipping v3 boundary; Lean proves neither cryptographic hardness nor host
 execution, append, or durability.
+
+**45g. Named checked export → explicitly emitted canonical runtime bytes** ⚠
+*source* a finite `Preo.ArtifactEmit.Name` selecting either the generated
+`SemanticExport.ArtifactDurableBytes` or the checked V2 full-export encoding ·
+*target* a fresh host `ByteArray`, and only under explicit CLI invocation,
+stdout or a named file · *transport* `semanticEncoding_eq_generated` pins the
+computable semantic-export reification to the whole generated encoding;
+`bytesImpl_eq_bytes` proves the `@[implemented_by bytesImpl]` native path is
+the same named logical value; `byteArray_data_toList` pins the host buffer to
+those exact bytes. Internally, `projectionBytesFast_eq` proves the tail-safe
+implementation byte-for-byte equal to canonical `ArtifactDurable.projectionBytes`
+rather than creating a second format · *needs* the closed name registry,
+whole-value equality, the canonical durable codec, and explicit execution of
+`tools/uwueave-preo-artifact`; importing `ArtifactEmit` performs no I/O ·
+*without the equalities* an independently maintained computable mirror or fast
+framer could silently drift from the proof-generated value or canonical wire
+format. `ArtifactEmitMain` is an audited executable but not a proof-root import;
+its `writeBinFile` boundary proves no atomic replacement, fsync, permission,
+path-hardening, or logical-journal refinement.
 
 ---
 
@@ -1584,10 +1633,11 @@ exact V1/V2 host validation, deterministic data-only Rust rendering, and the
 whole checked export manifest in rows 44a–44r. Rows 44s–44z add conservative
 incremental evaluation, communicated choice, finite clash-graph realization,
 composite residual patches, finite contextual compilation, six-status effects,
-temporal fairness, and checked woven edits. Rows 45–45f connect the covered
+temporal fairness, and checked woven edits. Rows 45–45g connect the covered
 history engine, logical persistent runtime, canonical artifact journal,
 bounded planning generator, native protocol syntax, total result/report
-program, and staged authenticated-v4 boundary. What remains is different work:
+program, staged authenticated-v4 boundary, and the explicit canonical-byte
+emitter. What remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives
 and three-or-more-field invariants are refused, and neither logical persistence

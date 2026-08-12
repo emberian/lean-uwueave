@@ -119,12 +119,15 @@ clauses:
     wise.** ⟨TERMINAL⟩ The discharge witness is `sealAll` — give up on every
     peer — which is honest (`absent` is then true of the evidence) and lossy (a
     peer that would have answered is now certified silent). Which discharge a
-    surface should offer is a product decision the type does not make.
+    surface should offer is a product decision the type does not make. Its
+    `DischargeOffer` nevertheless closes `HonestRender`'s structural affordance
+    boundary: actor, live authorization, permitted effect, and discharge proof
+    all travel together.
   * **The inherited three-cell limit now has a total adapter.**
     ⟨HISTORICAL LIMIT, DISCHARGED BY `StatusEffects`⟩ This file still deepens
     the `pending` cell against `RenderSix.SoundEvaluator6`; it does not silently
     strengthen that compatibility contract. `StatusEffects.TotalSoundEvaluator6`
-    supplies the missing `provisional` and fork clauses,
+    supplies complete semantic rows for all six cells,
     `statusOf_totalSound6` proves them for the sanctioned evaluator, and
     `toSoundEvaluator6` preserves every consumer of the original contract. The
     old/new separation is witnessed by `closedForkAsOpen_old_sound` and

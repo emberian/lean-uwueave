@@ -699,31 +699,6 @@ global obstruction into a live one without the separate co-reachability data.
 No numeric separation of `Width` from the chromatic number is claimed either
 way. -/
 
-private theorem merge_self_left {S : Type w} [MergeState S] (x y : S) :
-    x ⊔ (x ⊔ y) = x ⊔ y := by
-  rw [← merge_assoc, merge_idem]
-
-private theorem merge_absorb_left {S : Type w} [MergeState S] (x y : S) :
-    (x ⊔ y) ⊔ x = x ⊔ y := by
-  rw [merge_comm (x ⊔ y) x, merge_self_left]
-
-private theorem merge_absorb_right {S : Type w} [MergeState S] (x y : S) :
-    (x ⊔ y) ⊔ y = x ⊔ y := by
-  rw [merge_assoc, merge_idem]
-
-private theorem join_xy_xz {S : Type w} [MergeState S] (x y z : S) :
-    (x ⊔ y) ⊔ (x ⊔ z) = (x ⊔ y) ⊔ z := by
-  rw [← merge_assoc, merge_absorb_left]
-
-private theorem join_xy_yz {S : Type w} [MergeState S] (x y z : S) :
-    (x ⊔ y) ⊔ (y ⊔ z) = (x ⊔ y) ⊔ z := by
-  rw [← merge_assoc, merge_absorb_right]
-
-private theorem join_xz_yz {S : Type w} [MergeState S] (x y z : S) :
-    (x ⊔ z) ⊔ (y ⊔ z) = (x ⊔ y) ⊔ z := by
-  rw [← merge_assoc, merge_assoc x z y, merge_comm z y, ← merge_assoc,
-    merge_absorb_right]
-
 /-- **⚑ A three-way obstruction is a triangle.** If `x`, `y`, `z` are legal, all
 three pairwise joins are legal, and the triple join is not, then the three
 pairwise joins pairwise clash — a 3-clique. Each pair of them joins to `x ⊔ y ⊔ z`

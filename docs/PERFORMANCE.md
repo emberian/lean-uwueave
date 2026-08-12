@@ -811,3 +811,167 @@ Runtime kernel comparisons still belong in the harness and protocol of §§10–
 Proof/build improvements in this section make the verified system cheaper to
 develop and ship; they do not change the runtime numbers above unless measured
 again by that harness.
+
+---
+
+## 13. Wave 24 elaboration and module-boundary engineering — 2026-08-11
+
+Wave 24 turned three large elaboration/fixture surfaces into small production
+facades backed by explicit worker or core modules. These are source-elaboration
+and static import-closure results, not measurements of the generated program's
+runtime. As in §12, profiler categories are cumulative and nested and must not
+be summed into wall time.
+
+### Preoscript elaborator decomposition
+
+| measurement | before | after | change / interpretation |
+|---|---:|---:|---|
+| direct `Preo.Elab` source-check wall | **39.35 s** | **1.18 s** | **−97.0%** arithmetically; the public facade now registers handlers and delegates to compiled phase workers |
+| whole-file cumulative LCNF-base | **about 33.1 s** | **0.813 ms** | the facade now contains no phase implementation |
+| `elabPreoDecl` LCNF-base event | **32.2 s** | eliminated | its replacement `Declaration` module reports **43.2 ms** cumulative LCNF-base |
+| largest individual worker LCNF-base | included in the 32.2 s monolith | **1.28 s** | no extracted phase recreates the original hotspot |
+| aggregate worker LCNF-base | included in the 32.2 s monolith | **about 4.16 s** | useful work moved behind independently cached module boundaries rather than disappearing |
+
+The after facade, workers, `ProtocolSurface`, and `Demo` passed an **81/81**
+focused build. Acceptance fixtures check the generated constant names and
+types, persisted row ordering, equality-only typed-result future, exact reach,
+reports, cache/update laws, native protocol fixtures, and failure behavior.
+A required late-phase failure rolls back both generated constants and
+`preoExt` rows; immediate reuse of the same declaration name succeeds.
+
+The baseline was one source-only default-threaded
+`lake env lean --profile --json Uwueave/Preo/Elab.lean` under
+`/usr/bin/time -lp`, with existing imports: wall 39.35 s and user CPU 36.97 s.
+The after facade and each of 14 workers were checked sequentially once with
+`lean -j1 --profile`, again retaining imported oleans and clearing no cache.
+The largest worker wall was **3.25 s** (`TypedDerive`, including 1.12 s import),
+and the largest RSS was **1,309,900,800 B** (`Invariant`). The 4.16 s aggregate
+is the sum of cumulative LCNF-base buckets, not a predicted wall time; summing
+the 15 source-process walls would repay imports 15 times and is not a useful
+comparison. Different thread settings and N=1 make the wall reduction strong
+structural evidence rather than a controlled statistical estimate.
+
+The thin facade itself fell from **1,718 lines / 92,797 B** to **45 / 1,242 B**;
+its olean from **13,645,800 B** to **18,720 B** and generated C from
+**5,278,203 B** to **8,269 B**. Those are facade-boundary reductions, not total
+artifact reductions. The 14 workers plus facade occupy **2,170 lines /
+104,376 B**, **15,919,888 olean bytes**, and **5,881,678 generated-C bytes**.
+They now include native protocol grammar/core that previously lived in the
+separate `ProtocolSurface`; its old artifact was not retained. Consequently a
+correct combined old-Elab-plus-old-ProtocolSurface comparison is unmeasured,
+and neither a combined artifact regression nor saving is claimed.
+
+One post-split Demo source profile (`lean -j1`) reported **3.47 s wall**,
+**2.84 s user**, **0.54 s system**, **746 ms import**, **897 ms
+interpretation**, **330 ms elaboration**, **299 ms type checking**, **340 ms
+typeclass inference**, and **1,389,658,112 B peak RSS**. The largest emitted
+handler event was `NestedSurface` at **218 ms**. The exact clean-warm Wave 23
+RSS reference was 1,412,513,792 B, making the RSS change −1.62%, but wall and
+handler comparisons to earlier runs are non-paired because cache, thread, and
+run conditions differ. Demo's source change was one explicit examples import.
+
+### Projection production closures
+
+Closure counts below come from each root's Lake `setup.json` transitive project
+import keys, with the root counted separately; byte totals are the exact
+corresponding olean and generated-C files. The before side uses the retained
+Wave 23 setup artifacts.
+
+| production root | project modules | olean bytes | generated-C bytes |
+|---|---:|---:|---:|
+| Projection V1 before | **47** | **36,384,896** | **5,278,509** |
+| Projection V1 after | **3** (−44; −93.6%) | **3,354,088** (−90.8%) | **621,168** (−88.2%) |
+| Projection V2 before | **48** | **38,263,712** | **5,796,707** |
+| Projection V2 after | **4** (−44; −91.7%) | **4,290,744** (−88.8%) | **665,363** (−88.5%) |
+
+V1 production now consists of `ArtifactData`, `ProjectionV1Core`, and the V1
+renderer; V2 adds `ProjectionV2Core` and its renderer while sharing the first
+two dependencies. Diagnostics, examples, `Repr` instances, and giant golden
+renderer equalities are opt-in modules. This intentionally narrows what a
+direct production import provides; aggregate roots retain the broader public
+surface for users that need it.
+
+Single uncontended source profiles were **0.63 s / 195 ms elaboration** for
+V1Core, **0.36 s / 52.4 ms** for the V1 facade, **0.57 s / 130 ms** for V2Core,
+and **0.34 s / 45 ms** for the V2 facade. They are diagnostic points, not
+sampled before/after wall benchmarks. The expensive renderer fixtures remain
+real work: their last isolated builds were about **12 s** for V1 and **27 s**
+for V2, now paid only by fixture consumers. A ten-target no-op build completed
+all **57 jobs**, and the combined elaborator/protocol/demo gate completed all
+**81 jobs**. Production setup checks found no `Export`, `Scheduling`, or
+`Tactics` dependency, and recursion-depth overrides occur only in fixtures.
+
+### Proof cleanup and shipping closure
+
+The minima, path-edge, and semilattice cleanup added 140 lines and removed 185
+across `CoordEffect`, `SeamColoring`, `ForkGrade`, `Confluence`, `ClashGraph`,
+and `CliqueLive`: **net −45 lines**, including 168 removed nonblank,
+non-comment proof lines. In one sequential direct `lean -j1 --profile --json`
+source pass per file, the sum of emitted tactic-execution summaries fell from
+**1,361.4 ms to 973.7 ms** (**−387.7 ms / −28.48%**). Imports were retained,
+with no cache reset, warmup, or repetitions; reruns were visibly noisy. This is
+a directional profiler workload aggregate rather than a wall-speedup claim.
+The durable result is that public theorem names remain as
+thin wrappers over Std `List.min?` / `List.minOn?`, one canonical path
+`flatMap`, and shared absorption laws. The focused **41-job** build and full
+**126-job** downstream/Audit gate passed; Audit covered **117 root modules and
+20,477 constants** within the trust floor.
+
+Wave 24 also added explicit artifact-emission and durability coverage without
+widening the shipping FFI graph. The runtime closure remains the Wave 23 value:
+**13 Lean objects / 655,368 raw bytes**, and the archive protocol and caveats in
+§12 are unchanged. Both real emitted artifacts survive frame creation,
+append, close/reopen, exact-byte and BLAKE3 checks; mutation, truncation, and a
+wrong version are refused. This is functional durability evidence, not a new
+archive-size or runtime-throughput benchmark.
+
+### Preoscript command corpus and hard goldens
+
+The command-level comparison uses **21 cases**, each run with two unmeasured
+warmups followed by five serialized `lean -j1 --profile` measurements under
+`/usr/bin/time -lp`. A wall or user-time median absolute deviation above 8%
+triggers a clean nine-run retry; a persistent value above 8% is labelled
+infrastructure-noisy rather than reported as a speedup. The baseline is commit
+`ab4c767` in a detached temporary worktree with the same corpus copied in and
+normal dependencies built and warmed. No cache clearing or declaration trace
+profiler is mixed into the timed samples.
+
+Each table entry below is therefore the median of five runs, or of the fresh
+nine-run replacement set when the MAD rule fired. `import_syntax` was the only
+current retry and stabilized at 4.08% wall MAD; four baseline cases also
+stabilized, with no persistent-noise label. Wall/user/system are seconds from
+`time`, RSS is its byte result converted to binary MiB, and Lean profiler
+categories are cumulative milliseconds grouped by label. The 213 checks are
+21 cases × 10 regression metrics plus three typed-scaling checks.
+
+Performance samples are only half the acceptance contract. Separate hard
+goldens pin **94 generated names and canonical types**, persisted `preoExt` row
+order, the exact **42-line** report, required diagnostics, rollback, and reuse
+of a failed declaration name. The final comparison produced **210 passes, two
+warnings, and one scale failure across 213 checks**. Selected medians are:
+
+| corpus case | wall, before → after | user CPU, before → after | peak RSS, before → after | selected profiler category, before → after |
+|---|---:|---:|---:|---:|
+| import + elaborator syntax | **0.96 → 0.94 s** | **0.39 → 0.40 s** | **1,181.2 → 1,182.9 MiB** | elaboration **0.19 → 0.15 ms** |
+| 32 built-in fields | **1.82 → 1.79 s** | **1.18 → 1.21 s** | **1,247.8 → 1,248.6 MiB** | elaboration **73.6 → 71.5 ms**; type checking **32.1 → 31.1 ms**; compilation **90.9 → 88.3 ms** |
+| 32 custom fields | **1.92 → 1.86 s** | **1.35 → 1.29 s** | **1,257.2 → 1,258.2 MiB** | elaboration **70.0 → 66.2 ms**; compilation **140.0 → 133.3 ms** |
+| 16 typed derives | **1.97 → 1.86 s** | **1.39 → 1.36 s** | **1,269.8 → 1,269.2 MiB** | elaboration **31.7 → 30.8 ms**; type checking **186 → 182 ms**; compilation **100.4 → 97.5 ms** |
+| export command | **1.14 → 1.07 s** | **0.56 → 0.55 s** | **1,217.7 → 1,218.9 MiB** | elaboration **6.70 → 6.56 ms**; type checking **37.2 → 32.8 ms** |
+| all command families | **1.25 → 1.23 s** | **0.68 → 0.66 s** | **1,233.3 → 1,234.0 MiB** | elaboration **12.5 → 12.2 ms**; compilation **23.0 → 22.1 ms** |
+| late rejection/rollback | **1.00 → 0.91 s** | **0.42 → 0.42 s** | **1,196.6 → 1,197.4 MiB** | elaboration **2.26 → 2.06 ms** |
+
+The two warnings were profiler import time: the syntax-import case rose from
+**721 to 857 ms** (+18.9%), and the eight-field case from **771 to 849 ms**
+(+10.1%). Neither is disguised as an elaboration regression or folded into a
+single aggregate score. The remaining scale failure is typed-incremental peak
+RSS per item: **6,692,864 B → 4,943,872 B** (**−26.1%**), still **4.71 MiB**
+against a hard 4 MiB ceiling. Its user CPU per item passed at
+**0.060 → 0.05875 s** (−2.1%), and elaboration per item was essentially flat at
+**1.8225 → 1.8231 ms** (+0.03%).
+
+All current hard goldens pass. The historical baseline exposes one semantic
+failure that timing cannot: a malformed late typed derive leaked generated
+field constants, so an identical declaration name could not be reused. The
+current transactional command rolls back both declarations and report rows,
+and the same-name reuse golden passes. That correctness fix is the primary
+result even where the command medians are nearly flat.

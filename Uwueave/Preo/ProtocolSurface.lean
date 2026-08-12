@@ -25,12 +25,17 @@ this first deterministic fragment; the semantic expansion is the constant
 selector `fun _ => selected`.  A future strategy-pattern form may enrich the
 selector without changing the six-constructor AST or the emitted artifacts.
 -/
-import Uwueave.Protocol
+import Uwueave.Preo.Elab
 
 namespace Uwueave.Preo.ProtocolSurface
 
 open Lean Elab Command
 
+/-! The grammar and its transactional handler are provided by
+`Uwueave.Preo.Elab.Protocol`; this module remains the compatibility surface and
+the executable acceptance fixture. -/
+
+/-
 /-! ## §1. Native recursive grammar -/
 
 declare_syntax_cat preoProtocolCurrency
@@ -261,6 +266,7 @@ elab_rules : command
       theorem $planExactName : $planName = ($elaborationName).plan := rfl))
     elabCommand (← `(command|
       theorem $boundExactName : ($boundName).plan = $planName := rfl))
+-/
 
 /-! ## §3. Fully native acceptance fixture -/
 

@@ -102,6 +102,7 @@ parameter chosen to sit inside the decidable fragment, exactly as the tree's
 other miniatures are (two users, `Bool`; budget 10).
 -/
 import Uwueave.Preo.Elab
+import Uwueave.Preo.ProjectionV2Examples
 import Uwueave.WeaveState
 
 namespace Uwueave.Preo.Demo

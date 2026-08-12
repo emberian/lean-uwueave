@@ -20,8 +20,9 @@ This is the delta audit after the execution encoder, durability, authenticity,
 Byzantine, recursive-choreography, structured-evidence, frontier, outcome-spec,
 protocol, world-context, and preoscript artifact work landed, followed by the
 Cycle-20 authoring foundations, Cycle-21 checked-manifest/result foundations,
-the Cycle-22 language-consumer and runtime/persistence foundations, and the
-Wave-23 automation/trust/native-closure work. The new
+the Cycle-22 language-consumer and runtime/persistence foundations, the
+Wave-23 automation/trust/native-closure work, and the Wave-24 failure-honest
+elaboration, projection, and real-artifact execution work. The new
 modules, their root/gate wiring, and their MAP and TRANSPORTS entries are
 checkpointed together: a clean checkout cannot receive only one side of that
 assembly.
@@ -33,14 +34,15 @@ was repaired during this audit and is now complete in the live working tree.
 
 | Surface | Live evidence | Current verdict |
 |---|---|---|
-| Root → gate | `#gate_covers_root` at `Uwueave/Audit.lean:174-203` parses `Uwueave.lean` with Lean's own header parser and checks every direct root import is in the gate environment; the intentionally indented `TrustFloor` import (`Uwueave.lean:1-3`) is an executable regression. `Choreo` is in both (`Uwueave.lean:83`, `Uwueave/Audit.lean:64`). | **The original A.1 defect and the brittle line-scanner follow-up are closed.** |
-| Disk → root → gate | There are **123** Lean module files under `Uwueave/`; the root directly imports **117** Uwueave modules excluding `Audit`, while its transitive closure reaches all **123/123**. The live full gate completed **126 jobs**, reports those **117** root modules covered, and audits **20,446** constants. | **The current-wave assembly defect is closed.** |
+| Root → gate | `#gate_covers_root` at `Uwueave/Audit.lean:184-211` parses `Uwueave.lean` with Lean's own header parser and checks every direct root import is in the gate environment; the intentionally indented `TrustFloor` import (`Uwueave.lean:1-3`) is an executable regression. `Choreo` is in both (`Uwueave.lean:83`, `Uwueave/Audit.lean:64`). | **The original A.1 defect and the brittle line-scanner follow-up are closed.** |
+| Disk → root → gate | There are **148** Lean module files under `Uwueave/`; the root directly imports **127** Uwueave modules excluding `Audit`, while its transitive closure and the audit gate each reach all **148/148**. The executable-only `Preo.ArtifactEmitMain` is an intentional filesystem boundary: `Audit` imports it for trust coverage, while the proof root does not import it directly. The live full gate completed **150 jobs**, reports those **127** root modules covered, and audits **20,801** constants. | **The current-wave assembly defect remains closed, including the executable boundary.** |
 | Checkpoint → disk | Cycle 21 adds nine Lean modules and the matching root, audit, MAP, TRANSPORTS, census, and surface changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
-| MAP → disk → gate | The MAP file table has **123 rows for 123 files**, including the nine Wave-23 modules, and every module is inside the root/gate closure. Its keystone table currently contains **477** theorem rows. | **The former 34-row exposure remains closed.** The table is a reading aid, not a per-name trust gate. |
-| TRANSPORTS | The ledger has **115** numbered rows, including checked manifests, budget-bearing V2 validation, communicated choice, composite deltas, contextual compilation, differential evaluation, status effects, temporal fairness, and typed edits. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
+| MAP → disk → gate | The MAP file table has **148 unique rows for 148 files**, with no missing or extra module, and every module is inside the root/gate closure. Its keystone table currently contains **500** theorem rows. | **The former 34-row exposure remains closed.** The table is a reading aid, not a per-name trust gate. |
+| TRANSPORTS | The ledger has **116** unique numbered rows, including the explicit ArtifactEmit canonical-byte crossing, checked manifests, budget-bearing V2 validation, communicated choice, composite deltas, contextual compilation, differential evaluation, status effects, temporal fairness, and typed edits. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
 | Runtime persistence | `ArtifactFrame::new` bounds a frame at `MAX_ARTIFACT_FRAME_BYTES = 1 MiB`, checks its v2 envelope, and asks the exported Lean `Preo.ArtifactJournalKernel.validateOneKernel` for exact semantic canonicality before `ArtifactJournal` stores the unchanged bytes in checksummed `UWARJ001` records. `DocumentJournal` separately stores canonical typed `MoveLog` mutations and prefix-equal checkpoints in `UWDJRN01`. | **A concrete pure-Rust host rung has landed.** It is not a filesystem theorem, authenticated document admission, multi-record atomic commit, or a refinement of `PersistentRuntime`. |
+| Real artifact bytes | `Preo.ArtifactEmit` selects two real checked encodings and its proved-equal stack-safe implementation produces exact `ArtifactDurable.projectionBytes`; the explicit CLI writes only when invoked. The Rust integration test carries both artifacts through Lean validation, `SyncData` append, close/reopen, exact-byte and BLAKE3 comparison, then rejects mutation, truncation, and a wrong version. | **The fixture-to-real-export execution gap is narrowed.** Importing remains I/O-free, and the test is not a filesystem or stable-media theorem. |
 | Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest` (`Uwueave/Exec.lean:772-782`); Rust supplies typed records (`rust/src/ffi.rs:34-53,85-115`) and no longer owns FORMAT-v3 bytes. `RuntimeAuthV4` now specifies canonical signed-move bytes and layered admission premises, but is deliberately not wired into that shipping path. | The v3 wire-encoder decision is closed; ABI, shim, runtime and codegen remain open. Host persistence has a tested narrow implementation, while formal filesystem/refinement and authenticated v4 admission remain open. |
-| Native closure and initialization | The data-free `RuntimeInit` directly imports `Exec`, `SeqKernel`, `EraKernel`, and `Preo.ArtifactJournalKernel` (`Uwueave/RuntimeInit.lean:1-18`). `build.rs` takes Lake's setup description as the sole transitive-closure authority, snapshots and stages the exact native objects, verifies the archive member set and bytes, then rechecks Lake paths, setup, objects, every Lean source, and build configuration (`rust/build.rs:43-150,358-438,575-722`). The shim calls only the RuntimeInit initializer (`rust/shim.c:14-17,54-70`). The full gate observed **13** Lake objects / **655,368 bytes**, a **14**-member archive including the shim / **798,968 bytes**, and **132** Rust tests. | Stale, extra, missing, or mixed-generation native objects and initializer drift now fail closed. Code generation, compiler/linker correctness, ABI, ownership, runtime behavior, and filesystem semantics remain execution-TCB obligations. |
+| Native closure and initialization | The data-free `RuntimeInit` directly imports `Exec`, `SeqKernel`, `EraKernel`, and `Preo.ArtifactJournalKernel` (`Uwueave/RuntimeInit.lean:1-18`). `build.rs` takes Lake's setup description as the sole transitive-closure authority, snapshots and stages the exact native objects, verifies the archive member set and bytes, then rechecks Lake paths, setup, objects, every Lean source, and build configuration (`rust/build.rs:43-150,358-438,575-722`). The shim calls only the RuntimeInit initializer (`rust/shim.c:14-17,54-70`). The full gate observed **13** Lake objects / **655,368 bytes**, a **14**-member archive including the shim / **798,968 bytes**, and **133** Rust tests. | Stale, extra, missing, or mixed-generation native objects and initializer drift now fail closed. Code generation, compiler/linker correctness, ABI, ownership, runtime behavior, and filesystem semantics remain execution-TCB obligations. |
 
 Cycle 20 adds:
 
@@ -72,6 +74,19 @@ internal-error routes; automatic finite classification is capped at 64 states /
 the exact term, elaboration, session, plan, five limits, and witnessed profile
 bound rather than accepting only an opaque Lean term.
 
+Wave 24 splits the large elaborator and projection surfaces without changing
+their public command or declaration names. `Preo.Elab` is now a small facade
+over phase modules; optional route probes roll back and return diagnostics as
+data, required emissions fail loudly, and the enclosing command transaction
+removes both declarations and environment-extension rows after a later
+failure. Positive/red subprocess canaries cover the trust floor, route refusal,
+resource caps, internal-error loudness, declaration congruence, whole-command
+rollback, and same-name reuse. `ProjectionV1` and `ProjectionV2` retain their
+production validators/renderers while core data, diagnostics, examples, and
+large fixtures live in separate modules, so production imports do not pay for
+diagnostic and fixture elaboration. `ArtifactEmit`/`ArtifactEmitMain` provide
+the explicit, import-pure boundary to real artifact bytes described above.
+
 The previous checkpoint's twelve modules were:
 
 `Authenticity` · `Byzantine` · `ChoreoRec` · `Durable` · `EvidenceGraph` ·
@@ -97,7 +112,7 @@ root/gate closure:
 the root, while `Protocol` and `Preo.Future` account for the other two
 then-untracked modules. Root imports at `Uwueave.lean:73-84` and matching audit
 imports at `Uwueave/Audit.lean:128-139` put those modules in both closures; the
-Cycle-20 imports extend the same checked perimeter to all 98 current modules.
+Cycle-20 imports extend the same checked perimeter to all 98 then-current modules.
 The table is retained as exact evidence of what the wiring
 repair closed; it is no longer a live exposure.
 
@@ -108,8 +123,9 @@ These are genuinely closed in source, not merely marked closed here:
 - **A.1, root module outside the gate:** `Choreo` is imported by both root and
   gate, and `#gate_covers_root` makes that particular mismatch refutable.
 - **Current-wave disk modules outside root/gate:** the previous twelve and the
-  seven Cycle-20 modules are imported by both root and audit; both transitive
-  closures now cover 98/98 modules, and the aggregate Lean check passes.
+  seven Cycle-20 modules were imported by both root and audit; both transitive
+  closures covered the then-current 98/98 modules, and the aggregate Lean check
+  passed. The live totals are in the current headline above.
 - **B.2, untracked retraction index:** `FORCODEX.md` and `CODEXHELP.md` are now
   tracked; `.gitignore:4-10` records why they must remain so.
 - **B.5, ORMap reachability contradiction:** `Uwueave/ORMap.lean:53-56` now says

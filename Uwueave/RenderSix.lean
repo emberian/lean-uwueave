@@ -107,23 +107,22 @@ sanctioned renderer *does* make, at six named pieces of evidence.
   * **The original contract constrains three cells; its total extension is
     shipped.** ⟨HISTORICAL LIMIT, DISCHARGED BY `StatusEffects`⟩
     `SoundEvaluator6` deliberately remains the compatibility contract for
-    `exact`, `absent` and `pending`. `StatusEffects.TotalSoundEvaluator6` adds
-    exact candidate and settledness clauses for `provisional`, `forkedClosed`
-    and `forkedOpen`; `statusOf_totalSound6` discharges all six and
-    `toSoundEvaluator6` projects back to this API. The boundary is load-bearing:
-    `closedForkAsOpen_old_sound` constructs the closed-fork-as-open lie admitted
-    here, while `closedForkAsOpen_not_total` refutes it under the total contract.
+    `exact`, `absent` and escapability at `pending`.
+    `StatusEffects.TotalSoundEvaluator6` supplies complete candidate and
+    settledness semantics for all six cells; `semanticsAt` exposes the uniform
+    `Status.Semantics` row, while `toSoundEvaluator6` projects back to this API.
+    The boundary is load-bearing: the acceptance fixture's pending-with-a-
+    candidate evaluator satisfies this compatibility contract and is rejected
+    by the total one.
   * **Noncomputability is inherited.** ⟨TERMINAL at this carrier⟩ `statusOf`,
     `spinnerRender` and `giveUpRender` all quantify over an unbounded value type.
     `Classical.choice` is inside the audit floor.
-  * **The checked adapter binds the six-way report site to the evaluated state;
-    deployment-world authenticity remains open.** ⟨UNDONE at runtime
-    authenticity⟩ This raw `Carrier6.report` still believes its site argument.
-    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
-    report carries exactly the state fed to the total evaluator, and
-    `refuses_wrong_site` rejects a contradictory site claim. A runtime must
-    still authenticate that its supplied state is the external world actually
-    observed; neither the raw carrier nor the adapter fabricates that premise.
+  * **The checked adapter binds the six-way report site to the evaluated state.**
+    ⟨DONE downstream in `Uwueave.Preo.ResultProgram`⟩ `CheckedReport.site_exact`
+    proves the carrier site is the evaluated state, `refuses_wrong_site`
+    rejects a contradictory claim, and `ObservedReport` retains an explicit
+    `ObservationBoundary.Authentic` witness. Whether a deployment can supply
+    that witness is stated once at that boundary rather than duplicated here.
 -/
 import Uwueave.HonestRender
 

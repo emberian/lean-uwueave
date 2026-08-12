@@ -182,7 +182,11 @@ is a bigger, real schema that deliberately contains one.
   policy, and torn-tail/corruption handling. They do not provide authenticated
   v4 admission, whole-journal resource bounds, multi-record transactions,
   anti-rollback state, or a theorem about the host filesystem. The exact
-  boundary is in **[the runtime architecture](docs/RUNTIME.md)**.
+  boundary is in **[the runtime architecture](docs/RUNTIME.md)**. An explicit
+  Lean artifact command now emits real checked `ArtifactDurableBytes`; a Rust
+  integration test admits them, appends under `SyncData`, closes/reopens, and
+  checks exact recovery. That is tested host evidence, not a claim that
+  `writeBinFile`, `sync_data`, or any filesystem survives every crash.
 - **A checked language surface.** `preo` declarations now cover ordinary and
   keyed fields, application carriers with explicit planting seeds, invariants,
   derived summaries, retained-world futures, typed protocol terms, and
@@ -192,7 +196,11 @@ is a bigger, real schema that deliberately contains one.
   name fully indexed certificates and accept five-currency budgets only through
   one witnessed plan. Automatic finite verdict search refuses work above its
   explicit 64-state / 4,096-pair caps rather than disguising resource failure as
-  an inapplicable route; explicit `classifyFinite` remains total. The checked
+  an inapplicable route; explicit `classifyFinite` remains total. The elaborator
+  is split into bounded phases with transactional surface commands: optional
+  probes may decline as data, mandatory emissions fail loudly, and a late
+  failure leaves no declarations or extension rows behind. Subprocess canaries
+  verify declaration absence and same-name reuse after rollback. The checked
   `preo_export` manifest projects those meanings to canonical first-order
   artifacts, format-v2 framed bytes, and a validated budget-bearing data-only
   Rust representation; none of those transport layers can manufacture a
@@ -248,7 +256,8 @@ not something you crash on.
   logic, execution, and environment. Including what our own build gate *cannot*
   prove. The shared `TrustFloor` policy is also exercised by subprocess canaries
   that must reject a custom axiom, `sorry`, `native_decide`, and a vacuous
-  namespace.
+  namespace; the Preoscript acceptance suite repeats the forbidden-proof cases
+  at generated declarations and covers failure honesty and resource caps.
 - **[Runtime architecture](docs/RUNTIME.md)** — the shipping FORMAT-v3 path,
   exact RuntimeInit/Lake native closure, Cycle-22 pure-Rust journals, exact
   durability assumptions, and the canonical but not-yet-shipping authenticated
@@ -262,6 +271,7 @@ not something you crash on.
 ```sh
 lake build              # every proof + the total axiom gate (Lean core only, no mathlib)
 ./scripts/trust-canaries.sh # acceptance tests: the trust gate must also go red
+./scripts/preo-automation-canaries.sh # positive/red tactic and transactional gates
 cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
 

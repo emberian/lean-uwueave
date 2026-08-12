@@ -294,27 +294,6 @@ theorem LeaveOneOutObstruction.forces_domains {S : Type w} [MergeState S]
     (hw : LiveSegmented.GlobalWidth I n) : h.leaves.length ≤ n :=
   CliqueLive.clique_forces_global_width h.clique hw
 
-private theorem merge_absorb_left {S : Type w} [MergeState S] (x y : S) :
-    (x ⊔ y) ⊔ x = x ⊔ y := by
-  rw [merge_comm (x ⊔ y) x, ← merge_assoc, merge_idem]
-
-private theorem merge_absorb_right {S : Type w} [MergeState S] (x y : S) :
-    (x ⊔ y) ⊔ y = x ⊔ y := by
-  rw [merge_assoc, merge_idem]
-
-private theorem join_xy_xz {S : Type w} [MergeState S] (x y z : S) :
-    (x ⊔ y) ⊔ (x ⊔ z) = (x ⊔ y) ⊔ z := by
-  rw [← merge_assoc, merge_absorb_left]
-
-private theorem join_xy_yz {S : Type w} [MergeState S] (x y z : S) :
-    (x ⊔ y) ⊔ (y ⊔ z) = (x ⊔ y) ⊔ z := by
-  rw [← merge_assoc, merge_absorb_right]
-
-private theorem join_xz_yz {S : Type w} [MergeState S] (x y z : S) :
-    (x ⊔ z) ⊔ (y ⊔ z) = (x ⊔ y) ⊔ z := by
-  rw [← merge_assoc, merge_assoc x z y, merge_comm z y, ← merge_assoc,
-    merge_absorb_right]
-
 /-- The three-generator instance of the general finite obstruction. -/
 def tripleLeaveOneOut {S : Type w} [MergeState S] {I : Invariant S}
     (x y z : S) (hxy : I (x ⊔ y)) (hxz : I (x ⊔ z))

@@ -113,6 +113,49 @@ theorem merge_le_iff {S : Type u} [MergeState S] {x y z : S} :
     show (x ⊔ y) ⊔ z = z
     rw [merge_assoc, hy, hx]
 
+/-! ### Small normalization kit for finite join obstructions
+
+These equations are the recurring algebraic core of leave-one-out and
+three-generator clash arguments.  Keeping them beside `MergeState` avoids
+re-proving the same commutative-idempotent-semigroup normalization in each
+consumer.  They are deliberately not global simp rules: associativity and
+commutativity still need a proof-selected normal form. -/
+
+/-- Unfolding the induced order is exactly the usual join absorption test. -/
+theorem leq_iff_merge_eq {S : Type u} [MergeState S] {x y : S} :
+    x ⊑ y ↔ x ⊔ y = y := Iff.rfl
+
+/-- A value already present on the left is absorbed by the containing join. -/
+theorem merge_self_left {S : Type u} [MergeState S] (x y : S) :
+    x ⊔ (x ⊔ y) = x ⊔ y :=
+  le_merge_left x y
+
+/-- Re-merging the left input into a binary join changes nothing. -/
+theorem merge_absorb_left {S : Type u} [MergeState S] (x y : S) :
+    (x ⊔ y) ⊔ x = x ⊔ y := by
+  rw [merge_comm (x ⊔ y) x, merge_self_left]
+
+/-- Re-merging the right input into a binary join changes nothing. -/
+theorem merge_absorb_right {S : Type u} [MergeState S] (x y : S) :
+    (x ⊔ y) ⊔ y = x ⊔ y := by
+  rw [merge_assoc, merge_idem]
+
+/-- Two joins sharing their left input normalize to the three-way join. -/
+theorem join_xy_xz {S : Type u} [MergeState S] (x y z : S) :
+    (x ⊔ y) ⊔ (x ⊔ z) = (x ⊔ y) ⊔ z := by
+  rw [← merge_assoc, merge_absorb_left]
+
+/-- Two joins sharing the middle input normalize to the three-way join. -/
+theorem join_xy_yz {S : Type u} [MergeState S] (x y z : S) :
+    (x ⊔ y) ⊔ (y ⊔ z) = (x ⊔ y) ⊔ z := by
+  rw [← merge_assoc, merge_absorb_right]
+
+/-- Two joins sharing their right input normalize to the three-way join. -/
+theorem join_xz_yz {S : Type u} [MergeState S] (x y z : S) :
+    (x ⊔ z) ⊔ (y ⊔ z) = (x ⊔ y) ⊔ z := by
+  rw [← merge_assoc, merge_assoc x z y, merge_comm z y, ← merge_assoc,
+    merge_absorb_right]
+
 /-! ## §2. The judgement -/
 
 /-- An invariant is just a predicate on replica state: `balance ≥ 0`, "the parent

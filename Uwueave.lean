@@ -111,7 +111,17 @@ import Uwueave.Preo.ArtifactDurable
 import Uwueave.Preo.ArtifactJournalKernel
 import Uwueave.Preo.ArtifactJournalDiagnostics
 import Uwueave.Preo.ProjectionV1
+import Uwueave.Preo.ProjectionV1Core
+import Uwueave.Preo.ProjectionV1Diagnostics
+import Uwueave.Preo.ProjectionV1Examples
+import Uwueave.Preo.ProjectionV1Fixtures
 import Uwueave.Preo.ProjectionV2
+import Uwueave.Preo.ProjectionV2Core
+import Uwueave.Preo.ProjectionV2Diagnostics
+import Uwueave.Preo.ProjectionV2Examples
+import Uwueave.Preo.ProjectionV2Fixtures
+import Uwueave.Preo.ArtifactEmit
+import Uwueave.StatusSemanticsAcceptance
 import Uwueave.RepairSynthesis
 import Uwueave.RuntimeAuthV4
 import Uwueave.RuntimeInit

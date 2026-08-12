@@ -300,26 +300,28 @@
     face &mdash; the theorem names, the refutations, the prices, and the compiled kernels.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">123</div><div class="l">Lean modules</div>
+      <div class="stat"><div class="n">148</div><div class="l">Lean modules</div>
         <div class="s">all reached by the root and total trust gate</div></div>
-      <div class="stat"><div class="n">20,446</div><div class="l">constants audited</div>
+      <div class="stat"><div class="n">20,801</div><div class="l">constants audited</div>
         <div class="s">the live Lean&nbsp;4.30 floor gate</div></div>
-      <div class="stat"><div class="n">477</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">500</div><div class="l">keystones in the ledger</div>
         <div class="s">each tagged with a generality and a reachability axis</div></div>
       <div class="stat"><div class="n">8</div><div class="l">priced exits</div>
         <div class="s">each with an availability check and a price</div></div>
       <div class="stat"><div class="n">4</div><div class="l">native-kernel modules</div>
         <div class="s">six exports in one exact RuntimeInit closure</div></div>
+      <div class="stat"><div class="n">133</div><div class="l">Rust tests</div>
+        <div class="s">including real artifact SyncData/reopen evidence</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
         <div class="s">Lean core only &mdash; nothing to vendor, nothing to pin</div></div>
     </div>
     <p style="font-size:.9rem;color:var(--muted);max-width:78ch;margin-top:1.1rem"><strong>Check
     every cell.</strong> These commands were run against this repository to produce the numbers
     above &mdash; a stat with no command under it is decoration:</p>
-<pre><code># 123 Lean modules in the assembled worktree
+<pre><code># 148 Lean modules in the assembled worktree
 rg --files Uwueave -g '*.lean' | wc -l
 
-# 477 rows in the keystone ledger
+# 500 rows in the keystone ledger
 awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 
 # 8 exits — the constructors of `inductive Exit`
@@ -331,12 +333,15 @@ grep -RFn '@[export ' Uwueave/
 # `"packages": []` — no dependencies, mathlib included
 grep '"packages"' lake-manifest.json
 
-# the audit count, live: prints `#audit_floor: N constants audited`
+# the full gate: 150 jobs; prints `#audit_floor: N constants audited`
 lake build</code></pre>
     <p style="font-size:.85rem;color:var(--muted);max-width:78ch"><strong>The audit count is a
     moving floor, not a protocol constant.</strong> The number your own <code>lake build</code>
     prints is authoritative. Root coverage is checked separately: Lean parses the real root
-    header, including indented imports, and the current gate reaches all 123 module files.</p>
+    header, including indented imports. It reports 127 direct root modules excluding
+    <code>Audit</code>; the transitive root/gate closure reaches all 148 source files.
+    <code>ArtifactEmitMain</code> is intentionally audit-covered but not directly imported by
+    the proof root: it is the executable-only artifact writer.</p>
 
     <h2 style="margin-top:2.2rem">The shape of the whole thing</h2>
     <ol class="three">
@@ -1401,6 +1406,14 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           elaboration, session, plan, five written limits and witnessed
           <code>ProfileUpperBound</code>; unsupported syntax and out-of-range crossing origins
           are refusals, not opaque guesses.</li>
+          <li><span class="badge pattern">transactional elaboration</span> The public
+          Preoscript commands are thin registrations over bounded phase modules. Optional
+          route probes may decline as diagnostic data, required declarations fail loudly,
+          and the outer environment transaction removes every earlier declaration and
+          extension row after a late failure. Positive/red subprocess canaries assert both
+          absence and successful reuse of the identical name after rollback. The V1/V2 host
+          projections are split similarly: production core and rendering stay lean, while
+          diagnostics, worked examples, and large exact fixtures are opt-in modules.</li>
           <li><span class="badge pattern">for a reader with a schema</span>
           <code>uwueave-check</code> reads ten shapes and eleven invariant kinds out of a few
           lines of schema and answers <code>FREE</code> / <code>ESCALATES</code> /
@@ -1758,6 +1771,14 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       <code>uwueave_encode_request</code>; <code>uwueave_request_canonical</code> remains a
       compatibility/test audit. The Rust side supplies typed lanes but owns no second FORMAT-v3
       encoder or ArtifactEncoding decoder.</p>
+      <p>Preoscript artifacts now cross one further explicit boundary. The opt-in
+      <code>uwueave-preo-artifact</code> command selects real checked Lean values and emits exact
+      <code>ArtifactDurable.projectionBytes</code>; importing its library module performs no I/O.
+      A Rust integration test validates both emitted artifacts, appends them under
+      <code>SyncData</code>, closes and reopens the journal, and compares the exact recovered bytes
+      and BLAKE3 observations. Mutation, truncation and a wrong version are refused. This is
+      execution evidence, not a theorem about <code>writeBinFile</code>, stable media or host
+      filesystem crash behavior.</p>
     </div>
 
     <figure class="flow">
@@ -1915,10 +1936,14 @@ def replayKernel (input : ByteArray) : ByteArray :=
       <code>Classical.choice</code>, <code>Quot.sound</code>) is fatal: a <code>sorry</code>
       (<code>sorryAx</code>), custom axiom, or Lean-4.30 <code>native_decide</code>
       (<code>_native.native_decide.ax_…</code>) goes red. The whole-tree command retains its
-      300-constant tripwire and currently audits 20,446 constants. Seven subprocess fixtures
+      300-constant tripwire and currently audits 20,801 constants. Seven trust subprocess fixtures
       exercise the exact allowed floor, indented/root header parsing, prefix vacuity, and all
       three forbidden dependency classes. They prove the gate can fail, but share its
-      <code>collectAxioms</code> implementation and are not an independent checker.
+      <code>collectAxioms</code> implementation and are not an independent checker. A separate
+      Preoscript automation suite repeats custom-axiom, <code>sorryAx</code>, and
+      <code>_native.native_decide.ax_…</code> rejection at generated declarations, then checks
+      route failures, exact resource caps, internal-error loudness, declaration congruence,
+      rollback, and same-name reuse.
       <strong>What a green gate does not
       say:</strong> that any of those theorems is <em>about</em> the thing we say it is about.
       That gap is not a premise and not an obligation &mdash; it is narrowed, by refutable
@@ -1969,11 +1994,11 @@ def replayKernel (input : ByteArray) : ByteArray :=
 <pre><code># every proof, plus the total axiom gate; Lean core only, so it is seconds
 lake build
 
-# compiles the three Lean kernels to C and links them (needs elan)
+# compiles the exact four-module RuntimeInit kernel closure and links it (needs elan)
 cd rust &amp;&amp; cargo test</code></pre>
     <p>Further reading in the repo:
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/MAP.md">docs/MAP.md</a>
-    (every module, what it settles, and the 126-row keystone ledger with its generality and
+    (every module, what it settles, and the 500-row keystone ledger with its generality and
     reachability axes) ·
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/TRUST.md">docs/TRUST.md</a>
     (the three ledgers) ·

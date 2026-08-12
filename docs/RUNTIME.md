@@ -118,7 +118,7 @@ shim, build script, Cargo manifest, and lockfile must also be unchanged.
 initialization with `Once`; failure aborts rather than exposing a partly
 initialized runtime. The current full gate observed 13 Lake-owned objects
 (655,368 bytes before archiving), 14 archive members including the shim
-(798,968 bytes), and 132 passing Rust tests.
+(798,968 bytes), and 133 passing Rust tests.
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native
@@ -168,6 +168,23 @@ The corresponding Lean contract is
   `scan_stops_at_first_refusal` state canonical scan and append behavior.
 - `PhysicalRecord.Valid` parameterizes the outer digest/version/domain
   obligation without claiming that Lean implements BLAKE3 or a filesystem.
+
+The repository now also has an explicit real-byte producer rather than only
+handwritten frame fixtures. `Uwueave.Preo.ArtifactEmit` names the generated
+`SemanticExport.ArtifactDurableBytes` and the complete Projection-V2 example.
+Its executable implementation uses a stack-safe encoder proved equal to
+`ArtifactDurable.projectionBytes`; importing the module performs no I/O.
+`tools/uwueave-preo-artifact` invokes `ArtifactEmitMain` only on request and
+writes the selected bytes to stdout or one caller-selected path.
+
+`rust/tests/artifact_emit.rs` crosses the resulting host boundary end to end:
+both real artifacts pass `ArtifactFrame::new`, are appended under `SyncData`,
+then survive close/reopen with exact bytes and pinned BLAKE3 observations. The
+same test refuses a semantic mutation, a torn frame, and a wrong version. This
+is stronger execution evidence than a reconstructed fixture, but the boundary
+remains exact: the Lean equality covers the logical bytes; Rust tests the
+command, validator, journal, and reopen behavior; neither proves stdout,
+`writeBinFile`, `sync_data`, or the host filesystem correct under a crash.
 
 ### 2.2 DocumentJournal: the typed MoveLog journal
 
@@ -238,7 +255,7 @@ These layers must remain explicit:
 
 | Layer | Bytes or values | Authority |
 | --- | --- | --- |
-| Artifact logical stream | Exact concatenation of `projectionBytes` | Canonical compiled artifact records |
+| Artifact logical stream | Exact concatenation of `projectionBytes`, including bytes selected by the explicit Lean artifact emitter | Canonical compiled artifact records |
 | Artifact physical file | Checksummed `UWARJ001` records containing unchanged logical frames | Physical recovery evidence only |
 | Document logical journal | Ordered typed `DocumentEntry` values | Presently MoveLog mutations; checkpoint is validated acceleration |
 | Document physical file | Checksummed `UWDJRN01` records containing canonical entry bodies | Physical recovery evidence only |
@@ -312,6 +329,13 @@ only a validated complete prefix, with an explicitly chosen policy for a torn
 final record. The repository does not prove that every real crash produces
 such an observation. Checksums detect the modeled corruptions with test
 evidence; they do not make undetected corruption impossible.
+
+The executable emitter has the same filesystem boundary. Path mode calls
+Lean's ordinary `IO.FS.writeBinFile`; it does not write through `RawJournal`,
+request an atomic rename, sync the file or its parent, enforce permissions, or
+defend against symlink/path replacement. Durable use begins only after those
+emitted bytes are admitted and appended through `ArtifactJournal` under a
+deployment-chosen sync and recovery policy.
 
 ## 5. FORMAT v4: authenticated admission plan
 

@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 170
-- **Extracted blocks (marker-bearing source lines):** 168
-- **Lean files containing markers:** 43
+- **Marker occurrences:** 167
+- **Extracted blocks (marker-bearing source lines):** 165
+- **Lean files containing markers:** 44
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -931,29 +931,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     discipline the theorems reward, not one the kernel enforces.
 ````
 
-### [`Uwueave/HonestRender.lean:158`](../Uwueave/HonestRender.lean#L158)
-
-````text
-    deployment-world authenticity remains open.** ⟨UNDONE at runtime
-    authenticity⟩ `Carrier.site` itself still trusts the argument to `report`.
-    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
-    report's carrier site is exactly the state whose status was evaluated, and
-    `refuses_wrong_site` rejects packaging it under a different site. What no
-    Lean theorem establishes is that the state supplied by a running deployment
-    is the external world it claims to have observed; that requires an
-    authenticated runtime observation boundary.
-````
-
-### [`Uwueave/HonestRender.lean:174`](../Uwueave/HonestRender.lean#L174)
-
-````text
-  * **Obligations are not affordances here.** ⟨UNDONE⟩ §8's actionable
-    obligation needs an actor, an authorization proof, a precondition and an
-    effect. `Authority.lean` owns the first two and nothing below imports them;
-    "waiting on `bob`" is a `Source` in a `GSet` and nothing more.
-````
-
-### [`Uwueave/HonestRender.lean:178`](../Uwueave/HonestRender.lean#L178)
+### [`Uwueave/HonestRender.lean:179`](../Uwueave/HonestRender.lean#L179)
 
 ````text
   * **The empirical claim of §8 is untouched.** ⟨UNDONE⟩ *That a recurring class
@@ -1255,6 +1233,20 @@ clothes.
     assumptions.
 ````
 
+## `Uwueave/Preo/ResultProgram.lean`
+
+### [`Uwueave/Preo/ResultProgram.lean:21`](../Uwueave/Preo/ResultProgram.lean#L21)
+
+````text
+    ⟨UNDONE at the deployment observation boundary⟩
+    `ObservationBoundary.Authentic` names the relation between an external
+    world and the Lean state evaluated here. `ObservedReport.attach` requires a
+    proof of that relation, `authentic_site` transports it to the carrier site,
+    and `refuses_inauthentic` rejects a refuted pair. No constructor in this
+    module observes a filesystem, network, device, or process and no theorem
+    claims that a running deployment supplies the premise.
+````
+
 ## `Uwueave/Recoverable.lean`
 
 ### [`Uwueave/Recoverable.lean:106`](../Uwueave/Recoverable.lean#L106)
@@ -1306,18 +1298,6 @@ clothes.
     under its responsiveness premise. That theorem does not supply an infinite
     trace semantics, prove that every execution is fair, or turn this existential
     future property into temporal eventuality; those stronger claims remain open.
-````
-
-### [`Uwueave/RenderSix.lean:120`](../Uwueave/RenderSix.lean#L120)
-
-````text
-    deployment-world authenticity remains open.** ⟨UNDONE at runtime
-    authenticity⟩ This raw `Carrier6.report` still believes its site argument.
-    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
-    report carries exactly the state fed to the total evaluator, and
-    `refuses_wrong_site` rejects a contradictory site claim. A runtime must
-    still authenticate that its supplied state is the external world actually
-    observed; neither the raw carrier nor the adapter fabricates that premise.
 ````
 
 ## `Uwueave/Repair.lean`
@@ -1457,38 +1437,29 @@ own ⟨UNDONE⟩ says an absent row means "nobody proved it". -/
 clothes.
 ````
 
-### [`Uwueave/ResultStatus.lean:96`](../Uwueave/ResultStatus.lean#L96)
+### [`Uwueave/ResultStatus.lean:97`](../Uwueave/ResultStatus.lean#L97)
 
 ````text
-    ⟨UNDONE⟩ What is enforced here is that the value's projection names its
-    policy and its evidence: `ResolvedBy π e` has both as indices, so `r.value`
-    cannot be written without them, and `resolved_value_is_not_a_function_of_
-    the_evidence` proves the projection is genuinely policy-dependent. What is
-    **not** built is any statement that an *elaborator* never inserts that
-    projection silently — that is a fact about a surface language, and there is
-    no surface language.
+    ⟨DONE at `typed derive`, ⟨UNDONE⟩ for unrestricted projection⟩ `ResolvedBy
+    π e` names its policy and evidence, and `resolved_value_is_not_a_function_
+    of_the_evidence` proves the policy index is load-bearing. Preoscript's
+    `typed derive` emits a preserve-fork `CheckedDeclaration` and checked
+    reports; it emits no resolved-value coercion. Ordinary Lean code can still
+    call `ResolvedBy.value` explicitly or define its own coercion, and this
+    library does not claim to police arbitrary elaborators.
 ````
 
-### [`Uwueave/ResultStatus.lean:125`](../Uwueave/ResultStatus.lean#L125)
+### [`Uwueave/ResultStatus.lean:126`](../Uwueave/ResultStatus.lean#L126)
 
 ````text
-    ⟨UNDONE at running/arbitrary reach and surface integration⟩ `Declares`
-    here is still a proposition a proof discharges. For an explicitly supplied
-    finite list of states, `StatusEffects.infer` now returns the downward
-    closure of the observed six-way shapes, and `infer_is_least` proves both
-    support and leastness. It does not discover the states a running system can
-    reach, infer over an unbounded reach predicate, or install that inference
-    in the surface elaborator.
-````
-
-### [`Uwueave/ResultStatus.lean:132`](../Uwueave/ResultStatus.lean#L132)
-
-````text
-  * **The reach set is a hypothesis.** ⟨TERMINAL for the refutation, ⟨UNDONE⟩
-    as deployment⟩ `declaration_is_relative_to_the_reach` shows a declaration
-    that holds over one state set fails over a wider one. Which states a
-    running system actually reaches is `WorldFuture.lean`'s question about
-    wellformedness, and it is not answered there either.
+    supplied boundary.** ⟨DONE for finite `typed derive`, ⟨UNDONE⟩ for
+    running/arbitrary reach⟩ `StatusEffects.infer_is_least` proves support and
+    leastness, and `typed derive` installs that inference in its generated
+    `CheckedDeclaration`; membership-gated reports retain the authored reach
+    proof in `ResultProgram.ReachReport`. The list is still an input, not a
+    discovered execution invariant. `declaration_is_relative_to_the_reach`
+    proves why widening it matters; neither this adapter nor `WorldFuture`
+    discovers every state a deployment can actually reach.
 ````
 
 ## `Uwueave/Scheduling.lean`

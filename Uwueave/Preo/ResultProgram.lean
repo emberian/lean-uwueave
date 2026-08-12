@@ -14,6 +14,17 @@ resolution mode, and to explicit visibility and per-value disclosure policy.
 The exactness fields make a false site, visibility, or disclosure claim
 refutable. This checks claims against the declared policy; as in
 `HonestRender`, no proposition about pixel salience is inferred from it.
+
+## Honest boundary
+
+  * **External observation authenticity is supplied, not manufactured.**
+    ⟨UNDONE at the deployment observation boundary⟩
+    `ObservationBoundary.Authentic` names the relation between an external
+    world and the Lean state evaluated here. `ObservedReport.attach` requires a
+    proof of that relation, `authentic_site` transports it to the carrier site,
+    and `refuses_inauthentic` rejects a refuted pair. No constructor in this
+    module observes a filesystem, network, device, or process and no theorem
+    claims that a running deployment supplies the premise.
 -/
 import Uwueave.StatusEffects
 
@@ -122,6 +133,13 @@ theorem effect_allows_iff (d : CheckedDeclaration S β F resolution)
       ∃ s, s ∈ d.reach ∧ shape ⊑ₛ StatusEffects.shapeOf (d.evaluate s) :=
   Iff.rfl
 
+/-- The computed status satisfies its complete semantic row at every state.
+This is independent of finite-reach admission: reach controls the inferred
+effect, while total soundness controls what each status means. -/
+theorem semanticsAt (d : CheckedDeclaration S β F resolution) (state : S) :
+    (d.evaluate state).Semantics (d.answer state) (d.settled state) :=
+  d.totalSound.semanticsAt state
+
 /-- The six-way soundness proof projects exactly to the historical renderer
 contract when an older consumer needs it. -/
 theorem rendererSound (d : CheckedDeclaration S β F resolution) :
@@ -212,6 +230,34 @@ theorem says_iff (r : CheckedReport d C) (status : Status β) :
     rw [← h]
     exact says_computed r
 
+/-- The status computed for a checked report satisfies its semantic row. -/
+theorem semanticsAt (r : CheckedReport d C) :
+    (d.evaluate r.state).Semantics (d.answer r.state) (d.settled r.state) :=
+  d.semanticsAt r.state
+
+/-- Any status the carrier says for this report has the corresponding answer
+and settledness semantics at the report's checked site. -/
+theorem says_semantics (r : CheckedReport d C) {status : Status β}
+    (h : C.Says r.output status) :
+    status.Semantics (d.answer r.state) (d.settled r.state) := by
+  rw [← (r.says_iff status).mp h]
+  exact r.semanticsAt
+
+/-- The exact row projects candidate membership, uniqueness, and settledness
+without exposing either carrier representation or evaluator conditionals. -/
+theorem exact_semantics (r : CheckedReport d C) {value : β}
+    (h : C.Says r.output (Status.exact value)) :
+    d.answer r.state value = true ∧ Holes.SealsTo (d.answer r.state) value
+      ∧ d.settled r.state :=
+  r.says_semantics h
+
+/-- A semantically impossible status cannot be said by a checked report. -/
+theorem refuses_status_without_semantics (r : CheckedReport d C)
+    (status : Status β)
+    (hnot : ¬ status.Semantics (d.answer r.state) (d.settled r.state)) :
+    ¬ C.Says r.output status :=
+  fun h => hnot (r.says_semantics h)
+
 @[simp] theorem renderAt_site (d : CheckedDeclaration S β F resolution)
     (C : RenderSix.Carrier6 F β) (state : S) :
     C.site (renderAt d C state).output = state :=
@@ -266,7 +312,114 @@ theorem refuses_wrong_disclosure (state : S) (value : β) (claim : Disclosure)
   apply hne
   rw [← hrclaim, r.disclosure_exact, hrs]
 
+/-- A resolution identity different from the declaration's indexed resolution
+cannot be attached to a checked report. -/
+theorem refuses_wrong_resolution (claim : ResolutionIdentity)
+    (hne : claim ≠ resolutionIdentity resolution) :
+    ¬ ∃ r : CheckedReport d C, r.resolutionId = claim := by
+  rintro ⟨r, hr⟩
+  exact hne (hr ▸ r.resolution_exact)
+
 end CheckedReport
+
+/-! ## Finite-reach and observation adapters -/
+
+/-- A checked report whose evaluated state belongs to the exact finite reach
+used for effect inference. The proof is retained as data; no running reach is
+discovered or inferred by this wrapper. -/
+structure ReachReport {S β : Type} {F : Evidence.Future S}
+    {resolution : StatusEffects.Resolution S β}
+    (d : CheckedDeclaration S β F resolution)
+    (C : RenderSix.Carrier6 F β) where
+  checked : CheckedReport d C
+  inReach : checked.state ∈ d.reach
+
+namespace ReachReport
+
+variable {S β : Type} {F : Evidence.Future S}
+  {resolution : StatusEffects.Resolution S β}
+  {d : CheckedDeclaration S β F resolution}
+  {C : RenderSix.Carrier6 F β}
+
+/-- Construct a reach-admitted report from an explicit membership proof. -/
+def renderAt (d : CheckedDeclaration S β F resolution)
+    (C : RenderSix.Carrier6 F β) (state : S) (inReach : state ∈ d.reach) :
+    ReachReport d C where
+  checked := CheckedReport.renderAt d C state
+  inReach := inReach
+
+/-- Reach admission preserves the complete semantics of the checked report. -/
+theorem semanticsAt (r : ReachReport d C) :
+    (d.evaluate r.checked.state).Semantics (d.answer r.checked.state)
+      (d.settled r.checked.state) :=
+  r.checked.semanticsAt
+
+/-- The inferred effect admits the exact shape carried by every admitted
+report, rather than relying on the caller to remember its reach proof. -/
+theorem effect_supports (r : ReachReport d C) :
+    d.effect.Allows (StatusEffects.shapeOf (d.evaluate r.checked.state)) :=
+  d.effect_supports r.checked.state r.inReach
+
+/-- No reach-admitted report can claim a state outside the authored reach. -/
+theorem refuses_out_of_reach (state : S) (hnot : state ∉ d.reach) :
+    ¬ ∃ r : ReachReport d C, r.checked.state = state := by
+  rintro ⟨r, hr⟩
+  exact hnot (hr ▸ r.inReach)
+
+end ReachReport
+
+/-- A runtime boundary supplies the proposition connecting an external world
+observation to the Lean state used for evaluation. This interface does not
+construct, trust, or authenticate such a witness by itself. -/
+structure ObservationBoundary (World S : Type) where
+  Authentic : World → S → Prop
+
+/-- A reach-admitted checked report together with a caller-supplied proof that
+its state authentically represents one external observation. -/
+structure ObservedReport {World S β : Type} {F : Evidence.Future S}
+    {resolution : StatusEffects.Resolution S β}
+    (boundary : ObservationBoundary World S)
+    (d : CheckedDeclaration S β F resolution)
+    (C : RenderSix.Carrier6 F β) where
+  world : World
+  report : ReachReport d C
+  authentic : boundary.Authentic world report.checked.state
+
+namespace ObservedReport
+
+variable {World S β : Type} {F : Evidence.Future S}
+  {resolution : StatusEffects.Resolution S β}
+  {boundary : ObservationBoundary World S}
+  {d : CheckedDeclaration S β F resolution}
+  {C : RenderSix.Carrier6 F β}
+
+/-- Attach an authenticity proof supplied by the observation boundary. -/
+def attach (boundary : ObservationBoundary World S) (world : World)
+    (report : ReachReport d C)
+    (authentic : boundary.Authentic world report.checked.state) :
+    ObservedReport boundary d C where
+  world := world
+  report := report
+  authentic := authentic
+
+/-- The retained authenticity proof reaches the carrier site because the
+checked report's site is exactly its evaluated state. -/
+theorem authentic_site (r : ObservedReport boundary d C) :
+    boundary.Authentic r.world (C.site r.report.checked.output) := by
+  rw [r.report.checked.site_exact]
+  exact r.authentic
+
+/-- A boundary-refuted world/state pair cannot be packaged as observed. -/
+theorem refuses_inauthentic (world : World) (state : S)
+    (hnot : ¬ boundary.Authentic world state) :
+    ¬ ∃ r : ObservedReport boundary d C,
+      r.world = world ∧ r.report.checked.state = state := by
+  rintro ⟨r, hw, hs⟩
+  apply hnot
+  rw [← hw, ← hs]
+  exact r.authentic
+
+end ObservedReport
 
 /-! ## Executable theorem fixtures -/
 

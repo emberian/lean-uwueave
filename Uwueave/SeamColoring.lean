@@ -1007,76 +1007,37 @@ theorem allColorings_complete {S : Type u} {Seg : Type v} [DecidableEq S]
 
 /-! ### A certified argument-minimum over a list -/
 
-/-- A structural argument-minimum.  Ties choose the earlier list member. -/
-def argMin? {X : Type u} (cost : X → Nat) : List X → Option X
-  | [] => none
-  | x :: xs =>
-      match argMin? cost xs with
-      | none => some x
-      | some y => if cost x ≤ cost y then some x else some y
+/-- The standard structural argument-minimum, specialized to natural costs.
+`List.minOn?` retains the first member when costs tie. -/
+def argMin? {X : Type u} (cost : X → Nat) (xs : List X) : Option X :=
+  xs.minOn? cost
 
-theorem argMin_eq_none_iff {X : Type u} (cost : X → Nat) :
-    ∀ xs : List X, argMin? cost xs = none ↔ xs = [] := by
-  intro xs
-  induction xs with
-  | nil => simp [argMin?]
-  | cons x xs ih =>
-      cases h : argMin? cost xs with
-      | none => simp [argMin?, h]
-      | some y => by_cases hxy : cost x ≤ cost y <;> simp [argMin?, h, hxy]
+theorem argMin_eq_none_iff {X : Type u} (cost : X → Nat) (xs : List X) :
+    argMin? cost xs = none ↔ xs = [] := by
+  cases xs <;> simp [argMin?, List.minOn?]
 
-theorem argMin_mem {X : Type u} (cost : X → Nat) :
-    ∀ {xs : List X} {x : X}, argMin? cost xs = some x → x ∈ xs := by
-  intro xs
-  induction xs with
-  | nil => simp [argMin?]
-  | cons a rest ih =>
-      intro x hx
-      cases htail : argMin? cost rest with
-      | none =>
-          simp [argMin?, htail] at hx
-          subst x
-          exact List.mem_cons_self
-      | some b =>
-          by_cases hab : cost a ≤ cost b
-          · simp [argMin?, htail, hab] at hx
-            subst x
-            exact List.mem_cons_self
-          · simp [argMin?, htail, hab] at hx
-            subst x
-            exact List.mem_cons_of_mem a (ih htail)
+theorem argMin_mem {X : Type u} (cost : X → Nat)
+    {xs : List X} {x : X} (hx : argMin? cost xs = some x) : x ∈ xs :=
+  List.minOn?_mem (by simpa only [argMin?] using hx)
 
 /-- The returned member costs no more than any member of the searched list. -/
-theorem argMin_le_of_mem {X : Type u} (cost : X → Nat) :
-    ∀ {xs : List X} {x : X}, argMin? cost xs = some x →
-      ∀ {y : X}, y ∈ xs → cost x ≤ cost y := by
-  intro xs
-  induction xs with
-  | nil => simp [argMin?]
-  | cons a rest ih =>
-      intro x hx y hy
-      cases htail : argMin? cost rest with
-      | none =>
-          have hrest : rest = [] := (argMin_eq_none_iff cost rest).mp htail
-          subst rest
-          simp [argMin?] at hx
-          subst x
-          rcases List.mem_cons.mp hy with hya | hfalse
-          · subst y
-            exact Nat.le_refl _
-          · exact False.elim (List.not_mem_nil hfalse)
-      | some b =>
-          by_cases hab : cost a ≤ cost b
-          · simp [argMin?, htail, hab] at hx
-            subst x
-            rcases List.mem_cons.mp hy with rfl | hy
-            · exact Nat.le_refl _
-            · exact Nat.le_trans hab (ih htail hy)
-          · simp [argMin?, htail, hab] at hx
-            subst x
-            rcases List.mem_cons.mp hy with rfl | hy
-            · omega
-            · exact ih htail hy
+theorem argMin_le_of_mem {X : Type u} (cost : X → Nat)
+    {xs : List X} {x : X} (hx : argMin? cost xs = some x)
+    {y : X} (hy : y ∈ xs) : cost x ≤ cost y := by
+  have hne : xs ≠ [] := by
+    intro hnil
+    subst xs
+    simp [argMin?, List.minOn?] at hx
+  rw [argMin?, List.minOn?_eq_some_minOn hne] at hx
+  injection hx with hx
+  subst x
+  exact List.apply_minOn_le_of_mem hy
+
+/-- Regression for the executable tie contract: the first equal-cost member
+is retained, rather than a later representative. -/
+theorem argMin_first_tie_fixture :
+    argMin? (fun _ : Bool => 7) [false, true] = some false := by
+  decide
 
 /-- All enumerated valid colourings, still as total functions. -/
 def validColorings {S : Type u} {Seg : Type v} [DecidableEq S] [MergeState S]

@@ -155,14 +155,12 @@ committed one. `ResultStatus` still imports nothing from here.
     prevents a `cast` between `Result F α` and `Result G α`; the index is a
     discipline the theorems reward, not one the kernel enforces.
   * **The checked adapter binds the report site to the evaluated state;
-    deployment-world authenticity remains open.** ⟨UNDONE at runtime
-    authenticity⟩ `Carrier.site` itself still trusts the argument to `report`.
-    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
-    report's carrier site is exactly the state whose status was evaluated, and
-    `refuses_wrong_site` rejects packaging it under a different site. What no
-    Lean theorem establishes is that the state supplied by a running deployment
-    is the external world it claims to have observed; that requires an
-    authenticated runtime observation boundary.
+    the observation premise is explicit downstream.**
+    ⟨DONE downstream in `Uwueave.Preo.ResultProgram`⟩
+    `CheckedReport.site_exact` and `refuses_wrong_site` bind a checked report to
+    its evaluated state. `ObservedReport` then retains a caller-supplied
+    `ObservationBoundary.Authentic` proof. The remaining deployment question is
+    centralized at that boundary; this five-status carrier does not restate it.
   * **Disclosure is explicitly and totally decided downstream.**
     ⟨DONE downstream in `Uwueave.Preo.ResultProgram`⟩ The alternatives still
     survive resolution by `ResultStatus.alternatives_are_retained`.
@@ -171,10 +169,13 @@ committed one. `ResultStatus` still imports nothing from here.
     `CheckedReport.renderAt_disclosure` projects it exactly and
     `refuses_wrong_disclosure` rejects a contradictory claim. This types the
     decision, not its eventual pixel salience.
-  * **Obligations are not affordances here.** ⟨UNDONE⟩ §8's actionable
-    obligation needs an actor, an authorization proof, a precondition and an
-    effect. `Authority.lean` owns the first two and nothing below imports them;
-    "waiting on `bob`" is a `Source` in a `GSet` and nothing more.
+  * **Obligations become authorization-carrying affordances downstream.**
+    ⟨DONE downstream in `Uwueave.RenderProgress`⟩ `DischargeOffer` retains the
+    resulting state, actor, delegation and revocation sets, a proof of
+    `Authority.Active`, a permitted-future proof, and proof that the action
+    leaves `pending`. `statusOf_pendingActionable` constructs the offer only
+    from live authority, while `a_revoked_actor_gets_no_button` rejects the
+    same affordance after revocation.
   * **The empirical claim of §8 is untouched.** ⟨UNDONE⟩ *That a recurring class
     of local-first UI misrepresentations consists of unproved coercions from
     open/forked evidence to exact singular presentation* needs a defect corpus

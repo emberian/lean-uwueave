@@ -255,6 +255,7 @@ structure TotalSoundEvaluator6 {S β : Type} (F : Evidence.Future S)
   forkedOpen_correct : ∀ s, peval s = Status.forkedOpen →
     HasFork answer s ∧ ¬ Settled s
   absent_settled : ∀ s, peval s = Status.absent → Settled s
+  pending_correct : ∀ s, peval s = Status.pending → ∀ a, answer s a = false
   pending_open : ∀ s, peval s = Status.pending → ¬ Settled s
 
 /-- Exact projection back to the historical three-cell contract. -/
@@ -262,6 +263,23 @@ theorem TotalSoundEvaluator6.toSoundEvaluator6 {S β : Type} {F : Evidence.Futur
     {answer : S → GSet β} {Settled : S → Prop} {peval : S → Status β}
     (h : TotalSoundEvaluator6 F answer Settled peval) :
     RenderSix.SoundEvaluator6 F answer peval := h.core
+
+/-- The total contract implies the semantic row of every computed status.
+Unlike the historical renderer contract this includes truth at `pending`, not
+only the existence of a future which escapes it. -/
+theorem TotalSoundEvaluator6.semanticsAt {S β : Type} {F : Evidence.Future S}
+    {answer : S → GSet β} {Settled : S → Prop} {peval : S → Status β}
+    (h : TotalSoundEvaluator6 F answer Settled peval) (s : S) :
+    (peval s).Semantics (answer s) (Settled s) := by
+  cases hs : peval s with
+  | exact value =>
+      exact ⟨(h.core.exact_correct s value hs).1,
+        (h.core.exact_correct s value hs).2, h.exact_settled s value hs⟩
+  | provisional value => exact h.provisional_correct s value hs
+  | forkedClosed => exact h.forkedClosed_correct s hs
+  | forkedOpen => exact h.forkedOpen_correct s hs
+  | absent => exact ⟨h.core.absent_correct s hs, h.absent_settled s hs⟩
+  | pending => exact ⟨h.pending_correct s hs, h.pending_open s hs⟩
 
 /-! ### The three missing inversions, now stated exactly -/
 
@@ -304,6 +322,7 @@ theorem statusOf_totalSound6 {β : Type} [DecidableEq β] [Inhabited β] :
   forkedClosed_correct := fun _ h => values_of_statusOf_forkedClosed h
   forkedOpen_correct := fun _ h => values_of_statusOf_forkedOpen h
   absent_settled := fun _ h => (RenderSix.values_of_statusOf_absent h).2
+  pending_correct := fun _ h => (RenderSix.values_of_statusOf_pending h).1
   pending_open := fun _ h => (RenderSix.values_of_statusOf_pending h).2
 
 /-! ## 6. Fixtures: correlations, explicit resolution, and a rejected lie -/

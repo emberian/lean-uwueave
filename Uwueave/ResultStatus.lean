@@ -92,14 +92,15 @@ these are the two meanings and this is the type-level one.
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's
 clothes.
 
-  * **"No branch selection through an implicit coercion" is half-formalised.**
-    ⟨UNDONE⟩ What is enforced here is that the value's projection names its
-    policy and its evidence: `ResolvedBy π e` has both as indices, so `r.value`
-    cannot be written without them, and `resolved_value_is_not_a_function_of_
-    the_evidence` proves the projection is genuinely policy-dependent. What is
-    **not** built is any statement that an *elaborator* never inserts that
-    projection silently — that is a fact about a surface language, and there is
-    no surface language.
+  * **"No branch selection through an implicit coercion" is enforced at the
+    typed-derive result surface, not for unrestricted Lean terms.**
+    ⟨DONE at `typed derive`, ⟨UNDONE⟩ for unrestricted projection⟩ `ResolvedBy
+    π e` names its policy and evidence, and `resolved_value_is_not_a_function_
+    of_the_evidence` proves the policy index is load-bearing. Preoscript's
+    `typed derive` emits a preserve-fork `CheckedDeclaration` and checked
+    reports; it emits no resolved-value coercion. Ordinary Lean code can still
+    call `ResolvedBy.value` explicitly or define its own coercion, and this
+    library does not claim to police arbitrary elaborators.
   * **Visibility is an independent downstream axis.**
     ⟨DONE downstream in `Uwueave.Preo.ResultProgram`⟩ The six cells here remain
     candidates × closure only. `ResultProgram.Visibility` separately models
@@ -121,19 +122,15 @@ clothes.
   * **`statusOf` is noncomputable.** ⟨TERMINAL at this carrier⟩ Inherited
     verbatim from `Evidence.render`: both decisions quantify over an unbounded
     value type. `Classical.choice` is inside the audit floor.
-  * **Finite-reach declarations are inferred; arbitrary reach remains open.**
-    ⟨UNDONE at running/arbitrary reach and surface integration⟩ `Declares`
-    here is still a proposition a proof discharges. For an explicitly supplied
-    finite list of states, `StatusEffects.infer` now returns the downward
-    closure of the observed six-way shapes, and `infer_is_least` proves both
-    support and leastness. It does not discover the states a running system can
-    reach, infer over an unbounded reach predicate, or install that inference
-    in the surface elaborator.
-  * **The reach set is a hypothesis.** ⟨TERMINAL for the refutation, ⟨UNDONE⟩
-    as deployment⟩ `declaration_is_relative_to_the_reach` shows a declaration
-    that holds over one state set fails over a wider one. Which states a
-    running system actually reaches is `WorldFuture.lean`'s question about
-    wellformedness, and it is not answered there either.
+  * **Finite authored reach is inferred and surfaced; running reach remains a
+    supplied boundary.** ⟨DONE for finite `typed derive`, ⟨UNDONE⟩ for
+    running/arbitrary reach⟩ `StatusEffects.infer_is_least` proves support and
+    leastness, and `typed derive` installs that inference in its generated
+    `CheckedDeclaration`; membership-gated reports retain the authored reach
+    proof in `ResultProgram.ReachReport`. The list is still an input, not a
+    discovered execution invariant. `declaration_is_relative_to_the_reach`
+    proves why widening it matters; neither this adapter nor `WorldFuture`
+    discovers every state a deployment can actually reach.
 -/
 import Uwueave.WorldFuture
 
@@ -190,9 +187,8 @@ settledness, never `statusOf`'s nested decidable conditionals.
 
 The predicate is intentionally generic in the answer set and the settledness
 proposition. `statusOf_semantics` instantiates them with `Evidence.values e`
-and `Evidence.Closed e`. `StatusEffects.TotalSoundEvaluator6` supplies the
-other five complete rows and the pending row's openness, but not yet its
-empty-answer clause. -/
+and `Evidence.Closed e`. `StatusEffects.TotalSoundEvaluator6.semanticsAt`
+supplies the same complete rows for application-defined evaluators. -/
 def Status.Semantics {α : Type} (answer : GSet α) (settled : Prop) : Status α → Prop
   | .exact a => answer a = true ∧ Holes.SealsTo answer a ∧ settled
   | .provisional a => answer a = true ∧ Holes.SealsTo answer a ∧ ¬ settled

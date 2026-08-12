@@ -157,6 +157,25 @@ def edgesOfPaths (step : S → Op → S) (s : S) : List (List Op) → List (S ×
   | [] => []
   | p :: ps => edgesAlong step s p ++ edgesOfPaths step s ps
 
+/-- Execution edges across branch paths are the standard `flatMap` of the
+single-path edge trace.  All branches retain the same root. -/
+theorem edgesOfPaths_eq_flatMap (step : S → Op → S) (s : S)
+    (ps : List (List Op)) :
+    edgesOfPaths step s ps = ps.flatMap (edgesAlong step s) := by
+  induction ps with
+  | nil => rfl
+  | cons p ps ih => rw [edgesOfPaths, List.flatMap_cons, ih]
+
+theorem edgesOfPaths_empty_fixture :
+    edgesOfPaths (fun s o : Nat => s + o) 0 [] = [] := rfl
+
+theorem edgesOfPaths_singleton_fixture :
+    edgesOfPaths (fun s o : Nat => s + o) 0 [[1, 2]] = [(0, 1), (1, 2)] := rfl
+
+theorem edgesOfPaths_multi_fixture :
+    edgesOfPaths (fun s o : Nat => s + o) 0 [[1, 2], [3], []] =
+      [(0, 1), (1, 2), (0, 3)] := rfl
+
 /-- **The scenario's execution edges.** Finite, by construction. -/
 def execEdges (sc : Scenario S Op) (step : S → Op → S) : List (S × Op) :=
   edgesOfPaths step sc.root sc.paths
@@ -191,15 +210,9 @@ theorem run_mem_trace (step : S → Op → S) :
 theorem mem_edgesOfPaths (step : S → Op → S) (s : S) :
     ∀ (ps : List (List Op)) (p : List Op), p ∈ ps →
       ∀ e ∈ edgesAlong step s p, e ∈ edgesOfPaths step s ps := by
-  intro ps
-  induction ps with
-  | nil => intro p hp; cases hp
-  | cons q ps ih =>
-      intro p hp e he
-      show e ∈ edgesAlong step s q ++ edgesOfPaths step s ps
-      rcases List.mem_cons.mp hp with h | h
-      · exact List.mem_append.mpr (Or.inl (h ▸ he))
-      · exact List.mem_append.mpr (Or.inr (ih p h e he))
+  intro ps p hp e he
+  rw [edgesOfPaths_eq_flatMap]
+  exact List.mem_flatMap.mpr ⟨p, hp, he⟩
 
 /-- …and so are a branch's worlds. -/
 theorem mem_map_edgesOfPaths (step : S → Op → S) (s : S) :
@@ -440,12 +453,11 @@ private theorem countP_edgesOfPaths {S : Type u} {Op : Type w} {Seg : Type v}
           (fun e => !decide (σ (step e.1 e.2) = σ e.1))
         = jointCost σ step s ps := by
   intro ps
-  induction ps with
-  | nil => rfl
-  | cons p ps ih =>
-      show (Scenario.edgesAlong step s p ++ Scenario.edgesOfPaths step s ps).countP _
-        = jointCost σ step s (p :: ps)
-      rw [List.countP_append, countP_edgesAlong σ step s p, ih, jointCost_cons]
+  rw [Scenario.edgesOfPaths_eq_flatMap, List.countP_flatMap]
+  congr 1
+  apply List.map_congr_left
+  intro p _
+  exact countP_edgesAlong σ step s p
 
 /-- **The cost really is charged to execution edges.** `liveCost` counts exactly
 the execution edges whose two endpoints land in different segments — the

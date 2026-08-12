@@ -302,6 +302,7 @@ theorem totalSound (program : Expr.Program Γ) :
     forkedClosed_correct := ?_
     forkedOpen_correct := ?_
     absent_settled := ?_
+    pending_correct := ?_
     pending_open := ?_ }
   · refine {
       exact_correct := ?_
@@ -336,6 +337,8 @@ theorem totalSound (program : Expr.Program Γ) :
     simp [evaluate] at h
   · intro _ _
     trivial
+  · intro env h
+    simp [evaluate] at h
   · intro env h
     simp [evaluate] at h
 

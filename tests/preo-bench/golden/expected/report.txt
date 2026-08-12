@@ -1,0 +1,41 @@
+preo PreoBench.Golden.Report.Subject
+  state    PreoBench.Golden.Report.Subject.State  (MergeState by inferInstance — checked by an emitted `example`)
+
+  FIELD                 KIND                  CARRIER
+  marker                Counter               Nat
+
+  INVARIANT             READS            GLOBAL      SEAM        ROUTES
+  nonnegative           marker           FREE        —           selection
+      ↳ Catalog.selection_iconfluent (the merge picks a side)
+
+  TYPED DERIVE          SCHEMA                RAW PROGRAM
+  Next                  [.nat, .nat]          .natSucc (.field 0) on reach [Incremental.before]
+      ↳ Expr.Raw.infer → proof-carrying merge/monotone analyses → checked cache/update → finite-reach six-status Result/report
+
+  FUTURE                WORLD MODEL           DECLARATION
+  Delivered             (Future.evidenceWorldModel Holes.Val)  Future.Delivery Holes.Val
+      ↳ Preo.Future.FutureDecl at the explicit WorldModel (kernel-checked)
+
+  PROTOCOL              STRATEGY              TYPED TERM
+  P                     Unit                  Protocol.coalescingProtocol
+      ↳ Protocol.Term (typed AST; semantics stay in Term.denote/profile)
+
+  SESSION               PROTOCOL(S)           ELABORATION
+  S                     P                     Protocol.elaborate
+      ↳ Protocol.Elaboration with checked .plan and .upperBound
+
+  Every VERDICT column above is REDUCED out of the row's `.classification`
+  constant at print time — `Classification.answer` and `.mergeAnswer`,
+  whose order-independence is `Preo.run_answer_congr`. No verdict is stored.
+  FREE rows are also stated at document scale as `<invariant>.onState`;
+  SEAM rows as `<invariant>.seamOnState` (`Preo.seamAlong` — the clash is
+  transported by PLANTING the field replicas in a document, which is what
+  fragment 1 said it could not synthesize).
+  TYPED DERIVE rows expose `.Holes`, `.Reads`, `.MergeSafe?`,
+  `.MonotoneSafe?`, `.buildCache`, `.updateCache`, `.Result`, and
+  membership-gated `.reportAt`;
+  positive badges are
+  proof values, while `none` remains an honest non-answer.
+
+  FUTURE/PROTOCOL/SESSION rows have no verdict column: they name typed
+  semantic artifacts, and their cited constructors carry the proofs.

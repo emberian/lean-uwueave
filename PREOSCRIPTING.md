@@ -458,6 +458,129 @@ Two recursive generators also have semantic simp interfaces on purpose:
   proof-normalization blowups; exact denotation still retains the real linear
   repeated demand stream.
 
+### 7.3 One public facade, transactional phases
+
+The implementation is split without splitting the language. The public
+[`Uwueave.Preo.Elab`](Uwueave/Preo/Elab.lean) module is the **only** place that
+registers handlers for `preo`, `preo_certificate`, `preo_budget`,
+`preo_export`, `#preo_report`, and the native `preo_protocol` command. The
+modules under [`Uwueave/Preo/Elab/`](Uwueave/Preo/Elab/) expose ordinary,
+non-registered worker declarations. Importing a worker therefore cannot
+install a second handler for the same syntax or cause a surface command to run.
+
+For a `preo N`, the
+[`Declaration`](Uwueave/Preo/Elab/Declaration.lean) orchestrator retains the
+historical phase and report-row order:
+
+```
+state and fields
+  → invariants
+  → composed document seam
+  → futures
+  → typed derives
+  → ordinary derives
+  → protocols
+  → sessions
+  → publish report rows
+```
+
+This order is semantic compatibility, not a scheduling suggestion. The phases
+are not run in parallel, and report rows enter the environment extension only
+after all earlier generated declarations have succeeded. Splitting the old
+monolith gives Lean smaller recompilation and profiler boundaries and lets a
+leaf consumer import less implementation. It does not reduce kernel checking,
+change route order, or introduce a second semantics for any surface form.
+
+The shared
+[`Internal`](Uwueave/Preo/Elab/Internal.lean) layer makes two kinds of emission
+deliberately different:
+
+- `emitRequired` emits a declaration promised by the surface. A thrown
+  exception or logged elaboration error restores that command's input
+  environment and aborts the enclosing surface command; the diagnostic is
+  retained.
+- `probeCommand` tries an optional classification or transport route. Failure
+  restores its input environment and message log and returns the diagnostic as
+  data, so an inapplicable route leaves no declaration and no stray error.
+  Success keeps the checked declaration. Macro scopes and name generators keep
+  advancing across a failed probe; reusing hidden hygiene state would be less
+  safe than leaving that monotone state alone.
+
+Every public mutating core is wrapped in `withEnvTransaction`. If a required
+late phase fails, the environment is restored to its state before the whole
+surface command: earlier generated constants and any report-extension entries
+are both absent, while diagnostics remain visible. The identical user-level
+top name can then be used by a later successful command. The executable
+[`RollbackReuse`](tests/preo-automation/RollbackReuse.lean) canary checks both
+absence and same-name reuse. This is environment atomicity inside Lean; it is
+not a filesystem transaction.
+
+The phase split is intentionally **not** a generated-API change. Existing
+names, types, emission order, report rows, and route labels remain the
+compatibility contract, pinned comprehensively by the
+[`names-types-rows.tsv`](tests/preo-bench/golden/expected/names-types-rows.tsv)
+golden fixture. In particular, the stable families remain:
+
+- a declaration `N` emits `N.State`; each field `f` emits `N.f.Carrier`,
+  `N.f`, `N.f.merge_hom`, `N.f.plant`, `N.f.plant_proj`,
+  `N.f.plant_merge`, and `N.f.surj` (plus `seed` and `mergeState` for a custom
+  carrier);
+- an invariant `i` emits `N.i`, its accumulated `verdict` family and
+  `N.i.classification`, with `seam`, `onState`, `seamOnState`, or `obligation`
+  only when the corresponding checked route applies;
+- futures retain `N.F.WorldModel` and `N.F`; ordinary derives retain their
+  `on`, value, `merge`, `classification`, and possible `obligation` family;
+  typed derives retain the existing checked program, dependency, incremental,
+  result, reach, and report family;
+- protocols and sessions retain their term/elaboration, `Plan`, `UpperBound`,
+  and where applicable `ProfilePlan` declarations; the native spelling retains
+  the exact `Strategy`, `selectedStrategy`, `Term`, `Elaboration`, `Session`,
+  `Plan`, `Limits`, `ProfileUpperBound`, and equality-witness surface described
+  above;
+- `preo_budget B` retains `B`, `B.Limits`, `B.Session`, `B.Plan`, and
+  `B.PeerUpperBound`; `preo_certificate C` emits exactly `C`; and
+  `#preo_report` emits no declaration;
+- `preo_export E` retains exactly `E.Declaration`, `E.Bundle`, `E.Artifact`,
+  `E.Projection`, `E.Encoding`, `E.ArtifactDurableFormat`,
+  `E.ArtifactDurableBytes`, `E.ProjectionV2`, `E.ValidationConfig`,
+  `E.Validation`, `E.validation_ok`, `E.Validated`, `E.Rendered`, and
+  `E.RenderResult`, in dependency order.
+
+### 7.4 Explicit durable-artifact emission
+
+Elaboration computes and names durable artifact bytes but performs no I/O.
+Writing one of the currently registered real artifacts is an explicit host
+action through [`tools/uwueave-preo-artifact`](tools/uwueave-preo-artifact):
+
+```sh
+# Show the finite registry and its canonical Lean names.
+tools/uwueave-preo-artifact --list
+
+# Write binary bytes to stdout; redirect them, do not print them in a terminal.
+tools/uwueave-preo-artifact \
+  SemanticExport.ArtifactDurableBytes --stdout > semantic.preo
+
+# Or ask Lean's runner to write a named path directly.
+tools/uwueave-preo-artifact \
+  ProjectionV2.Examples.fullExport --output full.preo
+
+# The short aliases `semantic-export` and `full-export` are also accepted.
+```
+
+Both output modes select bytes from the Lean-owned finite registry in
+[`ArtifactEmit`](Uwueave/Preo/ArtifactEmit.lean); Rust does not reconstruct the
+artifact. `--stdout` writes only the binary artifact on standard output, and
+`--output` leaves standard output empty on success.
+
+The direct-path mode uses ordinary `IO.FS.writeBinFile`, and shell redirection
+uses the shell's ordinary file behavior. Neither writes a sibling temporary
+file and atomically renames it; neither proves `fsync`, directory durability,
+permission safety, path hardening, or crash recovery. A crash or I/O failure
+can therefore leave a missing, truncated, or partially replaced output. Treat
+the CLI as an explicit byte emitter, then hand the bytes to the durable runtime
+or to an application-specific atomic publication protocol when that stronger
+host guarantee is required.
+
 ## 8. Why it is a UI substrate
 
 The epistemic status of a value determines its widget: `Exact` renders a value;
