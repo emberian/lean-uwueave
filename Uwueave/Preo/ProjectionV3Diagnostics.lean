@@ -9,6 +9,7 @@ deriving instance Repr for Projection
 deriving instance Repr for ValidationBounds
 deriving instance Repr for ValidationConfig
 deriving instance Repr for BoundedList
+deriving instance Repr for StableIdKind
 deriving instance Repr for ValidationError
 deriving instance Repr for ValidatedProjectionV3
 

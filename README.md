@@ -181,7 +181,10 @@ is a bigger, real schema that deliberately contains one.
   `HistoryJournal` stores canonical explicit-id events whose strictly ordered
   parents must already be present, so every accepted prefix is causally closed.
   Exact retries are idempotent, while missing parents and same-id/different-event
-  collisions fail loudly.
+  collisions fail loudly. An optional `BufferedHistoryJournal` accepts
+  out-of-order delivery into a visible finite in-memory buffer and drains ready
+  layers deterministically. Pending entries are deliberately volatile and
+  disappear on reopen; only the causally closed prefix is durable.
   They provide per-record bounds, sequence-addressed retry, locking, sync
   policy, and torn-tail/corruption handling. They do not provide authenticated
   v4 admission, whole-journal resource bounds, multi-record transactions,
@@ -216,7 +219,17 @@ is a bigger, real schema that deliberately contains one.
   is written, reopened byte-for-byte, concatenated as a two-record logical
   journal, and inspected by the bounded diagnostic-only Lean inspector. The
   companion red gates reject a wrong projection, future, certificate, plan, or
-  world at their typed boundaries.
+  world at their typed boundaries. `preo_export_v3` now exposes that construction
+  as one transactional command. It accepts only an exact authenticated-observation
+  adapter, exact checked plan/budget/query/future/world values, explicit work and
+  validation bounds, and builds result/effect/disclosure/certificate rows only
+  through checked constructors. A bare certified report or structural lookalike
+  is refused because neither retains the external authenticity and independent
+  running-reach premises. The command is acceptance-green but not yet
+  performance-green: its serialized N=16 benchmark measures **6.732 MiB/item**,
+  above the existing 4 MiB/item RSS ceiling. Typed expression evidence likewise retains exact
+  value/source/child-path attribution; its verified entry point still requires
+  the deployment to prove its own source-authenticity relation.
 
 ## Some things we found that surprised us
 
@@ -285,14 +298,16 @@ lake build              # every proof + the total axiom gate (Lean core only, no
 ./scripts/trust-canaries.sh # acceptance tests: the trust gate must also go red
 ./scripts/preo-automation-canaries.sh # positive/red tactic and transactional gates
 ./scripts/preo-quickstart-canaries.sh # coherent V3 journey + five typed refusals
+./scripts/preo-v3-acceptance-canaries.sh # observed V3 export, rollback, floor, caps
 cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
 
-The current checkpoint is **170** Lean source modules (**147** direct proof-root
-imports excluding `Audit`, **171** full-build jobs), **23,138** audited
-constants, **580** MAP keystones, **121** documented transports, and **140**
-passing Rust tests. The generated work ledger records **159** `⟨UNDONE⟩`
-markers in **157** blocks across **43** source files. Counts are checkpoints;
+The current checkpoint is **172** Lean source modules (**149** direct proof-root
+imports excluding `Audit`, **173** full-build jobs), **23,757** audited
+constants, **637** MAP keystones, **124** documented transports, and **142**
+passing Rust tests.
+The generated work ledger records **158** `⟨UNDONE⟩`
+markers in **156** blocks across **43** source files. Counts are checkpoints;
 the commands and fail-closed gates are the durable contract.
 
 ## How to read our claims

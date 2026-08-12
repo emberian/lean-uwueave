@@ -97,6 +97,13 @@ which is what the impossibility said the escape route would have to look like.
     cryptographic or content-addressed identities; no hash/signature binding is
     manufactured by the typed graph. §4's DAG remains the dependency graph
     *between* derivations, which is a different graph.
+  * **Position nodes are attribution, not self-authenticating provenance.**
+    ⟨TERMINAL for the semantic carrier⟩ `deriveAttributedDoc_position_iff`
+    proves exactly what the caller's world/source functions and static position
+    list say, and `forgetPositions_deriveAttributedDoc` projects back to the
+    original evidence document. `Preo.DerivedProgram` derives that list from
+    exact typed holes; its verified entry point additionally demands an
+    external source-authenticity proof. This file does not manufacture one.
   * **Claim 1 is faithful because every component of `ResultEvidence` is
     grow-only.** ⟨TERMINAL for this carrier⟩ `encodeEvidence` is a relabelling
     along `EvNode α ≃ (α × Source) ⊕ Source ⊕ Source`, and the merge equation is
@@ -471,6 +478,20 @@ theorem deriveDoc_merge {α : Type} (f : Holes.World → α)
       = deriveDoc f src obl cert W₁ ⊔ deriveDoc f src obl cert W₂ :=
   deriveDoc_hom f src obl cert W₁ W₂
 
+/-- Exact candidate/source membership in a derived document. -/
+theorem deriveDoc_candidate_iff {α : Type} (f : Holes.World → α)
+    (src : Holes.World → Evidence.Source) (obl cert : GSet Evidence.Source)
+    (worlds : GSet Holes.World) (value : α) (source : Evidence.Source) :
+    deriveDoc f src obl cert worlds (.cand value source) = true ↔
+      ∃ world, worlds world = true ∧ f world = value ∧ src world = source := by
+  rw [deriveDoc, evidenceOf, encodeEvidence, Evidence.fromWorlds,
+    Holes.mem_evalSet]
+  constructor
+  · rintro ⟨world, hworld, hp⟩
+    exact ⟨world, hworld, congrArg Prod.fst hp, congrArg Prod.snd hp⟩
+  · rintro ⟨world, hworld, hvalue, hsource⟩
+    exact ⟨world, hworld, by rw [hvalue, hsource]⟩
+
 /-- **And therefore the derived document ships and folds.** Any gossip history,
 any batching, any duplication of documents: the fold of shipped documents equals
 the document of the merged worlds. `JoinHom.summaryFold_iff_joinHom` again, now
@@ -479,6 +500,80 @@ theorem deriveDoc_ships {α : Type} (f : Holes.World → α)
     (src : Holes.World → Evidence.Source) (obl cert : GSet Evidence.Source) :
     JoinHom.SummaryFoldAgrees (deriveDoc f src obl cert) :=
   (JoinHom.summaryFold_iff_joinHom _).mpr (deriveDoc_hom f src obl cert)
+
+/-! ### Positioned attribution documents -/
+
+/-- An evidence document augmented with exact value/source/position records.
+The old evidence nodes are embedded unchanged, so forgetting the new records
+recovers `EvidenceDoc` on the nose. -/
+inductive AttributedNode (α Position : Type) where
+  | evidence (node : EvNode α)
+  | position (candidate : Evidence.PositionCandidate α Position)
+  deriving DecidableEq
+
+/-- The grow-only document carrier for attributed expression positions. -/
+abbrev AttributedDoc (α Position : Type) := GSet (AttributedNode α Position)
+
+/-- Drop the positional augmentation and retain the original evidence
+document. -/
+def forgetPositions {α Position : Type}
+    (document : AttributedDoc α Position) : EvidenceDoc α :=
+  fun node => document (.evidence node)
+
+/-- Materialize ordinary evidence and exact positioned candidates together. -/
+noncomputable def deriveAttributedDoc {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Evidence.Source)
+    (positions : List Position) (obl cert : GSet Evidence.Source)
+    (worlds : GSet Holes.World) : AttributedDoc α Position
+  | .evidence node => deriveDoc f src obl cert worlds node
+  | .position candidate => Evidence.positionCandidates f src positions worlds candidate
+
+/-- The augmentation projects exactly to the existing derived document. -/
+@[simp] theorem forgetPositions_deriveAttributedDoc {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Evidence.Source)
+    (positions : List Position) (obl cert : GSet Evidence.Source)
+    (worlds : GSet Holes.World) :
+    forgetPositions (deriveAttributedDoc f src positions obl cert worlds) =
+      deriveDoc f src obl cert worlds := rfl
+
+/-- Exact ordinary candidate/source membership survives in the augmented
+document. -/
+theorem deriveAttributedDoc_candidate_iff {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Evidence.Source)
+    (positions : List Position) (obl cert : GSet Evidence.Source)
+    (worlds : GSet Holes.World) (value : α) (source : Evidence.Source) :
+    deriveAttributedDoc f src positions obl cert worlds
+        (.evidence (.cand value source)) = true ↔
+      ∃ world, worlds world = true ∧ f world = value ∧ src world = source :=
+  deriveDoc_candidate_iff f src obl cert worlds value source
+
+/-- Exact value/source/position membership in the augmentation. -/
+theorem deriveAttributedDoc_position_iff {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Evidence.Source)
+    (positions : List Position) (obl cert : GSet Evidence.Source)
+    (worlds : GSet Holes.World)
+    (candidate : Evidence.PositionCandidate α Position) :
+    deriveAttributedDoc f src positions obl cert worlds (.position candidate) = true ↔
+      ∃ world, worlds world = true
+        ∧ f world = candidate.value
+        ∧ src world = candidate.source
+        ∧ candidate.position ∈ positions :=
+  Evidence.mem_positionCandidates f src positions worlds candidate
+
+/-- The augmented materialization remains a join homomorphism in candidate
+worlds. -/
+theorem deriveAttributedDoc_hom {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Evidence.Source)
+    (positions : List Position) (obl cert : GSet Evidence.Source) :
+    JoinHom (deriveAttributedDoc f src positions obl cert) := by
+  intro left right
+  funext node
+  cases node with
+  | evidence node =>
+      exact congrFun (deriveDoc_merge f src obl cert left right) node
+  | position candidate =>
+      exact congrFun (Evidence.positionCandidates_hom
+        f src positions left right) candidate
 
 /-! ## §3. CLAIM 2's NECESSARY NEGATIVE — the count, transported to documents.
 

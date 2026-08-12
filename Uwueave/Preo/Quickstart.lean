@@ -380,9 +380,13 @@ theorem checked_result_and_certificate_rows_exact :
 def v3Artifact : ArtifactV3.ArtifactV3Encoding :=
   let encoded := ArtifactV3.ArtifactV3Encoding.ofArtifact baseArtifact StableId.schema
   let encoded := encoded.addQuery checkedQuery rfl rfl
+    (by intro previous member; cases member)
   let encoded := encoded.addWorld checkedWorld
+    (by intro previous member; cases member)
   let encoded := encoded.addExactResult checkedResult exactStartBranch rfl rfl rfl
+    (by intro previous member; cases member)
   encoded.addCertificate checkedCertificate rfl rfl
+    (by intro previous member; cases member)
 
 theorem v3_rows_exact :
     v3Artifact.base = baseArtifact.canonicalEncoding
@@ -410,12 +414,14 @@ def validationConfig : ProjectionV3.ValidationConfig where
       maxProfileEntriesPerBudget := 5
       maxParticipantsPerDemand := 2
       maxWitnessWords := 0 }
+    maxStableIdValue := 1106
     maxWorlds := 1
     maxQueries := 1
     maxResults := 1
     maxCertificates := 1
     maxReadsPerQuery := 1
     maxHolesPerQuery := 1
+    maxHolePathDepth := 1
     maxAnalysesPerQuery := 2
     maxEffectShapesPerResult := 1 }
 
@@ -431,37 +437,13 @@ theorem v3_bytes_reopen_exact :
     ArtifactV3Durable.decodeProjection v3Bytes = some (v3Artifact, []) :=
   ArtifactV3Durable.decodeProjection_projectionBytes v3Artifact
 
-private def encodeDataFast (payload : List UInt8) : List UInt8 :=
-  (payload.foldl
-    (fun encoded byte => byte :: Durable.dataTag :: encoded) []).reverse
-
-private theorem encodeDataFast_go (payload accumulator : List UInt8) :
-    (payload.foldl
-      (fun encoded byte => byte :: Durable.dataTag :: encoded)
-      accumulator).reverse =
-    accumulator.reverse ++ Durable.encodeData payload := by
-  induction payload generalizing accumulator with
-  | nil => simp [Durable.encodeData]
-  | cons byte payload ih =>
-      simp only [List.foldl_cons]
-      rw [ih]
-      simp [Durable.encodeData, List.append_assoc]
-
-private theorem encodeDataFast_eq (payload : List UInt8) :
-    encodeDataFast payload = Durable.encodeData payload := by
-  simpa [encodeDataFast] using encodeDataFast_go payload []
-
 /-- Stack-safe executable framing, proved byte-identical to `v3Bytes`. -/
 def v3BytesExecutable : List UInt8 :=
-  let tag := ArtifactV3Durable.artifactV3Format
-  [Durable.magic₀, Durable.magic₁, tag.version, tag.domain] ++
-    encodeDataFast (ArtifactV3Durable.artifactV3Codec.encode v3Artifact) ++
-    [Durable.endTag]
+  ArtifactDurable.stackSafeEncodeValue ArtifactV3Durable.artifactV3Codec
+    ArtifactV3Durable.artifactV3Format v3Artifact
 
 theorem v3_bytes_executable_exact : v3BytesExecutable = v3Bytes := by
-  simp [v3BytesExecutable, v3Bytes, ArtifactV3Durable.projectionBytes,
-    Durable.encodeValue, Durable.encodeFrame, Durable.encodeEnvelope,
-    Durable.encodePayload, encodeDataFast_eq]
+  exact ArtifactDurable.stackSafeEncodeValue_eq _ _ _
 
 /-- Pure diagnostic inspection decodes and validates the same durable frame.
 The companion host test writes, reopens, and journals these exact bytes. -/

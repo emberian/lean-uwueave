@@ -300,17 +300,17 @@
     face &mdash; the theorem names, the refutations, the prices, and the compiled kernels.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">170</div><div class="l">Lean modules</div>
-        <div class="s">168 library modules plus two separate CLI mains</div></div>
-      <div class="stat"><div class="n">23,138</div><div class="l">constants audited</div>
+      <div class="stat"><div class="n">172</div><div class="l">Lean modules</div>
+        <div class="s">170 library modules plus two separate CLI mains</div></div>
+      <div class="stat"><div class="n">23,757</div><div class="l">constants audited</div>
         <div class="s">the live Lean&nbsp;4.30 floor gate</div></div>
-      <div class="stat"><div class="n">580</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">637</div><div class="l">keystones in the ledger</div>
         <div class="s">each tagged with a generality and a reachability axis</div></div>
       <div class="stat"><div class="n">8</div><div class="l">priced exits</div>
         <div class="s">each with an availability check and a price</div></div>
       <div class="stat"><div class="n">4</div><div class="l">native-kernel modules</div>
         <div class="s">six exports in one exact RuntimeInit closure</div></div>
-      <div class="stat"><div class="n">140</div><div class="l">Rust tests</div>
+      <div class="stat"><div class="n">142</div><div class="l">Rust tests</div>
         <div class="s">including artifacts, inspection, and causal history storage</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
         <div class="s">Lean core only &mdash; nothing to vendor, nothing to pin</div></div>
@@ -318,13 +318,13 @@
     <p style="font-size:.9rem;color:var(--muted);max-width:78ch;margin-top:1.1rem"><strong>Check
     every cell.</strong> These commands were run against this repository to produce the numbers
     above &mdash; a stat with no command under it is decoration:</p>
-<pre><code># 170 Lean modules in the assembled worktree
+<pre><code># 172 Lean modules in the assembled worktree
 rg --files Uwueave -g '*.lean' | wc -l
 
-# 580 rows in the keystone ledger
+# 637 rows in the keystone ledger
 awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 
-# 159 UNDONE markers / 157 blocks / 43 source files
+# 158 UNDONE markers / 156 blocks / 43 source files
 ./scripts/undone-census.sh --check
 
 # 8 exits — the constructors of `inductive Exit`
@@ -336,17 +336,17 @@ grep -RFn '@[export ' Uwueave/
 # `"packages": []` — no dependencies, mathlib included
 grep '"packages"' lake-manifest.json
 
-# the full gate: 171 jobs; prints `#audit_floor: N constants audited`
+# the root/Audit gate: 173 jobs; prints `#audit_floor: N constants audited`
 lake build</code></pre>
     <p style="font-size:.85rem;color:var(--muted);max-width:78ch"><strong>The audit count is a
     moving floor, not a protocol constant.</strong> The number your own <code>lake build</code>
     prints is authoritative. Root coverage is checked separately: Lean parses the real root
-    header, including indented imports. It reports 147 direct root modules excluding
-    <code>Audit</code>; the transitive root/gate closure reaches all 168 import-pure library
+    header, including indented imports. It reports 149 direct root modules excluding
+    <code>Audit</code>; the transitive root/gate closure reaches all 170 import-pure library
     modules. <code>ArtifactEmitMain</code> and <code>ArtifactInspectionMain</code> are compiled
     separately because both own a root-level <code>main</code>; the proof aggregate covers their
-    pure library modules instead. The same checkpoint has 580 MAP keystones, 121 documented
-    transports, 140 passing Rust tests, and 159 UNDONE markers in 157 blocks across 43 source
+    pure library modules instead. The same checkpoint has 637 MAP keystones, 124 documented
+    transports, 142 passing Rust tests, and 158 UNDONE markers in 156 blocks across 43 source
     files.</p>
 
     <h2 style="margin-top:2.2rem">The shape of the whole thing</h2>
@@ -1428,8 +1428,19 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           result, disclosure, and certificate rows. Bounded validation, canonical reopen, and a
           stack-safe frame proved byte-identical to the canonical codec all stay in the same
           dependent chain; wrong projection, future, certificate, plan, and world canaries must
-          fail. The typed N=16 regression corpus now passes at <strong>3.946 MiB incremental peak
-          RSS per item</strong>, below its 4 MiB/item gate.</li>
+          fail. <code>preo_export_v3</code> consumes the same journey only through an exact
+          observed wrapper retaining caller-supplied authenticity, independent running reach,
+          authored reach, and the exact certificate. It then checks explicit command and
+          validator bounds before transactionally publishing checked result/effect/disclosure/
+          certificate rows. Its acceptance suite has three green fixtures and fifteen red command
+          cases; a bare certified report and a structural lookalike both refuse, and the positive
+          prefix audits 48 constants. This surface is not yet scale-green: its serialized N=16
+          benchmark measures 6.732 MiB/item, above the 4 MiB/item ceiling. Typed position evidence similarly retains exact value,
+          source, and <code>Expr.Hole</code> child path while requiring an external source-
+          authenticity proof at its verified entry point. The serialized typed N=16 regression
+          corpus now passes at <strong>3.940 MiB incremental peak RSS per item</strong>, below its
+          unchanged 4 MiB/item gate, while preserving 88 pinned constants and exact row/
+          diagnostic/rollback/report goldens.</li>
           <li><span class="badge pattern">for a reader with a schema</span>
           <code>uwueave-check</code> reads ten shapes and eleven invariant kinds out of a few
           lines of schema and answers <code>FREE</code> / <code>ESCALATES</code> /
@@ -1803,6 +1814,15 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       It cannot reconstruct a checked source or permit. The pure emitter and inspector are in the
       root/audit closure; their two root-level <code>*Main</code> entry points are compiled and run
       separately, because aggregating both executable mains would itself be a name collision.</p>
+      <p>The checked V3 surface now exposes that route as one failure-honest command.
+      <code>ObservedBoundResult.attachAtWorld</code> requires the caller to supply observation
+      authenticity, running-reach membership, authored-reach membership and the exact indexed
+      certificate; <code>preo_export_v3</code> accepts that exact wrapper plus checked plan,
+      budget, query, future, world and exact branch. It checks a written work ceiling and the V3
+      validator&rsquo;s stable-ID, row-order, hole-depth and row/reference bounds before committing
+      any declaration. A failed command leaves the prefix absent and reusable. These facts check
+      the dependent construction and transaction; they do not authenticate a process, network,
+      device or filesystem observation.</p>
       <p>The pure-Rust storage layer now has three distinct journals. In addition to artifact and
       typed MoveLog storage, <code>HistoryJournal</code> stores canonical explicit 32-byte event
       IDs with strictly ordered parents that must already be accepted. Every admitted prefix is
@@ -1811,6 +1831,16 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       finite causal append, checkpoint/suffix replay, and event-set convergence, but no theorem
       yet refines the host bytes or filesystem observations to it, and event IDs are not
       authenticated.</p>
+      <p>Out-of-order history delivery has an explicit bounded boundary rather than an implicit
+      queue. Lean&rsquo;s <code>DeliveryState</code> proves capacity preservation and deterministic
+      finite draining, and its persistent schema treats the complete arrival sequence&mdash;
+      including pending arrivals&mdash;as authoritative and replayable. Rust&rsquo;s optional
+      <code>BufferedHistoryJournal</code> deliberately does something narrower: pending events
+      live in a bounded volatile map, only ready events enter the checksummed journal, and reopen
+      loses pending entries. A six-event reversed criss-cross test settles and converges, but the
+      volatile endpoint is not a refinement of Lean&rsquo;s durable arrival cursor. A durable Rust
+      arrival queue, parent-order reconciliation, authenticated IDs and a filesystem model remain
+      explicit work.</p>
     </div>
 
     <figure class="flow">
@@ -1838,7 +1868,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           <rect x="252" y="36" width="176" height="130" rx="10" fill="var(--bg)" stroke="var(--border)"/>
           <text x="264" y="60" font-size="12.5" font-weight="650" fill="currentColor">Lake-owned objects</text>
           <text x="264" y="82" font-size="10" font-family="var(--mono)" fill="currentColor">13 exact members</text>
-          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">655,368 bytes</text>
+          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">659,152 bytes</text>
           <text x="264" y="120" font-size="10.5" fill="var(--muted)">setup schema + paths</text>
           <text x="264" y="133" font-size="10.5" fill="var(--muted)">validated; bytes stable</text>
           <text x="264" y="146" font-size="10.5" fill="var(--muted)">before and after archive</text>
@@ -1849,7 +1879,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           <text x="484" y="60" font-size="12.5" font-weight="650" fill="currentColor">verified archive set</text>
           <text x="484" y="82" font-size="9.5" font-family="var(--mono)" fill="currentColor">13 Lake objects + shim</text>
           <text x="484" y="96" font-size="9.5" font-family="var(--mono)" fill="currentColor">14 unique members</text>
-          <text x="484" y="120" font-size="10.5" fill="var(--muted)">shim.c: 225 lines;</text>
+          <text x="484" y="120" font-size="10.5" fill="var(--muted)">803,520 bytes;</text>
           <text x="484" y="133" font-size="10.5" fill="var(--muted)">one root initializer;</text>
           <text x="484" y="146" font-size="10.5" fill="var(--muted)">every object byte checked</text>
 
@@ -1968,7 +1998,7 @@ def replayKernel (input : ByteArray) : ByteArray :=
       <code>Classical.choice</code>, <code>Quot.sound</code>) is fatal: a <code>sorry</code>
       (<code>sorryAx</code>), custom axiom, or Lean-4.30 <code>native_decide</code>
       (<code>_native.native_decide.ax_…</code>) goes red. The whole-tree command retains its
-      300-constant tripwire and currently audits 23,138 constants. Seven trust subprocess fixtures
+      300-constant tripwire and currently audits 23,757 constants. Seven trust subprocess fixtures
       exercise the exact allowed floor, indented/root header parsing, prefix vacuity, and all
       three forbidden dependency classes. They prove the gate can fail, but share its
       <code>collectAxioms</code> implementation and are not an independent checker. A separate
@@ -2030,7 +2060,7 @@ lake build
 cd rust &amp;&amp; cargo test</code></pre>
     <p>Further reading in the repo:
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/MAP.md">docs/MAP.md</a>
-    (every module, what it settles, and the 580-row keystone ledger with its generality and
+    (every module, what it settles, and the 637-row keystone ledger with its generality and
     reachability axes) ·
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/TRUST.md">docs/TRUST.md</a>
     (the three ledgers) ·

@@ -1,10 +1,11 @@
 //! Checksummed persistence for a causally closed history event set.
 //!
 //! Each event carries an explicit, application-assigned 32-byte id, a
-//! canonical parent set, and opaque payload bytes. Parents must already be in
-//! the journal when a child is appended. This immediate-refusal policy keeps
-//! every accepted physical prefix causally closed; there is deliberately no
-//! hidden out-of-order buffer whose loss or bound would change admission.
+//! canonical parent set, and opaque payload bytes. [`HistoryJournal`] requires
+//! parents immediately, keeping every accepted physical prefix causally closed.
+//! [`BufferedHistoryJournal`] optionally adds a visible bounded out-of-order
+//! endpoint whose pending events are deliberately non-durable and vanish on
+//! reopen; only ready events enter the physical journal.
 //!
 //! Event ids are uniqueness claims, not authentication. Repeating the exact
 //! event is idempotent, while resolving one id to different parents or payload
@@ -139,6 +140,11 @@ pub enum HistoryJournalError {
         existing_sequence: u64,
         incoming_sequence: u64,
     },
+    /// One buffered id resolves to different event content. Buffered events do
+    /// not yet have a physical sequence.
+    PendingIdCollision { id: HistoryEventId },
+    /// The explicit non-durable out-of-order buffer has no free slot.
+    BufferFull { capacity: usize },
     /// The configured per-record allocation bound was exceeded.
     RecordTooLarge { actual: u64, maximum: u64 },
     /// Append skipped the next internal physical sequence.
@@ -190,6 +196,14 @@ impl fmt::Display for HistoryJournalError {
                 "history event id {} at sequence {incoming_sequence} conflicts with sequence {existing_sequence}",
                 NodeIdDisplay::new(id)
             ),
+            Self::PendingIdCollision { id } => write!(
+                f,
+                "buffered history event id {} resolves to different content",
+                NodeIdDisplay::new(id)
+            ),
+            Self::BufferFull { capacity } => {
+                write!(f, "history out-of-order buffer is full at capacity {capacity}")
+            }
             Self::RecordTooLarge { actual, maximum } => write!(
                 f,
                 "history event record is {actual} bytes; configured maximum is {maximum}"
@@ -393,6 +407,188 @@ impl HistoryJournal {
     /// Strengthen durability independently of the configured append policy.
     pub fn sync(&mut self, policy: SyncPolicy) -> Result<(), HistoryJournalError> {
         self.raw.sync(policy).map_err(Into::into)
+    }
+}
+
+/// Outcome of one delivery to [`BufferedHistoryJournal`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HistoryDeliveryStatus {
+    /// The event was appended to the causally closed physical journal.
+    Appended,
+    /// The event is waiting in the bounded, non-durable missing-parent buffer.
+    Buffered,
+    /// The exact complete event was already accepted or buffered.
+    Retry,
+}
+
+/// Receipt for one bounded delivery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryDeliveryReceipt {
+    /// Immediate disposition of the presented event.
+    pub status: HistoryDeliveryStatus,
+    /// Physical sequence for an immediate append or accepted retry.
+    pub sequence: Option<u64>,
+    /// Number of older buffered events causally drained after this delivery.
+    pub drained: usize,
+}
+
+/// A causal history journal with an explicit bounded **volatile** out-of-order
+/// endpoint.
+///
+/// Only causally ready events reach the checksummed [`HistoryJournal`]. Missing
+/// parent events live in `pending` until a later delivery makes them ready.
+/// The buffer is intentionally in-memory and non-authoritative: reopening
+/// reconstructs the causally closed physical prefix and starts with no pending
+/// events. A transport which needs pending durability must journal its arrival
+/// queue separately and define that queue's own authority/recovery contract.
+/// That durable arrival queue is not implemented here. In particular, this is
+/// not a refinement of Lean `PersistentHistoryRuntime.deliverySchema`, whose
+/// authoritative arrival cursor can replay/checkpoint buffered arrivals.
+#[derive(Debug)]
+pub struct BufferedHistoryJournal {
+    journal: HistoryJournal,
+    pending: BTreeMap<HistoryEventId, HistoryEvent>,
+    capacity: usize,
+}
+
+impl BufferedHistoryJournal {
+    /// Open the durable causal prefix with an empty non-durable pending buffer.
+    pub fn open(
+        path: impl AsRef<Path>,
+        options: JournalOptions,
+        capacity: usize,
+    ) -> Result<Self, HistoryJournalError> {
+        Ok(Self {
+            journal: HistoryJournal::open(path, options)?,
+            pending: BTreeMap::new(),
+            capacity,
+        })
+    }
+
+    /// The causally closed durable journal.
+    pub fn journal(&self) -> &HistoryJournal {
+        &self.journal
+    }
+
+    /// Mutable durable journal access, for explicit synchronization.
+    pub fn journal_mut(&mut self) -> &mut HistoryJournal {
+        &mut self.journal
+    }
+
+    /// Caller-selected maximum number of pending complete events.
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Number of currently buffered events.
+    pub fn pending_len(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// Whether no missing-parent events remain buffered.
+    pub fn is_settled(&self) -> bool {
+        self.pending.is_empty()
+    }
+
+    /// Pending events in deterministic id order.
+    pub fn pending(&self) -> impl Iterator<Item = &HistoryEvent> {
+        self.pending.values()
+    }
+
+    /// Compare full durable event content, deliberately ignoring arrival and
+    /// physical append order. Callers normally require both endpoints settled.
+    pub fn same_event_set(&self, other: &Self) -> bool {
+        self.journal.same_event_set(&other.journal)
+    }
+
+    /// Require both volatile buffers empty before comparing the full durable
+    /// event sets. This is the endpoint convergence predicate.
+    pub fn settled_same_event_set(&self, other: &Self) -> bool {
+        self.is_settled() && other.is_settled() && self.same_event_set(other)
+    }
+
+    /// Receive one caller-identified complete event.
+    ///
+    /// Identifiers are equality keys, not authentication. Exact retry is a
+    /// no-op across accepted and pending stores; different content under either
+    /// key is refused. A ready event is durably appended and then drains every
+    /// now-ready buffered layer in deterministic id order.
+    pub fn receive(
+        &mut self,
+        event: HistoryEvent,
+    ) -> Result<HistoryDeliveryReceipt, HistoryJournalError> {
+        if let Some(existing) = self.journal.event(&event.id) {
+            if existing != &event {
+                return Err(HistoryJournalError::IdCollision {
+                    id: event.id,
+                    existing_sequence: self.journal.sequences[&event.id],
+                    incoming_sequence: self.journal.next_sequence(),
+                });
+            }
+            return Ok(HistoryDeliveryReceipt {
+                status: HistoryDeliveryStatus::Retry,
+                sequence: Some(self.journal.sequences[&event.id]),
+                drained: 0,
+            });
+        }
+        if let Some(existing) = self.pending.get(&event.id) {
+            if existing != &event {
+                return Err(HistoryJournalError::PendingIdCollision { id: event.id });
+            }
+            return Ok(HistoryDeliveryReceipt {
+                status: HistoryDeliveryStatus::Retry,
+                sequence: None,
+                drained: 0,
+            });
+        }
+
+        let ready = event
+            .parents
+            .iter()
+            .all(|parent| self.journal.event(parent).is_some());
+        if !ready {
+            if self.pending.len() >= self.capacity {
+                return Err(HistoryJournalError::BufferFull {
+                    capacity: self.capacity,
+                });
+            }
+            self.pending.insert(event.id, event);
+            return Ok(HistoryDeliveryReceipt {
+                status: HistoryDeliveryStatus::Buffered,
+                sequence: None,
+                drained: 0,
+            });
+        }
+
+        let receipt = self.journal.append(event)?;
+        let drained = self.drain_ready()?;
+        Ok(HistoryDeliveryReceipt {
+            status: HistoryDeliveryStatus::Appended,
+            sequence: Some(receipt.sequence),
+            drained,
+        })
+    }
+
+    fn drain_ready(&mut self) -> Result<usize, HistoryJournalError> {
+        let mut drained = 0;
+        loop {
+            let ready = self
+                .pending
+                .iter()
+                .find(|(_, event)| {
+                    event
+                        .parents
+                        .iter()
+                        .all(|parent| self.journal.event(parent).is_some())
+                })
+                .map(|(id, event)| (*id, event.clone()));
+            let Some((id, event)) = ready else {
+                return Ok(drained);
+            };
+            self.journal.append(event)?;
+            self.pending.remove(&id);
+            drained += 1;
+        }
     }
 }
 
@@ -754,6 +950,122 @@ mod tests {
             Err(HistoryJournalError::IdCollision {
                 existing_sequence: 0,
                 incoming_sequence: 1,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn bounded_reverse_criss_cross_drains_and_converges() {
+        let causal_path = TempFile::new("buffered-criss-cross-causal");
+        let reverse_path = TempFile::new("buffered-criss-cross-reverse");
+        let root = event(1, &[], b"root");
+        let left = event(2, &[1], b"left");
+        let right = event(3, &[1], b"right");
+        let merge_left = event(4, &[2, 3], b"merge-left");
+        let merge_right = event(5, &[2, 3], b"merge-right");
+        let tip = event(6, &[4, 5], b"merge-tip");
+        let causal = [
+            root.clone(),
+            left.clone(),
+            right.clone(),
+            merge_left.clone(),
+            merge_right.clone(),
+            tip.clone(),
+        ];
+        let reverse = [tip, merge_right, merge_left, right, left, root];
+
+        let mut causal_journal =
+            BufferedHistoryJournal::open(&causal_path.0, options(TornTailPolicy::Refuse), 5)
+                .unwrap();
+        for event in causal {
+            assert_eq!(
+                causal_journal.receive(event).unwrap().status,
+                HistoryDeliveryStatus::Appended
+            );
+        }
+
+        let mut reverse_journal =
+            BufferedHistoryJournal::open(&reverse_path.0, options(TornTailPolicy::Refuse), 5)
+                .unwrap();
+        for event in &reverse[..5] {
+            assert_eq!(
+                reverse_journal.receive(event.clone()).unwrap().status,
+                HistoryDeliveryStatus::Buffered
+            );
+        }
+        let root_receipt = reverse_journal.receive(reverse[5].clone()).unwrap();
+        assert_eq!(root_receipt.status, HistoryDeliveryStatus::Appended);
+        assert_eq!(root_receipt.drained, 5);
+        assert!(causal_journal.settled_same_event_set(&reverse_journal));
+        assert_eq!(causal_journal.journal().len(), 6);
+        assert_eq!(reverse_journal.journal().len(), 6);
+
+        drop(reverse_journal);
+        let reopened =
+            BufferedHistoryJournal::open(&reverse_path.0, options(TornTailPolicy::Refuse), 5)
+                .unwrap();
+        assert!(reopened.is_settled());
+        assert_eq!(reopened.journal().len(), 6);
+        assert!(causal_journal.settled_same_event_set(&reopened));
+    }
+
+    #[test]
+    fn bounded_buffer_retries_collisions_capacity_and_reopen_loss_are_exact() {
+        let path = TempFile::new("buffered-policy");
+        let orphan = event(2, &[1], b"child");
+        {
+            let mut buffered =
+                BufferedHistoryJournal::open(&path.0, options(TornTailPolicy::Refuse), 1).unwrap();
+            assert_eq!(
+                buffered.receive(orphan.clone()).unwrap(),
+                HistoryDeliveryReceipt {
+                    status: HistoryDeliveryStatus::Buffered,
+                    sequence: None,
+                    drained: 0,
+                }
+            );
+            assert_eq!(
+                buffered.receive(orphan.clone()).unwrap().status,
+                HistoryDeliveryStatus::Retry
+            );
+            assert!(matches!(
+                buffered.receive(event(2, &[1], b"forged")),
+                Err(HistoryJournalError::PendingIdCollision { id }) if id == [2; ID_BYTES]
+            ));
+            assert!(matches!(
+                buffered.receive(event(3, &[1], b"second")),
+                Err(HistoryJournalError::BufferFull { capacity: 1 })
+            ));
+            assert!(!buffered.settled_same_event_set(&buffered));
+            assert_eq!(buffered.journal().len(), 0);
+            assert_eq!(fs::metadata(&path.0).unwrap().len(), 0);
+        }
+
+        // Pending arrivals are intentionally not authoritative and disappear
+        // on reopen; the physical journal remains the empty causal prefix.
+        let mut reopened =
+            BufferedHistoryJournal::open(&path.0, options(TornTailPolicy::Refuse), 1).unwrap();
+        assert!(reopened.is_settled());
+        assert_eq!(reopened.pending_len(), 0);
+        assert_eq!(reopened.journal().len(), 0);
+
+        assert_eq!(
+            reopened.receive(event(1, &[], b"root")).unwrap().status,
+            HistoryDeliveryStatus::Appended
+        );
+        assert_eq!(
+            reopened.receive(orphan.clone()).unwrap().status,
+            HistoryDeliveryStatus::Appended
+        );
+        assert_eq!(
+            reopened.receive(orphan).unwrap().status,
+            HistoryDeliveryStatus::Retry
+        );
+        assert!(matches!(
+            reopened.receive(event(2, &[1], b"forged accepted")),
+            Err(HistoryJournalError::IdCollision {
+                existing_sequence: 1,
                 ..
             })
         ));

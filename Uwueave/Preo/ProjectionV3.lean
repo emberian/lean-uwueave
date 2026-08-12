@@ -126,6 +126,15 @@ private def rustTypeDeclarations : List String :=
    "    #[derive(Clone, Copy, Debug, PartialEq, Eq)]",
    "    pub struct UwueavePreoProjectionV3 { pub schema: &'static str, pub schema_id_decimal: &'static str, pub base: &'static super::uwueave_preo_projection_v2::UwueavePreoProjectionV2, pub worlds_decimal: &'static [&'static str], pub queries: &'static [UwueavePreoQueryV3], pub results: &'static [UwueavePreoResultV3], pub certificates: &'static [UwueavePreoCertificateV3] }"]
 
+private def rustLookupHelpers : List String :=
+  ["    impl UwueavePreoProjectionV3 {",
+   "        // Neutral DTO lookup only; callers must not treat a fabricated row as proof authority.",
+   "        pub fn query_by_id(&self, id_decimal: &str) -> Option<&'static UwueavePreoQueryV3> { self.queries.iter().find(|row| row.id_decimal == id_decimal) }",
+   "        pub fn result_by_id(&self, id_decimal: &str) -> Option<&'static UwueavePreoResultV3> { self.results.iter().find(|row| row.id_decimal == id_decimal) }",
+   "        pub fn certificate_by_id(&self, id_decimal: &str) -> Option<&'static UwueavePreoCertificateV3> { self.certificates.iter().find(|row| row.id_decimal == id_decimal) }",
+   "        pub fn result_for_query_row(&self, query: &UwueavePreoQueryV3) -> Option<&'static UwueavePreoResultV3> { self.result_by_id(query.result_id_decimal) }",
+   "    }"]
+
 private def rustProjectionLines (validated : ValidatedProjectionV3) : List String :=
   let encoding := validated.encoding
   ["    pub static UWUEAVE_PREO_PROJECTION_V3: UwueavePreoProjectionV3 =",
@@ -147,7 +156,8 @@ def renderRustSource (validated : ValidatedProjectionV3) : String :=
        "", "pub mod uwueave_preo_projection_v3 {",
        "    pub const UWUEAVE_PREO_PROJECTION_V3_SCHEMA: &str = " ++
          rustStringLiteral schema ++ ";", ""] ++
-      rustTypeDeclarations ++ [""] ++ rustProjectionLines validated ++ ["}", ""])
+      rustTypeDeclarations ++ [""] ++ rustLookupHelpers ++ [""] ++
+      rustProjectionLines validated ++ ["}", ""])
 
 def validateAndRender (config : ValidationConfig) (projection : Projection) :
     ValidationResult String :=

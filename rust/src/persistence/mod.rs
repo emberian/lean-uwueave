@@ -15,6 +15,8 @@
 //!   events. Canonical parent sets, immediate missing-parent refusal, and
 //!   collision checks make every accepted physical prefix a valid causal
 //!   prefix while full event-set equality ignores arrival order.
+//!   [`BufferedHistoryJournal`] adds an explicitly bounded non-durable arrival
+//!   buffer; reopening loses pending arrivals and recovers only that prefix.
 //!
 //! These implementations and their fault-injection tests are deployment
 //! evidence. They are not a theorem about a filesystem, a drive write cache,
@@ -72,8 +74,8 @@ pub use document::{
     DocumentReplay, DocumentReplayError,
 };
 pub use history::{
-    HistoryEvent, HistoryEventError, HistoryEventId, HistoryJournal, HistoryJournalError,
-    HistoryOpenReport,
+    BufferedHistoryJournal, HistoryDeliveryReceipt, HistoryDeliveryStatus, HistoryEvent,
+    HistoryEventError, HistoryEventId, HistoryJournal, HistoryJournalError, HistoryOpenReport,
 };
 
 /// Default maximum size of one physical journal record (64 MiB).

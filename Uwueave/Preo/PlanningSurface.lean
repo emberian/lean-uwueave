@@ -81,6 +81,56 @@ private def emitUniverseRefusalChecks (name actions : Ident)
       `maxChoices`; the command refuses before materializing its exponential \
       action-choice list. Raise the explicit cap or reduce the authored scope."
 
+private def emitSelectedSchedule (problemId selectedId limitsId planId boundId
+    planExactId peerId arbiterId roundId promptId rollbackId : Ident) :
+    CommandElabM Unit := do
+  emitRequired (← `(command|
+    /-- The problem's five independent schedule limits. -/
+    abbrev $limitsId : Uwueave.Scheduling.Currency → Nat := ($problemId).limits))
+  emitRequired (← `(command|
+    /-- The exact selected schedule plan. -/
+    def $planId : Uwueave.Scheduling.Plan ($problemId).session :=
+      ($selectedId).schedule.plan))
+  emitRequired (← `(command|
+    /-- The selected plan's proof that all five coordinates fit together. -/
+    def $boundId : Uwueave.Scheduling.ProfileUpperBound
+        ($problemId).session $limitsId := ($selectedId).schedule))
+  emitRequired (← `(command|
+    theorem $planExactId : ($boundId).plan = $planId := rfl))
+  emitRequired (← `(command| abbrev $peerId : Nat := $limitsId .peerBarrier))
+  emitRequired (← `(command| abbrev $arbiterId : Nat := $limitsId .arbiterCut))
+  emitRequired (← `(command| abbrev $roundId : Nat := $limitsId .networkRound))
+  emitRequired (← `(command| abbrev $promptId : Nat := $limitsId .userPrompt))
+  emitRequired (← `(command| abbrev $rollbackId : Nat := $limitsId .rollback))
+
+private def emitSelectedRepair (promise : Term) (problemId selectedId planId
+    candidateId repairId priceId seamCrossingsId repairArbiterId rollbackWindowId
+    writesId evidenceId pluralId restrictsId assumptionsId couplingId : Ident) :
+    CommandElabM Unit := do
+  emitRequired (← `(command|
+    /-- The exact selected repair candidate, including its dependent target. -/
+    def $candidateId : Uwueave.RepairSynthesis.Candidate $promise :=
+      ($selectedId).repair.candidate))
+  emitRequired (← `(command|
+    /-- Stable identity of the selected repair candidate. -/
+    def $repairId : Uwueave.RepairSynthesis.CandidateId := ($candidateId).id))
+  emitRequired (← `(command|
+    /-- The complete, non-scalarized eight-axis repair price. -/
+    def $priceId : Uwueave.Repair.Price := ($candidateId).price))
+  emitRequired (← `(command| abbrev $seamCrossingsId : Nat := ($priceId).seamCrossings))
+  emitRequired (← `(command| abbrev $repairArbiterId : Nat := ($priceId).arbiterCuts))
+  emitRequired (← `(command| abbrev $rollbackWindowId : Nat := ($priceId).rollbackWindow))
+  emitRequired (← `(command| abbrev $writesId : Nat := ($priceId).resolutionWrites))
+  emitRequired (← `(command| abbrev $evidenceId : Bool := ($priceId).retainsEvidence))
+  emitRequired (← `(command| abbrev $pluralId : Bool := ($priceId).pluralRead))
+  emitRequired (← `(command| abbrev $restrictsId : Bool := ($priceId).restrictsReachability))
+  emitRequired (← `(command|
+    abbrev $assumptionsId : List Uwueave.Repair.Premise := ($priceId).assumptions))
+  emitRequired (← `(command|
+    /-- The application-specific relation tying this exact plan and repair. -/
+    theorem $couplingId :
+        ($problemId).compatible $planId $candidateId := ($selectedId).coupled))
+
 private def emitSelected (name : Ident) (promise : Term) (proof : Term) :
     CommandElabM Unit := do
   let resultId := suffix name `Result
@@ -123,47 +173,11 @@ private def emitSelected (name : Ident) (promise : Term) (proof : Term) :
     /-- The dependent selected witness recovered from `Result`. -/
     def $selectedId : Uwueave.Preo.Planning.Selected $problemId :=
       Uwueave.Preo.PlanningSurface.selectedOf $resultId $selectedProofId))
-  emitRequired (← `(command|
-    /-- The problem's five independent schedule limits. -/
-    abbrev $limitsId : Uwueave.Scheduling.Currency → Nat := ($problemId).limits))
-  emitRequired (← `(command|
-    /-- The exact selected schedule plan. -/
-    def $planId : Uwueave.Scheduling.Plan ($problemId).session :=
-      ($selectedId).schedule.plan))
-  emitRequired (← `(command|
-    /-- The selected plan's proof that all five coordinates fit together. -/
-    def $boundId : Uwueave.Scheduling.ProfileUpperBound
-        ($problemId).session $limitsId := ($selectedId).schedule))
-  emitRequired (← `(command|
-    theorem $planExactId : ($boundId).plan = $planId := rfl))
-  emitRequired (← `(command| abbrev $peerId : Nat := $limitsId .peerBarrier))
-  emitRequired (← `(command| abbrev $arbiterId : Nat := $limitsId .arbiterCut))
-  emitRequired (← `(command| abbrev $roundId : Nat := $limitsId .networkRound))
-  emitRequired (← `(command| abbrev $promptId : Nat := $limitsId .userPrompt))
-  emitRequired (← `(command| abbrev $rollbackId : Nat := $limitsId .rollback))
-  emitRequired (← `(command|
-    /-- The exact selected repair candidate, including its dependent target. -/
-    def $candidateId : Uwueave.RepairSynthesis.Candidate $promise :=
-      ($selectedId).repair.candidate))
-  emitRequired (← `(command|
-    /-- Stable identity of the selected repair candidate. -/
-    def $repairId : Uwueave.RepairSynthesis.CandidateId := ($candidateId).id))
-  emitRequired (← `(command|
-    /-- The complete, non-scalarized eight-axis repair price. -/
-    def $priceId : Uwueave.Repair.Price := ($candidateId).price))
-  emitRequired (← `(command| abbrev $seamCrossingsId : Nat := ($priceId).seamCrossings))
-  emitRequired (← `(command| abbrev $repairArbiterId : Nat := ($priceId).arbiterCuts))
-  emitRequired (← `(command| abbrev $rollbackWindowId : Nat := ($priceId).rollbackWindow))
-  emitRequired (← `(command| abbrev $writesId : Nat := ($priceId).resolutionWrites))
-  emitRequired (← `(command| abbrev $evidenceId : Bool := ($priceId).retainsEvidence))
-  emitRequired (← `(command| abbrev $pluralId : Bool := ($priceId).pluralRead))
-  emitRequired (← `(command| abbrev $restrictsId : Bool := ($priceId).restrictsReachability))
-  emitRequired (← `(command|
-    abbrev $assumptionsId : List Uwueave.Repair.Premise := ($priceId).assumptions))
-  emitRequired (← `(command|
-    /-- The application-specific relation tying this exact plan and repair. -/
-    theorem $couplingId :
-        ($problemId).compatible $planId $candidateId := ($selectedId).coupled))
+  emitSelectedSchedule problemId selectedId limitsId planId boundId planExactId
+    peerId arbiterId roundId promptId rollbackId
+  emitSelectedRepair promise problemId selectedId planId candidateId repairId
+    priceId seamCrossingsId repairArbiterId rollbackWindowId writesId evidenceId
+    pluralId restrictsId assumptionsId couplingId
   floorCheck name "selected planning result" ((← getCurrNamespace) ++ selectedId.getId)
   floorCheck name "selected planning profile" ((← getCurrNamespace) ++ boundId.getId)
   floorCheck name "selected repair price" ((← getCurrNamespace) ++ priceId.getId)

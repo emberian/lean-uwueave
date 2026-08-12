@@ -54,6 +54,98 @@ set_option autoImplicit false
 
 abbrev Bytes := Durable.Bytes
 
+/-! ## §0. Stack-safe executable framing -/
+
+/-- Tail-recursive execution of the durable data-pair encoding.  This exists
+for large artifacts run through Lean's interpreter, whose fixed recursion
+guard rejects the structurally recursive `Durable.encodeData` after roughly
+ten thousand payload bytes. -/
+def stackSafeEncodeData (payload : Bytes) : Bytes :=
+  (payload.foldl
+    (fun encoded byte => byte :: Durable.dataTag :: encoded) []).reverse
+
+private theorem stackSafeEncodeData_go (payload accumulator : Bytes) :
+    (payload.foldl
+      (fun encoded byte => byte :: Durable.dataTag :: encoded)
+      accumulator).reverse =
+    accumulator.reverse ++ Durable.encodeData payload := by
+  induction payload generalizing accumulator with
+  | nil => simp [Durable.encodeData]
+  | cons byte payload ih =>
+      simp only [List.foldl_cons]
+      rw [ih]
+      simp [Durable.encodeData, List.append_assoc]
+
+/-- The executable data encoder is byte-identical to the logical encoder. -/
+theorem stackSafeEncodeData_eq (payload : Bytes) :
+    stackSafeEncodeData payload = Durable.encodeData payload := by
+  simpa [stackSafeEncodeData] using stackSafeEncodeData_go payload []
+
+/-- Generic stack-safe durable framing for any version/domain and payload. -/
+def stackSafeEncodeFrame (tag : Durable.FormatTag) (payload : Bytes) : Bytes :=
+  [Durable.magic₀, Durable.magic₁, tag.version, tag.domain] ++
+    stackSafeEncodeData payload ++ [Durable.endTag]
+
+/-- Stack-safe framing preserves the exact canonical durable wire format. -/
+theorem stackSafeEncodeFrame_eq (tag : Durable.FormatTag) (payload : Bytes) :
+    stackSafeEncodeFrame tag payload = Durable.encodeFrame tag payload := by
+  simp [stackSafeEncodeFrame, Durable.encodeFrame, Durable.encodeEnvelope,
+    Durable.encodePayload, stackSafeEncodeData_eq]
+
+/-- Generic stack-safe value framing; semantic payload bytes remain owned by
+the supplied canonical codec. -/
+def stackSafeEncodeValue {alpha : Type} (codec : Durable.CanonicalCodec alpha)
+    (tag : Durable.FormatTag) (value : alpha) : Bytes :=
+  stackSafeEncodeFrame tag (codec.encode value)
+
+/-- Stack-safe value framing is byte-identical to `Durable.encodeValue`. -/
+theorem stackSafeEncodeValue_eq {alpha : Type}
+    (codec : Durable.CanonicalCodec alpha) (tag : Durable.FormatTag)
+    (value : alpha) :
+    stackSafeEncodeValue codec tag value = Durable.encodeValue codec tag value := by
+  simp [stackSafeEncodeValue, Durable.encodeValue, stackSafeEncodeFrame_eq]
+
+/-- The canonical decoder accepts stack-safe bytes and preserves arbitrary
+following journal bytes exactly. -/
+theorem decodeValue_stackSafeEncodeValue_append {alpha : Type}
+    (codec : Durable.CanonicalCodec alpha) (tag : Durable.FormatTag)
+    (value : alpha) (following : Bytes) :
+    Durable.decodeValue codec tag
+      (stackSafeEncodeValue codec tag value ++ following) =
+        some (value, following) := by
+  rw [stackSafeEncodeValue_eq]
+  exact Durable.decodeValue_encodeValue_append codec tag value following
+
+/- Reserved framing bytes are adversarial payload data here; a changed tag is
+refused, and a nonempty following suffix is returned rather than consumed. -/
+namespace StackSafeExamples
+
+def tag : Durable.FormatTag := ⟨7, 9⟩
+def payload : Bytes :=
+  [Durable.magic₀, Durable.dataTag, Durable.endTag, 255]
+
+theorem reserved_payload_and_trailing_exact :
+    Durable.decodeFor tag (stackSafeEncodeFrame tag payload ++ [91, 92]) =
+      some (payload, [91, 92]) := by
+  rw [stackSafeEncodeFrame_eq]
+  exact Durable.decodeFor_encodeFrame_append tag payload [91, 92]
+
+theorem changed_version_refused :
+    Durable.decodeFor ⟨8, tag.domain⟩
+      (stackSafeEncodeFrame tag payload ++ [91]) = none := by
+  rw [stackSafeEncodeFrame_eq]
+  exact Durable.decodeFor_encodeFrame_ne ⟨8, tag.domain⟩ tag (by decide)
+    payload [91]
+
+theorem changed_domain_refused :
+    Durable.decodeFor ⟨tag.version, 10⟩
+      (stackSafeEncodeFrame tag payload) = none := by
+  rw [stackSafeEncodeFrame_eq]
+  simpa using Durable.decodeFor_encodeFrame_ne ⟨tag.version, 10⟩ tag
+    (by decide) payload []
+
+end StackSafeExamples
+
 /-! ## §1. A compositional prefix codec -/
 
 /-- A prefix codec parses exactly one value and returns trailing bytes. The law

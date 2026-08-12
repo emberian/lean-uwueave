@@ -116,9 +116,10 @@ shim, build script, Cargo manifest, and lockfile must also be unchanged.
 `rust/shim.c` first calls `lean_initialize_runtime_module`, then only
 `initialize_uwueave_Uwueave_RuntimeInit(1)`. Rust serializes that process-global
 initialization with `Once`; failure aborts rather than exposing a partly
-initialized runtime. The current full gate observed 13 Lake-owned objects
-(655,368 bytes before archiving), 14 archive members including the shim
-(798,968 bytes), and 140 passing Rust tests.
+initialized runtime. The current native-closure gate observed 13 Lake-owned
+objects (659,152 bytes before archiving) and 14 archive members including the
+shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The full Wave-26 Cargo
+gate passed 142/142 tests.
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native
@@ -197,6 +198,29 @@ and byte-reopens the exact **71,011-byte** frame and the exact **142,022-byte**
 two-frame logical journal. Wrong projection, future, certificate, plan, and
 world fixtures must all fail to compile.
 
+`ObservedBoundResult.attachAtWorld` adds the deployment-facing premise without
+pretending to observe a deployment. The caller supplies one exact
+`ObservationBoundary.Authentic` proof, membership in a separately authored
+running reach, membership in the binding's authored world reach, and the exact
+world-indexed certificate. `preo_export_v3` accepts only that wrapper plus the
+exact checked plan, budget, query, future, world, branch, command-work limit,
+and validator config. It computes result status/effect/visibility/disclosure
+and certificate rows through checked builders, then commits the complete prefix
+only after V3 validation. The validator now bounds stable-ID magnitude and hole
+path depth and requires strictly increasing world/query/result/certificate
+registries in addition to its existing row/reference/resource checks.
+
+The dedicated acceptance runner has three green fixtures and fifteen red
+command cases. It rejects a bare certified report and a structural lookalike,
+forged state, out-of-running reach, wrong projection/future/world/certificate/
+plan, both command and validator resource ceilings, custom axiom, `sorryAx`,
+and Lean-4.30 `native_decide`; a guarded late refusal proves complete prefix
+absence and successful same-name reuse. Its positive generated prefix audits
+48 constants on the repository trust floor. This establishes elaboration
+honesty, not authenticity of any host observation. Nor is acceptance a
+performance claim: the command's serialized N=16 benchmark currently measures
+6.732 MiB incremental peak RSS per item, above the existing 4 MiB/item ceiling.
+
 ### 2.2 Bounded diagnostic-only artifact inspection
 
 **Implemented as pure inspection, not authority.**
@@ -265,7 +289,43 @@ yet refines the Rust host bytes or filesystem observations to that model. The
 a deployment needing unforgeable history identity must authenticate or
 content-address a canonical event representation before admission.
 
-### 2.5 Shared physical record format
+### 2.5 Buffered history delivery: two intentionally different authorities
+
+**Implemented with an explicit non-refinement boundary.** Lean
+`HistoryRuntime.DeliveryState` separates causally materialized events from an
+explicit pending list and written capacity. `DeliveryValid` is exactly
+`pending.length ≤ capacity`; empty is valid, drain never increases the pending
+length, and every successful `receive`/`receiveAll` transition preserves the
+bound. Receive is retry-idempotent across both stores, collision-refuses one ID
+with different event content, rejects self/duplicate parents, buffers a
+missing-parent event only when capacity permits, and deterministically scans
+finite pending layers after a ready append. A six-event fixture—root,
+left/right, two sibling merges, and one tip—settles both causal and fully
+reversed arrival orders with capacity five and proves the same event-set view.
+
+`PersistentHistoryRuntime.deliverySchema` makes the arrival sequence
+authoritative, including arrivals still pending in `DeliveryState`. Its
+coherence relation states that an accepted arrival occurs exactly in the
+materialized or pending side; checkpoint/suffix replay can therefore retain a
+buffered prefix and later settle it.
+
+Rust's `BufferedHistoryJournal` has a different contract. It wraps the durable
+causally closed `HistoryJournal`, keeps missing-parent events in a bounded
+in-memory `BTreeMap`, and appends only ready events. Draining uses deterministic
+ID order; retries, same-ID/different-content collisions, and buffer-full are
+explicit. The buffer is deliberately **volatile**: reopen reconstructs the
+checksummed causal prefix and starts with no pending entries, which the focused
+test asserts. A durable arrival queue is required before this endpoint can
+refine Lean's `deliverySchema`.
+
+The remaining gaps are exact: Lean requires only duplicate-free parent lists,
+where Rust requires strictly increasing canonical parent IDs; application IDs
+are equality keys, not authentication; there is no Lean↔Rust event codec or
+host-byte refinement; and no theorem covers filesystem or power-loss behavior.
+The focused gates are 36/36 Lean jobs and 8/8 Rust history tests; those Rust
+tests are not a newly rerun aggregate crate count.
+
+### 2.6 Shared physical record format
 
 **Implemented.** `rust/src/persistence/record.rs::RawJournal` wraps each
 semantic body in:

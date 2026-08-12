@@ -25,12 +25,14 @@ private def validationError? {alpha : Type} :
 def config : ValidationConfig where
   bounds := {
     base := ProjectionV2.Examples.config.bounds
+    maxStableIdValue := 2000
     maxWorlds := 8
     maxQueries := 8
     maxResults := 8
     maxCertificates := 8
     maxReadsPerQuery := 8
     maxHolesPerQuery := 8
+    maxHolePathDepth := 8
     maxAnalysesPerQuery := 2
     maxEffectShapesPerResult := 6 }
 
@@ -173,6 +175,119 @@ def zeroQueryBound : ValidationConfig :=
 theorem query_bound_refused :
     validationError? (validate zeroQueryBound fullProjection) =
       some (.listTooLarge .queries 1 0) := by decide
+
+def overdeepHolePath : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with queries := fullEncoding.queries.map fun row =>
+          { row with holes := row.holes.map fun hole =>
+              { hole with path := List.replicate 9 0 } } } }
+
+theorem overdeep_hole_path_refused :
+    validationError? (validate config overdeepHolePath) =
+      some (.holePathTooDeep 1002 0 9 8) := by decide
+
+def invalidHolePathSegment : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with queries := fullEncoding.queries.map fun row =>
+          { row with holes := row.holes.map fun hole =>
+              { hole with path := [2] } } } }
+
+theorem invalid_hole_path_segment_refused :
+    validationError? (validate config invalidHolePathSegment) =
+      some (.invalidHolePathSegment 1002 0 0 2) := by decide
+
+def incoherentAnalyses : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with queries := fullEncoding.queries.map fun row =>
+          { row with analyses := [.mergeSafe] } } }
+
+theorem incoherent_analyses_refused :
+    validationError? (validate config incoherentAnalyses) =
+      some (.incoherentAnalyses 1002 [.mergeSafe]) := by decide
+
+def oversizedSurfaceId : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with results := fullEncoding.results.map fun row =>
+          { row with surface := ⟨2001⟩ } } }
+
+theorem oversized_surface_id_refused :
+    validationError? (validate config oversizedSurfaceId) =
+      some (.stableIdTooLarge .surface 2001 2000) := by decide
+
+private def secondQuery : QueryRow :=
+  { fullQuery with id := ⟨1007⟩, result := ⟨1008⟩, program := ⟨1009⟩ }
+
+private def secondResult : ResultRow :=
+  { fullResult with id := ⟨1008⟩, query := ⟨1007⟩ }
+
+def reorderedQueries : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with
+        queries := [secondQuery, fullQuery]
+        results := [fullResult, secondResult] } }
+
+theorem reordered_queries_refused :
+    validationError? (validate config reorderedQueries) =
+      some (.nonCanonicalRowOrder .queries 1007 1002) := by decide
+
+def reorderedWorlds : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with worlds := [⟨1007⟩, ⟨1001⟩] } }
+
+theorem reordered_worlds_refused :
+    validationError? (validate config reorderedWorlds) =
+      some (.nonCanonicalRowOrder .worlds 1007 1001) := by decide
+
+def reorderedResults : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with
+        queries := [fullQuery, secondQuery]
+        results := [secondResult, fullResult] } }
+
+theorem reordered_results_refused :
+    validationError? (validate config reorderedResults) =
+      some (.nonCanonicalRowOrder .results 1008 1003) := by decide
+
+private def secondCertificate : CertificateRow :=
+  { fullCertificate with id := ⟨1007⟩ }
+
+def reorderedCertificates : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with certificates := [secondCertificate, fullCertificate] } }
+
+theorem reordered_certificates_refused :
+    validationError? (validate config reorderedCertificates) =
+      some (.nonCanonicalRowOrder .certificates 1007 1006) := by decide
+
+def nonCanonicalAnalyses : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with queries := fullEncoding.queries.map fun row =>
+          { row with analyses := [.monotoneSafe, .mergeSafe] } } }
+
+theorem noncanonical_analyses_refused :
+    validationError? (validate config nonCanonicalAnalyses) =
+      some (.nonCanonicalAnalyses 1002 [.monotoneSafe, .mergeSafe]) := by decide
+
+def nonDownwardEffect : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with results := fullEncoding.results.map fun row =>
+          { { row with status := StatusShape.provisional } with
+            effect := [StatusShape.provisional]
+            disclosure := none } } }
+
+theorem nondownward_effect_refused :
+    validationError? (validate config nonDownwardEffect) =
+      some (.effectNotDownwardClosed 1003) := by decide
+
+def statusOutsideEffect : Projection :=
+  { fullProjection with encoding :=
+      { fullEncoding with results := fullEncoding.results.map fun row =>
+          { { row with status := StatusShape.pending } with
+            disclosure := none } } }
+
+theorem status_outside_effect_refused :
+    validationError? (validate config statusOutsideEffect) =
+      some (.statusOutsideEffect 1003 .pending) := by decide
 
 end Examples
 end Uwueave.Preo.ProjectionV3

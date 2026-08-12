@@ -1,0 +1,7 @@
+api	status	basis
+preo_program	AVAILABLE	StateProgramSurface syntax
+preo_plan	AVAILABLE	PlanningSurface syntax
+observation_adapter_v1	AVAILABLE	ObservedReport.attach
+observed_bound_result	AVAILABLE	ObservedCertifiedReport.attachAtWorld
+v3_checked_builder	AVAILABLE	ArtifactV3Encoding.addQuery
+v3_export_command	AVAILABLE	Preoscript V3 command syntax

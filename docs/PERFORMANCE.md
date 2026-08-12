@@ -9,7 +9,7 @@ ever been timed.*
 > `BENCH_MAX=1000` rerun made on 2026-08-11; it is deliberately separate from
 > the baseline and does not replace the original full-range sweep. Section 12
 > separately records Wave 23 proof-elaboration and build-closure engineering,
-> and §§13–14 do the same for Waves 24–25; those figures are not kernel-runtime
+> and §§13–15 do the same for Waves 24–26; those figures are not kernel-runtime
 > benchmarks. Current
 > complexity statements come from proved equivalence where applicable, source
 > inspection, successful builds, and generated-C inspection; only the rows in
@@ -1093,3 +1093,198 @@ Those counts establish final source/build/test coverage on the frozen Wave 25
 tree. As throughout this document, a green aggregate duration would mix cache,
 link, compiler, and test work, so no aggregate wall-speedup is inferred from
 the job or test totals.
+
+---
+
+## 15. Wave 26 proof reuse, observation, and export hardening — 2026-08-11
+
+Wave 26 consolidated canonical framing and exact-result proofs, added typed
+value/source/position attribution, separated authenticated running observation
+from authored analysis reach, hardened V3 validation and export, and expanded
+the logical/Rust history runtime. As in §14, this section mixes several
+explicitly labelled evidence classes: paired profiler comparisons, single-shot
+source diagnostics, static closure and file sizes, and functional acceptance
+counts. None is a new runtime-kernel benchmark, filesystem refinement, source
+authentication protocol, or proof that an authored reach equals deployment
+reach.
+
+### Canonical stack-safe framing
+
+One generic stack-safe framing API in `ArtifactDurableCore` replaced three
+local encoders. Relative to the Wave 25 source, `ArtifactDurableCore` gained 92
+lines while `ArtifactEmit`, `Quickstart`, and the V3 fixture lost 33, 24, and 2
+respectively: **113 insertions / 80 deletions, net +33 LOC**. The following
+exact byte gates remained unchanged:
+
+| framed value | exact bytes |
+|---|---:|
+| semantic V2 artifact | **33,331 B** |
+| full V2 artifact | **15,887 B** |
+| fixture V3 artifact | **41,249 B** |
+| Quickstart V3 artifact | **71,011 B** |
+| two Quickstart frames as a logical journal | **142,022 B** |
+
+The narrow build completed **103 jobs**. Last warm target observations were
+0.14 s for the core, 0.14 s for emission, 1.55 s for the V3 fixture, and 4.82 s
+for replay-heavy Quickstart. These are noisy incremental validation durations,
+not before/after samples or framing-throughput measurements. Exact bytes,
+version/domain/trailing-suffix refusals, reopen, and inspection are functional
+codec evidence; they do not prove stable-media durability or authenticity.
+
+### Typed attribution
+
+The typed attribution path now derives full expression positions from exact
+`Expr.Hole` analysis and requires an external `SourceAuthenticity` proof before
+materialization. Its focused build passed **32 jobs**. Single post-change source
+profiler diagnostics reported:
+
+| module | cumulative tactics | cumulative `simp` |
+|---|---:|---:|
+| `Holes` | **58.8 ms** | **4.94 ms** |
+| `Evidence` | **162 ms** | **23.3 ms** |
+| `DerivedDocument` | **87.7 ms** | **1.87 ms** |
+| `DerivedProgram` | **53.6 ms** | **19.9 ms** |
+
+Profiler categories are nested, these are not summed into wall time, and no
+before samples were retained; the table locates current proof work rather than
+claiming a speedup. The new exact membership/union laws remain relative to the
+authored `World → Source` attribution. They do not authenticate a source or
+prove that an externally named position was actually read unless it came
+through the checked typed-hole adapter.
+
+### Exact-result proof reuse
+
+`ResultProgram.ExactSnapshot` centralizes the exact singleton-answer,
+settledness, evaluation, and total-soundness construction shared by
+`Incremental` and `StateProgram`. The source change was **+64/−103 lines, net
+−39**, replacing 100 duplicated proof lines with 36 shared/helper-wrapper
+lines while preserving public names, types, and definitional reductions.
+
+On the retained declaration-profiler comparison, the consumer theorem sum fell
+from **32.704 ms to 6.604 ms** (about −80%). Charging the new shared helper as
+well gives **32.704 ms to 21.687 ms** (**−33.7%**) for the whole migrated proof
+work. These are declaration-level elaboration measurements, not module wall
+times; helper and wrapper accounting is stated separately precisely to avoid
+making displaced work disappear. The downstream focused gate passed **99/99**.
+
+### Authenticated observation and transactional V3 surface
+
+`ObservedBoundResult` is a **202 LOC / 9,154 B** proof adapter. Its direct
+source check was about **1.0 s** and a fresh dependency build completed **42/42
+jobs**. Construction requires all of the following at one exact index: a
+caller-supplied `ObservationBoundary.Authentic` witness, running-reach
+membership, authored-world-reach membership, and a certificate for the exact
+bound declaration answer. No definition performs I/O, discovers running reach,
+or constructs authenticity. Consequently the deployment-observation marker is
+narrowed but not closed.
+
+The transactional `preo_export_v3` production surface is **527 LOC**. One fresh
+focused macOS `/usr/bin/time -l lake env lean` source compile reported **13.55 s
+wall, 12.16 s user, 0.74 s system, and 1,421,836,288 B peak RSS**. It is a
+single cold/focused observation, not a serialized corpus median or a baseline
+comparison. The focused build completed **100 jobs**.
+
+Acceptance comprised **3 green subprocess fixtures**, **14 standalone expected
+refusals**, and one additional guarded `maxWork` refusal: **15 expected-red
+commands total**. The positive surface audits **48 generated prefix constants**
+against the axiom floor. The observation positive pins the exact world, state,
+certificate, and report and kernel-checks forged-world and stale-index
+refusals. Other red paths cover forged state, absent running reach, bare or
+structural-lookalike reports, wrong query/projection/future/binding/world/index/
+certificate answer/plan/base, resource bounds, a custom axiom, `sorryAx`, and
+`native_decide`. Rollback proves five declarations absent before successful
+same-name reuse. The corpus is **19 Lean files including two supports, plus the
+runner, totalling 766 LOC**. This is adversarial typechecking evidence, not a
+runtime authentication test.
+
+### V3 validation and production closure
+
+V3 hardening passed **108/108** focused checks and added fail-fast resource,
+stable-ID, ordering, path, and analysis validation plus proof-gated append
+ordering. Its current production renderer closure is **7 project modules,
+7,521,384 olean bytes, and 1,230,875 generated-C bytes**. One source-profiler
+pass reported **377 ms cumulative elaboration** for the validation core and
+**39 ms** for the renderer. These category values are not wall time.
+
+The seven-module renderer continues to reuse V2 infrastructure rather than
+duplicate it. The closure is therefore evidence of current shipping cost, not
+a paired reduction. Certificate-to-result wire association, stable name
+registries, and topology-aware hole-path checking remain explicit boundaries.
+
+### Planning surface
+
+Splitting `PlanningSurface.emitSelected` into two private phases preserved the
+public API and emission order. The comparison used serialized direct source
+checks, `lake env lean -j1 --profile`, wrapped in `/usr/bin/time -lp`: two
+unmeasured warmups followed by five measured runs, reporting medians with no
+cache clear or trace profiler. The paired medians were:
+
+| measurement | before | after | change |
+|---|---:|---:|---:|
+| cumulative LCNF | **2,310 ms** | **639 ms** | **−72.3%** |
+| wall | **7.44 s** | **3.71 s** | **−50.1%**, baseline-noisy |
+| import | **1,750 ms** | **1,160 ms** | **−33.7%** |
+| elaboration | **837 ms** | **718 ms** | **−14.2%** |
+| peak RSS | **1,340,653,568 B** | **1,321,091,072 B** | **−19,562,496 B** |
+| olean | **2,642,704 B** | **2,459,328 B** | **−183,376 B / −6.94%** |
+| generated C | **1,007,938 B** | **1,012,370 B** | **+4,432 B / +0.44%** |
+
+The exact 88-pin golden still passes and typed scaling remains **3.940
+MiB/item**, below the 4 MiB guard. The focused V3, StateProgram,
+PlanningSurface, and Quickstart build passed **99/99**. LCNF is a cumulative
+compiler category, RSS is process peak, and olean bytes are an artifact size;
+only like-for-like rows are compared. The baseline cohort was
+infrastructure-noisy (LCNF ranged 1,840–5,340 ms and wall 4.53–10.75 s), while
+the after cohort was tighter (LCNF 612–808 ms and wall 3.33–4.35 s). The
+structural LCNF reduction is useful evidence, but the wall percentage should
+not be treated as a controlled speedup.
+
+### History runtime and bounded host queue
+
+Relative to Wave 25, `HistoryRuntime` grew **568→880 LOC** (+312),
+25,266→39,571 source bytes, and **1,883,936→3,151,328 olean bytes**.
+`PersistentHistoryRuntime` grew **170→296 LOC** (+126), 7,227→12,389 source
+bytes, and **178,416→333,560 olean bytes**. The Rust history implementation
+grew **761→1,073 LOC** (+312) and is now **38,305 B**.
+
+One warm-cache source profile under active multi-agent contention reported:
+
+| module | wall | import | cumulative elaboration |
+|---|---:|---:|---:|
+| `HistoryRuntime` | **2.04 s** | **0.940 s** | **508 ms** |
+| `PersistentHistoryRuntime` | **1.30 s** | **0.965 s** | **132 ms** |
+
+These are single samples, not medians. The focused Lean build passed **36/36**.
+The focused Rust selection passed **8/8** with 81 filtered; the latest command
+spent **11.74 s** compiling and reported **0.00 s** in test bodies, so it is not
+a queue-latency measurement. Strict Clippy found only five existing unrelated
+lint failures; rerunning with exactly those categories allowed passed in 4.27 s.
+
+The semantic caveat is load-bearing: Lean checkpoints authoritative buffered
+arrivals, while Rust's bounded pending buffer is volatile and disappears on
+reopen. No durable Rust arrival queue or Lean↔Rust refinement theorem is
+claimed.
+
+### Final Lean and native closure
+
+The frozen production aggregate completed **173 Lean jobs in 3.72 s**. The
+trust audit traversed **149 direct root modules excluding `Audit`** and checked
+**23,757 constants**. This was a warm final validation duration, not a cold
+build or speedup sample.
+
+The native runtime closure remains **13 Lake-owned objects**, now **659,152 raw
+bytes** before archive. The verified archive has **14 members / 803,520 B**:
+the 13 uniquely named objects plus the sole shim. All 13 Lake source, staged,
+and archived object bytes matched; the audit found zero unresolved same-package
+initializers and all **7/7** required initializer/FFI definitions. Relative to
+Wave 25 this is +3,784 raw object bytes and +4,552 archive bytes, not a change
+in object count or FFI surface. Archive SHA-256 was
+`29cea783e844895d44fa72d91b79512535d449181e379b5d2c06f31a2621915a`.
+
+The final `cargo test --all-targets` gate passed **142 tests / 0 failures** in
+**11.94 s real**; Cargo's own finished phase was **0.07 s**, so the wall figure
+is a validation-path duration, not Rust test-body throughput. The accounting
+was 89 library, 13 check-CLI, one artifact-emission, one artifact-inspection,
+four ergonomics, 15 persistence/history, 11 property, six runtime-closure, and
+two UNDONE-census tests. The fail-closed closure check repeated the exact
+**13 objects / 659,152 B** warning line above.

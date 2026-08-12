@@ -69,6 +69,54 @@ def resolutionIdentity {S β : Type} : StatusEffects.Resolution S β →
   | .preserveFork => .preserveFork
   | .byPolicy name _ => .named name
 
+/-! ## Exact pure snapshots -/
+
+/- Shared semantics for a pure query whose result is one exact value.  The
+future-specific obligation is isolated to stability of the evaluator. -/
+namespace ExactSnapshot
+
+/-- The singleton answer computed by an exact snapshot evaluator. -/
+def answer {S β : Type} [DecidableEq β] (eval : S → β) (state : S) : GSet β :=
+  fun value => decide (value = eval state)
+
+/-- A pure exact snapshot is settled at every state. -/
+def settled {S β : Type} (_eval : S → β) (_state : S) : Prop := True
+
+/-- A pure snapshot reports precisely its computed value. -/
+def evaluate {S β : Type} (eval : S → β) (state : S) : Status β :=
+  .exact (eval state)
+
+/-- Complete six-status soundness for any evaluator stable under its authored
+future.  Impossible non-exact rows are discharged once here rather than by
+every typed snapshot adapter. -/
+theorem totalSound {S β : Type} [DecidableEq β]
+    (F : Evidence.Future S) (eval : S → β)
+    (stable : ∀ before after, F before after → eval before = eval after) :
+    StatusEffects.TotalSoundEvaluator6 F (answer eval) (settled eval)
+      (evaluate eval) where
+  core := {
+    exact_correct := by
+      intro state value h
+      simp only [evaluate, Status.exact.injEq] at h
+      subst value
+      simp [answer, Holes.SealsTo]
+    exact_final := by
+      intro before after value hfuture h
+      simp only [evaluate, Status.exact.injEq] at h ⊢
+      exact (stable before after hfuture).symm.trans h
+    absent_correct := by intro state h; simp [evaluate] at h
+    absent_final := by intro before after hfuture h; simp [evaluate] at h
+    pending_escapable := by intro state h; simp [evaluate] at h }
+  exact_settled := by intro _ _ _; trivial
+  provisional_correct := by intro state value h; simp [evaluate] at h
+  forkedClosed_correct := by intro state h; simp [evaluate] at h
+  forkedOpen_correct := by intro state h; simp [evaluate] at h
+  absent_settled := by intro _ _; trivial
+  pending_correct := by intro state h; simp [evaluate] at h
+  pending_open := by intro state h; simp [evaluate] at h
+
+end ExactSnapshot
+
 /-! ## Checked declarations -/
 
 /-- A reusable, checked result program.

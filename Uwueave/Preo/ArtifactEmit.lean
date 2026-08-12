@@ -83,51 +83,16 @@ theorem semanticEncoding_eq_generated :
     semanticEncoding = Demo.SemanticExport.Encoding := by
   rfl
 
-/-- Tail-recursive implementation of `Durable.encodeData`. The logical format
-is unchanged; this avoids the Lean interpreter retaining one frame per payload
-byte when this explicit command is run without compiling a separate binary. -/
-private def encodeDataFast (payload : Durable.Bytes) : Durable.Bytes :=
-  (payload.foldl
-    (fun encoded byte => byte :: Durable.dataTag :: encoded) []).reverse
-
-private theorem encodeDataFast_go (payload accumulator : Durable.Bytes) :
-    (payload.foldl
-      (fun encoded byte => byte :: Durable.dataTag :: encoded)
-      accumulator).reverse =
-    accumulator.reverse ++ Durable.encodeData payload := by
-  induction payload generalizing accumulator with
-  | nil => simp [Durable.encodeData]
-  | cons byte payload ih =>
-      simp only [List.foldl_cons]
-      rw [ih]
-      simp [Durable.encodeData, List.append_assoc]
-
-private theorem encodeDataFast_eq (payload : Durable.Bytes) :
-    encodeDataFast payload = Durable.encodeData payload := by
-  simpa [encodeDataFast] using encodeDataFast_go payload []
-
-/-- Stack-safe execution path, proved byte-for-byte equal to Lean's canonical
-artifact framing rather than introducing a second format implementation. -/
-private def projectionBytesFast (value : ArtifactEncoding) :
-    ArtifactDurable.Bytes :=
-  let tag := ArtifactDurable.artifactFormat
-  [Durable.magic₀, Durable.magic₁, tag.version, tag.domain] ++
-    encodeDataFast (ArtifactDurable.artifactCodec.encode value) ++
-    [Durable.endTag]
-
-private theorem projectionBytesFast_eq (value : ArtifactEncoding) :
-    projectionBytesFast value = ArtifactDurable.projectionBytes value := by
-  simp [projectionBytesFast, ArtifactDurable.projectionBytes,
-    Durable.encodeValue, Durable.encodeFrame, Durable.encodeEnvelope,
-    Durable.encodePayload, encodeDataFast_eq]
-
 /-- The compiler implementation. It remains Lean's canonical codec applied to
-whole-value checked encodings, through the equal stack-safe framing path above;
-Rust neither constructs nor interprets payload fields. -/
+whole-value checked encodings, through ArtifactDurable's proved-equal
+stack-safe framing path; Rust neither constructs nor interprets payload fields. -/
 def bytesImpl : Name → ArtifactDurable.Bytes
-  | .semanticExport => projectionBytesFast semanticEncoding
+  | .semanticExport =>
+      ArtifactDurable.stackSafeEncodeValue ArtifactDurable.artifactCodec
+        ArtifactDurable.artifactFormat semanticEncoding
   | .fullExport =>
-      projectionBytesFast ProjectionV2.Examples.fullExport.encoding
+      ArtifactDurable.stackSafeEncodeValue ArtifactDurable.artifactCodec
+        ArtifactDurable.artifactFormat ProjectionV2.Examples.fullExport.encoding
 
 /-- Select exact Lean-owned durable bytes. The logical semantic-export branch
 names the actual generated `ArtifactDurableBytes`; `implemented_by` supplies
@@ -142,9 +107,11 @@ theorem bytesImpl_eq_bytes (name : Name) : bytesImpl name = bytes name := by
   cases name with
   | semanticExport =>
       simp only [bytesImpl, bytes, Demo.SemanticExport.ArtifactDurableBytes,
-        projectionBytesFast_eq]
+        ArtifactDurable.stackSafeEncodeValue_eq,
+        ArtifactDurable.projectionBytes]
       rw [semanticEncoding_eq_generated]
-  | fullExport => exact projectionBytesFast_eq _
+  | fullExport =>
+      exact ArtifactDurable.stackSafeEncodeValue_eq _ _ _
 
 theorem bytes_semanticExport :
     bytes .semanticExport = Demo.SemanticExport.ArtifactDurableBytes := rfl

@@ -8,10 +8,10 @@ extension; one maximal element is a lowest base, while more than one is an
 honest ambiguity.
 
 The second half is an executable causal event-set boundary.  Exact retries are
-idempotent, an identifier collision is refused, and parents must already be
-present.  The immediate-refusal parent policy is deliberate: buffering belongs
-to a transport endpoint with an explicit resource policy, not to this logical
-append core.
+idempotent and identifier collisions are refused. The small `append` core
+requires every parent immediately; the `DeliveryState` endpoint adds an
+explicit bounded buffer and deterministic finite draining for out-of-order
+arrival. Identifiers are caller-supplied equality keys, not authentication.
 
 The construction remains `Type 0`, inherits the caller-supplied rank and finite
 coverage premises, and does not discover an enumeration for an infinite DAG.
@@ -478,7 +478,315 @@ theorem sameEventSet_converges {Id Payload : Type}
   · exact holds event ((same event).2 member)
   · exact holds event ((same event).1 member)
 
-/-! ## 6. Asymmetry versus convergence and exact conditioned necessity -/
+/-! ## 6. Stable-id delivery with an explicit bounded buffer -/
+
+/-- Runtime materialization plus a bounded, non-authoritative out-of-order
+buffer.  Stable event identifiers, rather than nested sum constructors, name
+every successive append. -/
+structure DeliveryState (Id Payload : Type) where
+  materialized : EventState Id Payload
+  pending : List (Event Id Payload)
+  capacity : Nat
+  deriving DecidableEq, Repr
+
+/-- The exported structure is inspectable, so boundedness is a named runtime
+invariant rather than a hidden constructor premise. Public bounded-buffer
+claims below are explicitly about states reachable from `empty` by successful
+`receive` transitions, which preserve this predicate. -/
+def DeliveryValid {Id Payload : Type} (state : DeliveryState Id Payload) : Prop :=
+  state.pending.length ≤ state.capacity
+
+def DeliveryState.empty (Id Payload : Type) (capacity : Nat) :
+    DeliveryState Id Payload := ⟨EventState.empty, [], capacity⟩
+
+theorem DeliveryState.empty_valid (Id Payload : Type) (capacity : Nat) :
+    DeliveryValid (DeliveryState.empty Id Payload capacity) := by
+  simp [DeliveryValid, DeliveryState.empty]
+
+/-- One deterministic scan. Events which become ready only after an event to
+their right are reconsidered by the next scan. -/
+private def drainOnce {Id Payload : Type} [DecidableEq Id] [DecidableEq Payload]
+    (materialized : EventState Id Payload) :
+    List (Event Id Payload) → EventState Id Payload × List (Event Id Payload)
+  | [] => (materialized, [])
+  | event :: rest =>
+      match append materialized event with
+      | .appended next => drainOnce next rest
+      | _ =>
+          let (next, waiting) := drainOnce materialized rest
+          (next, event :: waiting)
+
+private def drainFuel {Id Payload : Type} [DecidableEq Id] [DecidableEq Payload] :
+    Nat → EventState Id Payload → List (Event Id Payload) →
+      EventState Id Payload × List (Event Id Payload)
+  | 0, materialized, pending => (materialized, pending)
+  | fuel + 1, materialized, pending =>
+      let (next, waiting) := drainOnce materialized pending
+      drainFuel fuel next waiting
+
+private theorem drainOnce_pending_length_le {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    (materialized : EventState Id Payload) (pending : List (Event Id Payload)) :
+    (drainOnce materialized pending).2.length ≤ pending.length := by
+  induction pending generalizing materialized with
+  | nil => simp [drainOnce]
+  | cons event rest ih =>
+      cases decision : append materialized event with
+      | appended next =>
+          simpa [drainOnce, decision] using
+            Nat.le_trans (ih next) (Nat.le_succ rest.length)
+      | retry | collision | missingParent | selfParent | duplicateParent =>
+          simpa [drainOnce, decision] using Nat.succ_le_succ (ih materialized)
+
+private theorem drainFuel_pending_length_le {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    (fuel : Nat) (materialized : EventState Id Payload)
+    (pending : List (Event Id Payload)) :
+    (drainFuel fuel materialized pending).2.length ≤ pending.length := by
+  induction fuel generalizing materialized pending with
+  | zero => exact Nat.le_refl _
+  | succ fuel ih =>
+      simp only [drainFuel]
+      rcases onceEq : drainOnce materialized pending with ⟨next, waiting⟩
+      exact Nat.le_trans (ih next waiting)
+        (by simpa [onceEq] using drainOnce_pending_length_le materialized pending)
+
+/-- Repeated deterministic scans. `pending.length + 1` scans are enough for
+every finite dependency chain already represented in the buffer; unavailable
+external parents remain explicitly pending. -/
+def drain {Id Payload : Type} [DecidableEq Id] [DecidableEq Payload]
+    (materialized : EventState Id Payload) (pending : List (Event Id Payload)) :
+    EventState Id Payload × List (Event Id Payload) :=
+  drainFuel (pending.length + 1) materialized pending
+
+theorem drain_pending_length_le {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    (materialized : EventState Id Payload) (pending : List (Event Id Payload)) :
+    (drain materialized pending).2.length ≤ pending.length :=
+  drainFuel_pending_length_le _ _ _
+
+inductive ReceiveDecision (Id Payload : Type) where
+  | delivered (state : DeliveryState Id Payload)
+  | buffered (state : DeliveryState Id Payload)
+  | retry (state : DeliveryState Id Payload)
+  | collision (prior : Event Id Payload)
+  | bufferFull (capacity : Nat)
+  | selfParent
+  | duplicateParent
+  deriving DecidableEq, Repr
+
+/-- Receive one stable-id event. Exact accepted or buffered delivery is a
+retry; conflicting reuse is refused across both stores. Missing-parent events
+occupy one explicit buffer slot, and a successful causal append drains every
+now-ready finite dependency layer deterministically. -/
+def receive {Id Payload : Type} [DecidableEq Id] [DecidableEq Payload]
+    (state : DeliveryState Id Payload) (event : Event Id Payload) :
+    ReceiveDecision Id Payload :=
+  if event ∈ state.materialized.accepted ∨ event ∈ state.pending then
+    .retry state
+  else
+    match (state.materialized.accepted ++ state.pending).find?
+        (fun prior => prior.id == event.id) with
+    | some prior => .collision prior
+    | none =>
+      if event.id ∈ event.parents then .selfParent
+      else if ¬ event.parents.Nodup then .duplicateParent
+      else
+        match event.parents.find? (fun parent => ¬ state.materialized.hasId parent) with
+        | some _ =>
+            if state.pending.length < state.capacity then
+              .buffered { state with pending := state.pending ++ [event] }
+            else .bufferFull state.capacity
+        | none =>
+            match append state.materialized event with
+            | .appended next =>
+                let (settled, waiting) := drain next state.pending
+                .delivered { state with materialized := settled, pending := waiting }
+            | .retry _ => .retry state
+            | .collision prior => .collision prior
+            | .missingParent _ => .bufferFull state.capacity
+            | .selfParent => .selfParent
+            | .duplicateParent => .duplicateParent
+
+theorem receive_retry {Id Payload : Type} [DecidableEq Id] [DecidableEq Payload]
+    (state : DeliveryState Id Payload) (event : Event Id Payload)
+    (known : event ∈ state.materialized.accepted ∨ event ∈ state.pending) :
+    receive state event = .retry state := by
+  simp [receive, known]
+
+/-- A successful buffering decision never exceeds the state's written bound,
+even if the caller supplied an otherwise arbitrary state. -/
+theorem receive_buffered_within_capacity {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    {state next : DeliveryState Id Payload} {event : Event Id Payload}
+    (buffered : receive state event = .buffered next) :
+    next.pending.length ≤ next.capacity := by
+  simp only [receive] at buffered
+  grind [DeliveryValid]
+
+theorem receive_delivered_within_capacity {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    {state next : DeliveryState Id Payload} {event : Event Id Payload}
+    (valid : DeliveryValid state)
+    (delivered : receive state event = .delivered next) :
+    DeliveryValid next := by
+  simp only [receive] at delivered
+  split at delivered <;> try contradiction
+  split at delivered <;> try contradiction
+  split at delivered <;> try contradiction
+  split at delivered <;> try contradiction
+  split at delivered <;> try contradiction
+  split at delivered <;> try contradiction
+  next ready =>
+    cases decision : append state.materialized event with
+    | appended settled =>
+        simp only [decision] at delivered
+        cases delivered
+        exact Nat.le_trans (drain_pending_length_le settled state.pending) valid
+    | retry | collision | missingParent | selfParent | duplicateParent =>
+        simp [decision] at delivered
+
+theorem receive_retry_state {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    {state next : DeliveryState Id Payload} {event : Event Id Payload}
+    (retry : receive state event = .retry next) : next = state := by
+  simp only [receive] at retry
+  split at retry
+  · exact (ReceiveDecision.retry.inj retry).symm
+  split at retry <;> try contradiction
+  split at retry <;> try contradiction
+  split at retry <;> try contradiction
+  split at retry <;> try contradiction
+  split at retry <;> try contradiction
+  next ready =>
+    cases decision : append state.materialized event with
+    | retry source =>
+        simp only [decision] at retry
+        exact (ReceiveDecision.retry.inj retry).symm
+    | appended | collision | missingParent | selfParent | duplicateParent =>
+        simp [decision] at retry
+
+/-- Every transition which returns a successor preserves the bound. This is
+the exact operational sense in which the buffer is bounded from `empty`. -/
+theorem receive_success_valid {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    {state next : DeliveryState Id Payload} {event : Event Id Payload}
+    (valid : DeliveryValid state)
+    (success : receive state event = .delivered next ∨
+      receive state event = .buffered next ∨
+      receive state event = .retry next) :
+    DeliveryValid next := by
+  rcases success with delivered | buffered | retry
+  · exact receive_delivered_within_capacity valid delivered
+  · exact receive_buffered_within_capacity buffered
+  · rw [receive_retry_state retry]
+    exact valid
+
+def SettledSameEventSet {Id Payload : Type} [DecidableEq Id]
+    [DecidableEq Payload] (left right : DeliveryState Id Payload) : Prop :=
+  left.pending = [] ∧ right.pending = [] ∧
+    SameEventSet left.materialized right.materialized
+
+theorem SettledSameEventSet.view_eq {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    {left right : DeliveryState Id Payload}
+    (same : SettledSameEventSet left right) :
+    eventSetView left.materialized = eventSetView right.materialized :=
+  sameEventSet_view_eq same.2.2
+
+/-! ### Two successive criss-cross merges over stable natural identifiers -/
+
+def runtimeRoot : Event Nat String := ⟨0, [], "root"⟩
+def runtimeLeft : Event Nat String := ⟨1, [0], "left"⟩
+def runtimeRight : Event Nat String := ⟨2, [0], "right"⟩
+def runtimeMergeLeft : Event Nat String := ⟨3, [1, 2], "merge-left"⟩
+def runtimeMergeRight : Event Nat String := ⟨4, [1, 2], "merge-right"⟩
+def runtimeTip : Event Nat String := ⟨5, [3, 4], "merge-tip"⟩
+
+def runtimeCausalOrder : List (Event Nat String) :=
+  [runtimeRoot, runtimeLeft, runtimeRight, runtimeMergeLeft,
+    runtimeMergeRight, runtimeTip]
+
+def runtimeReverseOrder : List (Event Nat String) :=
+  [runtimeTip, runtimeMergeRight, runtimeMergeLeft, runtimeRight,
+    runtimeLeft, runtimeRoot]
+
+def receiveAll {Id Payload : Type} [DecidableEq Id] [DecidableEq Payload] :
+    DeliveryState Id Payload → List (Event Id Payload) →
+      Option (DeliveryState Id Payload)
+  | state, [] => some state
+  | state, event :: rest =>
+      match receive state event with
+      | .delivered next | .buffered next | .retry next => receiveAll next rest
+      | _ => none
+
+theorem receiveAll_success_valid {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    {initial final : DeliveryState Id Payload}
+    {events : List (Event Id Payload)} (valid : DeliveryValid initial)
+    (success : receiveAll initial events = some final) : DeliveryValid final := by
+  induction events generalizing initial with
+  | nil =>
+      simp only [receiveAll, Option.some.injEq] at success
+      subst final
+      exact valid
+  | cons event rest ih =>
+      cases decision : receive initial event with
+      | delivered next =>
+          exact ih (receive_success_valid valid (Or.inl decision))
+            (by simpa [receiveAll, decision] using success)
+      | buffered next =>
+          exact ih (receive_success_valid valid (Or.inr (Or.inl decision)))
+            (by simpa [receiveAll, decision] using success)
+      | retry next =>
+          exact ih (receive_success_valid valid (Or.inr (Or.inr decision)))
+            (by simpa [receiveAll, decision] using success)
+      | collision | bufferFull | selfParent | duplicateParent =>
+          simp [receiveAll, decision] at success
+
+def runtimeCausalState : DeliveryState Nat String :=
+  ⟨⟨runtimeCausalOrder⟩, [], 5⟩
+
+def runtimeReverseSettledState : DeliveryState Nat String :=
+  ⟨⟨[runtimeRoot, runtimeRight, runtimeLeft, runtimeMergeRight,
+      runtimeMergeLeft, runtimeTip]⟩, [], 5⟩
+
+theorem runtime_causal_order_exact :
+    receiveAll (DeliveryState.empty Nat String 5) runtimeCausalOrder =
+      some runtimeCausalState := rfl
+
+theorem runtime_reverse_order_settles :
+    receiveAll (DeliveryState.empty Nat String 5) runtimeReverseOrder =
+      some runtimeReverseSettledState := rfl
+
+theorem runtime_reverse_order_respects_capacity :
+    DeliveryValid runtimeReverseSettledState :=
+  receiveAll_success_valid (DeliveryState.empty_valid Nat String 5)
+    runtime_reverse_order_settles
+
+theorem runtime_orders_converge :
+    SettledSameEventSet runtimeCausalState runtimeReverseSettledState := by
+  simp [SettledSameEventSet, SameEventSet, runtimeCausalState,
+    runtimeReverseSettledState, runtimeCausalOrder, or_comm, or_left_comm]
+
+theorem runtime_duplicate_retry :
+    receive runtimeCausalState runtimeTip = .retry runtimeCausalState := rfl
+
+theorem runtime_buffer_bound_refuses :
+    receive (DeliveryState.empty Nat String 0) runtimeTip = .bufferFull 0 := rfl
+
+def runtimeTipBufferedState : DeliveryState Nat String :=
+  ⟨EventState.empty, [runtimeTip], 5⟩
+
+def runtimeForgedTip : Event Nat String := ⟨5, [3, 4], "forged-tip"⟩
+
+theorem runtime_buffered_retry :
+    receive runtimeTipBufferedState runtimeTip = .retry runtimeTipBufferedState := rfl
+
+theorem runtime_pending_collision_refused :
+    receive runtimeTipBufferedState runtimeForgedTip = .collision runtimeTip := rfl
+
+/-! ## 7. Asymmetry versus convergence and exact conditioned necessity -/
 
 /-- Pairwise order agreement at the observable policy output. -/
 def OrderAgreementAt {V S Op : Type} (P : HistoryMerge V S Op)
@@ -561,8 +869,12 @@ universe boundary of `Histories` and `MergeModel`.  Finally, `Event` is an
 endpoint/runtime envelope with an opaque payload.  We do not yet claim a codec
 or refinement theorem reconstructing a generic proof-indexed `History`,
 `SelectedAdmission`, or `Coherent` witness from stored host bytes.  Network
-authentication and out-of-order buffering are likewise outside this slice:
-missing parents are refused immediately.
+authentication remains outside this slice. The logical event layer requires a
+duplicate-free parent list but does not canonicalize its order; the separate
+Rust journal deliberately requires strictly increasing parent bytes. No
+Lean-to-Rust codec/refinement theorem relates those choices. The buffer bound
+is proved for states reachable from `DeliveryState.empty` through successful
+`receive` transitions; arbitrary public structure literals carry no such fact.
 -/
 
 end Uwueave.HistoryRuntime

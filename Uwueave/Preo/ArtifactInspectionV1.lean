@@ -63,12 +63,14 @@ private def validationConfig (bounds : Bounds) : ProjectionV2.ValidationConfig w
 private def validationConfigV3 (bounds : Bounds) : ProjectionV3.ValidationConfig where
   bounds := {
     base := (validationConfig bounds).bounds
+    maxStableIdValue := bounds.maxInputBytes
     maxWorlds := bounds.maxRows
     maxQueries := bounds.maxRows
     maxResults := bounds.maxRows
     maxCertificates := bounds.maxRows
     maxReadsPerQuery := bounds.maxRefsPerRow
     maxHolesPerQuery := bounds.maxRefsPerRow
+    maxHolePathDepth := bounds.maxRefsPerRow
     maxAnalysesPerQuery := 2
     maxEffectShapesPerResult := 6 }
 

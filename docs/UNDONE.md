@@ -4,8 +4,8 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 159
-- **Extracted blocks (marker-bearing source lines):** 157
+- **Marker occurrences:** 158
+- **Extracted blocks (marker-bearing source lines):** 156
 - **Lean files containing markers:** 43
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
@@ -277,7 +277,7 @@ values in one round while replicas do occupy the intermediate states. -/
     *between* derivations, which is a different graph.
 ````
 
-### [`Uwueave/DerivedDocument.lean:120`](../Uwueave/DerivedDocument.lean#L120)
+### [`Uwueave/DerivedDocument.lean:127`](../Uwueave/DerivedDocument.lean#L127)
 
 ````text
     ⟨UNDONE⟩ `BoundedHeight` is a *hypothesis* — a
@@ -442,7 +442,7 @@ clothes.
     manufacture closure or eventual delivery in a running system.
 ````
 
-### [`Uwueave/Evidence.lean:819`](../Uwueave/Evidence.lean#L819)
+### [`Uwueave/Evidence.lean:857`](../Uwueave/Evidence.lean#L857)
 
 ````text
 what may still arrive) and listed the bridge to a real closure as ⟨UNDONE⟩.
@@ -828,18 +828,6 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     actually holds — "this is what `Holes.lean` §6 assumed under the name
     `Stable`", in its own words — so the remaining gap is Era's arbiter cut,
     not the licence in general.
-````
-
-### [`Uwueave/Holes.lean:215`](../Uwueave/Holes.lean#L215)
-
-````text
-  * **Provenance is whatever `p` computes.** ⟨UNDONE⟩ §7 lands
-    candidates-with-provenance in `MVRegister.MVReg` by *type*, and the
-    MV-register's frontier machinery applies unchanged. No theorem says the
-    carried clocks are causally meaningful — that is `Causality.lean`'s
-    premise, discharged by whatever generates `p`, not by anything here. The
-    memo's open question (attributed holes; "who do I need" as a computed
-    value) is supported by the codomain and computed by nothing.
 ````
 
 ## `Uwueave/HonestRender.lean`

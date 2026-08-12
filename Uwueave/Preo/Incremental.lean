@@ -278,13 +278,14 @@ def Future (_program : Expr.Program Γ) : Evidence.Future (Env Γ) := Eq
 /-- The singleton result computed at an environment. -/
 def answer (program : Expr.Program Γ) (env : Env Γ) :
     Catalog.GSet program.type.denote :=
-  fun value => decide (value = program.eval env)
+  ResultProgram.ExactSnapshot.answer program.eval env
 
-def settled (_program : Expr.Program Γ) (_env : Env Γ) : Prop := True
+def settled (program : Expr.Program Γ) (env : Env Γ) : Prop :=
+  ResultProgram.ExactSnapshot.settled program.eval env
 
 def evaluate (program : Expr.Program Γ) (env : Env Γ) :
     ResultStatus.Status program.type.denote :=
-  .exact (program.eval env)
+  ResultProgram.ExactSnapshot.evaluate program.eval env
 
 def surface (program : Expr.Program Γ) (surfaceId : String) :
     ResultProgram.SurfacePolicy (Env Γ) program.type.denote where
@@ -294,53 +295,9 @@ def surface (program : Expr.Program Γ) (surfaceId : String) :
 
 theorem totalSound (program : Expr.Program Γ) :
     StatusEffects.TotalSoundEvaluator6 (Future program) (answer program)
-      (settled program) (evaluate program) := by
-  refine {
-    core := ?_
-    exact_settled := ?_
-    provisional_correct := ?_
-    forkedClosed_correct := ?_
-    forkedOpen_correct := ?_
-    absent_settled := ?_
-    pending_correct := ?_
-    pending_open := ?_ }
-  · refine {
-      exact_correct := ?_
-      exact_final := ?_
-      absent_correct := ?_
-      absent_final := ?_
-      pending_escapable := ?_ }
-    · intro env value h
-      simp only [evaluate] at h
-      injection h with hv
-      subst value
-      constructor
-      · simp [answer]
-      · intro other ho
-        simpa [answer] using ho
-    · intro before after value same h
-      subst after
-      exact h
-    · intro env h
-      simp [evaluate] at h
-    · intro before after same h
-      simp [evaluate] at h
-    · intro env h
-      simp [evaluate] at h
-  · intro _ _ _
-    trivial
-  · intro env value h
-    simp [evaluate] at h
-  · intro env h
-    simp [evaluate] at h
-  · intro env h
-    simp [evaluate] at h
-  · intro _ _
-    trivial
-  · intro env h
-    simp [evaluate] at h
-  · intro env h
-    simp [evaluate] at h
+      (settled program) (evaluate program) :=
+  ResultProgram.ExactSnapshot.totalSound (Future program) program.eval
+    (fun _ _ same => congrArg program.eval same)
 
 /-- A fully checked result declaration for one typed program and one explicit
 finite reach. Future, resolution and default presentation policy are visible

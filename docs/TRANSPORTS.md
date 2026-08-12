@@ -19,13 +19,16 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 121 numbered transport rows.** Wave 24's elaborator and
+**Ledger total: 124 numbered transport rows.** Wave 24's elaborator and
 projection splits changed owners and proof routes without changing the earlier
 judgements. Wave 25 adds five crossings: application state into typed query
 semantics; checked state results into exact world futures/certificates; checked
 semantic values into neutral V3 rows; validated V3 data into deterministic
 Rust/canonical bytes/diagnostics; and finite coherent histories into logical
-persistence plus the separately tested pure-Rust journal.
+persistence plus the separately tested pure-Rust journal. Wave 26 adds three
+crossings: typed hole positions into explicitly attributed documents, an
+externally authenticated running observation into one exact certified report,
+and those proof-indexed values through a transactional checked V3 export.
 
 ---
 
@@ -1573,8 +1576,11 @@ stdout or a named file · *transport* `semanticEncoding_eq_generated` pins the
 computable semantic-export reification to the whole generated encoding;
 `bytesImpl_eq_bytes` proves the `@[implemented_by bytesImpl]` native path is
 the same named logical value; `byteArray_data_toList` pins the host buffer to
-those exact bytes. Internally, `projectionBytesFast_eq` proves the tail-safe
-implementation byte-for-byte equal to canonical `ArtifactDurable.projectionBytes`
+those exact bytes. Internally, the shared generic
+`ArtifactDurable.stackSafeEncodeData_eq`, `stackSafeEncodeFrame_eq`, and
+`stackSafeEncodeValue_eq` prove the tail-recursive executable framing path
+byte-for-byte equal to the canonical logical encoders;
+`decodeValue_stackSafeEncodeValue_append` preserves exact suffix-aware reopen
 rather than creating a second format · *needs* the closed name registry,
 whole-value equality, the canonical durable codec, and explicit execution of
 `tools/uwueave-preo-artifact`; importing `ArtifactEmit` performs no I/O ·
@@ -1659,7 +1665,7 @@ The renderer and inspector reconstruct no proof or permit; the separately run
 `ArtifactInspectionMain` establishes no host authenticity, denial-of-service,
 atomic-write, fsync, or filesystem-durability theorem.
 
-**45l. Finite coherent history decision → logical persistent history and durable host journal** ⚠
+**45l. Finite coherent history decision → logical persistence and bounded host delivery** ⚠
 *source* an explicitly finite covered `VersionDag`/history policy or a causal
 event with stable ID, duplicate-free parent list, and payload (the Rust wire
 boundary additionally requires strictly increasing canonical parent order) · *target* a total
@@ -1667,12 +1673,19 @@ finite merge decision, proof-carrying selected child, convergent event-set
 view, `PersistentRuntime` cursor/checkpoint replay, and a pure-Rust append-only
 history journal · *transport* `HistoryRuntime.refused_impossible`,
 `decideTotal_valid`, `higherSweep_complete`, `appendDag_reaches_inl`, and
-`sameEventSet_converges`; `PersistentHistoryRuntime.historySchema_step_eq_some_iff`
-ties persistent replay to exact causal append, while
-`checkpoint_suffix_replay` and `fork_arrival_orders_converge` pin logical
-reopen and order-independent event-set views. The Rust `HistoryJournal` uses
-the existing checksummed/locked/sync-capable `RawJournal` and is exercised by
-retry, collision, missing-parent, reopen, torn/corrupt, and arrival-order tests ·
+`sameEventSet_converges`; bounded `DeliveryState.receive` additionally buffers
+premature causal arrivals, refuses collisions/capacity failures, and preserves
+the capacity-only `DeliveryValid`, while `SettledSameEventSet.view_eq` pins
+settled convergence. `PersistentHistoryRuntime.historySchema_step_eq_some_iff`
+ties persistent replay to exact causal append; its delivery schema records
+accepted arrivals authoritatively, and `DeliveryCursorCoherent` states capacity
+plus exact arrival membership in the materialized-or-pending state.
+`checkpoint_suffix_replay`, `fork_arrival_orders_converge`, and
+`stable_reverse_checkpoint_suffix_exact` pin logical reopen. The Rust
+`HistoryJournal` retains its checksummed/locked/sync-capable causal prefix;
+`BufferedHistoryJournal` adds a bounded deterministic pending map and is
+exercised by retry, collision, missing-parent, reopen, torn/corrupt, buffer,
+and arrival-order tests ·
 *needs* a caller-supplied finite covering enumeration for total policy search,
 stable unique event identities, duplicate-free/non-self parents, and causal
 parent availability; the Rust boundary additionally needs strictly canonical
@@ -1681,8 +1694,66 @@ remains an application premise. Host guarantees additionally depend on the chose
 lock, checksum, sync, and torn-tail policy · *without it* refusal remains an
 honest finite decision, ID/content collisions and orphan/self/noncanonical
 parents reject, and corrupt or torn recovery follows the configured policy.
-No theorem yet refines host bytes or the Rust journal into the proof-indexed
-Lean `History`/cursor, and arbitrary or infinite DAG synthesis remains open.
+The two delivery models deliberately diverge: Rust pending entries are volatile
+and disappear on reopen, while the Lean delivery cursor replays authoritative
+arrival records; Lean assumes only duplicate-free parents while Rust requires
+strictly increasing canonical parent bytes. No theorem refines host bytes or
+either Rust journal into the proof-indexed Lean `History`/cursor. A durable Rust
+arrival queue and arbitrary or infinite DAG synthesis remain open.
+
+**45m. Typed derived holes → attributed evidence document** ⚠
+*source* an intrinsically typed `Expr.Program`, explicit `WorldDecoder`,
+candidate worlds, an authored world-to-source function, and the program's exact
+structural `Expr.Hole` list · *target* a grow-only `AttributedDoc` containing
+ordinary evidence plus exact value/source/position nodes · *transport*
+`Holes.mem_evalPositions` and `evalPositions_hom` establish the generic image;
+`DerivedDocument.forgetPositions_deriveAttributedDoc`,
+`deriveAttributedDoc_position_iff`, and `deriveAttributedDoc_hom` preserve the
+old document and its merge law; `DerivedProgram.Program.attributed_position_iff`
+specializes positions to the typed term's complete holes. The separately gated
+`Program.verifiedAttributedDocument` and `verified_position_iff` retain an
+external `SourceAuthenticity` witness · *needs* the authored decoder/source
+mapping and exact typed hole list; the word *verified* additionally needs the
+deployment's `Authentic world source` premise · *without it*
+`constantSeven_source_mismatch`, the false-position, opaque-only, and
+literal-no-position fixtures reject invented mappings or reads. Ungated
+attribution is not causal provenance, identity, signature verification, or
+authorization.
+
+**45n. Authenticated running observation → exact observed certified report** ⚠
+*source* one `BoundResult.WorldBinding`, a caller-supplied
+`ObservationBoundary.Authentic` witness, membership of the exact world in an
+independent running reach and the authored world reach, and a certificate at
+that exact `WorldIndex` · *target* an
+`ObservedBoundResult.ObservedCertifiedReport` retaining the observed state,
+binding, world, reaches, semantic report, and certificate · *transport*
+`ObservedBoundResult.attachAtWorld` constructs the adapter;
+`ObservedCertifiedReport.exact_alignment` exposes all alignments at once ·
+*needs* every premise explicitly—the adapter reads no process, network, clock,
+filesystem, or device · *without it* `refuses_forged_state`,
+`refuses_forged_world`, `refuses_stale_index`, and
+`refuses_out_of_running_reach` reject substitutions. State equality never
+manufactures authenticity, the running and authored reaches are never equated,
+and a bare `CertifiedReport` is not an observed report.
+
+**45o. Exact observed semantics → transactional checked V3 export** ⚠
+*source* an exact `StateProgram`, real `ObservedCertifiedReport` and retained
+certificate, exact checked plan/budget/query/future/world, stable-ID maps,
+explicit `maxWork`, and V3 validation config · *target* generated checked
+result/certificate rows, append-only `ArtifactV3Encoding`, validated projection,
+and canonical V3 durable bytes · *transport* parser-hard `preo_export_v3`
+routes the observation through `ArtifactV3Surface.exactObserved`, derives all
+status/effect/visibility/disclosure data through `ArtifactV3Checked`, checks
+the finite work cap, admits only `ProjectionV3.validate = .ok`, applies the
+trust floor, and encloses every generated declaration in
+`Internal.withEnvTransaction` · *needs* exact proof-indexed inputs, strict ID
+premises, explicit finite bounds, successful neutral validation, and the
+repository axiom floor · *without it* the acceptance matrix rejects bare and
+duck-typed observed values; wrong projection/future/world/certificate/plan;
+both resource limits; `sorry`, `native_decide`, and a custom axiom. A late
+failure leaves no declarations and the same prefix is reusable. The command
+does not authenticate a deployment, discover reach, authorize an operation,
+perform I/O, or prove host durability.
 
 ---
 
@@ -1740,9 +1811,11 @@ temporal fairness, and checked woven edits. Rows 45–45g connect the covered
 history engine, logical persistent runtime, canonical artifact journal,
 bounded planning generator, native protocol syntax, total result/report
 program, staged authenticated-v4 boundary, and the explicit canonical-byte
-emitter. Rows 45h–45l add explicit application-state query semantics, exact
+emitter. Rows 45h–45o add explicit application-state query semantics, exact
 world/certificate binding, proof-indexed V3 erasure, validated V3
-rendering/durability/inspection, and finite causal-history persistence. What
+rendering/durability/inspection, finite causal-history persistence, typed
+position attribution, authenticated running observation, and transactional V3
+export. What
 remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives

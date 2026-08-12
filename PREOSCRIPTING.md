@@ -66,6 +66,143 @@ The source path is deliberately explicit:
    `v3_bytes_executable_exact` proves the stack-safe emitted bytes equal those
    canonical bytes.
 
+### Authenticated observation and transactional V3 export
+
+The Quickstart above deliberately authors its analysis reach. The Wave-26
+adapter in [`ObservedBoundResult`](Uwueave/Preo/ObservedBoundResult.lean) is the
+next boundary: it lets a deployment attach a separately supplied running reach
+and authenticity proof to the already world-bound report. It does not observe
+anything itself. The complete acceptance gate is
+[`scripts/preo-v3-acceptance-canaries.sh`](scripts/preo-v3-acceptance-canaries.sh):
+
+```sh
+# Two positive fixtures, rollback/name-reuse, and fourteen exact rejection
+# boundaries: authenticity, reach, dependent indices, resources, and trust.
+scripts/preo-v3-acceptance-canaries.sh
+
+# The positive observed value and public surface can also be checked directly.
+lake env lean tests/preo-v3-acceptance/PositiveObserved.lean
+lake env lean tests/preo-v3-acceptance/PositiveSurface.lean
+```
+
+The observation premise is ordinary proof-bearing Lean data. This is the exact
+shape used by the positive fixture:
+
+```lean
+def observationBoundary :
+    ResultProgram.ObservationBoundary AppWorld AppState where
+  Authentic := fun world state => world.state = state
+
+def runningReach : List AppWorld := [startWorld]
+
+def observedStartReport :
+    ObservedBoundResult.ObservedCertifiedReport observationBoundary worldBinding
+      runningReach queryKey QueryAccepted startIndex :=
+  ObservedBoundResult.attachAtWorld observationBoundary worldBinding runningReach
+    startIndex
+    rfl                                      -- Authentic startWorld start
+    (by change startWorld ∈ [startWorld]; simp) -- running reach
+    (by change startWorld ∈ [startWorld]; simp) -- authored world reach
+    QueryCertificate                         -- this future/index/answer
+```
+
+`ObservedCertifiedReport` retains all four premises rather than flattening
+them: the external `Authentic` witness, membership in `runningReach`, membership
+in `worldBinding.worldReach`, and the exact `CheckedCertificate`. Its world and
+state equalities align the observed state report and certificate-gated world
+report at one `WorldIndex`. A bare `CertifiedReport`, a lookalike record, an
+authentic state at the wrong world, or an authored world absent from running
+reach is insufficient. Conversely, the constructor does not read a process,
+network, filesystem, clock, signature, or device, and it does not prove that
+the caller's `runningReach` is complete or truthful.
+
+The live checked V3 surface consumes that exact observed family:
+
+```lean
+preo_export_v3 Export from Journey := {
+  base := baseArtifact,
+  futureDecl := QueryFuture,
+  binding := worldBinding,
+  index := startIndex,
+  observed := observedStartReport,
+  certificate := QueryCertificate,
+  plan := artifactPlan,
+  budget := artifactBudget,
+  query := checkedQuery,
+  future := artifactFuture,
+  world := checkedWorld,
+  resolutionId := fun _ => ⟨0⟩,
+  surfaceId := StableId.surface,
+  reasonId := fun _ => ⟨0⟩,
+  certificateId := StableId.certificate,
+  branch := exactStartBranch,
+  maxWork := 64,
+  config := validationConfig
+}
+
+example : Export.StateProgram = Journey := rfl
+example : Export.ObservedReport = observedStartReport := rfl
+example : Export.Encoding = v3Artifact := rfl
+example : Export.Bytes = v3Bytes := rfl
+example : Export.Validation.isOk = true := Export.validation_ok
+```
+
+This is a checked projection, not a record-shaped escape hatch:
+
+- `observed` must reduce to the real `ObservedCertifiedReport` family for the
+  exact binding and index; `certificate` must be the certificate retained by
+  that report.
+- `plan` and `budget` must already be rows of the exact base artifact, and the
+  budget must name that exact plan. `query`, `future`, and `world` remain
+  indexed by the supplied state program, future declaration, and world index.
+- Result status, effect, visibility, disclosure, and certificate rows are
+  projected through checked builders. The caller cannot type in favorable
+  first-order badges.
+- `maxWork` bounds surface expansion before result construction. `config`
+  independently bounds the data validator: V2 base resources plus V3 stable-ID
+  magnitude; world/query/result/certificate counts; reads, holes, hole-path
+  depth, analyses, and effect width. Raising one bound does not waive the
+  other.
+- V3 validation also requires unique, strictly increasing extension row IDs;
+  canonical analysis/effect order; query↔result agreement; reads equal the
+  field erasure of holes; valid binary child-path segments; referenced fields,
+  futures, and worlds; a downward-closed effect containing the observed status;
+  and disclosure only where the status permits it. The V3 wire still cannot
+  validate certificate→result association or collisions among authored
+  resolution/surface/reason name registries, so the proof-indexed construction
+  remains stronger than decoded validation.
+
+The command owns one environment transaction. Any failed phase—including work
+or validation refusal—rolls back every declaration under the export prefix;
+the same name may then be reused by a successful command. This is Lean
+environment rollback, not filesystem or external-service atomicity.
+
+### Positional holes, attribution, and generic framing
+
+Typed programs retain exact `Expr.Hole` values: syntax-tree child path, field
+position, and `field`/`opaque` kind. `reads` is definitionally the field erasure
+of that hole list. Checked V3 `HoleRow`s map those exact positions to authored
+stable field IDs; validation bounds every path and checks that each path segment
+is a binary child index. A decoded hole row is structural diagnostic data, not
+evidence that a runtime source produced the value.
+
+The separate [`DerivedProgram`](Uwueave/Preo/DerivedProgram.lean) attributed
+materialization retains candidate value, source, and the complete positional
+hole. Its `verifiedAttributedDocument` additionally requires a caller-supplied
+`SourceAuthenticity` proof for every present world, and
+`verified_position_iff` returns that authenticity fact with the exact
+candidate/source/position witness. Neither V3 decoding nor a field ID supplies
+that proof.
+
+Framing is generic below either artifact version. `ArtifactDurableCore` exposes
+`stackSafeEncodeFrame tag payload` and `stackSafeEncodeValue codec tag value`,
+proved byte-identical to `Durable.encodeFrame`/`encodeValue`, including reserved
+payload bytes and exact trailing-journal preservation. The supplied canonical
+codec still owns payload semantics; a `FormatTag` only separates version and
+domain. V3 uses version `3` in artifact domain `161`, while V2 remains a
+different version. Generic framing therefore does not make V2 accept V3, make
+an arbitrary codec canonical, or promote decoded rows into proofs.
+
 Three boundaries are load-bearing:
 
 - `Journey.StateReach = [start, later]` and `worldBinding.worldReach =
@@ -108,17 +245,44 @@ than synthesized from arbitrary state, observation, or protocol types.
 The same module can materialize one selected admission as a fresh `V ⊕ Unit`
 merge version with a `Coherent` extended history. It does not yet allocate an
 unbounded sequence of fresh names or construct arbitrary repeated criss-cross
-growth. Its causal event endpoint makes exact retry idempotent, refuses ID
-collisions, self/duplicate parents, and missing parents immediately, and states
-event-set convergence independently of arrival order; it deliberately has no
-hidden out-of-order buffer.
+growth. Separately, its caller-ID event runtime executes a six-event finite
+fixture with two sibling admissions, two criss-cross merges, and a successor.
+Immediate `append` refuses a missing parent. `DeliveryState` instead exposes a
+bounded out-of-order policy: exact retry is idempotent across materialized and
+pending stores, a reused ID with different content is a collision, self and
+duplicate parents are refused, and an unresolved event is buffered only while
+capacity remains. Once parents arrive, a finite drain materializes ready events;
+causal and reverse delivery settle to the same event set and view.
+
+The buffer bound is an operational invariant proved from `DeliveryState.empty`:
+`DeliveryValid` is preserved by successful receives, including the exact
+capacity-preservation theorem. Arbitrary public record values should not be
+read as authenticated or reachable states. IDs are caller-supplied equality
+keys, not hashes or identities, and Lean requires only duplicate-free parent
+lists rather than the Rust journal's canonical strictly increasing parent
+order. This event machine is not a construction of repeated proof-indexed
+`History` values.
 
 [`Uwueave.PersistentHistoryRuntime`](Uwueave/PersistentHistoryRuntime.lean)
-instantiates checked replay and checkpoints for those events, while Rust
-`HistoryJournal` supplies a pure-Rust `RawJournal` host rung with reopen and
-fault tests. None of this enumerates arbitrary or infinite DAGs, lifts the
-current history model beyond its `Type 0` boundary, authenticates event IDs, or
-bridges opaque stored bytes back to `SelectedAdmission`/`Coherent` proofs.
+instantiates checked replay and checkpoints for immediate append and bounded
+delivery. A delivery cursor's accepted sequence is the authoritative arrival
+log, so it includes records that remain pending; `DeliveryCursorCoherent` ties
+that sequence to the materialized-or-pending stores, and replay from empty
+validates checkpoints, including a buffered prefix followed by a settling
+suffix.
+
+Rust `HistoryJournal` supplies the pure-Rust `RawJournal` host rung for
+immediately causal events. `BufferedHistoryJournal` is intentionally different:
+only ready events reach the physical journal, its bounded pending map is
+volatile, and reopen loses those pending arrivals. It can converge after two
+successive/criss-cross merges when every event is eventually delivered, but a
+durable Rust arrival queue is still missing. There is no Lean↔Rust refinement
+theorem: the Lean persistent cursor can authoritatively replay pending arrivals,
+whereas the Rust wrapper cannot recover them, and their parent canonicality
+rules differ. None of these runtimes enumerates arbitrary or infinite DAGs,
+lifts the proof model beyond its `Type 0` boundary, authenticates IDs, proves
+filesystem/device premises, or bridges opaque payload bytes back to
+`SelectedAdmission`/`Coherent` proofs.
 
 ## 1. The thesis
 
@@ -767,17 +931,19 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | ✅ seam verdicts in the surface | `Preo.budgetSeam`, `Preo.seamAlong`, `Segmented.budget_segmented` | **CLOSED** (was "inexpressible"). A globally clashing invariant now carries a `SegVerdict` facet *alongside* its clash — `Preo.seam_forces_clash` proves a seam is not a third alternative but forces the ESCALATES column. `Demo`'s `LoomDoc2.in_budget.seam` **is** `WeaveState.quotaVerdict`, by `rfl`. `seamAlong` lifts it to the whole declared document, using the emitted section (`<field>.plant`) that fragment 1 said the elaborator could not synthesize. |
 | ✅ cross-field invariants in the surface | `Spec.Verdict.cross`, `Spec.pointsAtExisting_iconfluent` | **CLOSED** (was refused by name). A two-field invariant is classified against the *product* state; `LoomDoc2.fk` **is** `Spec.refIntVerdict` by `rfl`. The keyed form is also live: `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Three or more fields is still refused: `Verdict.cross` is binary. |
 | ✅ `derive` + mergeability verdict | `JoinHom.Fourth`, `summaryFold_iff_joinHom`, `Preo.mergeability_comp` | **CLOSED**. `derive n : T = <expr>` emits the computation plus a `Fourth` facet with its `Fourth.Correct` proof. Registry: ∃-read, filtered view, high-water mark, set image (`fromResults`) and count (`needsEvidence`, via `no_count_merge_without_provenance`) — each *attempted by typechecking*, so an unknown shape is an obligation, never a guess. ⚠ the `needsEvidence` transport to document scale needs the projection **surjective**, not merely a hom; the elaborator emits `<field>.surj` for exactly that. |
-| ✅ typed program + local runtime/result adapter | `Preo.Expr`, `Preo.Incremental`, `Preo.ResultProgram`, `typed derive` | **BUILT for the first-order local evaluator.** `Raw.infer` is retained by an exact success witness; positional holes/reads, positive merge and monotone proof options, checked chained cache/update correctness and off-dependency zero work are emitted from that one term. An authored finite reach produces a least six-status effect and proof-carrying reach-indexed checked reports under the explicit equality future/preserve-fork/default disclosure policy. `Demo` compares the whole program to a hand value by `rfl`, checks a two-update cache chain plus report site/status/policy, and fail-closes malformed and opaque rows. Arbitrary Lean stays in ordinary `derive`; document-State projection and non-equality futures require explicit application proofs. **Still unbuilt:** typed-program rows in `preo_export`, and wiring `ContextCompiler` summaries into this command. |
+| ✅ typed program + local runtime/result adapter | `Preo.Expr`, `Preo.Incremental`, `Preo.ResultProgram`, `typed derive` | **BUILT for the first-order local evaluator.** `Raw.infer` is retained by an exact success witness; positional holes/reads, positive merge and monotone proof options, checked chained cache/update correctness and off-dependency zero work are emitted from that one term. An authored finite reach produces a least six-status effect and proof-carrying reach-indexed checked reports under the explicit equality future/preserve-fork/default disclosure policy. `ObservedBoundResult` can additionally attach a caller-proved authentic running-reach observation at the exact world. `preo_export_v3` projects that exact observed typed program into checked V3 rows; the legacy V2 `preo_export` surface remains unchanged and does not gain a typed-program member. Arbitrary Lean stays in ordinary `derive`; document-State projection and non-equality futures require explicit application proofs. **Still unbuilt:** wiring `ContextCompiler` summaries into this command and observing/authenticating a deployment without caller premises. |
 | ✅ **seam composition in the surface** | `SegVerdict.selfSeam`, `liftFst`/`liftSnd`, `andSeams`, `absorbFree`, `prependFree` | **CLOSED at the general surface/combinator layer.** `TwinQuota.documentSeam` is the existing product seam by `rfl`; `NestedSurface` finds two seam rows through eight right-nested fields and absorbs six checked FREE rows; the general algebra reconstructs `WeaveState.weaveDocSeamVerdict` as the same value. `GroupedCarrierSurface.State` now **is** `WeaveDoc` by `rfl`, with the explicit `core₀` seed. The remaining exact full-surface obstruction is narrower: built-in `Quota` plants structural zero, which is not `BudgetInv 10`; the surface cannot silently substitute the invariant-specific `quota₀`. |
 | ✅ **`per` / keyed families in the surface** | `Confluence.keyed_cross_iconfluent`, pointwise `MergeState` | **CLOSED for field carriers and keyed referential integrity.** `field bookmarks per Bool : GrowSet Nat` emits `Bool → GSet Nat`; `KeyedDoc.fk.verdict` is `WeaveState.bookmarksVerdict` by `rfl`. Unsupported keyed relations remain obligations, and automatic keyed clash seams still require a concrete key/default witness. |
 | ✅ **named world futures in the surface** | `Preo.Future.FutureDecl`, `WorldIndex`, `CheckedStability`, `CheckedCertificate` | **CLOSED.** `future N on M := D` checks `D : FutureDecl M`; `preo_certificate N : CheckedCertificate ... := proof` retains the complete world index and is whole-value `rfl` to the hand certificate. Same-state/different-world refusal and one-way delivery⊆extension variance remain theorem-visible in `Demo`. |
 | ✅ **protocol/session surface** | `Protocol.Term`, `Protocol.Elaboration`, `Preo.ProtocolSurface`, `elaborateProfilePlan`, `elaborateComposedProfilePlan` | **CLOSED with both a typed opaque body and native `preo_protocol`.** The native command covers operation/sequence/parallel/nonempty choice/bounded repeat/sync and emits the exact elaboration, session, plan and five-currency bound. Inline sessions expose checked plans/upper bounds and composed profiles select one global strategy. Reports name semantic artifacts and deliberately contain no invented verdict bit or meeting scalar. |
 | ✅ **five-currency budget surface** | `Scheduling.ProfileUpperBound`, `preo_budget`, `Preo.Planning` | **CLOSED for witnessed acceptance and bounded authored search.** A standalone command consumes one real plan satisfying `Currency → Nat` pointwise at the exact generated session. `Demo` rediscovers `coalescedProfileUpperBound` by `rfl`; separate theorems refute acceptance from crossings or a peer-meeting floor. `Preo.Planning` searches only a duplicate-free, pre-capped authored action universe. **Unbuilt:** arbitrary schedule discovery and a pretty inline budget block. |
 | ✅ **first-order checked export** | `Preo.Artifact`, `Preo.Export`, `Preo.ArtifactDurable`, `Preo.ProjectionV2`, `preo_export` | **BUILT AND SURFACED.** Private proof-indexed builders project answered classifications, certified world futures, ordinary/profile protocol elaborations and exact-plan five-currency budgets into one canonical first-order artifact. The manifest supplies every stable ID, witness codec and budget plan equality explicitly; it emits canonical durable bytes and must pass V2 structural/resource validation before rendering. Unresolved invariants, wrong certificates, wrong-plan budgets and duplicate IDs fail closed. Published V1 remains the budget-empty legacy schema. Composed profile plans wait for a dedicated checked export builder; decoded wire tags have no path back to semantic proof constructors. |
+| ✅ **authenticated observed V3 export** | `Preo.ObservedBoundResult`, `Preo.ArtifactV3Checked`, `Preo.ProjectionV3Core`, `Preo.ArtifactV3Surface`, `preo_export_v3` | **BUILT AND SURFACED for one exact observed typed program.** The command consumes separate authenticity, running-reach, authored-reach, certificate, plan and budget proofs; projects checked query/result/world/certificate rows plus positional reads/holes/analyses/effects; enforces work and validator resource caps; and publishes only after the whole environment transaction succeeds. Canonical bytes are generically framed under the distinct V3 format tag. The caller still supplies observation/authenticity and stable name registries; decoded validation cannot reconstruct proofs or check every semantic association. |
 | **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
 | ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term`, `Preo.Planning` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, bounded authored action-subset search, and exact crossing/meeting non-function refutations. **Unbuilt:** arbitrary schedule discovery and the pretty inline budget block. |
 | recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |
-| durable artifacts | `Durable` | **proved logical codec/journal rung** with canonical roundtrip and torn-tail recovery; no filesystem, flush or crash-atomicity guarantee is claimed |
+| durable artifacts | `Durable`, `ArtifactDurableCore` | **proved logical codec/journal rung** with canonical roundtrip, generic stack-safe framed encoding, and torn-tail recovery; no filesystem, flush or crash-atomicity guarantee is claimed |
+| ✅ bounded finite history delivery | `HistoryRuntime`, `PersistentHistoryRuntime`; Rust `HistoryJournal`/`BufferedHistoryJournal` | **BUILT for caller-ID finite events.** Exact retry/collision, bounded pending delivery, finite drain, criss-cross event-set convergence, replay and checked checkpoints are executable. Lean authoritative arrival replay may retain pending records; Rust buffered pending is volatile and lost on reopen. No cross-language refinement, ID authenticity, infinite enumeration, proof-history reconstruction, or durable Rust arrival queue is claimed. |
 
 ## 11. What would make us abandon this
 

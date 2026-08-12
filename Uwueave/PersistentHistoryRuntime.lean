@@ -1,19 +1,21 @@
 /-
 # Uwueave.PersistentHistoryRuntime -- causal history on checked replay
 
-This module instantiates `PersistentRuntime.RecordSchema` with the causal event
-admission function from `HistoryRuntime`.  The authoritative cursor therefore
-retains both the materialized event state and the complete chronological record
-list: exact retries are no-ops, identifier reuse with different content is a
-nonce collision, and a fresh child is admitted only after every parent.
+This module instantiates `PersistentRuntime.RecordSchema` twice: immediate
+causal admission and bounded out-of-order delivery. In the latter, the
+authoritative cursor's list records accepted arrivals, while its state separates
+causally materialized events from bounded pending arrivals. Exact retries are
+no-ops and identifier reuse with different content is a nonce collision.
 
 Checkpoints are the generic checked prefix cursors from `PersistentRuntime`.
 They are accelerators, not authority; the suffix theorem below is the existing
 full-replay equality specialized to causal history events.
 
-No theorem here claims a filesystem, network endpoint, out-of-order buffer,
-authentication, or infinite-history enumeration.  The pure-Rust
-`HistoryJournal` supplies one concrete checksummed host rung separately.
+No theorem here claims a filesystem, authenticated network endpoint, or
+infinite-history enumeration. The pure-Rust `HistoryJournal` supplies one
+concrete checksummed host rung separately. Its optional pending buffer is
+non-durable, unlike this Lean model's authoritative arrival list, and no
+refinement theorem identifies the two.
 -/
 import Uwueave.HistoryRuntime
 import Uwueave.PersistentRuntime
@@ -166,5 +168,129 @@ theorem fork_arrival_orders_converge :
       · exact Or.inl root
       · exact Or.inr (Or.inr right)
       · exact Or.inr (Or.inl left)
+
+/-! ## Stable-id buffered delivery replay -/
+
+/-- The authoritative record list keeps arrival order, while `DeliveryState`
+retains the causally materialized set and its explicitly bounded pending set.
+Exact retries and nonce collisions remain handled by `applyRecord`. -/
+def deliverySchema (Id Payload : Type) [DecidableEq Id] [DecidableEq Payload] :
+    RecordSchema (DeliveryState Id Payload) (Event Id Payload) Id where
+  nonce := Event.id
+  step state event :=
+    match receive state event with
+    | .delivered next | .buffered next => some next
+    | .retry _ => none
+    | .collision _ => none
+    | .bufferFull _ => none
+    | .selfParent => none
+    | .duplicateParent => none
+
+abbrev DeliveryCursor (Id Payload : Type) :=
+  Cursor (DeliveryState Id Payload) (Event Id Payload)
+
+abbrev DeliveryCheckpoint (Id Payload : Type) :=
+  CheckpointData (DeliveryState Id Payload) (Event Id Payload)
+
+/-- A resumable cursor must agree extensionally about all accepted arrival
+records: each is either causally materialized or explicitly pending, and there
+are no unjournaled events in either runtime store. `deliverySchema` itself is
+total on arbitrary structures, but public resume claims require this predicate
+or generic `CheckpointValid`. -/
+def DeliveryCursorCoherent {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    (cursor : DeliveryCursor Id Payload) : Prop :=
+  DeliveryValid cursor.state ∧
+    ∀ event, event ∈ cursor.accepted ↔
+      event ∈ cursor.state.materialized.accepted ∨
+      event ∈ cursor.state.pending
+
+def emptyDeliveryCursor (Id Payload : Type) (capacity : Nat) :
+    DeliveryCursor Id Payload :=
+  emptyCursor (DeliveryState.empty Id Payload capacity)
+
+theorem emptyDeliveryCursor_coherent (Id Payload : Type)
+    [DecidableEq Id] [DecidableEq Payload] (capacity : Nat) :
+    DeliveryCursorCoherent (emptyDeliveryCursor Id Payload capacity) := by
+  simp [DeliveryCursorCoherent, DeliveryValid, emptyDeliveryCursor, emptyCursor,
+    DeliveryState.empty, EventState.empty]
+
+theorem deliverySchema_step_eq_some_iff {Id Payload : Type}
+    [DecidableEq Id] [DecidableEq Payload]
+    (state next : DeliveryState Id Payload) (event : Event Id Payload) :
+    (deliverySchema Id Payload).step state event = some next ↔
+      receive state event = .delivered next ∨
+      receive state event = .buffered next := by
+  cases decision : receive state event <;>
+    simp [deliverySchema, decision]
+
+def stableCausalCursor : DeliveryCursor Nat String :=
+  ⟨runtimeCausalState, runtimeCausalOrder⟩
+
+def stableReverseCursor : DeliveryCursor Nat String :=
+  ⟨runtimeReverseSettledState, runtimeReverseOrder⟩
+
+theorem stable_causal_replay_exact :
+    replay (deliverySchema Nat String) (emptyDeliveryCursor Nat String 5)
+      runtimeCausalOrder = some stableCausalCursor := rfl
+
+theorem stable_reverse_replay_exact :
+    replay (deliverySchema Nat String) (emptyDeliveryCursor Nat String 5)
+      runtimeReverseOrder = some stableReverseCursor := rfl
+
+theorem stableCausalCursor_coherent :
+    DeliveryCursorCoherent stableCausalCursor := by
+  constructor
+  · change [].length ≤ 5
+    decide
+  · intro event
+    simp [stableCausalCursor, runtimeCausalState]
+
+theorem stableReverseCursor_coherent :
+    DeliveryCursorCoherent stableReverseCursor := by
+  constructor
+  · exact runtime_reverse_order_respects_capacity
+  · intro event
+    simp [stableReverseCursor, runtimeReverseSettledState, runtimeReverseOrder,
+      or_comm, or_left_comm]
+
+theorem stable_replays_converge :
+    SettledSameEventSet stableCausalCursor.state stableReverseCursor.state :=
+  runtime_orders_converge
+
+/-- A checkpoint may retain unresolved buffered events. Validation still uses
+the authoritative arrival prefix; resumption later drains them when their
+parents arrive. -/
+def stableReversePrefixState : DeliveryState Nat String :=
+  ⟨EventState.empty, [runtimeTip, runtimeMergeRight, runtimeMergeLeft], 5⟩
+
+def stableReversePrefixCursor : DeliveryCursor Nat String :=
+  ⟨stableReversePrefixState,
+    [runtimeTip, runtimeMergeRight, runtimeMergeLeft]⟩
+
+def stableReverseCheckpoint : DeliveryCheckpoint Nat String where
+  consumed := 3
+  cursor := stableReversePrefixCursor
+
+theorem stableReversePrefixCursor_coherent :
+    DeliveryCursorCoherent stableReversePrefixCursor := by
+  constructor
+  · change 3 ≤ 5
+    decide
+  · intro event
+    simp [stableReversePrefixCursor, stableReversePrefixState, EventState.empty]
+
+theorem stableReverseCheckpoint_valid :
+    CheckpointValid (deliverySchema Nat String)
+      (emptyDeliveryCursor Nat String 5) runtimeReverseOrder
+      stableReverseCheckpoint := by
+  exact ⟨by decide, rfl⟩
+
+theorem stable_reverse_checkpoint_suffix_exact :
+    replay (deliverySchema Nat String) stableReverseCheckpoint.cursor
+        (runtimeReverseOrder.drop stableReverseCheckpoint.consumed) =
+      replay (deliverySchema Nat String) (emptyDeliveryCursor Nat String 5)
+        runtimeReverseOrder :=
+  checkpoint_suffix_replay_equiv _ _ _ _ stableReverseCheckpoint_valid
 
 end Uwueave.PersistentHistoryRuntime

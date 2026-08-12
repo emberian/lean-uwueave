@@ -86,6 +86,20 @@ def CheckedQuery.toRow {State : Type} {Γ : Expr.Schema}
 
 /-! ## Append-only aggregate builders -/
 
+/-- Appending a row under the checked builder's ordering premise preserves the
+strictly-increasing stable-ID invariant required by V3 validation. -/
+theorem append_preserves_strictIds {alpha : Type} (id : alpha → Nat)
+    (rows : List alpha) (row : alpha)
+    (prior : rows.Pairwise fun left right => id left < id right)
+    (ordered : ∀ previous ∈ rows, id previous < id row) :
+    (rows ++ [row]).Pairwise fun left right => id left < id right := by
+  apply List.pairwise_append.mpr
+  refine ⟨prior, by simp, ?_⟩
+  intro previous previousMem current currentMem
+  simp only [List.mem_singleton] at currentMem
+  subst current
+  exact ordered previous previousMem
+
 /-- Begin a V3 aggregate from an unchanged V2 checked artifact projection. -/
 def ArtifactV3Encoding.ofArtifact (base : Artifact.Artifact) (schema : SchemaId) :
     ArtifactV3Encoding :=
@@ -95,7 +109,9 @@ def ArtifactV3Encoding.addQuery {State : Type} {Γ : Expr.Schema}
     {base : Artifact.Artifact} {source : StateProgram State Γ}
     (encoding : ArtifactV3Encoding) (query : CheckedQuery base source)
     (_base_exact : encoding.base = base.canonicalEncoding)
-    (_schema_exact : encoding.schema = query.schema) : ArtifactV3Encoding :=
+    (_schema_exact : encoding.schema = query.schema)
+    (_id_ordered : ∀ previous ∈ encoding.queries,
+      previous.id.value < query.id.value) : ArtifactV3Encoding :=
   { encoding with queries := encoding.queries ++ [query.toRow] }
 
 /-- The checked query's authored stable mapping lands in the exact checked
@@ -369,7 +385,9 @@ def CheckedCertificate.toRow
 
 def ArtifactV3Encoding.addWorld {M : Future.WorldModel}
     {index : Future.WorldIndex M} (encoding : ArtifactV3Encoding)
-    (world : CheckedWorld index) : ArtifactV3Encoding :=
+    (world : CheckedWorld index)
+    (_id_ordered : ∀ previous ∈ encoding.worlds,
+      previous.value < world.id.value) : ArtifactV3Encoding :=
   { encoding with worlds := encoding.worlds ++ [world.id] }
 
 def ArtifactV3Encoding.addExactResult
@@ -383,7 +401,9 @@ def ArtifactV3Encoding.addExactResult
     (_base_exact : encoding.base = base.canonicalEncoding)
     (_query_present : encoding.queries.any (fun row => row.id == query.id) = true)
     (_future_present : encoding.base.futures.any
-      (fun row => row.id == future.id.value) = true) :
+      (fun row => row.id == future.id.value) = true)
+    (_id_ordered : ∀ previous ∈ encoding.results,
+      previous.id.value < query.result.value) :
     ArtifactV3Encoding :=
   { encoding with results := encoding.results ++ [checked.toExactRow branch] }
 
@@ -398,7 +418,9 @@ def ArtifactV3Encoding.addNonExactResult
     (_base_exact : encoding.base = base.canonicalEncoding)
     (_query_present : encoding.queries.any (fun row => row.id == query.id) = true)
     (_future_present : encoding.base.futures.any
-      (fun row => row.id == future.id.value) = true) :
+      (fun row => row.id == future.id.value) = true)
+    (_id_ordered : ∀ previous ∈ encoding.results,
+      previous.id.value < query.result.value) :
     ArtifactV3Encoding :=
   { encoding with results := encoding.results ++ [checked.toNonExactRow notExact] }
 
@@ -410,8 +432,56 @@ def ArtifactV3Encoding.addCertificate
     (checked : CheckedCertificate (future := future) (world := world) report)
     (_future_present : encoding.base.futures.any
       (fun row => row.id == future.id.value) = true)
-    (_world_present : encoding.worlds.contains world.id = true) : ArtifactV3Encoding :=
+    (_world_present : encoding.worlds.contains world.id = true)
+    (_id_ordered : ∀ previous ∈ encoding.certificates,
+      previous.id.value < checked.id.value) : ArtifactV3Encoding :=
   { encoding with certificates := encoding.certificates ++ [checked.toRow] }
+
+@[simp] theorem ArtifactV3Encoding.addQuery_queries
+    {query : CheckedQuery base source} (encoding : ArtifactV3Encoding)
+    (baseExact : encoding.base = base.canonicalEncoding)
+    (schemaExact : encoding.schema = query.schema)
+    (idOrdered : ∀ previous ∈ encoding.queries,
+      previous.id.value < query.id.value) :
+    (encoding.addQuery query baseExact schemaExact idOrdered).queries =
+      encoding.queries ++ [query.toRow] := rfl
+
+@[simp] theorem ArtifactV3Encoding.addWorld_worlds
+    (encoding : ArtifactV3Encoding) (world : CheckedWorld index)
+    (idOrdered : ∀ previous ∈ encoding.worlds,
+      previous.value < world.id.value) :
+    (encoding.addWorld world idOrdered).worlds = encoding.worlds ++ [world.id] := rfl
+
+@[simp] theorem ArtifactV3Encoding.addExactResult_results
+    {query : CheckedQuery base source}
+    {future : Artifact.CheckedFuture futureDecl.future}
+    {world : CheckedWorld index}
+    {report : binding.CertifiedReport key C index}
+    (encoding : ArtifactV3Encoding)
+    (checked : CheckedResult query future world report)
+    (branch : report.ExactBranch)
+    (baseExact : encoding.base = base.canonicalEncoding)
+    (queryPresent : encoding.queries.any (fun row => row.id == query.id) = true)
+    (futurePresent : encoding.base.futures.any
+      (fun row => row.id == future.id.value) = true)
+    (idOrdered : ∀ previous ∈ encoding.results,
+      previous.id.value < query.result.value) :
+    (encoding.addExactResult checked branch baseExact queryPresent futurePresent
+      idOrdered).results = encoding.results ++ [checked.toExactRow branch] := rfl
+
+@[simp] theorem ArtifactV3Encoding.addCertificate_certificates
+    {future : Artifact.CheckedFuture futureDecl.future}
+    {world : CheckedWorld index}
+    {report : binding.CertifiedReport key C index}
+    (encoding : ArtifactV3Encoding)
+    (checked : CheckedCertificate (future := future) (world := world) report)
+    (futurePresent : encoding.base.futures.any
+      (fun row => row.id == future.id.value) = true)
+    (worldPresent : encoding.worlds.contains world.id = true)
+    (idOrdered : ∀ previous ∈ encoding.certificates,
+      previous.id.value < checked.id.value) :
+    (encoding.addCertificate checked futurePresent worldPresent idOrdered).certificates =
+      encoding.certificates ++ [checked.toRow] := rfl
 
 end ResultProjection
 

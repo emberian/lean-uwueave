@@ -162,4 +162,18 @@ structure ArtifactV3Encoding where
   certificates : List CertificateRow
   deriving DecidableEq
 
+/-! ## Honest V3 limits
+
+`ProjectionV3.validate` requires the world registry and query/result/
+certificate rows to be strictly increasing by their stable IDs, making the
+extension representation canonical under row permutation.  Checked appenders
+require this ordering as a proof premise.
+
+Certificate rows intentionally identify only a certificate, future, and
+world.  They cannot express which result/query consumed that certificate; a
+future wire version must add that reference before decoded validation can
+check it.  Likewise resolution, surface, and reason IDs retain stable manifest
+identity but this version carries no name registries from which to detect two
+authored names assigned the same number. -/
+
 end Uwueave.Preo.ArtifactV3

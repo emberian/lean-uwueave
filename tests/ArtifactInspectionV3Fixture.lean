@@ -21,7 +21,7 @@ def value : ArtifactV3Encoding where
        program := ⟨1004⟩
        reads := [⟨402⟩]
        holes := [{ path := [0], field := ⟨402⟩, kind := .field }]
-       analyses := [.mergeSafe] }]
+       analyses := [.mergeSafe, .monotoneSafe] }]
   results :=
     [{ id := ⟨1003⟩
        query := ⟨1002⟩
@@ -49,12 +49,14 @@ def config : Uwueave.Preo.ProjectionV3.ValidationConfig where
       maxProfileEntriesPerBudget := 5
       maxParticipantsPerDemand := 8
       maxWitnessWords := 8 }
+    maxStableIdValue := 1006
     maxWorlds := 8
     maxQueries := 8
     maxResults := 8
     maxCertificates := 8
     maxReadsPerQuery := 8
     maxHolesPerQuery := 8
+    maxHolePathDepth := 1
     maxAnalysesPerQuery := 2
     maxEffectShapesPerResult := 6 }
 
@@ -63,18 +65,16 @@ theorem value_validates :
       (Uwueave.Preo.ProjectionV3.Projection.ofEncoding value)).isOk = true := by
   decide
 
-private def encodeDataFast (payload : List UInt8) : List UInt8 :=
-  (payload.foldl
-    (fun encoded byte => byte :: Durable.dataTag :: encoded) []).reverse
-
 /-- Stack-safe executable framing for the test fixture.  The production V3
 codec still owns the payload; no host language constructs these bytes. -/
 def bytes : List UInt8 :=
-  let tag := Uwueave.Preo.ArtifactV3Durable.artifactV3Format
-  [Durable.magic₀, Durable.magic₁, tag.version, tag.domain] ++
-    encodeDataFast
-      (Uwueave.Preo.ArtifactV3Durable.artifactV3Codec.encode value) ++
-    [Durable.endTag]
+  Uwueave.Preo.ArtifactDurable.stackSafeEncodeValue
+    Uwueave.Preo.ArtifactV3Durable.artifactV3Codec
+    Uwueave.Preo.ArtifactV3Durable.artifactV3Format value
+
+theorem bytes_exact :
+    bytes = Uwueave.Preo.ArtifactV3Durable.projectionBytes value := by
+  exact Uwueave.Preo.ArtifactDurable.stackSafeEncodeValue_eq _ _ _
 
 def emit : IO Unit := do
   let stdout ← IO.getStdout

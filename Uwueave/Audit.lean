@@ -161,6 +161,7 @@ import Uwueave.Preo.Incremental
 import Uwueave.Preo.ResultProgram
 import Uwueave.Preo.StateProgram
 import Uwueave.Preo.BoundResult
+import Uwueave.Preo.ObservedBoundResult
 import Uwueave.Preo.DerivedProgram
 import Uwueave.Preo.StateProgramSurface
 import Uwueave.Preo.StateProgramSurfaceTests
@@ -186,6 +187,7 @@ import Uwueave.Preo.ArtifactV3Diagnostics
 import Uwueave.Preo.ArtifactV3Durable
 import Uwueave.Preo.ArtifactV3Fixtures
 import Uwueave.Preo.ArtifactV3Checked
+import Uwueave.Preo.ArtifactV3Surface
 import Uwueave.Preo.ProjectionV3Core
 import Uwueave.Preo.ProjectionV3
 import Uwueave.Preo.ProjectionV3Diagnostics

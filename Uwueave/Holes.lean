@@ -212,13 +212,14 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     (`determinate_result_not_iconfluent`): the clash pair is two replicas
     holding one candidate **world** each, so the coordination requirement is
     exhibited on the inputs a program actually has.
-  * **Provenance is whatever `p` computes.** ⟨UNDONE⟩ §7 lands
-    candidates-with-provenance in `MVRegister.MVReg` by *type*, and the
-    MV-register's frontier machinery applies unchanged. No theorem says the
-    carried clocks are causally meaningful — that is `Causality.lean`'s
-    premise, discharged by whatever generates `p`, not by anything here. The
-    memo's open question (attributed holes; "who do I need" as a computed
-    value) is supported by the codomain and computed by nothing.
+  * **Source authenticity remains external; typed positions are now exact.**
+    ⟨NARROWED⟩ §7 still accepts whatever provenance function `p` computes, and
+    no theorem makes its clocks causally meaningful. `evalPositions` now gives
+    a generic exact value/source/position image, and `Preo.DerivedProgram`
+    instantiates positions with the exact `Expr.Hole` list. Its verified entry
+    point requires an external `SourceAuthenticity` proof and rejects a
+    mismatched fixture. Signatures, causal ownership, and computing "who do I
+    need" dynamically remain deployment obligations.
 
 ## ⚠ Four retractions from the design memo this file was built from
 
@@ -1024,6 +1025,77 @@ it unchanged (`prov_view_antichain`).
 What is **not** claimed: that the derived object is a weave, or that anything
 here makes the carried provenance causally meaningful. See the boundary. -/
 
+/-! ### Exact source-and-position attribution -/
+
+/-- One candidate value, the source that justified its world, and one static
+position read by the computation.  The types of sources and positions are left
+to the language adapter; no causal interpretation is manufactured here. -/
+structure Positioned (α Source Position : Type) where
+  value : α
+  source : Source
+  position : Position
+  deriving DecidableEq
+
+/-- Attribute every result candidate to its world's source and to every static
+position in the supplied syntax-level read list.  Repeated positions remain
+observationally idempotent because the carrier is a grow-only set. -/
+noncomputable def evalPositions {α Source Position : Type}
+    (f : World → α) (source : World → Source) (positions : List Position)
+    (worlds : GSet World) : GSet (Positioned α Source Position) :=
+  fun candidate => truth (∃ world, worlds world = true
+    ∧ f world = candidate.value
+    ∧ source world = candidate.source
+    ∧ candidate.position ∈ positions)
+
+/-- Exact membership in the positioned image. -/
+theorem mem_evalPositions {α Source Position : Type}
+    (f : World → α) (source : World → Source) (positions : List Position)
+    (worlds : GSet World) (candidate : Positioned α Source Position) :
+    evalPositions f source positions worlds candidate = true ↔
+      ∃ world, worlds world = true
+        ∧ f world = candidate.value
+        ∧ source world = candidate.source
+        ∧ candidate.position ∈ positions :=
+  truth_eq_true
+
+/-- Positioned provenance commutes with candidate-world union. -/
+theorem evalPositions_hom {α Source Position : Type}
+    (f : World → α) (source : World → Source) (positions : List Position)
+    (left right : GSet World) :
+    evalPositions f source positions (left ⊔ right) =
+      evalPositions f source positions left ⊔
+        evalPositions f source positions right := by
+  refine gset_ext (fun candidate => ?_)
+  rw [mem_evalPositions, gset_mem_or]
+  constructor
+  · rintro ⟨world, hworld, hvalue, hsource, hposition⟩
+    rcases (gset_mem_or left right world).mp hworld with hleft | hright
+    · exact Or.inl ((mem_evalPositions _ _ _ _ _).2
+        ⟨world, hleft, hvalue, hsource, hposition⟩)
+    · exact Or.inr ((mem_evalPositions _ _ _ _ _).2
+        ⟨world, hright, hvalue, hsource, hposition⟩)
+  · rintro (hleft | hright)
+    · obtain ⟨world, hworld, hvalue, hsource, hposition⟩ :=
+        (mem_evalPositions _ _ _ _ _).1 hleft
+      exact ⟨world, (gset_mem_or left right world).2 (Or.inl hworld),
+        hvalue, hsource, hposition⟩
+    · obtain ⟨world, hworld, hvalue, hsource, hposition⟩ :=
+        (mem_evalPositions _ _ _ _ _).1 hright
+      exact ⟨world, (gset_mem_or left right world).2 (Or.inr hworld),
+        hvalue, hsource, hposition⟩
+
+/-- With no declared positions there is no positional attribution, even when
+candidate worlds exist. -/
+theorem evalPositions_nil {α Source Position : Type}
+    (f : World → α) (source : World → Source) (worlds : GSet World) :
+    evalPositions f source ([] : List Position) worlds = fun _ => false := by
+  funext candidate
+  apply Bool.eq_false_iff.mpr
+  intro h
+  obtain ⟨_, _, _, _, hposition⟩ :=
+    (mem_evalPositions f source [] worlds candidate).1 h
+  exact List.not_mem_nil hposition
+
 /-- **Candidates with provenance.** Evaluate a value *and* a tag in the same
 world, and the answer is a set of tagged candidates: `MVRegister.Write` is
 `value × clock`, so this lands in `MVRegister.MVReg` by type, not by
@@ -1084,4 +1156,3 @@ theorem evalSet_ofList {α : Type} [DecidableEq α] (f : World → α)
     exact ⟨w, decide_eq_true hw, hf⟩
 
 end Uwueave.Holes
-

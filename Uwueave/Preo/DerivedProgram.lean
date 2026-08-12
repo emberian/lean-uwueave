@@ -232,6 +232,15 @@ def natWorldDecoder (count : Nat) : WorldDecoder (natSchema count) where
 
 /-! ## Exact evidence-document materialization -/
 
+/-- Evidence that a caller-authored source function agrees with an external
+authenticity predicate on every candidate world actually present.  The
+predicate is deliberately supplied by the deployment: this module cannot
+derive signatures, causal ownership, or peer identity from a `Nat`. -/
+structure SourceAuthenticity (worlds : GSet Holes.World)
+    (source : Holes.World → Evidence.Source)
+    (Authentic : Holes.World → Evidence.Source → Prop) : Prop where
+  authentic : ∀ world, worlds world = true → Authentic world (source world)
+
 /-- Evaluate the typed program in a decoded candidate world. -/
 def Program.evalWorld (program : Program Γ) (decoder : WorldDecoder Γ)
     (world : Holes.World) : program.type.denote :=
@@ -259,15 +268,9 @@ theorem Program.document_candidate_iff (program : Program Γ)
     program.document decoder source obligations certificates worlds
         (.cand value origin) = true ↔
       ∃ world, worlds world = true ∧
-        program.evalWorld decoder world = value ∧ source world = origin := by
-  rw [Program.document, DerivedDocument.deriveDoc,
-    DerivedDocument.evidenceOf, DerivedDocument.encodeEvidence,
-    Evidence.fromWorlds, Holes.mem_evalSet]
-  constructor
-  · rintro ⟨world, hworld, hp⟩
-    exact ⟨world, hworld, congrArg Prod.fst hp, congrArg Prod.snd hp⟩
-  · rintro ⟨world, hworld, hvalue, horigin⟩
-    exact ⟨world, hworld, by rw [hvalue, horigin]⟩
+        program.evalWorld decoder world = value ∧ source world = origin :=
+  DerivedDocument.deriveDoc_candidate_iff (program.evalWorld decoder)
+    source obligations certificates worlds value origin
 
 @[simp] theorem Program.document_owed (program : Program Γ)
     (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
@@ -304,6 +307,106 @@ theorem Program.document_values_exact (program : Program Γ)
   change Evidence.values (Evidence.fromWorlds (program.evalWorld decoder)
     source worlds obligations certificates) = _
   exact Evidence.values_fromWorlds _ _ _ _ _
+
+/-! ## Exact positional attribution materialization -/
+
+/-- Augment the ordinary evidence document with one value/source/position node
+for every positional occurrence in the typed expression. -/
+noncomputable def Program.attributedDocument (program : Program Γ)
+    (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
+    (obligations certificates : GSet Evidence.Source)
+    (worlds : GSet Holes.World) :
+    DerivedDocument.AttributedDoc program.type.denote Hole :=
+  DerivedDocument.deriveAttributedDoc (program.evalWorld decoder) source
+    program.holes obligations certificates worlds
+
+/-- Dropping position nodes recovers the exact earlier materialization. -/
+@[simp] theorem Program.forget_attributedDocument (program : Program Γ)
+    (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
+    (obligations certificates : GSet Evidence.Source)
+    (worlds : GSet Holes.World) :
+    DerivedDocument.forgetPositions
+        (program.attributedDocument decoder source obligations certificates worlds) =
+      program.document decoder source obligations certificates worlds := rfl
+
+/-- Exact candidate/source membership in the augmented document. -/
+theorem Program.attributed_candidate_iff (program : Program Γ)
+    (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
+    (obligations certificates : GSet Evidence.Source)
+    (worlds : GSet Holes.World) (value : program.type.denote)
+    (origin : Evidence.Source) :
+    program.attributedDocument decoder source obligations certificates worlds
+        (.evidence (.cand value origin)) = true ↔
+      ∃ world, worlds world = true
+        ∧ program.evalWorld decoder world = value
+        ∧ source world = origin :=
+  DerivedDocument.deriveAttributedDoc_candidate_iff
+    (program.evalWorld decoder) source program.holes obligations certificates
+    worlds value origin
+
+/-- Exact candidate/source/position membership.  In particular, a node cannot
+name a field merely because its erased index appears elsewhere: the complete
+`Expr.Hole` (child path, field, and field/opaque kind) must occur in the typed
+term's positional analysis. -/
+theorem Program.attributed_position_iff (program : Program Γ)
+    (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
+    (obligations certificates : GSet Evidence.Source)
+    (worlds : GSet Holes.World)
+    (candidate : Evidence.PositionCandidate program.type.denote Hole) :
+    program.attributedDocument decoder source obligations certificates worlds
+        (.position candidate) = true ↔
+      ∃ world, worlds world = true
+        ∧ program.evalWorld decoder world = candidate.value
+        ∧ source world = candidate.source
+        ∧ candidate.position ∈ program.holes :=
+  DerivedDocument.deriveAttributedDoc_position_iff
+    (program.evalWorld decoder) source program.holes obligations certificates
+    worlds candidate
+
+/-- Positioned materialization remains mergeable under candidate-world union. -/
+theorem Program.attributedDocument_joinHom (program : Program Γ)
+    (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
+    (obligations certificates : GSet Evidence.Source) :
+    JoinHom (program.attributedDocument decoder source obligations certificates) :=
+  DerivedDocument.deriveAttributedDoc_hom (program.evalWorld decoder) source
+    program.holes obligations certificates
+
+/-- The proof-gated materialization entry point.  Unlike `attributedDocument`,
+this function cannot be called for a source assignment until the deployment
+proves its chosen authenticity relation for every present world. -/
+noncomputable def Program.verifiedAttributedDocument (program : Program Γ)
+    (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
+    (Authentic : Holes.World → Evidence.Source → Prop)
+    (obligations certificates : GSet Evidence.Source)
+    (worlds : GSet Holes.World)
+    (_authenticity : SourceAuthenticity worlds source Authentic) :
+    DerivedDocument.AttributedDoc program.type.denote Hole :=
+  program.attributedDocument decoder source obligations certificates worlds
+
+/-- Exact positioned membership at the verified entry point includes the
+external authenticity fact for the very world/source witness. -/
+theorem Program.verified_position_iff (program : Program Γ)
+    (decoder : WorldDecoder Γ) (source : Holes.World → Evidence.Source)
+    (Authentic : Holes.World → Evidence.Source → Prop)
+    (obligations certificates : GSet Evidence.Source)
+    (worlds : GSet Holes.World)
+    (authenticity : SourceAuthenticity worlds source Authentic)
+    (candidate : Evidence.PositionCandidate program.type.denote Hole) :
+    program.verifiedAttributedDocument decoder source Authentic
+        obligations certificates worlds authenticity (.position candidate) = true ↔
+      ∃ world, worlds world = true
+        ∧ program.evalWorld decoder world = candidate.value
+        ∧ source world = candidate.source
+        ∧ candidate.position ∈ program.holes
+        ∧ Authentic world candidate.source := by
+  rw [Program.verifiedAttributedDocument, program.attributed_position_iff]
+  constructor
+  · rintro ⟨world, hworld, hvalue, hsource, hposition⟩
+    refine ⟨world, hworld, hvalue, hsource, hposition, ?_⟩
+    rw [← hsource]
+    exact authenticity.authentic world hworld
+  · rintro ⟨world, hworld, hvalue, hsource, hposition, _⟩
+    exact ⟨world, hworld, hvalue, hsource, hposition⟩
 
 /-! ## Existing incremental evaluator, indexed by the admitted program -/
 
@@ -363,6 +466,76 @@ theorem maxFields_document_single_candidate :
   exact ⟨[3, 8], by simp [oneWorld, Delta.addDelta], by
     exact maxFields_eval_fixture, rfl⟩
 
+def maxLeftPosition : Hole := { path := [0], field := 0, kind := .field }
+def maxRightPosition : Hole := { path := [1], field := 1, kind := .field }
+def falseRootPosition : Hole := { path := [], field := 0, kind := .field }
+
+/-- Example deployment authenticity policy: the source id is register zero of
+the candidate world. -/
+def RegisterZeroAuthentic (world : Holes.World) (source : Evidence.Source) : Prop :=
+  source = Holes.read world 0
+
+def registerZeroAuthenticity (worlds : GSet Holes.World) :
+    SourceAuthenticity worlds (fun world => Holes.read world 0)
+      RegisterZeroAuthentic where
+  authentic := fun _ _ => rfl
+
+/-- The caller-authored constant source used by the ordinary attribution
+fixtures is not authentic under the example policy and therefore cannot enter
+the proof-gated materializer. -/
+theorem constantSeven_source_mismatch :
+    ¬ SourceAuthenticity oneWorld (fun _ => 7) RegisterZeroAuthentic := by
+  intro authenticity
+  have bad := authenticity.authentic [3, 8]
+    (by simp [oneWorld, Delta.addDelta])
+  exact (by decide : (7 : Nat) ≠ 3) bad
+
+theorem maxFields_left_position_attributed :
+    maxFields.attributedDocument (natWorldDecoder 2) (fun _ => 7)
+        noSources noSources oneWorld
+        (.position (⟨(8 : Nat), 7, maxLeftPosition⟩ :
+          Evidence.PositionCandidate Nat Hole)) = true := by
+  apply (maxFields.attributed_position_iff (natWorldDecoder 2) (fun _ => 7)
+    noSources noSources oneWorld _).2
+  exact ⟨[3, 8], by simp [oneWorld, Delta.addDelta], maxFields_eval_fixture,
+    rfl, by simp [maxFields_holes, maxLeftPosition]⟩
+
+theorem maxFields_right_position_attributed :
+    maxFields.attributedDocument (natWorldDecoder 2) (fun _ => 7)
+        noSources noSources oneWorld
+        (.position (⟨(8 : Nat), 7, maxRightPosition⟩ :
+          Evidence.PositionCandidate Nat Hole)) = true := by
+  apply (maxFields.attributed_position_iff (natWorldDecoder 2) (fun _ => 7)
+    noSources noSources oneWorld _).2
+  exact ⟨[3, 8], by simp [oneWorld, Delta.addDelta], maxFields_eval_fixture,
+    rfl, by simp [maxFields_holes, maxRightPosition]⟩
+
+theorem maxFields_verified_left_position :
+    maxFields.verifiedAttributedDocument (natWorldDecoder 2)
+        (fun world => Holes.read world 0) RegisterZeroAuthentic
+        noSources noSources oneWorld (registerZeroAuthenticity oneWorld)
+        (.position (⟨(8 : Nat), 3, maxLeftPosition⟩ :
+          Evidence.PositionCandidate Nat Hole)) = true := by
+  apply (maxFields.verified_position_iff (natWorldDecoder 2)
+    (fun world => Holes.read world 0) RegisterZeroAuthentic
+    noSources noSources oneWorld (registerZeroAuthenticity oneWorld) _).2
+  exact ⟨[3, 8], by simp [oneWorld, Delta.addDelta], maxFields_eval_fixture,
+    rfl, by simp [maxFields_holes, maxLeftPosition], rfl⟩
+
+/-- Erased field `0` is not enough: the nonexistent root path is absent even
+though the real left-child occurrence reads field `0`. -/
+theorem maxFields_false_root_position_absent :
+    maxFields.attributedDocument (natWorldDecoder 2) (fun _ => 7)
+        noSources noSources oneWorld
+        (.position (⟨(8 : Nat), 7, falseRootPosition⟩ :
+          Evidence.PositionCandidate Nat Hole)) = false := by
+  apply Bool.eq_false_iff.mpr
+  intro h
+  obtain ⟨_, _, _, _, hposition⟩ :=
+    (maxFields.attributed_position_iff (natWorldDecoder 2) (fun _ => 7)
+      noSources noSources oneWorld _).1 h
+  simp [maxFields_holes, falseRootPosition] at hposition
+
 def maxBase : Env (natSchema 2) :=
   .cons (show Ty.nat.denote from (3 : Nat))
     (.cons (show Ty.nat.denote from (8 : Nat)) .nil)
@@ -416,5 +589,38 @@ theorem opaque_without_proof_refused :
     certifyMergeSafe hiddenFirstTerm = none ∧
       certifyMonotone hiddenFirstTerm = none :=
   ⟨opaque_not_auto_mergeSafe, opaque_not_auto_monotone⟩
+
+/-- Explicitly admitted custom code exposes only opaque dependency positions;
+the adapter does not invent an inspectable internal syntax tree. -/
+def hiddenProgram : Program [.nat] where
+  type := .nat
+  term := hiddenFirstTerm
+  safe := hiddenFirst_explicitlySafe
+
+theorem hiddenProgram_holes : hiddenProgram.holes =
+    [{ path := [], field := 0, kind := .opaque }] := rfl
+
+theorem hiddenProgram_only_opaque {hole : Hole} (h : hole ∈ hiddenProgram.holes) :
+    hole.kind = .opaque := by
+  simpa [hiddenProgram_holes] using congrArg Hole.kind (List.mem_singleton.mp h)
+
+/-- A literal has a candidate value but no position attribution. -/
+def literalProgram : Program [] where
+  type := .nat
+  term := .litNat 4
+  safe := .litNat 4
+
+theorem literalProgram_no_position_attribution
+    (decoder : WorldDecoder []) (source : Holes.World → Evidence.Source)
+    (worlds : GSet Holes.World)
+    (candidate : Evidence.PositionCandidate literalProgram.type.denote Hole) :
+    literalProgram.attributedDocument decoder source noSources noSources worlds
+        (.position candidate) = false := by
+  apply Bool.eq_false_iff.mpr
+  intro h
+  obtain ⟨_, _, _, _, hposition⟩ :=
+    (literalProgram.attributed_position_iff decoder source
+      noSources noSources worlds candidate).1 h
+  exact List.not_mem_nil hposition
 
 end Uwueave.Preo.DerivedProgram

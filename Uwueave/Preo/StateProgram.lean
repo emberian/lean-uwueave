@@ -66,68 +66,24 @@ def Future (p : StateProgram State Γ) : Evidence.Future State :=
 /-- The singleton answer computed by the checked typed program. -/
 def answer (p : StateProgram State Γ) (state : State) :
     GSet p.program.type.denote :=
-  fun value => decide (value = p.eval state)
+  ResultProgram.ExactSnapshot.answer p.eval state
 
 /-- Pure snapshot evaluation is settled at its state. -/
-def settled (_p : StateProgram State Γ) (_state : State) : Prop := True
+def settled (p : StateProgram State Γ) (state : State) : Prop :=
+  ResultProgram.ExactSnapshot.settled p.eval state
 
 /-- The pure typed evaluator has one exact result. -/
 def evaluate (p : StateProgram State Γ) (state : State) :
     ResultStatus.Status p.program.type.denote :=
-  .exact (p.eval state)
+  ResultProgram.ExactSnapshot.evaluate p.eval state
 
 /-- Complete six-status soundness over the explicit projection future. -/
 theorem totalSound (p : StateProgram State Γ) :
-    StatusEffects.TotalSoundEvaluator6 p.Future p.answer p.settled p.evaluate := by
-  refine {
-    core := ?_
-    exact_settled := ?_
-    provisional_correct := ?_
-    forkedClosed_correct := ?_
-    forkedOpen_correct := ?_
-    absent_settled := ?_
-    pending_correct := ?_
-    pending_open := ?_ }
-  · refine {
-      exact_correct := ?_
-      exact_final := ?_
-      absent_correct := ?_
-      absent_final := ?_
-      pending_escapable := ?_ }
-    · intro state value h
-      simp only [evaluate] at h
-      injection h with hv
-      subst value
-      constructor
-      · simp [answer]
-      · intro other ho
-        simpa [answer] using ho
-    · intro before after value hfuture h
-      simp only [evaluate] at h
-      injection h with hv
-      subst value
-      simp only [Future] at hfuture
-      simp [evaluate, eval, hfuture]
-    · intro state h
-      simp [evaluate] at h
-    · intro before after hfuture h
-      simp [evaluate] at h
-    · intro state h
-      simp [evaluate] at h
-  · intro _ _ _
-    trivial
-  · intro state value h
-    simp [evaluate] at h
-  · intro state h
-    simp [evaluate] at h
-  · intro state h
-    simp [evaluate] at h
-  · intro _ _
-    trivial
-  · intro state h
-    simp [evaluate] at h
-  · intro state h
-    simp [evaluate] at h
+    StatusEffects.TotalSoundEvaluator6 p.Future p.answer p.settled p.evaluate :=
+  ResultProgram.ExactSnapshot.totalSound p.Future p.eval (by
+    intro before after hfuture
+    simp only [Future] at hfuture
+    simp [eval, hfuture])
 
 /-- Bind the checked query to an explicit future identity, resolution syntax,
 and presentation policy.  No policy is inferred from the raw expression. -/

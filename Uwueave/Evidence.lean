@@ -184,8 +184,9 @@ clothes.
   * **Typed expression positions now have an adapter.** ⟨DONE for `Preo.Expr`;
     terminal for arbitrary evidence producers⟩ `Preo.DerivedProgram` exposes
     exact child-path holes and their erased field reads, proves evaluation
-    locality from either view, and materializes the result through this
-    evidence carrier with an exact candidate/source membership theorem.
+    locality from either view, and materializes exact candidate/source/position
+    attribution through this carrier. The proof-gated entry point separately
+    requires the deployment's source-authenticity relation.
     `ResultEvidence` itself remains producer-agnostic and therefore carries no
     syntax tree internally.
 -/
@@ -323,6 +324,43 @@ theorem values_fromWorlds {α : Type} (f : Holes.World → α)
     exact ⟨w, hw, congrArg Prod.fst hf⟩
   · rintro ⟨w, hw, hf⟩
     exact ⟨src w, (Holes.mem_evalSet _ W (a, src w)).mpr ⟨w, hw, by rw [hf]⟩⟩
+
+/-! ### Source-and-position attribution -/
+
+/-- The positioned candidates of one expression evaluation.  This is a
+separate grow-only component rather than a change to `ResultEvidence`, whose
+three-axis representation and renderer remain stable. -/
+abbrev PositionCandidate (α Position : Type) :=
+  Holes.Positioned α Source Position
+
+/-- Attribute candidate values simultaneously to their source and to every
+static position the language adapter reports. -/
+noncomputable def positionCandidates {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Source)
+    (positions : List Position) (worlds : GSet Holes.World) :
+    GSet (PositionCandidate α Position) :=
+  Holes.evalPositions f src positions worlds
+
+/-- Exact value/source/position membership. -/
+theorem mem_positionCandidates {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Source)
+    (positions : List Position) (worlds : GSet Holes.World)
+    (candidate : PositionCandidate α Position) :
+    positionCandidates f src positions worlds candidate = true ↔
+      ∃ world, worlds world = true
+        ∧ f world = candidate.value
+        ∧ src world = candidate.source
+        ∧ candidate.position ∈ positions :=
+  Holes.mem_evalPositions f src positions worlds candidate
+
+/-- Positioned evidence is independently mergeable by world-set union. -/
+theorem positionCandidates_hom {α Position : Type}
+    (f : Holes.World → α) (src : Holes.World → Source)
+    (positions : List Position) (left right : GSet Holes.World) :
+    positionCandidates f src positions (left ⊔ right) =
+      positionCandidates f src positions left ⊔
+        positionCandidates f src positions right :=
+  Holes.evalPositions_hom f src positions left right
 
 /-! ## §3. Closure — the second dimension, and its coordination verdict.
 
