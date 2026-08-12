@@ -1,7 +1,9 @@
 //! The small FFI surface to the Lean-compiled kernels. See `shim.c` for the
 //! C side; see `Uwueave/Exec.lean` (move replay), `Uwueave/SeqKernel.lean`
 //! (sequence linearization) and `Uwueave/EraKernel.lean` (ERA arbitration)
-//! for the semantics — and for the byte-level contracts both sides speak.
+//! for runtime semantics, plus `Uwueave/Preo/ArtifactJournalKernel.lean` for
+//! canonical artifact-v2 admission. Those Lean modules own the byte-level
+//! contracts; this file only owns typed calls and memory transfer.
 
 use std::sync::Once;
 
@@ -24,6 +26,7 @@ extern "C" {
     fn shim_uweave_request_canonical(input: *const u8, len: usize) -> u8;
     fn shim_uweave_seq(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
     fn shim_uweave_era(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
+    fn shim_uweave_preo_artifact_v2_validate_one(input: *const u8, len: usize) -> u8;
 }
 
 static INIT: Once = Once::new();
@@ -164,4 +167,15 @@ pub fn era_kernel(input: &[u8]) -> Vec<u8> {
     let ptr = unsafe { shim_uweave_era(input.as_ptr(), input.len(), &mut out_len) };
     // SAFETY: established by `shim_uweave_era`'s ABI contract.
     unsafe { take_shim_bytes(ptr, out_len) }
+}
+
+/// Ask the Lean-owned artifact codec whether bytes are exactly one canonical
+/// `ArtifactDurable` format-v2 frame. Rust uses this narrow predicate rather
+/// than implementing a second `ArtifactEncoding` decoder.
+pub(crate) fn preo_artifact_v2_validate_one(input: &[u8]) -> bool {
+    ensure_initialized();
+    // SAFETY: `input` is readable for `input.len()` bytes. The initialized
+    // shim copies it into a Lean ByteArray, retains no pointer, consumes the
+    // Lean input, and reduces the exactly-one-byte output to a scalar.
+    unsafe { shim_uweave_preo_artifact_v2_validate_one(input.as_ptr(), input.len()) == 1 }
 }

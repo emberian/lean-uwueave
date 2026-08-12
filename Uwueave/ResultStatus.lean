@@ -100,10 +100,14 @@ clothes.
     **not** built is any statement that an *elaborator* never inserts that
     projection silently — that is a fact about a surface language, and there is
     no surface language.
-  * **Visibility is not modelled.** ⟨UNDONE⟩ `PREOSCRIPTING` §5.2 says
-    produced-but-uninspectable is an independent axis rather than a seventh
-    cell. Nothing here contradicts that and nothing here builds it: the six
-    cells are candidates × closure only.
+  * **Visibility is an independent downstream axis.**
+    ⟨DONE downstream in `Uwueave.Preo.ResultProgram`⟩ The six cells here remain
+    candidates × closure only. `ResultProgram.Visibility` separately models
+    inspectable versus opaque presentation, `SurfacePolicy.visibility` decides
+    it from the site and six-way status, and `CheckedReport.renderAt_visibility`
+    projects that decision exactly. `refuses_wrong_visibility` makes a claim
+    that disagrees with the named policy uninhabitable, without inventing a
+    seventh semantic status.
   * **`Capability` remains three flags; the general effect lattice is shipped.**
     ⟨HISTORICAL LIMIT, DISCHARGED BY `StatusEffects`⟩
     `StatusEffects.Shape` retains all six cells and `StatusEffects.Effect` is a

@@ -17,6 +17,7 @@ path.  Its author may opt into a cheaper path only by providing an
 `IncrementalLaw` whose result carries a proof against `Term.eval`.
 -/
 import Uwueave.Preo.Expr
+import Uwueave.Preo.ResultProgram
 
 namespace Uwueave.Preo.Incremental
 
@@ -108,6 +109,23 @@ structure Result {Γ : Schema} {t : Ty} (term : Term Γ t) (after : Env Γ) wher
   recomputations : Nat
   correct : value = term.eval after
 
+/-- Promote a checked update result to the cache for the next delta. This is
+the runtime chaining seam: no reevaluation occurs, and the result's correctness
+proof becomes the next cache's correctness proof verbatim. -/
+def Result.toCache {Γ : Schema} {t : Ty} {term : Term Γ t} {after : Env Γ}
+    (result : Result term after) : Cache term where
+  env := after
+  value := result.value
+  correct := result.correct
+
+@[simp] theorem Result.toCache_env {Γ : Schema} {t : Ty}
+    {term : Term Γ t} {after : Env Γ} (result : Result term after) :
+    result.toCache.env = after := rfl
+
+@[simp] theorem Result.toCache_value {Γ : Schema} {t : Ty}
+    {term : Term Γ t} {after : Env Γ} (result : Result term after) :
+    result.toCache.value = result.value := rfl
+
 /-- The honest miss path: one complete semantic recomputation. -/
 def fullRecompute {Γ : Schema} {t : Ty} (term : Term Γ t) (after : Env Γ) :
     Result term after where
@@ -193,6 +211,152 @@ theorem withLaw_correct {Γ : Schema} {t : Ty} {term : Term Γ t}
     (withLaw law cache delta).value = term.eval delta.after :=
   (withLaw law cache delta).correct
 
+/-! ## Checked-program adapter
+
+`Expr.Program` is the value emitted by Preoscript's `typed derive`.  These
+methods are deliberately generic: the generated surface aliases have no
+second evaluator or cache semantics to drift from this one. -/
+
+/-- A cache indexed by the program's inferred term. -/
+abbrev ProgramCache (program : Expr.Program Γ) := Cache program.term
+
+/-- Build the initial checked cache. -/
+def buildProgramCache (program : Expr.Program Γ) (env : Env Γ) :
+    ProgramCache program :=
+  buildCache program.term env
+
+/-- Apply a typed environment delta through the conservative evaluator. -/
+def updateProgram (program : Expr.Program Γ) (cache : ProgramCache program)
+    (delta : EnvDelta (Γ := Γ) cache.env) :
+    Result program.term delta.after :=
+  incremental program.term cache delta
+
+/-- Run one update and retain its proved value as the cache for the next
+typed delta. -/
+def updateProgramCache (program : Expr.Program Γ) (cache : ProgramCache program)
+    (delta : EnvDelta (Γ := Γ) cache.env) : ProgramCache program :=
+  (updateProgram program cache delta).toCache
+
+@[simp] theorem updateProgramCache_env (program : Expr.Program Γ)
+    (cache : ProgramCache program)
+    (delta : EnvDelta (Γ := Γ) cache.env) :
+    (updateProgramCache program cache delta).env = delta.after := rfl
+
+theorem updateProgramCache_correct (program : Expr.Program Γ)
+    (cache : ProgramCache program)
+    (delta : EnvDelta (Γ := Γ) cache.env) :
+    (updateProgramCache program cache delta).value = program.eval delta.after :=
+  (updateProgramCache program cache delta).correct
+
+theorem updateProgram_correct (program : Expr.Program Γ)
+    (cache : ProgramCache program)
+    (delta : EnvDelta (Γ := Γ) cache.env) :
+    (updateProgram program cache delta).value = program.eval delta.after :=
+  incremental_correct program.term cache delta
+
+theorem updateProgram_off_dependency_zero (program : Expr.Program Γ)
+    (cache : ProgramCache program) (delta : EnvDelta (Γ := Γ) cache.env)
+    (h : touched delta program.term = false) :
+    (updateProgram program cache delta).recomputations = 0 ∧
+      (updateProgram program cache delta).value = cache.value :=
+  off_dependency_zero program.term cache delta h
+
+/-! ## Exact six-status result adapter
+
+An intrinsically typed pure program has a small but useful honest result
+semantics: under the equality future, its singleton answer is settled and its
+status is exactly that value. Preoscript instantiates this adapter with the
+finite reach written in each `typed derive` row. It does not claim stability
+under arbitrary environment changes; callers wanting a larger future must
+prove the corresponding six-way contract themselves. -/
+
+namespace TypedResult
+
+/-- The exact future for a pure snapshot query. -/
+def Future (_program : Expr.Program Γ) : Evidence.Future (Env Γ) := Eq
+
+/-- The singleton result computed at an environment. -/
+def answer (program : Expr.Program Γ) (env : Env Γ) :
+    Catalog.GSet program.type.denote :=
+  fun value => decide (value = program.eval env)
+
+def settled (_program : Expr.Program Γ) (_env : Env Γ) : Prop := True
+
+def evaluate (program : Expr.Program Γ) (env : Env Γ) :
+    ResultStatus.Status program.type.denote :=
+  .exact (program.eval env)
+
+def surface (program : Expr.Program Γ) (surfaceId : String) :
+    ResultProgram.SurfacePolicy (Env Γ) program.type.denote where
+  name := surfaceId
+  visibility := fun _ _ => .inspectable
+  disclosure := fun _ _ => .shown
+
+theorem totalSound (program : Expr.Program Γ) :
+    StatusEffects.TotalSoundEvaluator6 (Future program) (answer program)
+      (settled program) (evaluate program) := by
+  refine {
+    core := ?_
+    exact_settled := ?_
+    provisional_correct := ?_
+    forkedClosed_correct := ?_
+    forkedOpen_correct := ?_
+    absent_settled := ?_
+    pending_open := ?_ }
+  · refine {
+      exact_correct := ?_
+      exact_final := ?_
+      absent_correct := ?_
+      absent_final := ?_
+      pending_escapable := ?_ }
+    · intro env value h
+      simp only [evaluate] at h
+      injection h with hv
+      subst value
+      constructor
+      · simp [answer]
+      · intro other ho
+        simpa [answer] using ho
+    · intro before after value same h
+      subst after
+      exact h
+    · intro env h
+      simp [evaluate] at h
+    · intro before after same h
+      simp [evaluate] at h
+    · intro env h
+      simp [evaluate] at h
+  · intro _ _ _
+    trivial
+  · intro env value h
+    simp [evaluate] at h
+  · intro env h
+    simp [evaluate] at h
+  · intro env h
+    simp [evaluate] at h
+  · intro _ _
+    trivial
+  · intro env h
+    simp [evaluate] at h
+
+/-- A fully checked result declaration for one typed program and one explicit
+finite reach. Future, resolution and default presentation policy are visible
+in the value and its type. -/
+def declaration (program : Expr.Program Γ) (name futureId surfaceId : String)
+    (reach : List (Env Γ)) :
+    ResultProgram.CheckedDeclaration (Env Γ) program.type.denote
+      (Future program) (.preserveFork) where
+  name := name
+  futureId := futureId
+  reach := reach
+  answer := answer program
+  settled := settled program
+  evaluate := evaluate program
+  surface := surface program surfaceId
+  totalSound := totalSound program
+
+end TypedResult
+
 /-! ## Executable fixtures -/
 
 abbrev DemoSchema : Schema := [.nat, .nat]
@@ -270,6 +434,7 @@ def opaqueFirst : CustomNode DemoSchema .nat where
   name := "opaque-first"
   run := fun env => env.get .here
   dependencies := [0]
+  dependenciesInRange := by simp [DemoSchema]
   respects := by
     intro x y h
     apply Env.get_eq_of_agreeAt .here x y

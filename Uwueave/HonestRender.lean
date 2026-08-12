@@ -154,18 +154,23 @@ committed one. `ResultStatus` still imports nothing from here.
     `ResultStatus.exact_does_not_strengthen` prices dropping it. Nothing
     prevents a `cast` between `Result F α` and `Result G α`; the index is a
     discipline the theorems reward, not one the kernel enforces.
-  * **The site index is carried, not checked.** ⟨UNDONE⟩ `Carrier.site` puts the
-    situation a report was made at into the report, and
-    `state_sited_certificates_refuse_openW` says what goes wrong when that
-    situation is a state and the future is delivery. No theorem says a running
-    system's reports are made at the world they claim; `report` takes the site
-    as an argument and believes it.
-  * **Disclosure is recorded, not decided.** ⟨UNDONE⟩ The alternatives survive a
-    resolution — `ResultStatus.alternatives_are_retained`, by indexing rather
-    than by a field — so a redacted fork is still a fork. No theorem says a
-    disclosure *decision* was taken, and §8's "every shown or hidden branch has
-    an explicit disclosure decision" is therefore half-built: the branches are
-    retained, the decision is not typed.
+  * **The checked adapter binds the report site to the evaluated state;
+    deployment-world authenticity remains open.** ⟨UNDONE at runtime
+    authenticity⟩ `Carrier.site` itself still trusts the argument to `report`.
+    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
+    report's carrier site is exactly the state whose status was evaluated, and
+    `refuses_wrong_site` rejects packaging it under a different site. What no
+    Lean theorem establishes is that the state supplied by a running deployment
+    is the external world it claims to have observed; that requires an
+    authenticated runtime observation boundary.
+  * **Disclosure is explicitly and totally decided downstream.**
+    ⟨DONE downstream in `Uwueave.Preo.ResultProgram`⟩ The alternatives still
+    survive resolution by `ResultStatus.alternatives_are_retained`.
+    `ResultProgram.SurfacePolicy.disclosure : S → β → Disclosure` additionally
+    makes a named shown/hidden decision for every value at every site;
+    `CheckedReport.renderAt_disclosure` projects it exactly and
+    `refuses_wrong_disclosure` rejects a contradictory claim. This types the
+    decision, not its eventual pixel salience.
   * **Obligations are not affordances here.** ⟨UNDONE⟩ §8's actionable
     obligation needs an actor, an authorization proof, a precondition and an
     effect. `Authority.lean` owns the first two and nothing below imports them;

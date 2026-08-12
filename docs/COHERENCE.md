@@ -19,9 +19,11 @@ it. Counts move; the mechanisms are what to check.*
 This is the delta audit after the execution encoder, durability, authenticity,
 Byzantine, recursive-choreography, structured-evidence, frontier, outcome-spec,
 protocol, world-context, and preoscript artifact work landed, followed by the
-Cycle-20 authoring foundations and Cycle-21 checked-manifest/result foundations. The new modules, their root/gate wiring,
-and their MAP and TRANSPORTS entries are checkpointed together: a clean checkout
-cannot receive only one side of that assembly.
+Cycle-20 authoring foundations, Cycle-21 checked-manifest/result foundations,
+and the Cycle-22 language-consumer and runtime/persistence foundations. The new
+modules, their root/gate wiring, and their MAP and TRANSPORTS entries are
+checkpointed together: a clean checkout cannot receive only one side of that
+assembly.
 
 ### Current headline
 
@@ -35,7 +37,8 @@ was repaired during this audit and is now complete in the live working tree.
 | Checkpoint → disk | Cycle 21 adds nine Lean modules and the matching root, audit, MAP, TRANSPORTS, census, and surface changes together. | **The assembly is commit-atomic:** none of the new root imports is left dangling. |
 | MAP → disk → gate | The module table has **107 rows for 107 files**, and every module is inside the root and audit closures. The keystone ledger says **433 rows**. | **The former 34-row exposure remains closed.** The table is a reading aid, not a per-name trust gate. |
 | TRANSPORTS | The ledger has **108** rows, including checked manifests, budget-bearing V2 validation, communicated choice, composite deltas, contextual compilation, differential evaluation, status effects, temporal fairness, and typed edits. | **The current-wave crossings are paid and their failure boundaries are recorded.** |
-| Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest` (`Uwueave/Exec.lean:763-781`); Rust supplies typed records (`rust/src/ffi.rs:31-50,82-113`) and no longer owns FORMAT-v3 bytes. | The wire-encoder decision is closed; ABI, shim, runtime, codegen and host storage remain open. |
+| Runtime persistence | `ArtifactFrame::new` bounds a frame at `MAX_ARTIFACT_FRAME_BYTES = 1 MiB`, checks its v2 envelope, and asks the exported Lean `Preo.ArtifactJournalKernel.validateOneKernel` for exact semantic canonicality before `ArtifactJournal` stores the unchanged bytes in checksummed `UWARJ001` records. `DocumentJournal` separately stores canonical typed `MoveLog` mutations and prefix-equal checkpoints in `UWDJRN01`. | **A concrete pure-Rust host rung has landed.** It is not a filesystem theorem, authenticated document admission, multi-record atomic commit, or a refinement of `PersistentRuntime`. |
+| Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest` (`Uwueave/Exec.lean:772-782`); Rust supplies typed records (`rust/src/ffi.rs:34-53,85-115`) and no longer owns FORMAT-v3 bytes. `RuntimeAuthV4` now specifies canonical signed-move bytes and layered admission premises, but is deliberately not wired into that shipping path. | The v3 wire-encoder decision is closed; ABI, shim, runtime and codegen remain open. Host persistence has a tested narrow implementation, while formal filesystem/refinement and authenticated v4 admission remain open. |
 
 Cycle 20 adds:
 
@@ -47,6 +50,13 @@ Cycle 21 adds:
 `ChoreoChoice` · `ClashGraph` · `CompositeDelta` · `ContextCompiler` ·
 `Preo.Incremental` · `Preo.ProjectionV2` · `StatusEffects` · `Temporal` ·
 `WovenEdit`.
+
+The Cycle-22 runtime/persistence portion adds:
+
+`PersistentRuntime` · `Preo.ArtifactJournalKernel` · `RuntimeAuthV4` · the
+pure-Rust `ArtifactJournal` and `DocumentJournal` stores. `PersistentRuntime`
+and `RuntimeAuthV4` are contracts/foundations; only the two explicitly bounded,
+unauthenticated journal surfaces are host implementations.
 
 The previous checkpoint's twelve modules were:
 
@@ -156,6 +166,21 @@ The load-bearing hypotheses are stated where they matter:
 - `Preo.Export` states an API-shape boundary, not an impossibility theorem:
   decoded verdict tags are first-order data and no wire-to-proof constructor is
   exposed (`Preo/Export.lean:269-293`).
+- `Preo.ArtifactJournalKernel.validateOne_projectionBytes`,
+  `scan_encodeJournal`, `scan_append`, and `scan_stops_at_first_refusal` are
+  logical exact-byte/scan laws. `PhysicalRecord.Valid` parameterizes its digest;
+  it does not prove Rust's BLAKE3 calls or filesystem behavior. The Rust adapter
+  is a test-backed refinement candidate, not a theorem.
+- `PersistentRuntime.replay_success_retry`,
+  `validateCheckpoint_eq_true_iff`, `checkpoint_suffix_replay_equiv`, and
+  `AtomicBatchObservation` describe deterministic retry, checked checkpoints,
+  and allowed batch observations over lists. No theorem instantiates them with
+  `RawJournal`; the current host appends one physical record at a time.
+- `RuntimeAuthV4.signingBytesV4_injective`, `decodeBounded`,
+  `replica_is_signed_issuer`, and `WellLayered` close a canonical model boundary
+  only. `VerificationBoundary.Accepts`, resolution, authorization, membership,
+  append, and durable observation remain explicit premises; there is no
+  shipping v4 Rust/FFI endpoint or concrete signature implementation.
 
 ### Judgement and interface collisions after the wave
 
@@ -184,8 +209,12 @@ Two former seams are now tied at their model boundaries:
    deployment obligations rather than being smuggled into this theorem.
 2. `Preo.ArtifactDurable.artifactCodec` gives the complete first-order
    `ArtifactEncoding` a canonical byte codec and format-v2 frame. `preo_export`
-   now reaches that exact encoding and the budget-bearing Projection V2. The
-   surviving boundary is host persistence, not a second semantic codec.
+   now reaches that exact encoding and the budget-bearing Projection V2.
+   `ArtifactJournal` retains those exact bytes and delegates canonical payload
+   validation back to Lean rather than adding a semantic Rust codec. The
+   surviving boundaries are the Rust/C/Lean ABI, physical-format refinement,
+   filesystem/crash behavior, resource exhaustion, path hardening, and
+   authenticated/anti-rollback storage.
 
 ### Execution-boundary reconciliation after the Lean encoder change
 
@@ -195,16 +224,19 @@ The implementation, source headers, MAP and `docs/TRUST.md` now agree:
   obligations and two paid controls.
 - The Rust byte marshaller is gone; production obtains canonical FORMAT-v3
   bytes from `Exec.encodeRequestKernel` over typed lanes.
-- `rust/shim.c` records that SeqKernel and EraKernel are root-reachable and
-  retains explicit idempotent initialization as an FFI robustness measure.
+- `rust/shim.c` records that SeqKernel, EraKernel, and
+  `Preo.ArtifactJournalKernel` are root-reachable and retains explicit
+  idempotent initialization as an FFI robustness measure.
 
 The FFI surface is still closed by name, but the old count is obsolete. There
-are now **five** Lean exports: request encoding, replay, canonical compatibility
-check, sequence, and ERA. All five have C callers; the canonical checker is a
-test/audit endpoint, while the new encoder is on the production request path.
+are now **six** Lean exports: request encoding, replay, canonical compatibility
+check, sequence, ERA, and exact-one Preoscript artifact-v2 validation. All six
+have C callers; the request canonical checker is a test/audit endpoint, while
+the encoder and artifact validator are on production paths.
 The typed ABI, record flattening, Lean object ownership, C allocation, runtime
 initialization and C/code generation remain trusted engineering. “Lean owns the
-wire encoder” must not be shortened to “the FFI is proved.”
+wire encoder and artifact semantic validator” must not be shortened to “the FFI
+is proved.”
 
 ### Current prioritized action list for root
 
@@ -217,9 +249,12 @@ wire encoder” must not be shortened to “the FFI is proved.”
 2. Generate useful repair and schedule catalogs instead of searching only
    caller-supplied entries; keep full prices/profiles and exhaustive refusal
    evidence through the surface.
-3. Consume Projection V2 as deterministic data in a real host, then bind the
-   canonical artifact bytes to a host journal. Separately add an authenticated
-   request lane before claiming the shipping kernel receives signed operations.
+3. Exercise Projection V2 and `ArtifactJournal` through downstream applications,
+   then validate the physical codec/recovery behavior against the Lean contract
+   and an explicit filesystem model. Separately implement the `RuntimeAuthV4`
+   verifier/resolver/authority/membership/storage pipeline before claiming the
+   shipping kernel receives authenticated operations. `DocumentJournal` remains
+   an unauthenticated legacy/runtime substrate, not that pipeline.
 
 ---
 

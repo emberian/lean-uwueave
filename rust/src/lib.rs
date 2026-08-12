@@ -45,11 +45,8 @@
 //!   `run_order_by_id` (sibling order is id arbitration, not intention)
 //!   applies verbatim — the id here being a blake3 content address.
 //!
-//!   ⚠ Build note, until the root Lean module imports `Uwueave.SeqKernel`:
-//!   `lake build` (the default target) does not emit `SeqKernel.c`, so run
-//!   `lake build Uwueave.SeqKernel` from the repo root before `cargo build`
-//!   (build.rs compiles every `.c` in the emitted-IR tree, so once emitted it
-//!   is picked up — and kept fresh only by re-running that command).
+//!   The root Lean module imports `Uwueave.SeqKernel`, so a plain `lake build`
+//!   keeps the generated C fresh before Cargo compiles it.
 //! * [`era`] — ERA epoch-resolved arbitration for group management (join /
 //!   write / promote / demote, the duelling-admins conflict): two grow-only
 //!   substrates (events value-keyed by eid, arbiter cut records) whose
@@ -63,12 +60,15 @@
 //!   the paper's ✗ marks observable, naming each event the arbitration
 //!   skipped.
 //!
-//!   ⚠ Build note, until the root Lean module imports `Uwueave.EraKernel`:
-//!   same stale-C hazard as SeqKernel above — run
-//!   `lake build Uwueave.EraKernel` from the repo root before `cargo build`
-//!   to (re-)emit `EraKernel.c`. Root wiring kills the hazard for good
-//!   (plain `lake build` then keeps the C fresh); that wiring is the
-//!   orchestrator's, not this module's.
+//!   The root Lean module also imports `Uwueave.EraKernel`, so the same plain
+//!   `lake build` refreshes this generated C boundary.
+//! * [`persistence`] — two deliberately distinct pure-Rust append logs. Exact
+//!   Lean-owned Preoscript artifact-v2 frames are canonical-validated by a
+//!   narrow Lean endpoint and stored unchanged inside checksummed physical
+//!   records. A separate typed operation/checkpoint journal reconstructs the
+//!   authoritative [`MoveLog`] substrate through its public APIs; derived
+//!   replay views are never persisted. Flush/sync and torn-tail recovery are
+//!   explicit deployment policies, not filesystem theorems.
 //!
 //! ## What is and is not claimed
 //!
@@ -93,6 +93,7 @@ pub mod causal;
 pub mod era;
 mod ffi;
 pub mod movelog;
+pub mod persistence;
 pub mod seq;
 pub mod status;
 pub mod weave;

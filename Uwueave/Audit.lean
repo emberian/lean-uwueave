@@ -113,6 +113,7 @@ import Uwueave.CompositeDelta
 import Uwueave.HonestRender
 import Uwueave.Histories
 import Uwueave.FiniteHistory
+import Uwueave.HistoryEngine
 import Uwueave.TextSummary
 import Uwueave.LiveBudget
 import Uwueave.EraCertificate
@@ -143,16 +144,22 @@ import Uwueave.Authenticity
 import Uwueave.Byzantine
 import Uwueave.AuthenticatedAdmission
 import Uwueave.Durable
+import Uwueave.PersistentRuntime
 import Uwueave.EvidenceGraph
 import Uwueave.Preo.Future
 import Uwueave.Preo.Artifact
 import Uwueave.Preo.Export
 import Uwueave.Preo.Expr
 import Uwueave.Preo.Incremental
+import Uwueave.Preo.ResultProgram
+import Uwueave.Preo.ProtocolSurface
+import Uwueave.Preo.Planning
 import Uwueave.Preo.ArtifactDurable
+import Uwueave.Preo.ArtifactJournalKernel
 import Uwueave.Preo.ProjectionV1
 import Uwueave.Preo.ProjectionV2
 import Uwueave.RepairSynthesis
+import Uwueave.RuntimeAuthV4
 import Uwueave.Tactics
 
 open Lean Elab Command in

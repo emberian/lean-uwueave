@@ -166,9 +166,12 @@ replaced.
     `Enumeration.decideReaches` decide this `Prop`-valued reachability, while
     `FiniteHistory.searchCertified` returns a proof-carrying `BaseSelection`
     with an exhaustive finite common-ancestor list when one of the three cases
-    is found. Its `none` result is deliberately not relabelled `unavailable`.
-    What remains here is the unrestricted/infinite-DAG claim and a totality
-    theorem turning every covered finite pair into a selection.
+    is found. Downstream `HistoryEngine.decidePair` is total as an operational
+    **four-way** answer: selected, ambiguous, unavailable, or a refusal carrying
+    proofs that none of those exact predicates was established. It sweeps every
+    ordered pair of the enumeration. What remains here is the
+    unrestricted/infinite-DAG claim and a theorem excluding the refusal case if
+    every covered finite pair is to produce a `BaseSelection`.
   * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
     theorems in §4 target `MergeModel.BaseDecision.Valid`, which is fixed at
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
@@ -179,18 +182,19 @@ replaced.
     root-reachable set is not merge-closed. The exact replacement is
     `HistorySafeFrom`, characterized by `historySafeFrom_iff`; the ceiling
     counter refutes it and the lock satisfies it.
-  * ⟨UNDONE, narrowed to VersionDag-native patch integration⟩ **Residual and
-    patch algebra now exists beside this state-level history model.**
-    `Uwueave.CompositeDelta.PatchEdge.reachable` forgets a patch-labelled edge
-    soundly to ordinary reachability, and
-    `CompositeDelta.Algebra.residualDiamond` grows two sibling patch edges to an
-    admitted common merge using proved residual, commutation, execution, and
-    legality laws. Its `LegalUnderComposition` is exactly equivalent to full
-    `AncestralConfluent`, and the existing length-two counter is retained as a
-    named failure of that law. What remains is native integration with this
-    file's `VersionDag`/`Coherent` structures: nodes and parent edges do not yet
-    carry `PatchEdge` evidence, and no theorem transports a residual diamond
-    through base selection or repeated/criss-cross history construction.
+  * ⟨UNDONE, narrowed to append-only version materialization⟩ **The selected-pair
+    patch seam is now operational.** Downstream `HistoryEngine.VersionPatch`
+    ties a `VersionDag` reachability witness to the exact admitted patch between
+    two labelled history states. `SelectedRequest.graph_selected` connects the
+    finite base search to a declared `HistoryMerge`, and `admitSelected`
+    transports sibling version patches through a residual algebra to a legal,
+    policy-identical `ResidualDiamond`. One delivery converges unconditionally;
+    arbitrary duplicate delivery converges under the named `ReplayStable` law,
+    proved for the concrete cheap-lock fixture. The length-two counter remains
+    an exact algebra refusal. What remains is allocation of a fresh version and
+    construction of an extended `History`/`Origin.merged` record (including
+    repeated criss-cross growth); no endpoint-only patch reconstruction is
+    claimed.
 
 Literature: Kaki, Priya, Sivaramakrishnan, Jagannathan, "Mergeable Replicated
 Data Types", OOPSLA 2019 (the version-store/LCA model whose *repeated* merge is

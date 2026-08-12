@@ -18,9 +18,16 @@ the AST semantics, a checked `Schedule`, and its proved identity-schedule bound.
 The bundle exposes the corresponding `Scheduling.Plan` and `UpperBound` without
 inventing a meeting count.
 
-There is no surface parser here. Operation leaves are semantic primitives:
-their crossing count may depend on the one global strategy, and their typed
-origins cannot point outside that count.
+This module remains the parser-independent semantic layer. The downstream
+`Uwueave.Preo.ProtocolSurface` command now parses native `.operation`, `.seq`,
+`.parallel`, `.choice`, `.repeat`, and `.sync` forms and emits predictable
+`N.Term`, `N.Elaboration`, `N.Session`, `N.Plan`, `N.Limits`, and
+`N.ProfileUpperBound` values through this API. Its `NativeFixture` proves the
+exact session shape, complete seven-axis demand stream, and five-currency
+profile; `NativeCoalescing` and `NativeAmbient` replay both directions of the
+crossings-versus-meetings refutation. Operation leaves here remain semantic
+primitives: their crossing count may depend on the one global strategy, and
+their typed origins cannot point outside that count.
 -/
 import Uwueave.Scheduling
 

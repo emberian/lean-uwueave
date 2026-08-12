@@ -35,9 +35,14 @@ Concrete fixtures exercise:
 * ⟨TERMINAL⟩ A scalar is an explicit preference policy, not a semantic collapse.
   Different policies provably select different plans while both results retain
   their pointwise `ProfileUpperBound` evidence.
-* ⟨UNDONE⟩ There is no catalog generator. A future generator needs a finite
-  action universe and a proved coverage search; neither `Scheduling` nor
-  `Protocol` currently supplies arbitrary schedule enumeration.
+* ⟨TERMINAL at an explicit bounded action universe⟩
+  `Preo.Planning.generatedPlans` now enumerates every canonical sublist of a
+  duplicate-free, size-capped `ActionUniverse`, decidably retains exactly the
+  covering schedules, and feeds this module's `selectLeast`.  Its
+  `mem_actionChoices_iff_sublist` and exact `2^n` cardinality theorem expose the
+  searched scope.  Arbitrary schedules outside that authored universe remain
+  intentionally unenumerated; the runtime-facing constructor refuses duplicate
+  and oversized universes before materializing the exponential catalog.
 * ⟨TERMINAL⟩ No unconditional search can be transported from a crossing floor or
   crossing count. `same_crossings_opposite_catalog_verdicts` replays the existing
   obstruction in the executable result: equal crossing counts can accept and

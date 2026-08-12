@@ -72,15 +72,24 @@ numbers.
     witness — one crossing, two forced peer meetings. An upper-bound reading
     needs an **at-most-one demand per crossing** interpretation; pure coalescing
     alone is not enough.
-  * ⟨UNDONE⟩ Participants are declared, not proved online; there is no
-    liveness, deadlock-freedom, message loss, elapsed time, or schedule search.
-  * **The syntax debt is narrowed.** `Uwueave.Protocol` now supplies the deep
-    semantic AST and proof-carrying scheduling elaboration; the Preo surface now
-    has checked `protocol` and `session` forms, with protocol bodies supplied as
-    typed `Protocol.Term`s. ⟨UNDONE⟩ There is still no custom user protocol
-    parser or user-authored budget block, and no transport from
-    `Budget.ForcedFloor` to a meeting floor. The examples prove that such a
-    transport is false.
+  * ⟨UNDONE⟩ Participants are declared, not proved online; there is no runtime
+    liveness, deadlock-freedom, message-loss, or elapsed-time model, and no
+    unbounded deployment-complete schedule-catalog generator. Finite catalog
+    search does not establish any of those operational properties.
+  * ⟨DONE downstream in `Uwueave.Preo.ProtocolSurface`⟩ **The native protocol
+    syntax debt is closed.** The parser covers operation, sequential and
+    parallel composition, nonempty finite choice, bounded repetition, and
+    synchronization without an opaque `Protocol.Term` in the main fixture.
+    Each command emits exact `N.Term`, `N.Elaboration`, `N.Session`, `N.Plan`,
+    `N.Limits`, and `N.ProfileUpperBound` values. `NativeFixture` checks every
+    constructor, all seven demand axes, and all five currencies; malformed
+    crossing origins and unsupported nodes fail closed. The separate
+    `preo_budget` command supplies a user-authored, plan-indexed five-currency
+    budget witness rather than deriving one from a crossing scalar.
+  * ⟨TERMINAL⟩ There is no transport from `Budget.ForcedFloor` to a meeting
+    floor or five-currency acceptance. Floors are lower-bound evidence, not
+    schedule constructors; `meeting_floor_does_not_entail_profile_acceptance`
+    is the concrete obstruction.
 -/
 import Uwueave.CoordEffect
 

@@ -11,11 +11,12 @@ carries, a **`Spec.Verdict` term** — or, where no route reaches one, an
 The reviewer's instruction this follows (codex, quoted in `CODEXHELP.md`): build
 the semantic modules first, then *"define the smallest AST required to compose
 their evidence, keeping arbitrary Lean computation behind a proved opaque
-node."* Everything here is small on purpose. There is no deep-embedded
-expression language: an invariant is an ordinary Lean term, and the only thing
-the elaborator analyses about it is **which field it reads** (§6). That is the
-one syntactic fact the classification carrier depends on, and it is the whole
-"AST".
+node."* Everything here is small on purpose. Invariants and ordinary derives
+remain Lean terms, with only a conservative field-mention scan. The separate
+`typed derive` row consumes `Preo.Expr.Raw`, whose deliberately first-order AST
+exists exactly where structural reads, merge/monotonicity proofs and checked
+incremental reuse need it. Unsupported raw syntax is refused; arbitrary Lean
+computation stays in the ordinary escape hatch.
 
 ## What lives here
 
@@ -36,7 +37,8 @@ one syntactic fact the classification carrier depends on, and it is the whole
   * §5 the report rows (an environment extension: display metadata only — every
     ANSWER column is reduced out of the row's `Preo.Classification` at report
     time, so the table cannot drift from the evidence);
-  * §6 the surface syntax itself.
+  * §6 the surface syntax itself, including `typed derive`'s parser-hard schema,
+    finite reach and raw program boundary.
 
 ## The fragment, stated up front
 
@@ -52,6 +54,9 @@ preo <Name> where
                                               -- invariant, over the product state)
   invariant <name> : <predicate> := <verdict> -- author-supplied evidence, kernel-checked
   future <name> on <WorldModel> := <FutureDecl>
+  typed derive <name> over {
+    schema := <Expr.Schema>, reach := <List (Expr.Env schema)>
+  } := <Expr.Raw>
   derive <name> : <type> = <expr>             -- ONE field; the fourth verdict
   derive <name> : <type> = <expr> := <evidence>
   protocol <name> over <Strategy> := <Protocol.Term Strategy>
@@ -94,8 +99,13 @@ Sessions call `Protocol.elaborate`, `elaborateProfilePlan`, or
 
 *Still* not in the fragment: a custom parser for protocol expressions, budget
 search or a pretty in-declaration budget block, invariants over three or more
-fields, derives reading more than one field, and general declaration
-composition. `preo_certificate` keeps its full dependent type as an ordinary
+fields, and general declaration composition. Ordinary Lean `derive` remains a
+one-field escape hatch; `typed derive` is the multi-input first-order program
+surface, with its exact positional reads and checked incremental adapter.
+Each update result promotes directly to the next cache; generated reports
+require membership in the authored finite reach. Typed-program export and
+automatic projection from the declaration `State` remain outside this fragment.
+`preo_certificate` keeps its full dependent type as an ordinary
 Lean term: the command checks that its reduced head is
 `Future.CheckedCertificate` but does not invent a state-indexed shorthand.
 `preo_budget` is equally thin: it consumes a real five-currency
@@ -245,6 +255,9 @@ inductive RowKind where
   | cross
   /-- A computed value, classified by the fourth verdict (`JoinHom.Fourth`). -/
   | derive
+  /-- A Raw-inferred first-order program with exact reads and checked cache
+  updates. Unlike ordinary `derive`, this row is intrinsically typed. -/
+  | typedDerive
   /-- A named, explicitly world-model-indexed future declaration. -/
   | future
   /-- A typed `Protocol.Term`; its semantics remain in `Protocol.Term.denote`. -/
@@ -260,7 +273,7 @@ print time. Nothing here stores an answer. -/
 structure Row where
   /-- The `preo` declaration this row belongs to. -/
   decl : Lean.Name
-  /-- Which of the four item kinds this row is. -/
+  /-- Which semantic/display item kind this row is. -/
   kind : RowKind
   /-- The field's, invariant's or derive's surface name. -/
   name : String
@@ -350,6 +363,16 @@ syntax preoDerive :=
   withPosition(&"derive" ident " : " colGt term:51 " = " colGt term
     (" := " colGt term)?)
 
+/-- A parser-hard intrinsically typed program.  The braces terminate the
+schema and `:=` terminates the header, so neither arbitrary Lean term can eat
+the next declaration item. `Raw.infer` determines the result type; malformed
+or opaque raw nodes make the entire declaration fail before any program row is
+recorded. -/
+syntax preoTypedDerive :=
+  withPosition(&"typed" ppSpace &"derive" ident ppSpace &"over" ppSpace
+    "{" &"schema" " := " colGt term "," ppSpace
+      &"reach" " := " colGt term "}" " := " colGt term)
+
 /-- `future <name> on <WorldModel> := <FutureDecl>` — a stable surface name for
 a relation on the model's retained world carrier. The model is mandatory:
 future declarations cannot be inferred from, or collapsed onto, state alone. -/
@@ -385,6 +408,7 @@ syntax (name := preoDecl) "preo " ident " where "
   (ppLine colGe preoField)*
   (ppLine colGe preoInv)*
   (ppLine colGe preoFuture)*
+  (ppLine colGe preoTypedDerive)*
   (ppLine colGe preoDerive)*
   (ppLine colGe preoProtocol)*
   (ppLine colGe preoSession)* : command

@@ -116,10 +116,14 @@ sanctioned renderer *does* make, at six named pieces of evidence.
   * **Noncomputability is inherited.** ⟨TERMINAL at this carrier⟩ `statusOf`,
     `spinnerRender` and `giveUpRender` all quantify over an unbounded value type.
     `Classical.choice` is inside the audit floor.
-  * **The site is carried, not checked.** ⟨UNDONE⟩ Inherited verbatim from
-    `HonestRender.lean`: `report` takes the site as an argument and believes it.
-    §4's separation is a statement about the *badge*; a consumer that reads
-    `site` is reading the evidence, not the rendered result.
+  * **The checked adapter binds the six-way report site to the evaluated state;
+    deployment-world authenticity remains open.** ⟨UNDONE at runtime
+    authenticity⟩ This raw `Carrier6.report` still believes its site argument.
+    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
+    report carries exactly the state fed to the total evaluator, and
+    `refuses_wrong_site` rejects a contradictory site claim. A runtime must
+    still authenticate that its supplied state is the external world actually
+    observed; neither the raw carrier nor the adapter fabricates that premise.
 -/
 import Uwueave.HonestRender
 

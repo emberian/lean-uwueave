@@ -16,8 +16,9 @@ The design is deliberately small and first-order:
 * `Term Γ t` is intrinsically typed.  Ill-typed negation, arithmetic, and
   projection are unrepresentable;
 * every term has a structural list of positional `Hole`s.  A field read records
-  its exact tree position.  An opaque leaf must declare its dependency list and
-  prove that agreement there determines its result;
+  its exact tree position.  An opaque leaf must declare an in-range dependency
+  list and prove that agreement there determines its result (extra conservative
+  reads are permitted; out-of-range vacuity is not);
 * `eval_ext` proves that the computed dependency set is sufficient;
 * `MergeSafe` and `MonotoneSafe` are proof-carrying positive analyses.
   `certifyMergeSafe`/`certifyMonotone` recognize only constructors whose laws
@@ -25,17 +26,20 @@ The design is deliberately small and first-order:
   even if its hidden function happens to be a homomorphism; an author may add
   it only by supplying the missing equation explicitly.
 
-`Raw.infer` is the intended future surface hook.  It rejects malformed syntax
-and raw opaque nodes; `Raw.certifyMergeSafe` returns a typed term together with
-its proof, never a Boolean claim detached from evidence.
+`Raw.infer` is the surface hook used by `typed derive` in Preoscript.  It
+rejects malformed syntax and raw opaque nodes; `Raw.certifyMergeSafe` returns a
+typed term together with its proof, never a Boolean claim detached from
+evidence.  `Program` retains the raw spelling, the inferred typed term, and the
+exact inference equation, so downstream cache and result adapters consume one
+kernel-checked value rather than repeating inference.
 
 ## Honest boundary
 
-This is a foundation, not an integration.  `Uwueave.Preo.Syntax` and
-`Uwueave.Preo.Elab` do not import it yet, so it closes no surface-language
-marker by itself.  The first-order `Ty` universe is intentional: application
-carriers remain behind `Opaque`, where locality and any positive algebraic
-classification must be supplied.  The positive analyses are sound and
+The first-order `Ty` universe is intentional: arbitrary Lean computations
+remain available through ordinary `derive`, while raw `custom` is refused
+because it carries neither an implementation nor a locality proof.  A caller
+can construct `Term.custom` directly only with those missing ingredients and
+must supply any positive algebraic law.  The automatic analyses are sound and
 deliberately incomplete; `none` means "not established by this syntax", not
 "semantically false".
 -/
@@ -59,6 +63,31 @@ def Ty.denote : Ty → Type
   | .nat => Nat
   | .pair a b => a.denote × b.denote
   | .option a => Option a.denote
+
+/-- Executable equality for every first-order value type.  Keeping this
+structural lets runtime/result adapters form singleton answer sets without a
+classical oracle. -/
+def Ty.decEq : (t : Ty) → DecidableEq t.denote
+  | .bool => Bool.decEq
+  | .nat => Nat.decEq
+  | .pair a b => fun x y =>
+      match a.decEq x.1 y.1 with
+      | isTrue hx =>
+          match b.decEq x.2 y.2 with
+          | isTrue hy => isTrue (Prod.ext hx hy)
+          | isFalse hy => isFalse (fun h => hy (congrArg Prod.snd h))
+      | isFalse hx => isFalse (fun h => hx (congrArg Prod.fst h))
+  | .option a => fun x y =>
+      match x, y with
+      | none, none => isTrue rfl
+      | none, some _ => isFalse (by intro h; cases h)
+      | some _, none => isFalse (by intro h; cases h)
+      | some x, some y =>
+          match a.decEq x y with
+          | isTrue h => isTrue (congrArg Option.some h)
+          | isFalse h => isFalse (fun hs => h (Option.some.inj hs))
+
+instance (t : Ty) : DecidableEq t.denote := t.decEq
 
 /-- The canonical evidence merge for each first-order query type: disjunction,
 maximum, componentwise merge, and `none`-as-bottom option merge. -/
@@ -201,12 +230,18 @@ theorem Env.get_eq_of_agreeAt (v : Var Γ t) (x y : Env Γ)
 /-! ## 2. Typed terms and exact dependencies -/
 
 /-- An opaque/custom query.  Its implementation is available to evaluation,
-but it must declare a finite dependency set and prove locality on that set.
-No algebraic property is stored or inferred here. -/
+but it must declare a finite, schema-bounded dependency set and prove locality
+on that set. The list may conservatively contain extra reads; it cannot use an
+impossible out-of-range agreement premise. No algebraic property is stored or
+inferred here. -/
 structure CustomNode (Γ : Schema) (t : Ty) where
   name : String
   run : Env Γ → t.denote
   dependencies : List Nat
+  /-- Declared reads must name actual schema slots. Without this field an
+  out-of-range dependency would make `AgreeOn` false and let `respects` pass
+  vacuously, which is not a locality certificate. -/
+  dependenciesInRange : ∀ n, n ∈ dependencies → n < Γ.length
   respects : ∀ x y, Env.AgreeOn dependencies x y → run x = run y
 
 /-- Intrinsically typed derivation/query expressions. -/
@@ -662,6 +697,73 @@ def Raw.infer (Γ : Schema) : Raw → Option (Checked Γ)
       | _, _ => Option.none
   | .custom _ => Option.none
 
+/-- A successful surface compilation.  Keeping the exact `Raw.infer`
+equation in the value is the trust boundary: a `Program` cannot pair arbitrary
+raw syntax with an unrelated typed term. -/
+structure Program (Γ : Schema) where
+  raw : Raw
+  success : (raw.infer Γ).isSome = true
+
+namespace Program
+
+/-- The checked term is obtained from `Raw.infer` itself; it is not a second
+author-supplied field. -/
+def checked (program : Program Γ) : Checked Γ :=
+  (program.raw.infer Γ).get program.success
+
+abbrev type (program : Program Γ) : Ty := program.checked.type
+
+abbrev term (program : Program Γ) : Term Γ program.type :=
+  program.checked.term
+
+/-- Evaluation exposed for runtime/status adapters. -/
+def eval (program : Program Γ) (env : Env Γ) : program.type.denote :=
+  program.term.eval env
+
+/-- Exact positional holes from the checked term. -/
+def holes (program : Program Γ) : List Hole := program.term.holes
+
+/-- Exact reads, definitionally the field erasure of `holes`. -/
+def reads (program : Program Γ) : List Nat := program.term.reads
+
+/-- Proof-carrying positive merge analysis.  `none` is an honest non-answer. -/
+def mergeSafe? (program : Program Γ) : Option (MergeSafe program.term) :=
+  certifyMergeSafe program.term
+
+/-- Proof-carrying positive monotonicity analysis.  `none` is an honest
+non-answer and is never interpreted as a refutation. -/
+def monotoneSafe? (program : Program Γ) : Option (MonotoneSafe program.term) :=
+  certifyMonotone program.term
+
+theorem reads_eq_hole_fields (program : Program Γ) :
+    program.reads = program.holes.map Hole.field := rfl
+
+theorem inferred (program : Program Γ) :
+    program.raw.infer Γ = Option.some program.checked := by
+  have hs := program.success
+  cases h : program.raw.infer Γ with
+  | none => simp [h] at hs
+  | some value => simp [Program.checked, h]
+
+end Program
+
+/-- Compile raw syntax to one checked program.  Failure is data and no typed
+term or analysis is produced. -/
+def Raw.compile? (Γ : Schema) (raw : Raw) : Option (Program Γ) :=
+  if h : (raw.infer Γ).isSome = true then
+    Option.some { raw := raw, success := h }
+  else
+    Option.none
+
+theorem Raw.compile?_isSome (Γ : Schema) (raw : Raw) :
+    (raw.compile? Γ).isSome = (raw.infer Γ).isSome := by
+  cases h : raw.infer Γ <;> simp [Raw.compile?, h]
+
+/-- A compiled value always exposes the very term returned by inference; this
+rules out attaching certificates to unsupported raw syntax. -/
+theorem Program.infer_eq (program : Program Γ) :
+    program.raw.infer Γ = Option.some program.checked := program.inferred
+
 /-- A successful raw positive analysis contains both the typed term and the
 proof that it preserves merge. -/
 structure CertifiedMergeSafe (Γ : Schema) where
@@ -726,6 +828,7 @@ def hiddenFirst : CustomNode [.nat] .nat where
   name := "hidden-first"
   run := fun env => env.get .here
   dependencies := [0]
+  dependenciesInRange := by simp
   respects := by
     intro x y h
     apply Env.get_eq_of_agreeAt .here x y

@@ -171,6 +171,15 @@ is a bigger, real schema that deliberately contains one.
 - **A Rust crate.** An append-only content-addressed document store,
   collaborative text, node moving, membership and roles — where the delicate
   decisions are compiled from the proofs rather than reimplemented.
+- **Two explicit persistence surfaces.** `ArtifactJournal` keeps exact,
+  Lean-validated Preoscript artifact-v2 frames inside a checksummed physical
+  log; `DocumentJournal` separately persists the current unauthenticated typed
+  `MoveLog` subset and validates checkpoints against their mutation prefix.
+  They provide per-record bounds, sequence-addressed retry, locking, sync
+  policy, and torn-tail/corruption handling. They do not provide authenticated
+  v4 admission, whole-journal resource bounds, multi-record transactions,
+  anti-rollback state, or a theorem about the host filesystem. The exact
+  boundary is in **[the runtime architecture](docs/RUNTIME.md)**.
 - **A checked language surface.** `preo` declarations now cover ordinary and
   keyed fields, application carriers with explicit planting seeds, invariants,
   derived summaries, retained-world futures, typed protocol terms, and
@@ -230,6 +239,9 @@ not something you crash on.
 - **[Trust](docs/TRUST.md)** — three separate ledgers of what this rests on:
   logic, execution, and environment. Including what our own build gate *cannot*
   prove.
+- **[Runtime architecture](docs/RUNTIME.md)** — the shipping FORMAT-v3 path,
+  Cycle-22 pure-Rust journals, exact durability assumptions, and the canonical
+  but not-yet-shipping authenticated FORMAT-v4 foundation.
 - **[The bibliography](docs/BIBLIOGRAPHY.md)** — every paper behind this, what it
   established, what we took, what we declined. Several entries exist to record
   claims of *ours* that the literature refuted.

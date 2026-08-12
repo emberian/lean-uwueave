@@ -832,6 +832,18 @@ preo SemanticSurface where
   future EraIssuing on Future.eraWorldModel := Future.EraIssuance
   future EraAnnouncing on Future.eraWorldModel := Future.EraAnnouncement
 
+  typed derive Next over {
+    schema := [.nat, .nat],
+    reach := [Incremental.before, Incremental.secondChangedAfter,
+      Incremental.firstChangedAfter]
+  } :=
+    .natSucc (.field 0)
+  typed derive Total over {
+    schema := [.nat, .nat],
+    reach := [Incremental.before]
+  } :=
+    .natAdd (.field 0) (.field 1)
+
   protocol Coalescing over Unit := Protocol.coalescingProtocol
   protocol Ambient over Unit := Protocol.ambientProtocol
   protocol TwoRound over Unit := Protocol.twoRoundProtocol
@@ -843,6 +855,215 @@ preo SemanticSurface where
     simp [unitStrategies, CoordEffect.Admissible.toList]
 
 #preo_report SemanticSurface
+
+/-! ### 4.0 Intrinsically typed programs reach the checked runtime adapter -/
+
+/-- A hand-written value for whole-program comparison. Its success field is
+the actual reduction of `Raw.infer`, not an independent type assertion. -/
+def handNextProgram : Expr.Program [.nat, .nat] where
+  raw := .natSucc (.field 0)
+  success := rfl
+
+/-- Whole-value acceptance: the surface program is the direct hand-built
+`Expr.Program`, including its raw spelling and inference witness. -/
+theorem semanticSurface_next_is_hand_program :
+    SemanticSurface.Next.Program = handNextProgram := rfl
+
+/-- The existential inference result and typed term are exactly the expected
+hand values. -/
+theorem semanticSurface_next_checked_exact :
+    SemanticSurface.Next.Checked =
+      ⟨.nat, Expr.Term.natSucc (.var .here)⟩
+      ∧ SemanticSurface.Next.Term = Incremental.firstPlusOne := by
+  exact ⟨rfl, rfl⟩
+
+/-- Positional holes and their erased field reads come from one structural
+analysis. The unary successor contributes child path `[0]`. -/
+theorem semanticSurface_next_exact_dependencies :
+    SemanticSurface.Next.Holes =
+        [{ path := [0], field := 0, kind := .field }]
+      ∧ SemanticSurface.Next.Reads = [0]
+      ∧ SemanticSurface.Next.Reads =
+        SemanticSurface.Next.Holes.map Expr.Hole.field := by
+  exact ⟨rfl, rfl, rfl⟩
+
+/-- Positive classifications contain proofs, never detached Boolean labels. -/
+theorem semanticSurface_next_positive_certificates :
+    (∃ safe, SemanticSurface.Next.MergeSafe? = some safe)
+      ∧ (∃ safe, SemanticSurface.Next.MonotoneSafe? = some safe) := by
+  exact ⟨⟨.natSucc (.var .here), rfl⟩,
+    ⟨.ofMergeSafe (.natSucc (.var .here)), rfl⟩⟩
+
+/-- Addition is admitted by the larger monotone fragment but deliberately not
+misclassified as preserving independent merge. -/
+theorem semanticSurface_total_honest_incompleteness :
+    SemanticSurface.Total.MergeSafe? = none
+      ∧ (∃ safe, SemanticSurface.Total.MonotoneSafe? = some safe) := by
+  exact ⟨rfl, ⟨.natAdd (.ofMergeSafe (.var .here))
+    (.ofMergeSafe (.var (.there .here))), rfl⟩⟩
+
+def semanticSurfaceNextCache : SemanticSurface.Next.Cache :=
+  SemanticSurface.Next.buildCache Incremental.before
+
+def semanticSurfaceRemoteAgainAfter : Expr.Env [.nat, .nat] :=
+  .cons (t := .nat) (2 : Nat) (.cons (t := .nat) (100 : Nat) .nil)
+
+/-- A second consecutive delta on the same off-dependency field, now based at
+the first update's `after` environment. -/
+def semanticSurfaceRemoteAgain :
+    Incremental.EnvDelta Incremental.secondChangedAfter where
+  after := semanticSurfaceRemoteAgainAfter
+  changed := Incremental.changedSecondField
+  unchanged := by
+    intro t field h
+    cases field with
+    | here => rfl
+    | there field =>
+        cases field with
+        | here => simp [Incremental.changedSecondField] at h
+        | there field => nomatch field
+
+/-- A change to field 1 is outside `Next`'s exact dependency set, so the
+generated checked update reuses its cache with zero root evaluations. -/
+theorem semanticSurface_next_off_dependency_zero :
+    (SemanticSurface.Next.update semanticSurfaceNextCache
+      Incremental.secondChanged).recomputations = 0 :=
+  (SemanticSurface.Next.update_off_dependency_zero semanticSurfaceNextCache
+    Incremental.secondChanged rfl).1
+
+/-- The retained value is still linked to a fresh evaluation at the post-state
+by the generated correctness theorem. -/
+theorem semanticSurface_next_update_correct :
+    (SemanticSurface.Next.update semanticSurfaceNextCache
+      Incremental.secondChanged).value =
+        SemanticSurface.Next.Eval Incremental.secondChanged.after :=
+  SemanticSurface.Next.update_correct semanticSurfaceNextCache
+    Incremental.secondChanged
+
+def semanticSurfaceNextCacheAfterRemote : SemanticSurface.Next.Cache :=
+  SemanticSurface.Next.updateCache semanticSurfaceNextCache
+    Incremental.secondChanged
+
+/-- Update results are first-class next caches, so a second delta chains
+without rebuilding or reevaluating the initial environment. -/
+theorem semanticSurface_next_cache_chains :
+    semanticSurfaceNextCacheAfterRemote.env = Incremental.secondChangedAfter
+      ∧ semanticSurfaceNextCacheAfterRemote.value = (3 : Nat)
+      ∧ (SemanticSurface.Next.update semanticSurfaceNextCacheAfterRemote
+          semanticSurfaceRemoteAgain).recomputations = 0 := by
+  refine ⟨rfl, rfl, ?_⟩
+  exact (SemanticSurface.Next.update_off_dependency_zero
+    semanticSurfaceNextCacheAfterRemote semanticSurfaceRemoteAgain rfl).1
+
+/-- The evaluator hook is deliberately a small stable seam for the checked
+six-status `ResultProgram` adapter; consumers need not unwrap `Checked`. -/
+theorem semanticSurface_next_eval_exact :
+    SemanticSurface.Next.Eval Incremental.before = (3 : Nat) := rfl
+
+/-- The authored typed environment is a query input contract, not a hidden
+projection from the surrounding document. Here the document is definitionally
+`Nat`, while the typed program explicitly consumes two naturals. An application
+that wants document evaluation must write its `State → Expr.Env Schema`
+projection and can then call `Next.Eval`; none is inferred from field names. -/
+theorem semanticSurface_typed_environment_boundary :
+    SemanticSurface.State = Nat
+      ∧ SemanticSurface.Next.Schema = [.nat, .nat]
+      ∧ SemanticSurface.Next.Reach =
+        [Incremental.before, Incremental.secondChangedAfter,
+          Incremental.firstChangedAfter] := by
+  exact ⟨rfl, rfl, rfl⟩
+
+/-- The generated result program consumes the typed evaluator and the exact
+finite reach; its future and resolution remain visible in its type and
+descriptor. -/
+theorem semanticSurface_next_result_exact :
+    SemanticSurface.Next.Result.reach = SemanticSurface.Next.Reach
+      ∧ SemanticSurface.Next.Result.evaluate Incremental.before = .exact (3 : Nat)
+      ∧ SemanticSurface.Next.Result.descriptor.resolution =
+        StatusEffects.Resolution.preserveFork := by
+  exact ⟨rfl, rfl, rfl⟩
+
+/-- The written reach does real least-effect work: exact is supported, and any
+other effect supporting all three written environments subsumes the generated
+one. -/
+theorem semanticSurface_next_effect_exact :
+    SemanticSurface.Next.Result.effect.Allows StatusEffects.Shape.exact := by
+  apply SemanticSurface.Next.Result.effect_supports Incremental.before
+  change Incremental.before ∈ SemanticSurface.Next.Reach
+  simp [SemanticSurface.Next.Reach]
+
+theorem semanticSurface_next_effect_is_least
+    (candidate : StatusEffects.Effect)
+    (supports : StatusEffects.Supports candidate
+      SemanticSurface.Next.Result.reach SemanticSurface.Next.Result.evaluate) :
+    SemanticSurface.Next.Result.effect ⊑ₑ candidate :=
+  SemanticSurface.Next.Result.effect_least candidate supports
+
+def semanticSurfaceNextReport :=
+  SemanticSurface.Next.reportAt Incremental.before (by simp [SemanticSurface.Next.Reach])
+
+/-- End-to-end checked report acceptance: the carrier site is the environment
+actually evaluated, not a report-supplied claim. -/
+theorem semanticSurface_next_report_site :
+    SemanticSurface.Next.ResultCarrier.site semanticSurfaceNextReport.checked.output =
+      Incremental.before :=
+  ResultProgram.CheckedReport.site_exact semanticSurfaceNextReport.checked
+
+/-- The report says exactly the status computed at that checked site. -/
+theorem semanticSurface_next_report_status :
+    SemanticSurface.Next.ResultCarrier.Says semanticSurfaceNextReport.checked.output
+      (.exact (3 : Nat)) := by
+  simpa using ResultProgram.CheckedReport.says_computed semanticSurfaceNextReport.checked
+
+/-- Reach admission survives construction as proof-carrying report data, so a
+downstream consumer can recover effect support rather than trusting the call
+site that built the report. -/
+theorem semanticSurface_next_report_retains_reach :
+    semanticSurfaceNextReport.checked.state ∈ SemanticSurface.Next.Reach :=
+  semanticSurfaceNextReport.inReach
+
+/-- Future identity, preserve-fork resolution, surface identity, visibility
+and disclosure all come from the checked declaration. -/
+theorem semanticSurface_next_report_policy_exact :
+    semanticSurfaceNextReport.checked.futureId =
+        "Uwueave.Preo.Demo.SemanticSurface.Next/snapshot-equality"
+      ∧ semanticSurfaceNextReport.checked.resolutionId =
+        ResultProgram.ResolutionIdentity.preserveFork
+      ∧ semanticSurfaceNextReport.checked.surfaceId =
+        "Uwueave.Preo.Demo.SemanticSurface.Next/inspectable"
+      ∧ semanticSurfaceNextReport.checked.visibility =
+        ResultProgram.Visibility.inspectable
+      ∧ semanticSurfaceNextReport.checked.disclosure (3 : Nat) =
+        ResultProgram.Disclosure.shown := by
+  exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+
+/-! #### Typed-program refusals
+
+These are surface-command failures, not merely equations about `Raw.infer` in
+isolation. A failed row records no report metadata and emits none of the typed
+term, positive analyses, cache/update, or result/report artifacts. -/
+
+/--
+error: preo: `typed derive Broken` was refused by `Preo.Expr.Raw.infer`. The expression is malformed, reads a field outside its schema, applies an operator at the wrong type, or uses raw `.custom`, which has no implementation/locality proof. No typed term or positive analysis was emitted. Kernel reduction said: Tactic `decide` proved that the proposition
+  (Expr.Raw.infer Schema Raw).isSome = true
+is false
+-/
+#guard_msgs in
+preo BadTypedMalformed where
+  field marker : Counter
+  typed derive Broken over { schema := [], reach := [] } :=
+    .boolNot (.litNat 7)
+
+/--
+error: preo: `typed derive Hidden` was refused by `Preo.Expr.Raw.infer`. The expression is malformed, reads a field outside its schema, applies an operator at the wrong type, or uses raw `.custom`, which has no implementation/locality proof. No typed term or positive analysis was emitted. Kernel reduction said: Tactic `decide` proved that the proposition
+  (Expr.Raw.infer Schema Raw).isSome = true
+is false
+-/
+#guard_msgs in
+preo BadTypedOpaque where
+  field marker : Counter
+  typed derive Hidden over { schema := [], reach := [] } :=
+    .custom "unchecked"
 
 /-! ### 4.1 A session budget is one five-currency plan witness -/
 

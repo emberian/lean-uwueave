@@ -65,6 +65,12 @@ def     N.documentSeam                                             -- final seam
 def     N.dₖ : N.State → T               := fun s => N.dₖ.on (N.fⱼ s)
 def     N.dₖ.merge : MergeFacet N.dₖ                              -- Fourth + its proof
 def     N.dₖ.classification : Classification _ N.dₖ
+
+def     N.q.Raw / .Schema / .Program                              -- Raw.infer witness
+def     N.q.Checked / .Type / .Term / .Eval                       -- one typed value
+def     N.q.Holes / .Reads / .MergeSafe? / .MonotoneSafe?         -- exact/proof options
+def     N.q.buildCache / .update / .updateCache / .update_correct  -- chained incrementality
+def     N.q.Reach / .Result / .ResultCarrier / .reportAt           -- checked six-status UI
 ```
 
 Four of those lines are the point:
@@ -87,6 +93,11 @@ Four of those lines are the point:
     field; `.andSeams` then forms the pair seam. Finally `.absorbFree` adds each
     FREE row whose legality at the carried clash pair kernel-checks. A free row
     that is false or undecidable there is omitted, never assumed.
+  * `N.q.Program` contains a kernel-reduced success witness for `Raw.infer`.
+    Every dependency, algebraic certificate, cache result and exact six-status
+    report above is computed from that one term. The authored finite reach feeds
+    least effect inference; equality is the explicit default future, not an
+    assertion that arbitrary environment changes preserve the result.
 
 ## The rule registry
 
@@ -150,12 +161,16 @@ exists** — a `sorry`-backed `Verdict` prints exactly like a real one.
     in the tree;
   * a `derive` reading zero or more than one field — the mergeability transport
     (`Preo.mergeability_comp`) is along **one** projection;
+  * a malformed, out-of-range, ill-typed or raw-opaque `typed derive` —
+    `Raw.infer` must return a checked term before any analysis or row exists;
   * a declaration with no fields.
 -/
 import Uwueave.Preo.Classification
 import Uwueave.Preo.ArtifactDurable
 import Uwueave.Preo.Future
+import Uwueave.Preo.Incremental
 import Uwueave.Preo.ProjectionV2
+import Uwueave.Preo.ResultProgram
 import Uwueave.Protocol
 import Uwueave.SeamAlgebra
 
@@ -461,7 +476,8 @@ private structure ParsedField where
 def elabPreoDecl : CommandElab := fun stx => do
   let `(command| preo $declId:ident where
       $fs:preoField* $invs:preoInv* $futures:preoFuture*
-      $ders:preoDerive* $protocols:preoProtocol* $sessions:preoSession*) := stx
+      $typedDers:preoTypedDerive* $ders:preoDerive*
+      $protocols:preoProtocol* $sessions:preoSession*) := stx
     | throwError "preo: malformed declaration"
   let declName := declId.getId
   let ns ← getCurrNamespace
@@ -983,7 +999,172 @@ def elabPreoDecl : CommandElab := fun stx => do
       evidence := ns ++ futureId.getId, isObligation := false
       cite := "Preo.Future.FutureDecl at the explicit WorldModel (kernel-checked)"
       seamCite := "" }
-  -- §3.6 Derives — the fourth verdict.
+  -- §3.6 Intrinsically typed programs. `Raw.infer` is executed by the
+  -- kernel-reduced `success` proof in `Expr.Program`; if it returns `none`, no
+  -- checked term, analysis, cache, update function, or report row exists.
+  for typedDer in typedDers do
+    let `(preoTypedDerive| typed derive $nm over { schema := $schema, reach := $reach } := $raw) := typedDer
+      | throwErrorAt typedDer "preo: malformed `typed derive`"
+    let schemaId := mkIdent (declName ++ (nm.getId ++ `Schema))
+    let rawId := mkIdent (declName ++ (nm.getId ++ `Raw))
+    let programId := mkIdent (declName ++ (nm.getId ++ `Program))
+    let checkedId := mkIdent (declName ++ (nm.getId ++ `Checked))
+    let typeId := mkIdent (declName ++ (nm.getId ++ `Type))
+    let termId := mkIdent (declName ++ (nm.getId ++ `Term))
+    let evalId := mkIdent (declName ++ (nm.getId ++ `Eval))
+    let holesId := mkIdent (declName ++ (nm.getId ++ `Holes))
+    let readsId := mkIdent (declName ++ (nm.getId ++ `Reads))
+    let mergeSafeId := mkIdent (declName ++ (nm.getId ++ `MergeSafe?))
+    let monotoneSafeId := mkIdent (declName ++ (nm.getId ++ `MonotoneSafe?))
+    let cacheId := mkIdent (declName ++ (nm.getId ++ `Cache))
+    let buildCacheId := mkIdent (declName ++ (nm.getId ++ `buildCache))
+    let updateId := mkIdent (declName ++ (nm.getId ++ `update))
+    let updateCacheId := mkIdent (declName ++ (nm.getId ++ `updateCache))
+    let updateCorrectId := mkIdent (declName ++ (nm.getId ++ `update_correct))
+    let zeroId := mkIdent (declName ++ (nm.getId ++ `update_off_dependency_zero))
+    let reachId := mkIdent (declName ++ (nm.getId ++ `Reach))
+    let resultFutureId := mkIdent (declName ++ (nm.getId ++ `ResultFuture))
+    let resultId := mkIdent (declName ++ (nm.getId ++ `Result))
+    let resultCarrierId := mkIdent (declName ++ (nm.getId ++ `ResultCarrier))
+    let reachReportId := mkIdent (declName ++ (nm.getId ++ `ReachReport))
+    let reportAtId := mkIdent (declName ++ (nm.getId ++ `reportAt))
+    elabCommand (← `(command|
+      /-- The explicitly written first-order input schema. -/
+      abbrev $schemaId : Uwueave.Preo.Expr.Schema := $schema))
+    elabCommand (← `(command|
+      /-- The raw typed-derive syntax before inference. -/
+      def $rawId : Uwueave.Preo.Expr.Raw := $raw))
+    match ← tryEmit (← `(command|
+        /-- The checked program. Its only typed term is extracted from
+        `Raw.infer`; the success proof is kernel reduction, not a cast. -/
+        def $programId : Uwueave.Preo.Expr.Program $schemaId where
+          raw := $rawId
+          success := by decide)) with
+    | .error why =>
+        throwErrorAt raw "preo: `typed derive {nm.getId}` was refused by \
+          `Preo.Expr.Raw.infer`. The expression is malformed, reads a field \
+          outside its schema, applies an operator at the wrong type, or uses \
+          raw `.custom`, which has no implementation/locality proof. No typed \
+          term or positive analysis was emitted. Kernel reduction said: {why}"
+    | .ok _ => pure ()
+    floorCheck nm "typed program" (fullDecl ++ (nm.getId ++ `Program))
+    elabCommand (← `(command|
+      /-- The exact existential result returned by `Raw.infer`. -/
+      def $checkedId : Uwueave.Preo.Expr.Checked $schemaId :=
+        Uwueave.Preo.Expr.Program.checked $programId))
+    elabCommand (← `(command|
+      /-- The result type inferred from the raw expression. -/
+      abbrev $typeId : Uwueave.Preo.Expr.Ty :=
+        Uwueave.Preo.Expr.Program.type $programId))
+    elabCommand (← `(command|
+      /-- The intrinsically typed term extracted from `Raw.infer`. -/
+      def $termId : Uwueave.Preo.Expr.Term $schemaId $typeId :=
+        Uwueave.Preo.Expr.Program.term $programId))
+    elabCommand (← `(command|
+      /-- Evaluation hook for runtime and six-state result adapters. -/
+      def $evalId : Uwueave.Preo.Expr.Env $schemaId →
+          Uwueave.Preo.Expr.Ty.denote $typeId :=
+        Uwueave.Preo.Expr.Program.eval $programId))
+    elabCommand (← `(command|
+      /-- Exact positional dependency occurrences. -/
+      def $holesId : List Uwueave.Preo.Expr.Hole :=
+        Uwueave.Preo.Expr.Program.holes $programId))
+    elabCommand (← `(command|
+      /-- Exact field reads, definitionally the erasure of `Holes`. -/
+      def $readsId : List Nat := Uwueave.Preo.Expr.Program.reads $programId))
+    elabCommand (← `(command|
+      /-- Proof-carrying positive merge classification; `none` is no claim. -/
+      def $mergeSafeId :
+          Option (Uwueave.Preo.Expr.MergeSafe $termId) :=
+        Uwueave.Preo.Expr.certifyMergeSafe $termId))
+    elabCommand (← `(command|
+      /-- Proof-carrying positive monotonicity classification; `none` is no
+      claim and is not a refutation. -/
+      def $monotoneSafeId :
+          Option (Uwueave.Preo.Expr.MonotoneSafe $termId) :=
+        Uwueave.Preo.Expr.certifyMonotone $termId))
+    elabCommand (← `(command|
+      /-- A cache indexed by this exact inferred term. -/
+      abbrev $cacheId := Uwueave.Preo.Incremental.ProgramCache $programId))
+    elabCommand (← `(command|
+      /-- Build a cache whose value is proved equal to fresh evaluation. -/
+      def $buildCacheId (env : Uwueave.Preo.Expr.Env $schemaId) : $cacheId :=
+        Uwueave.Preo.Incremental.buildProgramCache $programId env))
+    elabCommand (← `(command|
+      /-- Checked differential update: zero root evaluations on a proved miss,
+      exactly one full root evaluation on a conservative hit. -/
+      def $updateId (cache : $cacheId)
+          (delta : Uwueave.Preo.Incremental.EnvDelta cache.env) :=
+        Uwueave.Preo.Incremental.updateProgram $programId cache delta))
+    elabCommand (← `(command|
+      theorem $updateCorrectId (cache : $cacheId)
+          (delta : Uwueave.Preo.Incremental.EnvDelta cache.env) :
+          ($updateId cache delta).value = $evalId delta.after :=
+        Uwueave.Preo.Incremental.updateProgram_correct $programId cache delta))
+    elabCommand (← `(command|
+      /-- Chain a checked update into the cache for the next typed delta,
+      without reevaluating the term. -/
+      def $updateCacheId (cache : $cacheId)
+          (delta : Uwueave.Preo.Incremental.EnvDelta cache.env) : $cacheId :=
+        Uwueave.Preo.Incremental.updateProgramCache $programId cache delta))
+    elabCommand (← `(command|
+      theorem $zeroId (cache : $cacheId)
+          (delta : Uwueave.Preo.Incremental.EnvDelta cache.env)
+          (h : Uwueave.Preo.Incremental.touched delta $termId = false) :
+          ($updateId cache delta).recomputations = 0 ∧
+            ($updateId cache delta).value = cache.value :=
+        Uwueave.Preo.Incremental.updateProgram_off_dependency_zero
+          $programId cache delta h))
+    elabCommand (← `(command|
+      /-- The author-declared finite reach used for least six-status effect
+      inference. It is intentionally independent of the document State unless
+      the author supplies a projection into this typed environment. -/
+      def $reachId : List (Uwueave.Preo.Expr.Env $schemaId) := $reach))
+    elabCommand (← `(command|
+      /-- The honest snapshot future for this pure query: equality only. -/
+      abbrev $resultFutureId :
+          Uwueave.Evidence.Future (Uwueave.Preo.Expr.Env $schemaId) :=
+        Uwueave.Preo.Incremental.TypedResult.Future $programId))
+    let resultName := Syntax.mkStrLit s!"{fullDecl}.{nm.getId}"
+    let futureName := Syntax.mkStrLit s!"{fullDecl}.{nm.getId}/snapshot-equality"
+    let surfaceName := Syntax.mkStrLit s!"{fullDecl}.{nm.getId}/inspectable"
+    elabCommand (← `(command|
+      /-- A checked six-status declaration consuming this exact typed
+      evaluator and finite reach. Resolution is explicitly preserve-fork;
+      equality is the only admitted future. -/
+      def $resultId :=
+        Uwueave.Preo.Incremental.TypedResult.declaration $programId
+          $resultName $futureName $surfaceName $reachId))
+    floorCheck nm "typed result program" (fullDecl ++ (nm.getId ++ `Result))
+    elabCommand (← `(command|
+      /-- The reference six-way carrier used by the generated checked report. -/
+      abbrev $resultCarrierId :=
+        Uwueave.RenderSix.stdCarrier6 $resultFutureId
+          (Uwueave.Preo.Expr.Ty.denote $typeId)))
+    elabCommand (← `(command|
+      /-- A checked report that retains proof its evaluated site belongs to the
+      finite reach used by effect inference. -/
+      structure $reachReportId where
+        checked :
+          Uwueave.Preo.ResultProgram.CheckedReport $resultId $resultCarrierId
+        inReach : checked.state ∈ $reachId))
+    elabCommand (← `(command|
+      /-- A checked report whose site, status, future, resolution, visibility
+      and disclosure are all computed from the generated result declaration. -/
+      def $reportAtId (env : Uwueave.Preo.Expr.Env $schemaId)
+          (inReach : env ∈ $reachId) : $reachReportId where
+        checked := Uwueave.Preo.ResultProgram.CheckedReport.renderAt
+          $resultId $resultCarrierId env
+        inReach := inReach))
+    rows := rows.push {
+      decl := fullDecl, kind := .typedDerive, name := nm.getId.toString
+      detail := pp schema, detail₂ := pp raw ++ " on reach " ++ pp reach
+      evidence := fullDecl ++ (nm.getId ++ `Program), isObligation := false
+      cite := "Expr.Raw.infer → proof-carrying merge/monotone analyses → checked cache/update → finite-reach six-status Result/report"
+      seamCite := "" }
+
+  -- §3.7 Ordinary Lean derives — the fourth verdict and the deliberate
+  -- unrestricted escape hatch alongside the first-order typed fragment.
   for der in ders do
     let `(preoDerive| derive $nm : $ty = $body $[:= $ev]?) := der
       | throwErrorAt der "preo: malformed derive"
@@ -1107,7 +1288,7 @@ def elabPreoDecl : CommandElab := fun stx => do
           | none => "UNRESOLVED — see the row's `.obligation`"
         seamCite := "" }
     rows := rows.push row
-  -- §3.7 Typed protocol terms. The body is the deliberate opaque Lean escape
+  -- §3.8 Typed protocol terms. The body is the deliberate opaque Lean escape
   -- hatch into `Protocol.Term`: the semantic recursion remains in one API.
   for protocol in protocols do
     let `(preoProtocol| protocol $nm over $strategyTy := $body) := protocol
@@ -1124,7 +1305,7 @@ def elabPreoDecl : CommandElab := fun stx => do
       evidence := ns ++ protocolId.getId, isObligation := false
       cite := "Protocol.Term (typed AST; semantics stay in Term.denote/profile)"
       seamCite := "" }
-  -- §3.8 Sessions. Each emitted artifact is one named call to the modular
+  -- §3.9 Sessions. Each emitted artifact is one named call to the modular
   -- protocol elaborator; projections reuse it and never recompute a count.
   for session in sessions do
     let `(preoSession| session $nm $mode:preoSessionMode at $strategy $[:= $h]?) := session
@@ -1221,7 +1402,8 @@ def elabPreoDecl : CommandElab := fun stx => do
       throwErrorAt session "preo: unknown session form"
   modifyEnv fun env => rows.foldl (fun e r => preoExt.addEntry e r) env
   logInfo m!"preo {declName}: {n} field(s), {invs.size} invariant(s), \
-    {futures.size} future(s), {ders.size} derive(s), {protocols.size} protocol(s), \
+    {futures.size} future(s), {typedDers.size} typed derive(s), \
+    {ders.size} ordinary derive(s), {protocols.size} protocol(s), \
     {sessions.size} session(s) — \
     `#preo_report {declName}` for the table"
 
@@ -1482,6 +1664,12 @@ def elabPreoReport : CommandElab := fun stx => do
         out := out ++ s!"      ↳ {r.cite}\n"
         unless r.seamCite.isEmpty do
           out := out ++ s!"      ↳ SEAM: {r.seamCite}\n"
+  if rows.any (fun r => r.kind == .typedDerive) then
+    out := out ++ "\n  TYPED DERIVE          SCHEMA                RAW PROGRAM\n"
+    for r in rows do
+      if r.kind == .typedDerive then
+        out := out ++ s!"  {pad r.name 20}  {pad r.detail 20}  {r.detail₂}\n"
+        out := out ++ s!"      ↳ {r.cite}\n"
   if rows.any (fun r => r.kind == .derive) then
     out := out ++ "\n  DERIVE                READS       MERGEABILITY    ROUTE\n"
     for r in rows do
@@ -1512,7 +1700,8 @@ def elabPreoReport : CommandElab := fun stx => do
       if r.kind == .session then
         out := out ++ s!"  {pad r.name 20}  {pad r.detail 20}  {r.detail₂}\n"
         out := out ++ s!"      ↳ {r.cite}\n"
-  if rows.any (fun r => r.kind == .invariant || r.kind == .cross || r.kind == .derive) then
+  if rows.any (fun r => r.kind == .invariant || r.kind == .cross ||
+      r.kind == .derive || r.kind == .typedDerive) then
     out := out ++ "\n  Every VERDICT column above is REDUCED out of the row's `.classification`\n"
     out := out ++ "  constant at print time — `Classification.answer` and `.mergeAnswer`,\n"
     out := out ++ "  whose order-independence is `Preo.run_answer_congr`. No verdict is stored.\n"
@@ -1520,6 +1709,12 @@ def elabPreoReport : CommandElab := fun stx => do
     out := out ++ "  SEAM rows as `<invariant>.seamOnState` (`Preo.seamAlong` — the clash is\n"
     out := out ++ "  transported by PLANTING the field replicas in a document, which is what\n"
     out := out ++ "  fragment 1 said it could not synthesize).\n"
+    if rows.any (fun r => r.kind == .typedDerive) then
+      out := out ++ "  TYPED DERIVE rows expose `.Holes`, `.Reads`, `.MergeSafe?`,\n"
+      out := out ++ "  `.MonotoneSafe?`, `.buildCache`, `.updateCache`, `.Result`, and\n"
+      out := out ++ "  membership-gated `.reportAt`;\n"
+      out := out ++ "  positive badges are\n"
+      out := out ++ "  proof values, while `none` remains an honest non-answer.\n"
   if rows.any (fun r => r.kind == .future || r.kind == .protocol || r.kind == .session) then
     out := out ++ "\n  FUTURE/PROTOCOL/SESSION rows have no verdict column: they name typed\n"
     out := out ++ "  semantic artifacts, and their cited constructors carry the proofs.\n"

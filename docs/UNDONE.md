@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 174
-- **Extracted blocks (marker-bearing source lines):** 172
-- **Lean files containing markers:** 44
+- **Marker occurrences:** 170
+- **Extracted blocks (marker-bearing source lines):** 168
+- **Lean files containing markers:** 43
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -656,12 +656,15 @@ file is the frontier it named.
     `Enumeration.decideReaches` decide this `Prop`-valued reachability, while
     `FiniteHistory.searchCertified` returns a proof-carrying `BaseSelection`
     with an exhaustive finite common-ancestor list when one of the three cases
-    is found. Its `none` result is deliberately not relabelled `unavailable`.
-    What remains here is the unrestricted/infinite-DAG claim and a totality
-    theorem turning every covered finite pair into a selection.
+    is found. Downstream `HistoryEngine.decidePair` is total as an operational
+    **four-way** answer: selected, ambiguous, unavailable, or a refusal carrying
+    proofs that none of those exact predicates was established. It sweeps every
+    ordered pair of the enumeration. What remains here is the
+    unrestricted/infinite-DAG claim and a theorem excluding the refusal case if
+    every covered finite pair is to produce a `BaseSelection`.
 ````
 
-### [`Uwueave/Histories.lean:172`](../Uwueave/Histories.lean#L172)
+### [`Uwueave/Histories.lean:175`](../Uwueave/Histories.lean#L175)
 
 ````text
   * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
@@ -669,21 +672,22 @@ file is the frontier it named.
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
 ````
 
-### [`Uwueave/Histories.lean:182`](../Uwueave/Histories.lean#L182)
+### [`Uwueave/Histories.lean:185`](../Uwueave/Histories.lean#L185)
 
 ````text
-  * ⟨UNDONE, narrowed to VersionDag-native patch integration⟩ **Residual and
-    patch algebra now exists beside this state-level history model.**
-    `Uwueave.CompositeDelta.PatchEdge.reachable` forgets a patch-labelled edge
-    soundly to ordinary reachability, and
-    `CompositeDelta.Algebra.residualDiamond` grows two sibling patch edges to an
-    admitted common merge using proved residual, commutation, execution, and
-    legality laws. Its `LegalUnderComposition` is exactly equivalent to full
-    `AncestralConfluent`, and the existing length-two counter is retained as a
-    named failure of that law. What remains is native integration with this
-    file's `VersionDag`/`Coherent` structures: nodes and parent edges do not yet
-    carry `PatchEdge` evidence, and no theorem transports a residual diamond
-    through base selection or repeated/criss-cross history construction.
+  * ⟨UNDONE, narrowed to append-only version materialization⟩ **The selected-pair
+    patch seam is now operational.** Downstream `HistoryEngine.VersionPatch`
+    ties a `VersionDag` reachability witness to the exact admitted patch between
+    two labelled history states. `SelectedRequest.graph_selected` connects the
+    finite base search to a declared `HistoryMerge`, and `admitSelected`
+    transports sibling version patches through a residual algebra to a legal,
+    policy-identical `ResidualDiamond`. One delivery converges unconditionally;
+    arbitrary duplicate delivery converges under the named `ReplayStable` law,
+    proved for the concrete cheap-lock fixture. The length-two counter remains
+    an exact algebra refusal. What remains is allocation of a fresh version and
+    construction of an extended `History`/`Origin.merged` record (including
+    repeated criss-cross growth); no endpoint-only patch reconstruction is
+    claimed.
 ````
 
 ## `Uwueave/HistoryBase.lean`
@@ -772,29 +776,32 @@ harmlessness are always anti-correlated. -/
 ### [`Uwueave/HistoryPolicy.lean:123`](../Uwueave/HistoryPolicy.lean#L123)
 
 ````text
-  * ⟨UNDONE, narrowed to semantic whole-history judgements⟩ **The judgements are
-    asked at a pair, not swept over a history.** `BaseRobust`/`SelectorSafe`
-    quantify over the policy's declared `scope`, and every scope here is one
-    pair (in both orders). Downstream `FiniteHistory.sweepEntries_complete` and
-    `FiniteHistory.checkPolicy` do sweep every ordered pair of an explicitly
-    enumerated finite DAG, but only for exact version-level base-decision
-    admission. They do not sweep `BaseRobust`, `SelectorSafe`, or
-    `HistoryConvergent` over a `History`, and make no delivery/convergence claim.
+  * ⟨UNDONE, narrowed to higher semantic whole-history judgements⟩ **Declared
+    policy decisions are now swept; the higher judgements are not.** Downstream
+    `HistoryEngine.semanticSweep` evaluates `HistoryMerge.select` and `apply`
+    over every ordered pair of an explicitly enumerated history, returning
+    selected/ambiguous/unavailable evidence inside scope and a proved refusal
+    outside it. `SemanticDecision.graph_kind_eq` proves agreement with finite
+    DAG classification on every claimed pair. What remains is an executable
+    all-pairs sweep of `BaseRobust`, `SelectorSafe`, and protocol-level
+    convergence obligations; `HistoryConvergent` itself is still the same-record
+    derived-view theorem, not a delivery protocol.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:131`](../Uwueave/HistoryPolicy.lean#L131)
+### [`Uwueave/HistoryPolicy.lean:133`](../Uwueave/HistoryPolicy.lean#L133)
 
 ````text
   * ⟨UNDONE, narrowed to a total `HistoryMerge` selector⟩ **No total selector is
     computed into this model from a DAG.** Downstream
-    `FiniteHistory.searchCertified` performs proof-carrying search under an
-    explicit finite enumeration and computes all three concrete fixture cases.
-    It remains partial (`none` is not `unavailable`) and does not synthesize a
-    `HistoryMerge.select`, its `scope`, reconciliation kernel, or their laws;
+    `HistoryEngine.decidePair` performs proof-carrying four-way search under an
+    explicit finite enumeration and computes selected, ambiguous, unavailable,
+    or exact refusal evidence. `semanticSweep` applies an already-declared
+    policy and refuses pairs outside its scope. Neither operation synthesizes a
+    `HistoryMerge.select`, its scope, reconciliation kernel, or their laws;
     `ccSelect*`/`lvSelect` here are still written down and proved sound.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:138`](../Uwueave/HistoryPolicy.lean#L138)
+### [`Uwueave/HistoryPolicy.lean:141`](../Uwueave/HistoryPolicy.lean#L141)
 
 ````text
   * ⟨UNDONE⟩ **`SelectorSymmetric` is proved sufficient for order-agreement, not
@@ -803,7 +810,7 @@ harmlessness are always anti-correlated. -/
     does.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:142`](../Uwueave/HistoryPolicy.lean#L142)
+### [`Uwueave/HistoryPolicy.lean:145`](../Uwueave/HistoryPolicy.lean#L145)
 
 ````text
   * ⟨UNDONE⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
@@ -924,29 +931,20 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     discipline the theorems reward, not one the kernel enforces.
 ````
 
-### [`Uwueave/HonestRender.lean:157`](../Uwueave/HonestRender.lean#L157)
+### [`Uwueave/HonestRender.lean:158`](../Uwueave/HonestRender.lean#L158)
 
 ````text
-  * **The site index is carried, not checked.** ⟨UNDONE⟩ `Carrier.site` puts the
-    situation a report was made at into the report, and
-    `state_sited_certificates_refuse_openW` says what goes wrong when that
-    situation is a state and the future is delivery. No theorem says a running
-    system's reports are made at the world they claim; `report` takes the site
-    as an argument and believes it.
+    deployment-world authenticity remains open.** ⟨UNDONE at runtime
+    authenticity⟩ `Carrier.site` itself still trusts the argument to `report`.
+    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
+    report's carrier site is exactly the state whose status was evaluated, and
+    `refuses_wrong_site` rejects packaging it under a different site. What no
+    Lean theorem establishes is that the state supplied by a running deployment
+    is the external world it claims to have observed; that requires an
+    authenticated runtime observation boundary.
 ````
 
-### [`Uwueave/HonestRender.lean:163`](../Uwueave/HonestRender.lean#L163)
-
-````text
-  * **Disclosure is recorded, not decided.** ⟨UNDONE⟩ The alternatives survive a
-    resolution — `ResultStatus.alternatives_are_retained`, by indexing rather
-    than by a field — so a redacted fork is still a fork. No theorem says a
-    disclosure *decision* was taken, and §8's "every shown or hidden branch has
-    an explicit disclosure decision" is therefore half-built: the branches are
-    retained, the decision is not typed.
-````
-
-### [`Uwueave/HonestRender.lean:169`](../Uwueave/HonestRender.lean#L169)
+### [`Uwueave/HonestRender.lean:174`](../Uwueave/HonestRender.lean#L174)
 
 ````text
   * **Obligations are not affordances here.** ⟨UNDONE⟩ §8's actionable
@@ -955,7 +953,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     "waiting on `bob`" is a `Source` in a `GSet` and nothing more.
 ````
 
-### [`Uwueave/HonestRender.lean:173`](../Uwueave/HonestRender.lean#L173)
+### [`Uwueave/HonestRender.lean:178`](../Uwueave/HonestRender.lean#L178)
 
 ````text
   * **The empirical claim of §8 is untouched.** ⟨UNDONE⟩ *That a recurring class
@@ -1310,13 +1308,16 @@ clothes.
     future property into temporal eventuality; those stronger claims remain open.
 ````
 
-### [`Uwueave/RenderSix.lean:119`](../Uwueave/RenderSix.lean#L119)
+### [`Uwueave/RenderSix.lean:120`](../Uwueave/RenderSix.lean#L120)
 
 ````text
-  * **The site is carried, not checked.** ⟨UNDONE⟩ Inherited verbatim from
-    `HonestRender.lean`: `report` takes the site as an argument and believes it.
-    §4's separation is a statement about the *badge*; a consumer that reads
-    `site` is reading the evidence, not the rendered result.
+    deployment-world authenticity remains open.** ⟨UNDONE at runtime
+    authenticity⟩ This raw `Carrier6.report` still believes its site argument.
+    Downstream, `ResultProgram.CheckedReport.site_exact` proves that a checked
+    report carries exactly the state fed to the total evaluator, and
+    `refuses_wrong_site` rejects a contradictory site claim. A runtime must
+    still authenticate that its supplied state is the external world actually
+    observed; neither the raw carrier nor the adapter fabricates that premise.
 ````
 
 ## `Uwueave/Repair.lean`
@@ -1468,16 +1469,7 @@ clothes.
     no surface language.
 ````
 
-### [`Uwueave/ResultStatus.lean:103`](../Uwueave/ResultStatus.lean#L103)
-
-````text
-  * **Visibility is not modelled.** ⟨UNDONE⟩ `PREOSCRIPTING` §5.2 says
-    produced-but-uninspectable is an independent axis rather than a seventh
-    cell. Nothing here contradicts that and nothing here builds it: the six
-    cells are candidates × closure only.
-````
-
-### [`Uwueave/ResultStatus.lean:121`](../Uwueave/ResultStatus.lean#L121)
+### [`Uwueave/ResultStatus.lean:125`](../Uwueave/ResultStatus.lean#L125)
 
 ````text
     ⟨UNDONE at running/arbitrary reach and surface integration⟩ `Declares`
@@ -1489,7 +1481,7 @@ clothes.
     in the surface elaborator.
 ````
 
-### [`Uwueave/ResultStatus.lean:128`](../Uwueave/ResultStatus.lean#L128)
+### [`Uwueave/ResultStatus.lean:132`](../Uwueave/ResultStatus.lean#L132)
 
 ````text
   * **The reach set is a hypothesis.** ⟨TERMINAL for the refutation, ⟨UNDONE⟩
@@ -1499,32 +1491,15 @@ clothes.
     wellformedness, and it is not answered there either.
 ````
 
-## `Uwueave/ScheduleSynthesis.lean`
-
-### [`Uwueave/ScheduleSynthesis.lean:38`](../Uwueave/ScheduleSynthesis.lean#L38)
-
-````text
-* ⟨UNDONE⟩ There is no catalog generator. A future generator needs a finite
-  action universe and a proved coverage search; neither `Scheduling` nor
-  `Protocol` currently supplies arbitrary schedule enumeration.
-````
-
 ## `Uwueave/Scheduling.lean`
 
 ### [`Uwueave/Scheduling.lean:75`](../Uwueave/Scheduling.lean#L75)
 
 ````text
-  * ⟨UNDONE⟩ Participants are declared, not proved online; there is no
-    liveness, deadlock-freedom, message loss, elapsed time, or schedule search.
-````
-
-### [`Uwueave/Scheduling.lean:80`](../Uwueave/Scheduling.lean#L80)
-
-````text
-    typed `Protocol.Term`s. ⟨UNDONE⟩ There is still no custom user protocol
-    parser or user-authored budget block, and no transport from
-    `Budget.ForcedFloor` to a meeting floor. The examples prove that such a
-    transport is false.
+  * ⟨UNDONE⟩ Participants are declared, not proved online; there is no runtime
+    liveness, deadlock-freedom, message-loss, or elapsed-time model, and no
+    unbounded deployment-complete schedule-catalog generator. Finite catalog
+    search does not establish any of those operational properties.
 ````
 
 ## `Uwueave/SeamColoring.lean`

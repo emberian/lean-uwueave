@@ -17,6 +17,8 @@ extern void lean_initialize_runtime_module(void);
 extern lean_object *initialize_uwueave_Uwueave(uint8_t builtin);
 extern lean_object *initialize_uwueave_Uwueave_SeqKernel(uint8_t builtin);
 extern lean_object *initialize_uwueave_Uwueave_EraKernel(uint8_t builtin);
+extern lean_object *initialize_uwueave_Uwueave_Preo_ArtifactJournalKernel(
+    uint8_t builtin);
 extern lean_object *uwueave_encode_request(lean_object *first_parent_words,
                                            lean_object *op_fields,
                                            lean_object *grant_fields,
@@ -25,6 +27,8 @@ extern lean_object *uwueave_replay_kernel(lean_object *bytes);
 extern lean_object *uwueave_request_canonical(lean_object *bytes);
 extern lean_object *uwueave_seq_kernel(lean_object *bytes);
 extern lean_object *uwueave_era_resolve(lean_object *bytes);
+extern lean_object *
+uwueave_preo_artifact_v2_validate_one(lean_object *bytes);
 
 static int g_initialized = 0;
 
@@ -81,6 +85,16 @@ void shim_uweave_init(void) {
    * idempotently guarded initialization is retained for the same local FFI
    * robustness as SeqKernel above. */
   res = initialize_uwueave_Uwueave_EraKernel(1);
+  if (lean_io_result_is_ok(res)) {
+    lean_dec_ref(res);
+  } else {
+    lean_io_result_show_error(res);
+    abort();
+  }
+  /* Rust classifies outer framing faults, while this Lean module decides
+   * whether the opaque payload is exactly canonical ArtifactEncoding v2.
+   * Its initializer is idempotently guarded, like Seq/Era above. */
+  res = initialize_uwueave_Uwueave_Preo_ArtifactJournalKernel(1);
   if (lean_io_result_is_ok(res)) {
     lean_dec_ref(res);
   } else {
@@ -226,6 +240,21 @@ uint8_t shim_uweave_request_canonical(const uint8_t *in, size_t len) {
   lean_object *arr = copy_rust_bytes(in, len);
   lean_object *out = uwueave_request_canonical(arr); /* consumes arr */
   uint8_t v = lean_sarray_size(out) > 0 ? lean_sarray_cptr(out)[0] : 0;
+  lean_dec_ref(out);
+  return v;
+}
+
+/* Ask Lean whether `in` is exactly one canonical ArtifactDurable-v2 frame,
+ * including semantic payload canonicality and no trailing bytes. The export
+ * consumes the fresh input and returns an owned one-byte ByteArray.
+ * SAFETY CONTRACT: `in` is readable for len bytes when nonempty; no Rust
+ * pointer is retained; the runtime and validator module are initialized. */
+uint8_t shim_uweave_preo_artifact_v2_validate_one(const uint8_t *in,
+                                                   size_t len) {
+  lean_object *arr = copy_rust_bytes(in, len);
+  lean_object *out =
+      uwueave_preo_artifact_v2_validate_one(arr); /* consumes arr */
+  uint8_t v = lean_sarray_size(out) == 1 ? lean_sarray_cptr(out)[0] : 0;
   lean_dec_ref(out);
   return v;
 }

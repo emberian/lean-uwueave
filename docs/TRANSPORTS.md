@@ -19,7 +19,7 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 108 numbered transport rows.**
+**Ledger total: 115 numbered transport rows.**
 
 ---
 
@@ -353,23 +353,33 @@ summaries agrees with the truth **iff** the summary is a join homomorphism.
 its pullback along monotone `card` is not.
 
 **20a. Typed expression structure → sufficient dependencies and semantic laws** ⚠
-*source* an intrinsically typed `Preo.Expr.Term Γ t`, its structural holes,
-or a proof-carrying `MergeSafe`/`MonotoneSafe` certificate · *target* exact
-field-dependency sufficiency, `PreservesMerge`, or semantic `Monotone`
-respectively · *transport* `Preo.Expr.Term.eval_ext` proves environments that
-agree on `Term.reads` evaluate equally;
+*source* a raw `Preo.Expr.Raw`, an explicit schema, or an intrinsically typed
+`Preo.Expr.Term Γ t` with structural holes or a proof-carrying
+`MergeSafe`/`MonotoneSafe` certificate · *target* a checked
+`Preo.Expr.Program Γ` plus exact field-dependency sufficiency,
+`PreservesMerge`, or semantic `Monotone` respectively · *transport*
+`Preo.Expr.Raw.infer` constructs the checked term behind `Program.checked`,
+while `Program.inferred` pins the successful inference result;
+`Preo.Expr.Term.eval_ext` proves environments that agree on `Term.reads`
+evaluate equally;
 `Term.dependency_iff_positional_hole` makes every reported dependency exactly
 a positional field or declared opaque hole. `MergeSafe.sound` and
 `MonotoneSafe.sound` erase the structural certificates to their semantic laws
-· *needs* the typed schema and constructor rules; an opaque `CustomNode` must
+· *needs* the explicit schema, successful inference, and constructor rules; an
+opaque `CustomNode` must
 declare dependencies and prove read-extensionality, and any positive algebraic
 classification of it must be supplied explicitly · *without a sound
 constructor* `negatedMembership_not_monotone` and
 `summedFields_not_preservesMerge` separate tempting Boolean/addition forms;
 `malformed_not_classified` rejects an ill-typed raw negation, while
-`opaque_not_auto_mergeSafe` refuses to infer a hidden homomorphism. The positive
-analyses are intentionally incomplete, and this is not yet a surface-language
-transport: `Preo.Syntax` and `Preo.Elab` do not import or elaborate these terms.
+`opaque_not_auto_mergeSafe` refuses to infer a hidden homomorphism. The
+`typed derive` surface emits the raw form, schema, checked program, exact reads
+and holes, certificates, cache/update functions, finite result carrier, and
+report; `Preo.Demo.semanticSurface_next_is_hand_program` pins it to the hand
+program, while the guarded `BadTypedMalformed.Broken` and
+`BadTypedOpaque.Hidden` commands refuse failed inference and opaque custom
+syntax. Ordinary Lean `derive` remains an opaque escape, and the positive
+analyses remain intentionally incomplete.
 
 **21. Evidence → coarsest sufficient summary** ✅
 *transport* `MinimalSummary.ctxQuot_coarsest_sufficient` — universal property
@@ -704,7 +714,10 @@ and opposite executable results at the same limits. The ranked variant
 `selectLeast` additionally needs an explicit caller `OrderPolicy` and catalog
 tie order; `selection_is_policy_dependent` makes two policies choose opposite
 peer/network profiles from the same feasible catalog. Refusal and leastness
-remain catalog-relative, and no catalog generator is claimed.
+remain catalog-relative. `Preo.Planning.mem_actionChoices_iff_sublist` now
+supplies one bounded catalog route: every canonical sublist of a duplicate-free,
+pre-capped authored action universe, filtered by actual coverage. It still
+does not enumerate arbitrary schedules outside that finite universe.
 
 **36. Lower bound → acceptance** ✗ **REFUTED**
 *without it* `Budget.lower_bound_does_not_license_acceptance` — and the reason
@@ -1253,17 +1266,28 @@ manifest value.
 
 **44s. Conservative typed environment delta → correct differential result** ⚠
 *source* a proof-carrying `Preo.Incremental.EnvDelta`, a cache tied to its base
-environment, and a typed `Preo.Expr.Term` · *target* a `Result` equal to fresh
-evaluation at the new environment · *transport*
-`Preo.Incremental.incremental_correct`; `off_dependency_zero` additionally
-transports a false structural touch test to exact cached reuse with zero counted
-root evaluations · *needs* `EnvDelta.unchanged`, which proves every field
-reported unchanged really is equal, and the cache's own correctness proof ·
-*without an explicit extension law* `custom_without_law_recomputes` forces
-every opaque `CustomNode` down the one-full-evaluation path regardless of its
-declared reads. `withLaw_correct` permits a cheaper custom path only when the
-author returns a result carrying equality to `Term.eval`; no subterm work,
-allocation, or reduction-cost bound is transported.
+environment, and a typed `Preo.Expr.Term` or inferred `Preo.Expr.Program` ·
+*target* a `Result` equal to fresh evaluation at the new environment, or the
+generated equality-indexed six-status result declaration and policy-exact
+report · *transport* `Preo.Incremental.incremental_correct`;
+`off_dependency_zero` additionally transports a false structural touch test to
+exact cached reuse with zero counted root evaluations.
+`updateProgramCache_correct` lifts that theorem to checked programs and cache
+chaining, while `TypedResult.totalSound` and `TypedResult.declaration` turn
+exact equality futures into a total `Preo.ResultProgram` declaration. The
+generated `typed derive` path is pinned by
+`Preo.Demo.semanticSurface_next_update_correct`,
+`semanticSurface_next_cache_chains`, `semanticSurface_next_result_exact`, and
+`semanticSurface_next_report_policy_exact` · *needs* `EnvDelta.unchanged`,
+which proves every field reported unchanged really is equal, the cache's own
+correctness proof, and the declaration's explicit finite reach. The typed
+result adapter deliberately uses equality as its future and a singleton exact
+answer · *without an explicit extension law* `custom_without_law_recomputes`
+forces every opaque `CustomNode` down the one-full-evaluation path regardless
+of its declared reads. `withLaw_correct` permits a cheaper custom path only
+when the author returns a result carrying equality to `Term.eval`; no larger
+future/stability law and no subterm work, allocation, or reduction-cost bound
+is transported.
 
 **44t. Observer-selected Boolean → sound remote choreography branch** ⚠
 *source* a finite `ChoreoChoice.Program` built from read-free ordinary
@@ -1366,11 +1390,129 @@ is the nonempty accepted four-operation path. The transport covers neither
 physical deletion/GC nor text, pin, grant, horizon-advance, or cross-tree-hole
 edits.
 
+**45. Covered history decision plus explicit patches → admitted convergence** ⚠
+*source* a finite covered `HistoryEngine.Enumeration`, a scoped
+`HistoryMerge`, a selected merge request with explicit left/right
+`VersionPatch` values, and `CompositeDelta.Algebra` · *target* an exact
+`SelectedAdmission` and convergence after delivering the two residual patches
+· *transport* `HistoryEngine.graphSweep_complete` and the semantic-decision
+sweep establish the selected/refused/unavailable/ambiguous decision;
+`HistoryEngine.admitSelected` packages the chosen result, and
+`HistoryEngine.ResidualDiamond.deliver_once_converges` identifies both
+one-delivery orders. `repeated_delivery_converges` extends this to duplicate
+delivery · *needs* finite graph coverage, the declared history scope, exact
+patches, legal base-to-branch runs, and the composite algebra; duplicate
+delivery additionally needs `CompositeDelta.ReplayStable` · *without them*
+`cc_semantic_root_pair_refused` refuses a semantic pair outside scope, while
+`counter_length_two_refusal_fixture` supplies a real length-two patch refusal.
+Residual commutation alone does not imply idempotent redelivery, and the engine
+never reconstructs patches from endpoints.
+
+**45a. Authoritative checked append → atomic logical reopen** ⚠
+*source* a prior authoritative log, a checked batch, and an
+`PersistentRuntime.AtomicBatchObservation` · *target* reopening to exactly the
+old state or the state after the whole batch, plus checkpoint/suffix replay
+equivalence · *transport* `PersistentRuntime.checked_atomic_reopen`,
+`checkpoint_suffix_replay_equiv`, and `reopenImage_cache_irrelevant` · *needs*
+the host-supplied atomic observation and, for checkpoint recovery, a validated
+checkpoint at the stated sequence. This Lean model is a pure list-level
+specification; it does not derive filesystem atomicity, checksums, locking,
+flush ordering, or power-loss behavior · *without the observation*
+`strict_prefix_not_atomic` exhibits an interrupted strict prefix that is
+neither allowed outcome. `snapshot_only_recovery_unsafe` exhibits two distinct
+authoritative logs with the same snapshot, so a snapshot cannot replace replay.
+
+**45b. Canonical ArtifactDurable-v2 journal → exact scan boundary** ⚠
+*source* concatenated canonical `Preo.ArtifactDurable` format-v2 frames ·
+*target* their exact decoded values and half-open offsets, a first-stop
+classification, and a narrow one-frame host validator · *transport*
+`Preo.ArtifactJournalKernel.scan_stops_at_first_refusal` makes the first
+refusal terminal, `scan_torn_final` classifies a syntactic strict final prefix,
+and `validateOne_projectionBytes` pins the accepted inner value;
+`validateOneKernel` exports one byte equal to one only for an exactly canonical
+v2 frame · *needs* exact canonical inner bytes. A physical record must
+separately inhabit `PhysicalRecord.Valid`, including the caller's outer
+version/domain/length/checksum facts · *without canonical framing* the
+`Fixtures.corrupt_middle_fixture`, `wrong_version_fixture`,
+`wrong_domain_fixture`, `unknown_body_tag_fixture`, and
+`noncanonical_payload_fixture` stop rather than truncate. Lean supplies neither
+a digest nor filesystem semantics, and no theorem says the host physical
+journal refines this kernel.
+
+**45c. Bounded authored action universe → coupled schedule and repair result** ⚠
+*source* a `Preo.Planning.Problem` with an `ActionUniverse`, session, limits,
+schedule order, repair catalog/order, and universal compatibility relation ·
+*target* either a jointly selected schedule/repair pair or an exact scoped
+refusal · *transport* `Preo.Planning.mem_actionChoices_iff_sublist` and
+`actionChoices_length` characterize the bounded order-preserving generator;
+`generatedPlans` filters it by actual session coverage, and `synthesize` is
+characterized by `Result.coupled_exists_of_isSelected` and
+`Result.refusal_scope` · *needs* duplicate-free authored actions, the
+pre-materialization `2^n` cap, exact `Covers`, explicit five schedule and eight
+repair axes, and the supplied universal compatibility predicate · *without
+them* `duplicate_surface_refusal_is_exact` and
+`native_surface_size_refusal_is_exact` refuse before generation, while
+`generated_schedule_refusal_is_exhaustive` and
+`generated_repair_refusal_is_exhaustive` quantify only over their supplied
+finite lists. The transport performs no arbitrary action discovery or currency
+conversion.
+
+**45d. Native protocol syntax → exact typed protocol surface** ⚠
+*source* the parser-safe `Preo.ProtocolSurface` grammar covering all six
+`Protocol.Term` constructors · *target* exact generated `Term`, `Elaboration`,
+`Session`, `Plan`, `Limits`, and `ProfileUpperBound` constants · *transport*
+`native_fixture_exact_shape`, `native_fixture_exact_five_currency_profile`,
+and `native_fixture_retains_exact_demands` pin the generated values, while
+`native_coalescing_is_exact_session` and `native_ambient_is_exact_session`
+cover those constructors · *needs* the explicit branch strategy and all seven
+schedule axes; crossing origins are bounded `Fin` values and choice fragments
+are finite and nonempty · *without those syntax conditions* the guarded
+`BadCrossing` and `UnsupportedRace` commands fail. Independently,
+`crossings_can_still_exceed_meetings` and
+`meetings_can_still_exceed_crossings` refute collapsing those axes. This is a
+typed construction boundary, not a theorem of deadlock freedom, message
+delivery, liveness, or runtime execution.
+
+**45e. Total six-status declaration → least effect and policy-exact report** ⚠
+*source* a `Preo.ResultProgram.CheckedDeclaration` carrying finite reach,
+future, resolution, answer/settled/evaluate functions, a surface, and
+`TotalSoundEvaluator6` · *target* its least status effect, an honest renderer,
+and a site/status/future/resolution/surface/policy-exact `CheckedReport` ·
+*transport* `CheckedDeclaration.effect_least` and
+`CheckedDeclaration.renderer_honest`; `renderAt` and the report projection
+theorems pin the rendered observation · *needs* the total six-cell proof, the
+explicit finite reach, and exact visibility/disclosure equations · *without
+those policy equalities* `CheckedReport.refuses_wrong_site`,
+`refuses_wrong_visibility`, `refuses_wrong_disclosure`, and
+`open_report_refuses_lie_about_disclosure` reject concrete false reports. The
+older liar accepted by the legacy contract remains the row 44x counterexample;
+no pixel-level salience or claim outside the declared reach follows.
+
+**45f. Canonical authenticated v4 request → execution-ready exact operation** ⚠
+*source* bounded canonical `RuntimeAuthV4` bytes plus separate `Verified`,
+`Resolved`, `NonceFresh`, authorization, and membership evidence · *target* an
+exact `Exec.Op` inside the explicit execution-ready contract · *transport*
+`RuntimeAuthV4.bounded_roundtrip` and
+`signingBytesV4_injective` protect the canonical representation;
+`toExecOp_exact_fields` pins every translated operation field, while
+`ReadyForExecution` keeps verification, resolution, freshness, authorization,
+and membership as distinct premises. Follow-on `LayeredOutcome`/`WellLayered`
+and `StorageReceipt` specifications do not derive execution or persistence;
+the receipt keeps append and durability distinct · *needs* deployment-provided cryptographic
+verification, key resolution, authorization, membership, and storage evidence;
+the signed replica is exactly the issuer and there is no independent actor ·
+*without the bound or exact signed content* the document/genesis/issuer/
+algorithm/epoch/nonce/stable-child substitution fixtures, nonce collision,
+`old_version_refused`, `wrong_kind_refused`, `empty_nonce_shape_refused`, and
+`oversized_refused` are concrete failures. V4 is staged rather than the
+shipping v3 boundary; Lean proves neither cryptographic hardness nor host
+execution, append, or durability.
+
 ---
 
 ## The meta-row
 
-**45. Proved module → covered by the gate** ✗ **was REFUTED, now repaired**
+**46. Proved module → covered by the gate** ✗ **was REFUTED, now repaired**
 *without it* `Choreo` — 1305 lines, 53 theorems, four ledger rows — sat in the
 root and **outside `#audit_floor`** for a full wave, beneath four
 "total by construction" claims, while the vacuity tripwire cleared by a factor
@@ -1415,8 +1557,11 @@ exact V1/V2 host validation, deterministic data-only Rust rendering, and the
 whole checked export manifest in rows 44a–44r. Rows 44s–44z add conservative
 incremental evaluation, communicated choice, finite clash-graph realization,
 composite residual patches, finite contextual compilation, six-status effects,
-temporal fairness, and checked woven edits. What remains is different work:
+temporal fairness, and checked woven edits. Rows 45–45f connect the covered
+history engine, logical persistent runtime, canonical artifact journal,
+bounded planning generator, native protocol syntax, total result/report
+program, and staged authenticated-v4 boundary. What remains is different work:
 declarations still carry no operation vocabulary from which to derive
-reachability, no Preo rule produces a typed
-`Repair P Q`, multi-field derives and three-or-more-field invariants are
-refused.
+reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives
+and three-or-more-field invariants are refused, and neither logical persistence
+model proves the host filesystem implementation refines it.
