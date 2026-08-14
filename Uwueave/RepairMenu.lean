@@ -638,7 +638,7 @@ theorem seamRepair_price_is_forced {P : Promise} (Seg : Type) (σ : P.State → 
   f.forced τ hτ
 
 /-- **The seam obligation**: the row a menu prints for a projection it was
-handed and cannot decide. `Exits.lean`'s ⟨UNDONE U-0134⟩ — *"it reports that a seam exit
+handed and cannot decide. `Exits.lean`'s ⟨DEBT-REF U-0094⟩ — *"it reports that a seam exit
 exists for a σ you hand it; it does not synthesize the σ"* — with a type. -/
 def seamObligation (P : Promise) (Seg : Type) (σ : P.State → Seg)
     (f : SeamFloor P) : RepairObligation P P where

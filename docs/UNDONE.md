@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 86
-- **Extracted blocks (marker-bearing source lines):** 84
-- **Lean files containing markers:** 31
+- **Marker occurrences:** 84
+- **Extracted blocks (marker-bearing source lines):** 82
+- **Lean files containing markers:** 30
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -184,15 +184,6 @@ clothes.
 what may still arrive) and listed the bridge to a real closure as ⟨UNDONE U-0042⟩.
 Here the licence is a **theorem about the evidence**: `closed_freezes` says a
 closed evidence's candidate set cannot move under any admissible future.
-````
-
-## `Uwueave/Exits.lean`
-
-### [`Uwueave/Exits.lean:156`](../Uwueave/Exits.lean#L156)
-
-````text
-prior art; it is the next thing to build, and it is named ⟨UNDONE U-0044⟩ rather than
-paved over. Concretely, what is missing is a function
 ````
 
 ## `Uwueave/ForkGrade.lean`
@@ -683,13 +674,6 @@ minimal — see the module header. -/
 row for a σ you hand it. This is that sentence with a type: the row is a repair
 whose only missing piece is named, and the displayed price and delta are pinned
 to the repair the residual buys. -/
-````
-
-### [`Uwueave/RepairMenu.lean:641`](../Uwueave/RepairMenu.lean#L641)
-
-````text
-handed and cannot decide. `Exits.lean`'s ⟨UNDONE U-0134⟩ — *"it reports that a seam exit
-exists for a σ you hand it; it does not synthesize the σ"* — with a type. -/
 ````
 
 ## `Uwueave/ResultStatus.lean`

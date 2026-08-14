@@ -153,7 +153,7 @@ not **synthesize** the `σ`, and it does not **synthesize** the escrow's quota
 partition. That is a search problem over projections of the state space, and
 nothing here searches. LoRe does not synthesize these either — it inserts
 coordination from a fixed repertoire — so this gap is not a gap against the
-prior art; it is the next thing to build, and it is named ⟨UNDONE U-0044⟩ rather than
+prior art; it is the next thing to build, and it is named ⟨DEBT-REF U-0094⟩ rather than
 paved over. Concretely, what is missing is a function
 
     synth : (I : Invariant S) → Option (Σ Seg, {σ : S → Seg // SegmentedIConfluent σ I})
