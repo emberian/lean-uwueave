@@ -4,8 +4,8 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 113
-- **Extracted blocks (marker-bearing source lines):** 111
+- **Marker occurrences:** 112
+- **Extracted blocks (marker-bearing source lines):** 110
 - **Lean files containing markers:** 36
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
@@ -1090,17 +1090,6 @@ clothes.
 
 ````text
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0151⟩ = deliberately outside it.
-````
-
-### [`Uwueave/WorldContext.lean:43`](../Uwueave/WorldContext.lean#L43)
-
-````text
-  * ⟨DONE in the proof-carrying successor; ⟨UNDONE U-0152⟩ for deployment crypto⟩
-    **Authentication and capability consumption remain outside this carrier.**
-    `Uwueave.AuthenticatedWorldContext` adds accepted-and-issued signed typed
-    position claims and grow-only consumption tombstones while projecting its
-    distinct consuming step to `WorldFuture`.  This file still neither verifies
-    a deployed scheme nor deletes an outstanding grant.
 ````
 
 ## `Uwueave/WorldFuture.lean`

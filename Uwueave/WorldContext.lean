@@ -40,7 +40,8 @@ capability set, causal cut, or known base differs.
     `Histories.Reaches` in a real labelled `History`.  Turning a base into a
     state-level merge decision additionally requires `Histories.RunRealized`
     and a genuine `CommonAncestor`; `known_base_selected_valid` exposes both.
-  * ⟨DONE in the proof-carrying successor; ⟨UNDONE U-0152⟩ for deployment crypto⟩
+  * ⟨DONE in the proof-carrying successor; deployment crypto remains
+    ⟨DEBT-REF U-0001⟩ and host refinement remains ⟨DEBT-REF U-0052⟩⟩
     **Authentication and capability consumption remain outside this carrier.**
     `Uwueave.AuthenticatedWorldContext` adds accepted-and-issued signed typed
     position claims and grow-only consumption tombstones while projecting its
