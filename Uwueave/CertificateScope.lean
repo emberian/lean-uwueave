@@ -155,11 +155,12 @@ and the answer is split, both halves proved:
     preserves this file's residual images. No theorem here characterises every
     world-pair a given residual key glues, and general key sufficiency remains
     undecidable by this development.
-  * ⟨UNDONE U-0011⟩ **The evidence/world boundary remains `Type 0`.** Residuals,
-    sufficient keys, their quotient, and the `MinimalSummary` bridges are now
-    universe-polymorphic. The theorems phrased through
-    `Evidence.FreeTermination`, `Holes.Partial`, or `WorldFuture.World` remain
-    at `Type 0` because those imported carriers still require it.
+  * ⟨DONE downstream across the evidence/world universe chain⟩ **The former
+    `Type 0` boundary is gone.** `Evidence`, `Holes`, `WorldFuture`, histories,
+    and this file's certificate and residual bridges accept independent
+    higher-universe carriers. `tests/DebtClosures/U_0011.lean` compiles the full
+    mixed `Type 0`/`Type 1`/`Type 2` canary rather than inferring polymorphism
+    from one isolated declaration.
 
 Literature: the residual is Nerode's right congruence with futures in place of
 word suffixes, exactly as `MinimalSummary`'s relation is with merge contexts —
@@ -1319,8 +1320,10 @@ noncomputable def arriving {α : Type uA} (w : WorldFuture.World α) :
 evaluator.** `Holes.lean` §6 left `Arriving` abstract and named the transport
 from a real closure as unbuilt; this discharges it for *one* concrete
 `Arriving` — the deliveries of a world — by an iff rather than an implication.
-⟨UNDONE U-0012⟩ It says nothing about an Era cut, which is the instance `Holes.lean`
-was reaching for. -/
+⟨DONE downstream in `Uwueave.EraCertificate`⟩
+`era_cut_licenses_the_collapse` instantiates `Holes.Stable` at the Era delivery
+cut and `era_seal_survives` transports the resulting seal;
+`tests/DebtClosures/U_0012.lean` packages both with this iff. -/
 theorem stable_iff_freeTermination_values {α : Type uA} (w : WorldFuture.World α) :
     Holes.Stable (arriving w) (Evidence.values (WorldFuture.observe w))
       ↔ Evidence.FreeTermination WorldFuture.DeliveryFuture

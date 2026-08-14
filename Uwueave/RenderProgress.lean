@@ -98,7 +98,8 @@ clauses:
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0118⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ identifies a theorem of the model. Any tracked work below is
+named at the substantive caveat it belongs to.
 
   * **Salience survives, at the last hop.** ⟨TERMINAL⟩
     `salience_is_still_not_enforceable_after_the_widget`: `HonestWidget`

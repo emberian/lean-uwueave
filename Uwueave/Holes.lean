@@ -150,8 +150,9 @@ one and the earlier one never learns it was superseded. So, from this side:
 
 ## Honest boundary
 
-Each item is labelled ⟨TERMINAL⟩ (a theorem *of the model* — no work would
-remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
+Each item keeps an explicit disposition: ⟨TERMINAL⟩ marks a theorem *of the
+model* that no work would remove, while the other labels name their precise
+scope, completion, or narrowing boundary without creating a hidden obligation.
 
   * **The generic carrier accepts arbitrary functions; a typed expression
     adapter now exists.** ⟨DONE for `Preo.Expr`, terminal for arbitrary `f`⟩

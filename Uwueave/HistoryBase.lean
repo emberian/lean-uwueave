@@ -143,11 +143,12 @@ prize:
     worldCertSound` is one line and there is no theorem that a version index
     separates two worlds a `WorldFuture.WorldCert` cannot. What it buys is a
     **base to scope to**, which a bare world has no room for.
-  * ⟨UNDONE U-0068⟩ **The history/world bridge remains `Type 0`.** The state-level
-    `BaseDecision` facts and the standalone `VersionCert` are now
-    universe-polymorphic. `ValidInHistory` and `BasedWorld` cannot follow yet:
-    imported `Histories.VersionDag` / `Histories.History` and
-    `WorldFuture.World` still require their carriers in `Type 0`.
+  * ⟨DONE downstream at independent universes⟩ **The history/world bridge is
+    universe-generic.** `Histories.VersionDag` and `Histories.History` now carry
+    independent version, state, and operation universes; `ValidInHistory`,
+    `BasedWorld`, and `VersionCertSound` preserve those levels.  The downstream
+    closure probe instantiates the history bridge and the world-certificate
+    transport at deliberately mixed `Type 0`/`Type 1`/lifted carriers.
   * ⟨UNDONE U-0069⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
     expressible at the state level in the lock, where it costs nothing, and
     inexpressible in the counter, where it decides the invariant — is two

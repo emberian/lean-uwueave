@@ -142,8 +142,8 @@ projection, and:
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0153⟩ = work wearing a caveat's
-clothes.
+⟨TERMINAL⟩ marks a theorem of the model; the other labels state their
+precise scope or disposition without turning an honest caveat into hidden work.
 
   * **No deployed network, scheduler proof, or time.** ⟨TERMINAL for this
     file's question, ⟨PREMISE U-0154⟩ as a system model⟩ A delivery future here is a

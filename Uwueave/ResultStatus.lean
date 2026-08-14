@@ -89,8 +89,8 @@ these are the two meanings and this is the type-level one.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0136⟩ = work wearing a caveat's
-clothes.
+⟨TERMINAL⟩ marks a theorem of the model; the other labels state their
+precise scope or disposition without turning an honest caveat into hidden work.
 
   * **"No branch selection through an implicit coercion" is enforced at the
     typed-derive result surface, not for unrestricted Lean terms.**

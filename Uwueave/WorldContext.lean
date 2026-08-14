@@ -29,7 +29,8 @@ capability set, causal cut, or known base differs.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0151⟩ = deliberately outside it.
+⟨TERMINAL⟩ marks a theorem of this model; deliberately excluded deployment
+boundaries remain explicit in prose and are not open obligations of this module.
 
   * ⟨TERMINAL⟩ **Capabilities are active grants, not opaque booleans.** A source
     is licensed only by a grant present in `outstanding`, active in the carried

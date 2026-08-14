@@ -173,9 +173,14 @@ replaced.
     excludes its fourth branch under finite coverage, and `decideTotal` returns
     a `BaseSelection` for every covered pair. What remains is discovering or
     deciding adequate coverage for unrestricted/infinite DAGs.
-  * ⟨UNDONE U-0062⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE U-0063⟩: the bridge
-    theorems in §4 target `MergeModel.BaseDecision.Valid`, which is fixed at
-    `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
+  * ⟨DONE U-0062, downstream universe-generic⟩ **The history bridge is
+    universe-polymorphic.** `VersionDag`, `Origin`, `History`, `RunRealized`,
+    and §4's `selected_valid`/`ambiguous_valid` quantify independent version,
+    state, and operation universes. `tests/DebtClosures/U_0062.lean` exercises
+    the proof-carrying bridge at `History Nat Type (ULift.{2} Type)`.  The
+    downstream U-0063 closure independently exercises `MergeModel.BaseDecision`
+    and its `Valid` contract at mixed ordinary and lifted carriers, so the old
+    inline `Type 0` comparison is ⟨DONE downstream⟩ as well.
   * ⟨TERMINAL⟩ **`MergeClosedFrom` is sufficient, not necessary.** §7.3 proves
     both claims: `mergeClosed_implies_historySafeFrom` routes the old closure
     package into exact history safety, while

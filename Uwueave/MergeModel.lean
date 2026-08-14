@@ -96,8 +96,8 @@ rather than a boolean nobody checked.
 
 ## Non-claims
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0105⟩ = work wearing a caveat's
-clothes.
+⟨TERMINAL⟩ identifies a theorem of this model. Any tracked work below is
+named at the substantive caveat it belongs to.
 
   * ⟨TERMINAL⟩ **A merge result carrying provenance is not symmetric as a
     result.** `MergeCommutative` is therefore stated at the *observation* level

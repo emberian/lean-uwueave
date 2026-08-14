@@ -119,7 +119,8 @@ committed one. `ResultStatus` still imports nothing from here.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0081⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ identifies a theorem of the model. Any tracked work below is
+named at the substantive caveat it belongs to.
 
   * **Salience is not typable.** ⟨TERMINAL⟩ `salience_is_not_enforceable` is the
     statement, and no strengthening of the interface removes it: a presentation

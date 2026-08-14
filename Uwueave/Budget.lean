@@ -732,8 +732,11 @@ example : (budgetSharePlan.cost, batchSharePlan.cost,
 Two accepted stretches **of one stream under one seam** compose at the summed
 budget, from `Cost.crossings_append`. That is the whole of what composes here.
 Concurrent composition of two accepted *sessions* is a different theorem and a
-harder one — see the module docstring's ⟨UNDONE U-0006⟩ and the sibling
-`Uwueave/CoordEffect.lean`, deliberately not imported. -/
+harder one. ⟨DONE downstream in `Uwueave.CoordEffect`⟩ Its shared-profile
+laws, equality boundary, and strict pin witness are packaged together by
+`tests/DebtClosures/U_0006.lean`. `accepted_andThen` remains only the sequential
+special case stated here; this file deliberately does not import the concurrent
+profile layer. -/
 
 /-- Extend a workload by a further stretch of ops whose run is also legal. -/
 def Workload.andThen {S : Type u} {Op : Type w} [MergeState S]

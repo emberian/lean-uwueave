@@ -9,8 +9,9 @@ everything below relates them by theorem.
 
 ## The two limits, quoted, and their verdicts here
 
-`Exits.lean:80-97` — ⟨UNDONE U-0094⟩ **"A menu is not a solver."** It even spells out
-the missing signature,
+`Exits.lean:80-97` — ⟨DONE downstream for explicit finite carriers, palettes,
+quota axes, coupling policies, and resource caps⟩ **"A menu is not a solver."**
+It even spells out the missing signature,
 
     synth : (I : Invariant S) → Option (Σ Seg, {σ : S → Seg // SegmentedIConfluent σ I})
 
@@ -21,8 +22,12 @@ trivial inhabitants exist (`fun _ => none`, and the identity seam
 ceiling it returns `some` (`synth_pin_isSome`), the projection it returns
 identifies two **distinct** states (`pin_synth_is_non_trivial`), and it charges
 strictly fewer crossings than the identity seam on a workload where the identity
-seam charges one (`pin_synth_beats_full_coordination`). ⚠ The escrow half of
-that ⟨UNDONE U-0095⟩ — synthesising a quota partition — is untouched here and survives.
+seam charges one (`pin_synth_beats_full_coordination`). The escrow half is
+⟨DONE downstream in `FiniteProductClosure` for exact finite two-site quota
+enumeration⟩: `synthesizePartition` returns a least non-starving partition,
+the four-token fixture selects `2 + 2`, and the one-token fixture refuses every
+non-starving partition. Arbitrary replica sets and unbounded search remain
+outside that result.
 
 `Exits.lean:101-105` — ⟨DONE here for the explicit finite covering carrier and
 palette; unrestricted menus remain outside this result⟩ **"The menu is not
@@ -98,8 +103,15 @@ hence `k-1` crossings — is not here."* It is here.
 
 ## Non-claims
 
-  * ⟨UNDONE U-0099⟩ **Escrow synthesis.** `Exits.lean`'s ⟨UNDONE U-0100⟩ names two searches;
-    only the seam one is answered here.
+  * ⟨DONE downstream in `FiniteProductClosure` for resource-admitted finite
+    `Bool` quota spaces⟩ **Escrow synthesis.** Every non-starving partition is
+    enumerated and becomes a generated applicable repair; admitted search finds
+    one, while an oversized catalog is refused before enumeration.
+    `Exits.lean`'s repeated quota search is ⟨DONE downstream on the same finite,
+    resource-capped product scope⟩: the exact quota axis participates in the
+    coupled repair/quota product and the fixture finds a compatible pair. No
+    claim here enumerates arbitrary replica sets, repair grammars, or uncapped
+    products.
   * ⟨TERMINAL at an explicit finite carrier and palette⟩ **Minimum colourings.**
     §7 consumes `SeamColoring.synthesizeMinimumSeam`: the found branch carries
     `LeastSuch` minimality and the refusal branch rules out every seam using

@@ -84,7 +84,8 @@ which is what the impossibility said the escape route would have to look like.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0024⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ identifies a theorem of the model. Any tracked work below is
+named at the substantive caveat it belongs to.
 
   * **The evidence document here has no internal edge structure.** §1's document
     is a node *set*: the sense in which a forked result is "branching" is

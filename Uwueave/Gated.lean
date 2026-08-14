@@ -66,10 +66,10 @@ Four results:
 ## The honest boundary
 
 Each item is labelled **TERMINAL** (a theorem *of the model* — no work would
-remove it) or **⟨UNDONE U-0051⟩** (work, in a caveat's clothes). The list used to open
-with "this gates the abstract op layer, not the shipping kernel", followed by
-the recipe for fixing that; the recipe was executed, and the item is gone
-rather than reworded.
+remove it) or carries its own explicit classification at the substantive
+caveat it belongs to. The list used to open with "this gates the abstract op
+layer, not the shipping kernel", followed by the recipe for fixing that; the
+recipe was executed, and the item is gone rather than reworded.
 
 ⚑ **A second item left the same way — read this as the forward pointer.** The
 list also formerly marked conflicting grant issuance and composition with this

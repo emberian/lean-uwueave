@@ -137,10 +137,13 @@ identity seam and refutes it at `Exits.balTotal`.
     while downstream `FiniteRepairMenu` chooses from an explicitly supplied,
     checked finite catalog. The escrow partition and candidate universe are still
     handed in rather than discovered.
-  * ⟨UNDONE U-0132⟩ **The generated menus are not proved exhaustive** either.
-    `FiniteRepairMenu` refusal is exhaustive only for the supplied checked rows.
-    An unavailable row can be *printed with its refutation* instead of being
-    silently absent, but no theorem says the catalog contains every repair.
+  * ✅ **Done downstream, within a declared finite grammar.**
+    `FiniteProductClosure.ClosedScope.mem_menuEntries_iff` and
+    `mem_catalog_iff` prove exact soundness and completeness for the closed
+    seam/escrow/exposed-fork/full-coordination grammar, and
+    `four_constructor_catalog_has_six_rows` checks the worked scope. This does
+    not enumerate arbitrary `Repair` values: executable refusal remains exact
+    only for the resource-admitted finite scope.
   * ⟨scope⟩ **The full-coordination row's number is a ceiling, not a floor.**
     `full_price_is_the_ceiling` cites `Cost.crossings_le_length`. It is the one
     generated price with no clique behind it, and it is the one number a caller
@@ -269,10 +272,13 @@ inductive Refutation (P : Promise) : Type 1 where
 /-! ## §3. `RepairObligation` — a repair minus one named proposition.
 
 The conditional constructor is what a menu prints where a *search* would go.
-`Exits.lean`'s biggest ⟨UNDONE U-0133⟩ is "a menu is not a solver": it reports a seam
-row for a σ you hand it. This is that sentence with a type: the row is a repair
-whose only missing piece is named, and the displayed price and delta are pinned
-to the repair the residual buys. -/
+`Exits.lean`'s historical "a menu is not a solver" gap is discharged downstream
+by `FiniteProductClosure.ClosedScope.synthesizeCoupledCapped` over its admitted
+finite grammar. Its code axis is sound and complete exactly for applicable
+rows, and `inapplicable_candidate_is_not_returned` checks that a false residual
+cannot masquerade as a found repair. This structure is the typed residual that
+boundary searches: the row is a repair whose only missing piece is named, and
+the displayed price and delta are pinned to the repair the residual buys. -/
 
 /-- **A typed synthesis obligation.** `discharge` is a repair the moment
 `residual` is proved, and the two agreement fields stop the row from advertising

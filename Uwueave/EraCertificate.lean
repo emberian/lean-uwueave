@@ -1,23 +1,22 @@
 /-
 # Uwueave.EraCertificate — ERA's finalisation, run through the certificate machinery.
 
-**Origin: the oldest named ⟨UNDONE U-0028⟩ in the tree.** `Holes.lean` §6 built the
-abstract collapse licence `Stable Arriving P`, named `Era.final_view_immune` as
-"the intended implementing instance of the input-side licence", and closed with
-the admission that *"the transport from Era's event lists into a `Stable`
-hypothesis here is named in the boundary as unbuilt, and until it is built the
-instance is a design intention rather than a theorem."* `Evidence.lean` §8
-narrowed the hole — `closed_freezes` derives the licence from evidence — and
-`CertificateScope.lean` then built the general theory the Era bridge needs
-(`Residual`, `SufficientKey`, `KeyCertSound`, `key_licenses_reuse`,
-`no_sound_key_cert_accepts`) while recording, in its own boundary, that nobody
-had run Era through it:
+**Origin: ⟨DONE U-0028⟩ the historical `Stable`-to-ERA bridge is now concrete.**
+`Holes.lean` §6 built the abstract collapse licence `Stable Arriving P` and
+named `Era.final_view_immune` as its intended ERA instance. Section 7 below
+supplies that transport: `era_cut_licenses_the_collapse` proves `Holes.Stable`
+for delivery arrivals at every settled ERA world, and `era_seal_survives` runs
+`Holes.seal_survives_stable` on the resulting licence. The bridge is scoped to
+delivery; the announcement axis remains separate and can break the seal.
+`CertificateScope.lean` supplies the general residual and key theory used by
+the second historical boundary:
 
-> ⟨UNDONE U-0029⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
-> implementation. What is proved here is about `World.epoch`, the producer's
-> counter `WorldFuture.lean` defines; `Era.lean`'s arbiter cut is *not*
-> transported to this carrier […] `epoch_sufficient_on_wellformed` is a fact
-> about a `Nat` field, not about a finalisation.
+> ⟨DONE U-0029⟩ **ERA finalisation is placed explicitly.**
+> `era_finalisation_is_a_sound_certificate` instantiates `KeyCertSound` for
+> ERA's finalised view under delivery, and `eraKey_sufficient_on_wf` proves the
+> exact `(cuts, finalised delivered, finalised pool)` key sufficient on
+> wellformed ERA worlds. This is not an identification of `World.epoch` with
+> an arbiter cut, and it does not extend the certificate across announcements.
 
 This file is that placement. Nothing in `Era.lean`, `CertificateScope.lean`,
 `Evidence.lean`, `WorldFuture.lean` or `Holes.lean` is edited; every connection
@@ -156,8 +155,18 @@ id collision does the same with an honest arbiter).
     bounded certificate does not license stopping under the unrestricted
     announcement future without a separately proved external coverage or
     sealing premise; ERA's arbiter still has no internal pool.
-  * ⟨UNDONE U-0034⟩ **One evaluator at a time**, and `Type 0` only —
-    `CertificateScope`'s two, inherited.
+  * ⟨DONE U-0034⟩ **The certificate chain is universe-generic; executable
+    classification remains explicitly finite.** `Holes.Partial`,
+    `Evidence.FreeTermination`, `WorldFuture.World`, and `CertificateScope`'s
+    residual/key bridges now accept independent universe levels. Downstream
+    `FiniteCertificateClassifier.sufficientB_eq_true_iff` is exact only for a
+    caller-supplied world list, and its global bridge requires explicit carrier
+    coverage. `BoundedEraAnnouncement.traceStableB_iff_freeTermination` is
+    likewise exact only for a supplied finite announcement pool, while
+    `no_finite_pool_covers_unrestricted` rules out silently promoting it to
+    ERA's unrestricted announcement future. `ContextCompiler` covers a supplied
+    finite homogeneous contextual query family; no common residual certificate
+    for arbitrary, heterogeneous, or infinite evaluator families is claimed.
   * ⟨SCOPE U-0035⟩ **The witnesses are witnesses.** §3-§6's separations run on
     `Era.duelLog` and its two cut sets. No theorem here characterises which
     worlds a key glues, and there is no decision procedure for `Settled` over

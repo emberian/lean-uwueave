@@ -81,14 +81,17 @@ that sets `ready` must still be right at every larger instance it may yet see.
 
 ## What is earned rather than assumed
 
-`Holes.lean`'s boundary listed "the `Stable` → `Era` bridge is prose" as
-⟨UNDONE U-0037⟩: its collapse licence `Stable Arriving P` was abstract in what may
-still arrive. Here the licence is **read off the evidence**: `Closed e` says
+`Holes.lean`'s boundary historically listed "the `Stable` → `Era` bridge is
+prose". ⟨DONE U-0037 downstream in `Uwueave.EraCertificate` §7⟩ Its
+collapse licence `Stable Arriving P` remains abstract in what may still arrive,
+while this file reads a related freeze **off the evidence**: `Closed e` says
 every source `e` is still waiting on carries a closure certificate, and
 `closed_freezes` (§8) proves that a closed evidence's candidate set cannot move
-under any admissible future. That is the licence as a theorem about the
-evidence rather than a hypothesis handed in — and `render` is then a genuinely
-non-trivial `SoundEvaluator` (§8), not a vacuous one.
+under any admissible future. `EraCertificate.era_cut_licenses_the_collapse`
+separately instantiates the concrete Era delivery future as `Holes.Stable`.
+Thus the evidence-derived route is a theorem rather than a hypothesis handed
+in, and `render` is a genuinely non-trivial `SoundEvaluator` (§8), not a
+vacuous one.
 
 Two prices are paid in public, not deferred:
 
@@ -862,9 +865,13 @@ theorem futures_not_interchangeable :
 /-! ## §8. The licence, earned — and the price of an open source set.
 
 `Holes.lean` §6 assumed its collapse licence (`Stable Arriving P`, abstract in
-what may still arrive) and listed the bridge to a real closure as ⟨UNDONE U-0042⟩.
-Here the licence is a **theorem about the evidence**: `closed_freezes` says a
-closed evidence's candidate set cannot move under any admissible future.
+what may still arrive) and historically listed the bridge to a real closure as
+unbuilt. ⟨DONE U-0042 downstream in `Uwueave.EraCertificate` §7⟩ Here the
+evidence-side freeze is a theorem: `closed_freezes` says a closed evidence's
+candidate set cannot move under any admissible future. Downstream,
+`era_cut_licenses_the_collapse` supplies the concrete Era `Stable` declaration
+and `era_seal_survives` applies the generic collapse theorem to every permitted
+delivery.
 
 But a certificate closes the sources you know about. §8's ⚠ theorem shows what
 happens when a source you did not know about appears: an `exact` report becomes

@@ -147,8 +147,11 @@ its witness.
     counterexample, while `orderAgreement_iff_selector_symmetric_at` gives the
     exact necessity theorem under named reconcile-symmetry and
     decision-separation premises.
-  * ⟨UNDONE U-0077⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
-    `Histories`.
+  * ⟨DONE downstream at independent universes⟩ **History policies are
+    universe-generic.** `HistoryMerge`, its recorded-decision law, and the
+    record-determined convergence theorem retain independent version, state,
+    operation, and observation levels.  The downstream closure probe exercises
+    those laws at mixed `Type 0`/`Type 1`/lifted carriers.
 
 Literature: as `Histories.lean` — Kaki et al. (MRDT, OOPSLA 2019) for the
 version-store/LCA model, Sal 2026 §2 for the counter, Bailis et al. (VLDB 2015)

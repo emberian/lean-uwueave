@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 84
-- **Extracted blocks (marker-bearing source lines):** 82
-- **Lean files containing markers:** 30
+- **Marker occurrences:** 54
+- **Extracted blocks (marker-bearing source lines):** 54
+- **Lean files containing markers:** 23
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -27,36 +27,12 @@ Each block begins at one marker-bearing source line and includes its following c
     unrestricted floor is exactly the scope error the types prevent.
 ````
 
-### [`Uwueave/Budget.lean:735`](../Uwueave/Budget.lean#L735)
-
-````text
-harder one — see the module docstring's ⟨UNDONE U-0006⟩ and the sibling
-`Uwueave/CoordEffect.lean`, deliberately not imported. -/
-````
-
 ## `Uwueave/CertificateScope.lean`
 
 ### [`Uwueave/CertificateScope.lean:108`](../Uwueave/CertificateScope.lean#L108)
 
 ````text
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0007⟩ = work wearing a caveat's clothes.
-````
-
-### [`Uwueave/CertificateScope.lean:158`](../Uwueave/CertificateScope.lean#L158)
-
-````text
-  * ⟨UNDONE U-0011⟩ **The evidence/world boundary remains `Type 0`.** Residuals,
-    sufficient keys, their quotient, and the `MinimalSummary` bridges are now
-    universe-polymorphic. The theorems phrased through
-    `Evidence.FreeTermination`, `Holes.Partial`, or `WorldFuture.World` remain
-    at `Type 0` because those imported carriers still require it.
-````
-
-### [`Uwueave/CertificateScope.lean:1322`](../Uwueave/CertificateScope.lean#L1322)
-
-````text
-⟨UNDONE U-0012⟩ It says nothing about an Era cut, which is the instance `Holes.lean`
-was reaching for. -/
 ````
 
 ## `Uwueave/Choreo.lean`
@@ -96,77 +72,24 @@ was reaching for. -/
     `SeamAlgebra`'s candidate laws are not connected to such a judgement here.
 ````
 
-## `Uwueave/DerivedDocument.lean`
-
-### [`Uwueave/DerivedDocument.lean:87`](../Uwueave/DerivedDocument.lean#L87)
-
-````text
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0024⟩ = work wearing a caveat's clothes.
-````
-
 ## `Uwueave/EraCertificate.lean`
 
-### [`Uwueave/EraCertificate.lean:4`](../Uwueave/EraCertificate.lean#L4)
-
-````text
-**Origin: the oldest named ⟨UNDONE U-0028⟩ in the tree.** `Holes.lean` §6 built the
-abstract collapse licence `Stable Arriving P`, named `Era.final_view_immune` as
-"the intended implementing instance of the input-side licence", and closed with
-the admission that *"the transport from Era's event lists into a `Stable`
-hypothesis here is named in the boundary as unbuilt, and until it is built the
-instance is a design intention rather than a theorem."* `Evidence.lean` §8
-narrowed the hole — `closed_freezes` derives the licence from evidence — and
-`CertificateScope.lean` then built the general theory the Era bridge needs
-(`Residual`, `SufficientKey`, `KeyCertSound`, `key_licenses_reuse`,
-`no_sound_key_cert_accepts`) while recording, in its own boundary, that nobody
-had run Era through it:
-````
-
-### [`Uwueave/EraCertificate.lean:16`](../Uwueave/EraCertificate.lean#L16)
-
-````text
-> ⟨UNDONE U-0029⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
-> implementation. What is proved here is about `World.epoch`, the producer's
-> counter `WorldFuture.lean` defines; `Era.lean`'s arbiter cut is *not*
-> transported to this carrier […] `epoch_sufficient_on_wellformed` is a fact
-> about a `Nat` field, not about a finalisation.
-````
-
-### [`Uwueave/EraCertificate.lean:118`](../Uwueave/EraCertificate.lean#L118)
+### [`Uwueave/EraCertificate.lean:117`](../Uwueave/EraCertificate.lean#L117)
 
 ````text
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0030⟩ = work wearing a caveat's clothes.
 ````
 
-### [`Uwueave/EraCertificate.lean:159`](../Uwueave/EraCertificate.lean#L159)
-
-````text
-  * ⟨UNDONE U-0034⟩ **One evaluator at a time**, and `Type 0` only —
-    `CertificateScope`'s two, inherited.
-````
-
 ## `Uwueave/Evidence.lean`
 
-### [`Uwueave/Evidence.lean:85`](../Uwueave/Evidence.lean#L85)
-
-````text
-⟨UNDONE U-0037⟩: its collapse licence `Stable Arriving P` was abstract in what may
-still arrive. Here the licence is **read off the evidence**: `Closed e` says
-every source `e` is still waiting on carries a closure certificate, and
-`closed_freezes` (§8) proves that a closed evidence's candidate set cannot move
-under any admissible future. That is the licence as a theorem about the
-evidence rather than a hypothesis handed in — and `render` is then a genuinely
-non-trivial `SoundEvaluator` (§8), not a vacuous one.
-````
-
-### [`Uwueave/Evidence.lean:147`](../Uwueave/Evidence.lean#L147)
+### [`Uwueave/Evidence.lean:150`](../Uwueave/Evidence.lean#L150)
 
 ````text
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0038⟩ = work wearing a caveat's
 clothes.
 ````
 
-### [`Uwueave/Evidence.lean:154`](../Uwueave/Evidence.lean#L154)
+### [`Uwueave/Evidence.lean:157`](../Uwueave/Evidence.lean#L157)
 
 ````text
     `Evidence.values`. ⟨UNDONE U-0039 for this old carrier and deployment⟩
@@ -176,14 +99,6 @@ clothes.
     an exact typed consuming delivery. No theorem generates those messages or
     proves a runtime honestly advances its frontier, and full `render`
     stability is still not claimed.
-````
-
-### [`Uwueave/Evidence.lean:865`](../Uwueave/Evidence.lean#L865)
-
-````text
-what may still arrive) and listed the bridge to a real closure as ⟨UNDONE U-0042⟩.
-Here the licence is a **theorem about the evidence**: `closed_freezes` says a
-closed evidence's candidate set cannot move under any admissible future.
 ````
 
 ## `Uwueave/ForkGrade.lean`
@@ -198,13 +113,7 @@ closed evidence's candidate set cannot move under any admissible future.
 
 ## `Uwueave/Frontier.lean`
 
-### [`Uwueave/Frontier.lean:37`](../Uwueave/Frontier.lean#L37)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0048⟩ = deliberately outside it.
-````
-
-### [`Uwueave/Frontier.lean:52`](../Uwueave/Frontier.lean#L52)
+### [`Uwueave/Frontier.lean:53`](../Uwueave/Frontier.lean#L53)
 
 ````text
     bridge, ⟨UNDONE U-0050⟩ for the old carrier⟩ `ResultEvidence` stores no timestamp,
@@ -213,15 +122,6 @@ closed evidence's candidate set cannot move under any admissible future.
 ````
 
 ## `Uwueave/Gated.lean`
-
-### [`Uwueave/Gated.lean:69`](../Uwueave/Gated.lean#L69)
-
-````text
-remove it) or **⟨UNDONE U-0051⟩** (work, in a caveat's clothes). The list used to open
-with "this gates the abstract op layer, not the shipping kernel", followed by
-the recipe for fixing that; the recipe was executed, and the item is gone
-rather than reworded.
-````
 
 ### [`Uwueave/Gated.lean:174`](../Uwueave/Gated.lean#L174)
 
@@ -266,12 +166,6 @@ rather than reworded.
 
 ## `Uwueave/Gluing.lean`
 
-### [`Uwueave/Gluing.lean:65`](../Uwueave/Gluing.lean#L65)
-
-````text
-* §10 **Non-claims**, labelled ⟨TERMINAL⟩ / ⟨UNDONE U-0057⟩.
-````
-
 ### [`Uwueave/Gluing.lean:894`](../Uwueave/Gluing.lean#L894)
 
 ````text
@@ -295,15 +189,7 @@ file is the frontier it named.
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0060⟩ = work wearing a caveat's clothes.
 ````
 
-### [`Uwueave/Histories.lean:176`](../Uwueave/Histories.lean#L176)
-
-````text
-  * ⟨UNDONE U-0062⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE U-0063⟩: the bridge
-    theorems in §4 target `MergeModel.BaseDecision.Valid`, which is fixed at
-    `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
-````
-
-### [`Uwueave/Histories.lean:186`](../Uwueave/Histories.lean#L186)
+### [`Uwueave/Histories.lean:191`](../Uwueave/Histories.lean#L191)
 
 ````text
   * ⟨UNDONE U-0064, narrowed to repeated/generalized version growth⟩ **The
@@ -347,17 +233,7 @@ file is the frontier it named.
     valid base" is not a proof that a run converges, and no such proof is here.
 ````
 
-### [`Uwueave/HistoryBase.lean:146`](../Uwueave/HistoryBase.lean#L146)
-
-````text
-  * ⟨UNDONE U-0068⟩ **The history/world bridge remains `Type 0`.** The state-level
-    `BaseDecision` facts and the standalone `VersionCert` are now
-    universe-polymorphic. `ValidInHistory` and `BasedWorld` cannot follow yet:
-    imported `Histories.VersionDag` / `Histories.History` and
-    `WorldFuture.World` still require their carriers in `Type 0`.
-````
-
-### [`Uwueave/HistoryBase.lean:151`](../Uwueave/HistoryBase.lean#L151)
+### [`Uwueave/HistoryBase.lean:152`](../Uwueave/HistoryBase.lean#L152)
 
 ````text
   * ⟨UNDONE U-0069⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
@@ -366,20 +242,20 @@ file is the frontier it named.
     histories. No theorem here says that is the general pattern.
 ````
 
-### [`Uwueave/HistoryBase.lean:264`](../Uwueave/HistoryBase.lean#L264)
+### [`Uwueave/HistoryBase.lean:265`](../Uwueave/HistoryBase.lean#L265)
 
 ````text
     answer exists — the ⟨UNDONE U-0070⟩ `MergeModel` §9's own docstring records;
 ````
 
-### [`Uwueave/HistoryBase.lean:514`](../Uwueave/HistoryBase.lean#L514)
+### [`Uwueave/HistoryBase.lean:515`](../Uwueave/HistoryBase.lean#L515)
 
 ````text
 `selected_unique`, which forbids the pair at the history level. ⟨UNDONE U-0071⟩ This
 withdraws the *licence*; it is not a convergence proof. -/
 ````
 
-### [`Uwueave/HistoryBase.lean:1278`](../Uwueave/HistoryBase.lean#L1278)
+### [`Uwueave/HistoryBase.lean:1279`](../Uwueave/HistoryBase.lean#L1279)
 
 ````text
 ⟨UNDONE U-0073⟩ Two histories, not a classification: nothing here says visibility and
@@ -426,30 +302,9 @@ harmlessness are always anti-correlated. -/
     and synthesizing those semantic reconciliation inputs remain open.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:150`](../Uwueave/HistoryPolicy.lean#L150)
-
-````text
-  * ⟨UNDONE U-0077⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
-    `Histories`.
-````
-
-## `Uwueave/Holes.lean`
-
-### [`Uwueave/Holes.lean:154`](../Uwueave/Holes.lean#L154)
-
-````text
-remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
-````
-
 ## `Uwueave/HonestRender.lean`
 
-### [`Uwueave/HonestRender.lean:122`](../Uwueave/HonestRender.lean#L122)
-
-````text
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0081⟩ = work wearing a caveat's clothes.
-````
-
-### [`Uwueave/HonestRender.lean:131`](../Uwueave/HonestRender.lean#L131)
+### [`Uwueave/HonestRender.lean:132`](../Uwueave/HonestRender.lean#L132)
 
 ````text
     question, ⟨UNDONE U-0082⟩ as deployment⟩ Honesty is a predicate on renderers, not a
@@ -458,7 +313,7 @@ remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
     theorem below assumes it.
 ````
 
-### [`Uwueave/HonestRender.lean:147`](../Uwueave/HonestRender.lean#L147)
+### [`Uwueave/HonestRender.lean:148`](../Uwueave/HonestRender.lean#L148)
 
 ````text
   * **The eliminator is `Type 0`-valued.** ⟨UNDONE U-0083⟩ `Carrier.elim` eliminates
@@ -481,36 +336,7 @@ remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
     combiner is what an implementation would want and is not here.
 ````
 
-## `Uwueave/MenuTotality.lean`
-
-### [`Uwueave/MenuTotality.lean:12`](../Uwueave/MenuTotality.lean#L12)
-
-````text
-`Exits.lean:80-97` — ⟨UNDONE U-0094⟩ **"A menu is not a solver."** It even spells out
-the missing signature,
-````
-
-### [`Uwueave/MenuTotality.lean:25`](../Uwueave/MenuTotality.lean#L25)
-
-````text
-that ⟨UNDONE U-0095⟩ — synthesising a quota partition — is untouched here and survives.
-````
-
-### [`Uwueave/MenuTotality.lean:101`](../Uwueave/MenuTotality.lean#L101)
-
-````text
-  * ⟨UNDONE U-0099⟩ **Escrow synthesis.** `Exits.lean`'s ⟨UNDONE U-0100⟩ names two searches;
-    only the seam one is answered here.
-````
-
 ## `Uwueave/MergeModel.lean`
-
-### [`Uwueave/MergeModel.lean:99`](../Uwueave/MergeModel.lean#L99)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0105⟩ = work wearing a caveat's
-clothes.
-````
 
 ### [`Uwueave/MergeModel.lean:127`](../Uwueave/MergeModel.lean#L127)
 
@@ -589,23 +415,9 @@ clothes.
     claims otherwise.
 ````
 
-## `Uwueave/RenderProgress.lean`
-
-### [`Uwueave/RenderProgress.lean:101`](../Uwueave/RenderProgress.lean#L101)
-
-````text
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0118⟩ = work wearing a caveat's clothes.
-````
-
 ## `Uwueave/RenderSix.lean`
 
-### [`Uwueave/RenderSix.lean:79`](../Uwueave/RenderSix.lean#L79)
-
-````text
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0119⟩ = work wearing a caveat's clothes.
-````
-
-### [`Uwueave/RenderSix.lean:89`](../Uwueave/RenderSix.lean#L89)
+### [`Uwueave/RenderSix.lean:90`](../Uwueave/RenderSix.lean#L90)
 
 ````text
     ⟨UNDONE U-0120 as temporal/all-path liveness⟩ It says *some* permitted future is
@@ -654,35 +466,6 @@ minimal — see the module header. -/
 ````text
   it. ⟨UNDONE U-0129⟩ this is the provable fragment of "the observation changed"; see
   the module header. -/
-````
-
-## `Uwueave/RepairMenu.lean`
-
-### [`Uwueave/RepairMenu.lean:140`](../Uwueave/RepairMenu.lean#L140)
-
-````text
-  * ⟨UNDONE U-0132⟩ **The generated menus are not proved exhaustive** either.
-    `FiniteRepairMenu` refusal is exhaustive only for the supplied checked rows.
-    An unavailable row can be *printed with its refutation* instead of being
-    silently absent, but no theorem says the catalog contains every repair.
-````
-
-### [`Uwueave/RepairMenu.lean:272`](../Uwueave/RepairMenu.lean#L272)
-
-````text
-`Exits.lean`'s biggest ⟨UNDONE U-0133⟩ is "a menu is not a solver": it reports a seam
-row for a σ you hand it. This is that sentence with a type: the row is a repair
-whose only missing piece is named, and the displayed price and delta are pinned
-to the repair the residual buys. -/
-````
-
-## `Uwueave/ResultStatus.lean`
-
-### [`Uwueave/ResultStatus.lean:92`](../Uwueave/ResultStatus.lean#L92)
-
-````text
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0136⟩ = work wearing a caveat's
-clothes.
 ````
 
 ## `Uwueave/TextSummary.lean`
@@ -794,22 +577,7 @@ clothes.
 ⟨UNDONE U-0150⟩ item. -/
 ````
 
-## `Uwueave/WorldContext.lean`
-
-### [`Uwueave/WorldContext.lean:32`](../Uwueave/WorldContext.lean#L32)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0151⟩ = deliberately outside it.
-````
-
 ## `Uwueave/WorldFuture.lean`
-
-### [`Uwueave/WorldFuture.lean:145`](../Uwueave/WorldFuture.lean#L145)
-
-````text
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0153⟩ = work wearing a caveat's
-clothes.
-````
 
 ### [`Uwueave/WorldFuture.lean:175`](../Uwueave/WorldFuture.lean#L175)
 

@@ -62,7 +62,7 @@ is vacuous, and with three witnesses beside it, one of which shows the iff is **
   discipline is on the far side of the confluence wall (`Catalog.gset_atMostOne_not_iconfluent`),
   yet `oneShotOwner` makes it glue inside each owner fiber, and every valid seam must separate
   distinct singleton fills.
-* §10 **Non-claims**, labelled ⟨TERMINAL⟩ / ⟨UNDONE U-0057⟩.
+* §10 **Non-claims**, separating terminal facts from explicitly classified caveats.
 
 Literature: Bailis et al. VLDB'15 (I-confluence); Whittaker–Hellerstein VLDB'19 (segmentation);
 Almeida–Shoker–Baquero (delta mutators, the shape a fill takes here).

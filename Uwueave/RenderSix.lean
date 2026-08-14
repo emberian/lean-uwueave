@@ -76,7 +76,8 @@ sanctioned renderer *does* make, at six named pieces of evidence.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0119⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ marks a theorem of the model; the other labels state their
+precise scope or disposition without turning an honest caveat into hidden work.
 
   * **The split costs the badge's extension-finality at the zero row.** ⟨TERMINAL⟩
     `statusOf_not_extension_final_at_emptyClosedW`. A six-status surface must

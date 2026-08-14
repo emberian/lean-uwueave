@@ -34,7 +34,8 @@ claim because the unseen issued pool remains load-bearing.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0048⟩ = deliberately outside it.
+⟨TERMINAL⟩ marks a theorem of this model; deliberately excluded system
+boundaries are stated in prose and are not open obligations of this module.
 
   * **Frontiers are genuine antichains in a partial order.** ⟨TERMINAL⟩ Their
     upward closures give may-arrive sets, and advance is reverse inclusion of
