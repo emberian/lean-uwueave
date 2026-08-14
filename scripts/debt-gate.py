@@ -83,6 +83,7 @@ RECEIPT_KEYS = {
 CLASSES = {"obligation", "premise", "scope", "unclassified"}
 SEVERITIES = {"P0", "P1", "P2", "P3"}
 DISPOSITIONS = {"proved", "implemented", "obsolete", "superseded"}
+TERMINAL_SUPERSESSION_DISPOSITIONS = {"proved", "implemented", "obsolete"}
 EVIDENCE_KINDS = {"lean_decl", "case_manifest"}
 # Runnable implementation evidence is deliberately Rust-only in schema v1.
 # A Python fixture can terminate its own interpreter with ``os._exit(0)`` before
@@ -320,7 +321,7 @@ def rust_unit_case_binding(debt_id: str) -> Tuple[str, str, str, str]:
     module = f"debt_{stem}"
     prefix = f"persistence::record::{module}::"
     selector = prefix + f"debt_closure_{stem}_fault_paths"
-    hook = f'#[cfg(test)] #[path = "{module}.rs"] mod {module};'
+    hook = f'#[cfg(test)]\n#[path = "{module}.rs"]\nmod {module};'
     return module, prefix, selector, hook
 
 
@@ -1261,6 +1262,26 @@ def _require_plain_module_line(
         raise DebtError(f"{label}: module {module_name} must not be redirected or cfg-gated")
 
 
+def _require_exact_test_module_block(
+    data: bytes, expected_block: str, module_name: str, label: str
+) -> None:
+    source = _rust_without_comments(_decode_rust_source(data, label), label)
+    significant = [line.strip() for line in source.splitlines() if line.strip()]
+    expected = [line.strip() for line in expected_block.splitlines() if line.strip()]
+    starts = [
+        index
+        for index in range(len(significant) - len(expected) + 1)
+        if significant[index : index + len(expected)] == expected
+    ]
+    if len(starts) != 1:
+        raise DebtError(f"{label}: missing or duplicate exact module declaration block")
+    index = starts[0]
+    if significant.count(f"mod {module_name};") != 1:
+        raise DebtError(f"{label}: missing or duplicate exact module declaration")
+    if index > 0 and significant[index - 1].startswith("#["):
+        raise DebtError(f"{label}: module {module_name} has an unapproved attribute")
+
+
 def _validate_rust_unit_chain_bytes(
     debt_id: str,
     cargo_bytes: bytes,
@@ -1296,7 +1317,7 @@ def _validate_rust_unit_chain_bytes(
         persistence_bytes, "mod record;", "record", label + ".persistence-source"
     )
     module, _, _, hook = rust_unit_case_binding(debt_id)
-    _require_plain_module_line(record_bytes, hook, module, label + ".record-source")
+    _require_exact_test_module_block(record_bytes, hook, module, label + ".record-source")
     library_name = library.get("name", package["name"].replace("-", "_"))
     if not isinstance(library_name, str) or not library_name:
         raise DebtError(f"{label}: Cargo library must have one string name")
@@ -1605,9 +1626,12 @@ def validate_rust_unit_case(root: Path, debt_id: str, label: str) -> None:
     )
     ok_line = f"test {test_name} ... ok"
     ok_count = sum(line.strip() == ok_line for line in output.splitlines())
+    # A private unit runs inside the crate's standard library harness. The
+    # exact selector must therefore filter every unrelated library test; only
+    # the owned listing and the one completed passing test are invariant.
     summary_re = re.compile(
         r"test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; "
-        r"0 filtered out; finished in .+"
+        r"[0-9]+ filtered out; finished in .+"
     )
     summary_count = sum(
         summary_re.fullmatch(line.strip()) is not None for line in output.splitlines()
@@ -1662,6 +1686,48 @@ def validate_receipt_evidence(root: Path, receipt: Mapping[str, Any]) -> None:
             validate_case_manifest(root, debt_id, content, label)
 
 
+def validate_supersession_chains(
+    active_ids: Iterable[str],
+    receipts: Mapping[str, Mapping[str, Any]],
+    label: str = "",
+) -> None:
+    """Require every immutable supersession edge to reach live or paid debt.
+
+    Direct class/severity compatibility is checked when an edge is introduced;
+    this graph check deliberately permits that once-active replacement to close
+    later without rewriting the older receipt.
+    """
+    active = set(active_ids)
+    prefix = f"{label}: " if label else ""
+    for origin in sorted(receipts):
+        receipt = receipts[origin]
+        if receipt["disposition"] != "superseded":
+            continue
+        seen = {origin}
+        target = receipt["replacement_id"]
+        while True:
+            if target in active:
+                break
+            replacement = receipts.get(target)
+            if replacement is None:
+                raise DebtError(
+                    f"{prefix}supersession chain from {origin} names unknown target {target}"
+                )
+            if target in seen:
+                raise DebtError(
+                    f"{prefix}supersession cycle from {origin} reaches {target}"
+                )
+            seen.add(target)
+            disposition = replacement["disposition"]
+            if disposition in TERMINAL_SUPERSESSION_DISPOSITIONS:
+                break
+            if disposition != "superseded":  # Shape validation makes this unreachable.
+                raise DebtError(
+                    f"{prefix}supersession chain from {origin} ends in invalid disposition"
+                )
+            target = replacement["replacement_id"]
+
+
 def validate_head(
     root: Path,
     active: Sequence[Mapping[str, Any]],
@@ -1697,14 +1763,7 @@ def validate_head(
     for debt_id, source, line in scan.refs:
         if debt_id not in known_ids:
             raise DebtError(f"{source}:{line}: DEBT-REF names unknown id {debt_id}")
-    for debt_id in sorted(receipt_ids):
-        receipt = receipts[debt_id]
-        if receipt["disposition"] == "superseded":
-            replacement = receipt["replacement_id"]
-            if replacement not in active_ids:
-                raise DebtError(
-                    f"docs/debt/closed/{debt_id}.json: replacement_id must name an active item"
-                )
+    validate_supersession_chains(active_ids, receipts)
     if policy_profile is not None:
         policy = POLICY_PROFILES.get(policy_profile)
         if policy is None:
@@ -1771,7 +1830,12 @@ def validate_against_base(
         if receipt["prior_marker_sha256"] != base_by_id[debt_id]["marker_sha256"]:
             raise DebtError(f"{debt_id}: receipt prior_marker_sha256 does not match base")
         if receipt["disposition"] == "superseded":
-            replacement = current_by_id[receipt["replacement_id"]]
+            replacement = current_by_id.get(receipt["replacement_id"])
+            if replacement is None:
+                raise DebtError(
+                    f"{debt_id}: new superseding receipt replacement must be active "
+                    "for class/severity validation"
+                )
             prior = base_by_id[debt_id]
             if replacement["class"] != prior["class"]:
                 raise DebtError(f"{debt_id}: superseding item must preserve debt class")
@@ -1901,6 +1965,7 @@ def validate_committed_history(root: Path, base: str) -> None:
             raise DebtError(
                 f"{commit}: ids cannot be both active and closed: {','.join(overlap)}"
             )
+        validate_supersession_chains(active_by_id, receipts, commit)
         for debt_id, entry in active_by_id.items():
             encoded = canonical_json(entry)
             prior = active_versions.get(debt_id)

@@ -1,0 +1,1 @@
+{"checks":[{"kind":"rust_test","sha256":"093e76af69e29a85f611094c1a71fadfad3c70556822e11873ca3e8e5f420dee"},{"kind":"rust_unit","sha256":"382cb6054edec0ca64909d12bc52a2c796f238cf180e99389cfa4cfd38b097a7"}],"id":"U-0170","schema":1}

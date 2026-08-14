@@ -60,14 +60,14 @@ premise that real storage produces such an image.
     relocatability, or artifact-upload promise. Native implementation evidence
     is scoped to Ubuntu 24.04 x86-64 and macOS 15 arm64; widening that matrix
     allocates new obligations.
-  * ⟨UNDONE U-0170⟩ No mechanically checked host refinement yet proves that
-    Rust's `RawJournal` scan and append expose exact complete outer `UWARJ`
-    record bodies plus at most one syntactically valid final outer-record
-    prefix, withhold every incomplete outer body, and pass accepted inner bytes
-    satisfying `Durable.recover_encodeJournal`. The logical recovery therefore
-    sees a degenerate empty torn suffix, not a nonempty `Durable.TornFrame`.
-    Direct `ArtifactEmit` partial writes remain under the external crash premise
-    ⟨DEBT-REF U-0168⟩; deployment scope remains ⟨DEBT-REF U-0169⟩.
+  * ⟨DONE downstream⟩ `ArtifactJournalKernel` proves that every admitted inner
+    body satisfies `Durable.recover_encodeJournal`; the shipping `RawJournal`
+    uses the mechanically exercised outer codec for scan and append, withholds
+    every incomplete final outer body, refuses corrupt complete middle records,
+    and poisons rather than committing after deterministic write or sync
+    failures. Direct `ArtifactEmit` partial writes remain under the external
+    crash premise ⟨DEBT-REF U-0168⟩; deployment scope remains
+    ⟨DEBT-REF U-0169⟩.
 -/
 import Std
 

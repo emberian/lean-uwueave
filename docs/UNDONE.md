@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 112
-- **Extracted blocks (marker-bearing source lines):** 110
-- **Lean files containing markers:** 36
+- **Marker occurrences:** 111
+- **Extracted blocks (marker-bearing source lines):** 109
+- **Lean files containing markers:** 35
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -157,21 +157,6 @@ was reaching for. -/
 
 ````text
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0024⟩ = work wearing a caveat's clothes.
-````
-
-## `Uwueave/Durable.lean`
-
-### [`Uwueave/Durable.lean:63`](../Uwueave/Durable.lean#L63)
-
-````text
-  * ⟨UNDONE U-0170⟩ No mechanically checked host refinement yet proves that
-    Rust's `RawJournal` scan and append expose exact complete outer `UWARJ`
-    record bodies plus at most one syntactically valid final outer-record
-    prefix, withhold every incomplete outer body, and pass accepted inner bytes
-    satisfying `Durable.recover_encodeJournal`. The logical recovery therefore
-    sees a degenerate empty torn suffix, not a nonempty `Durable.TornFrame`.
-    Direct `ArtifactEmit` partial writes remain under the external crash premise
-    ⟨DEBT-REF U-0168⟩; deployment scope remains ⟨DEBT-REF U-0169⟩.
 ````
 
 ## `Uwueave/EraCertificate.lean`

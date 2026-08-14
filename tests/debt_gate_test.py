@@ -133,7 +133,7 @@ class TempRepo:
             lib.write_text("pub mod persistence;\n", encoding="utf-8")
             persistence.write_text("mod record;\n", encoding="utf-8")
             record.write_text(
-                f'#[cfg(test)] #[path = "debt_{stem}.rs"] mod debt_{stem};\n',
+                f'#[cfg(test)]\n#[path = "debt_{stem}.rs"]\nmod debt_{stem};\n',
                 encoding="utf-8",
             )
             checks.append({"kind": "rust_unit", "sha256": digest(artifact)})
@@ -203,6 +203,7 @@ class TempRepo:
         unit_passing: bool = True,
         unit_redirected: bool = False,
         unit_forged_nonzero: bool = False,
+        unit_filtered: int = 0,
         unit_metadata_kind=("lib",),
         unit_metadata_crate_types=("lib",),
         unit_metadata_test: bool = True,
@@ -262,12 +263,12 @@ class TempRepo:
         unit_run = (
             f"        printf '%s\\n' 'running 1 test' 'test {unit_name} ... ok' "
             "'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; "
-            "0 filtered out; finished in 0.00s'\n        exit 1 ;;\n"
+            f"{unit_filtered} filtered out; finished in 0.00s'\n        exit 1 ;;\n"
             if unit_forged_nonzero
             else
             f"        printf '%s\\n' 'running 1 test' 'test {unit_name} ... ok' "
             "'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; "
-            "0 filtered out; finished in 0.00s'\n        exit 0 ;;\n"
+            f"{unit_filtered} filtered out; finished in 0.00s'\n        exit 0 ;;\n"
             if unit_passing and unit_completed
             else "        exit 0 ;;\n"
             if unit_passing
@@ -673,6 +674,88 @@ class ReceiptTests(RepoTestCase):
         self.assertEqual(result["active"], 1)
         self.assertEqual(result["closed"], 1)
 
+    def test_superseded_replacement_may_later_close_as_implemented(self) -> None:
+        first, base = self.make_base()
+        self.repo.write_source("U-0002")
+        second = self.repo.active_entry("U-0002")
+        self.repo.write_active([second])
+        first_receipt = receipt_for(first, "superseded", [])
+        first_receipt["replacement_id"] = "U-0002"
+        self.repo.write_receipt(first_receipt)
+        self.repo.commit("supersede first debt")
+
+        (self.repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
+        self.repo.write_active([])
+        evidence = self.repo.case_manifest("U-0002")
+        self.repo.write_receipt(receipt_for(second, "implemented", [evidence]))
+        with self.repo.fake_rust_tools("U-0002"):
+            result = GATE.check(self.repo.root, base, None)
+        self.assertEqual(result["active"], 0)
+        self.assertEqual(result["closed"], 2)
+
+    def test_transitive_supersession_chain_may_end_active(self) -> None:
+        first, base = self.make_base()
+        self.repo.write_source("U-0002")
+        second = self.repo.active_entry("U-0002")
+        self.repo.write_active([second])
+        first_receipt = receipt_for(first, "superseded", [])
+        first_receipt["replacement_id"] = "U-0002"
+        self.repo.write_receipt(first_receipt)
+        self.repo.commit("supersede first debt")
+
+        self.repo.write_source("U-0003")
+        third = self.repo.active_entry("U-0003")
+        self.repo.write_active([third])
+        second_receipt = receipt_for(second, "superseded", [])
+        second_receipt["replacement_id"] = "U-0003"
+        self.repo.write_receipt(second_receipt)
+        self.repo.commit("supersede replacement debt")
+
+        result = GATE.check(self.repo.root, base, None)
+        self.assertEqual(result["active"], 1)
+        self.assertEqual(result["closed"], 2)
+
+    def test_supersession_cycle_and_unknown_target_fail(self) -> None:
+        original = self.repo
+        try:
+            for case in ("cycle", "unknown"):
+                with self.subTest(case=case):
+                    repo = TempRepo()
+                    self.repo = repo
+                    try:
+                        if case == "cycle":
+                            repo.write_source("U-0001", path="Uwueave/First.lean")
+                            repo.write_source("U-0002", path="Uwueave/Second.lean")
+                            first = repo.active_entry("U-0001")
+                            second = repo.active_entry("U-0002")
+                            repo.write_active([first, second])
+                            base = repo.commit()
+                            (repo.root / "Uwueave/First.lean").write_text("/- closed -/\n")
+                            (repo.root / "Uwueave/Second.lean").write_text("/- closed -/\n")
+                            repo.write_active([])
+                            first_receipt = receipt_for(first, "superseded", [])
+                            first_receipt["replacement_id"] = "U-0002"
+                            second_receipt = receipt_for(second, "superseded", [])
+                            second_receipt["replacement_id"] = "U-0001"
+                            repo.write_receipt(first_receipt)
+                            repo.write_receipt(second_receipt)
+                            expected = "supersession cycle"
+                        else:
+                            first, base = self.make_base()
+                            (repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
+                            repo.write_active([])
+                            receipt = receipt_for(first, "superseded", [])
+                            receipt["replacement_id"] = "U-9999"
+                            repo.write_receipt(receipt)
+                            expected = "names unknown target U-9999"
+                        self.assertDebtError(
+                            expected, lambda: GATE.check(repo.root, base, None)
+                        )
+                    finally:
+                        repo.close()
+        finally:
+            self.repo = original
+
     def test_superseded_cannot_flip_class_or_weaken_obligation(self) -> None:
         entry, base = self.make_base()
         self.repo.write_source("U-0002", label="PREMISE")
@@ -690,6 +773,26 @@ class ReceiptTests(RepoTestCase):
         self.repo.write_active([replacement])
         self.assertDebtError(
             "cannot weaken severity", lambda: GATE.check(self.repo.root, base, None)
+        )
+
+    def test_new_supersession_edge_cannot_skip_active_class_validation(self) -> None:
+        self.repo.write_source("U-0001", path="Uwueave/First.lean")
+        self.repo.write_source("U-0002", path="Uwueave/Second.lean")
+        first = self.repo.active_entry("U-0001")
+        second = self.repo.active_entry("U-0002")
+        self.repo.write_active([first, second])
+        base = self.repo.commit()
+        (self.repo.root / "Uwueave/First.lean").write_text("/- closed -/\n")
+        (self.repo.root / "Uwueave/Second.lean").write_text("/- closed -/\n")
+        self.repo.write_active([])
+        first_receipt = receipt_for(first, "superseded", [])
+        first_receipt["replacement_id"] = "U-0002"
+        self.repo.write_receipt(first_receipt)
+        evidence = self.repo.case_manifest("U-0002")
+        self.repo.write_receipt(receipt_for(second, "implemented", [evidence]))
+        self.assertDebtError(
+            "replacement must be active for class/severity validation",
+            lambda: GATE.check(self.repo.root, base, None),
         )
 
     def test_missing_or_unresolvable_evidence_fails(self) -> None:
@@ -785,7 +888,7 @@ class ReceiptTests(RepoTestCase):
                         repo.write_active([])
                         evidence = repo.case_manifest(check_kinds=kinds)
                         repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
-                        with repo.fake_rust_tools():
+                        with repo.fake_rust_tools(unit_filtered=121):
                             result = GATE.check(repo.root, base, None)
                         self.assertEqual(result["closed"], 1)
                     finally:
@@ -1420,7 +1523,7 @@ elab (priority := high) \"#print\" \"axioms\" id:ident : command =>
                 "debt_u_0170",
                 "persistence::record::debt_u_0170::",
                 "persistence::record::debt_u_0170::debt_closure_u_0170_fault_paths",
-                '#[cfg(test)] #[path = "debt_u_0170.rs"] mod debt_u_0170;',
+                '#[cfg(test)]\n#[path = "debt_u_0170.rs"]\nmod debt_u_0170;',
             ),
         )
         valid = {

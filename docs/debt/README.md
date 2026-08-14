@@ -107,9 +107,12 @@ marker hash. Dispositions are:
 - `proved`: evidence is exactly one Lean declaration check.
 - `implemented`: evidence is exactly one per-ID case manifest.
 - `obsolete`: evidence is exactly one Lean declaration or per-ID case manifest.
-- `superseded`: `evidence` is empty and `replacement_id` names a distinct
-  active item of the same class; an obligation replacement may not weaken
-  severity.
+- `superseded`: `evidence` is empty and `replacement_id` initially names a
+  distinct active item of the same class; an obligation replacement may not
+  weaken severity. That immutable edge remains valid if the replacement later
+  receives a `proved`, `implemented`, or `obsolete` receipt, or is itself
+  superseded through an acyclic chain terminating in an active item or one of
+  those paid dispositions. Unknown targets and supersession cycles fail.
 
 Each evidence object binds one tracked, non-symlinked regular file by exact
 SHA-256. It has only `kind`, `path`, and `sha256`; commands, declaration names,
@@ -190,7 +193,9 @@ gate also structurally checks the tracked module chain
 private-source hook, with no cfg or path redirection at an earlier link:
 
 ```rust
-#[cfg(test)] #[path = "debt_u_0001.rs"] mod debt_u_0001;
+#[cfg(test)]
+#[path = "debt_u_0001.rs"]
+mod debt_u_0001;
 ```
 
 Repository `.cargo/config` and `.cargo/config.toml` files are forbidden at
@@ -210,7 +215,10 @@ run replaces the module prefix with that full selector and passes only
 `--exact --include-ignored --test-threads 1` to libtest. Integration evidence
 similarly lists its isolated target. Both runners require exit status zero,
 one exact `... ok` line, and the standard one-passed, zero-failed summary. A
-zero-match Cargo success, an extra owned unit test/benchmark, an incomplete
+private-unit summary may report filtered unrelated library tests because its
+exact selector runs inside the crate library harness; its prefix listing must
+still contain exactly one owned test. A zero-match Cargo success, an extra
+owned unit test/benchmark, an incomplete
 transcript, or a nonzero exit despite forged success text is red.
 
 Python and shell cases are deliberately not schema-v1 evidence. An in-process
@@ -249,6 +257,8 @@ with `git ls-tree` and `git cat-file`. It rejects:
 - any change to a surviving active row (including source, marker hash, class,
   severity, summary, or acceptance); an edited obligation needs a new ID;
 - reused IDs or new IDs at or below the historical maximum;
+- supersession cycles, unknown replacement targets, or chains that do not end
+  in active or paid debt;
 - duplicate, unregistered, malformed, non-comment, or legacy markers;
 - unknown references, missing evidence, path traversal, unknown JSON keys,
   duplicate keys, noncanonical serialization, evidence/index drift, Cargo
