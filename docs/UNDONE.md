@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 96
-- **Extracted blocks (marker-bearing source lines):** 94
-- **Lean files containing markers:** 33
+- **Marker occurrences:** 86
+- **Extracted blocks (marker-bearing source lines):** 84
+- **Lean files containing markers:** 31
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -80,23 +80,6 @@ was reaching for. -/
     reaches a barrier remains a *liveness* question (`Uwueave.Liveness` owns that
     axis): no fairness, eventual-delivery, or temporal deadlock-freedom theorem is
     claimed.
-````
-
-## `Uwueave/CliqueLive.lean`
-
-### [`Uwueave/CliqueLive.lean:132`](../Uwueave/CliqueLive.lean#L132)
-
-````text
-  * ⟨UNDONE U-0017⟩ No clique is *synthesised*. Every bound below consumes a clique
-    somebody exhibits; finding the maximum one is the same search
-    `SeamColoring.lean` leaves open for minimum colourings.
-````
-
-### [`Uwueave/CliqueLive.lean:135`](../Uwueave/CliqueLive.lean#L135)
-
-````text
-  * ⟨UNDONE U-0018⟩ `no_live_triangle` is proved for the slot carrier by exhausting its
-    four legal states. Nothing here computes a live clique number in general.
 ````
 
 ## `Uwueave/CoordEffect.lean`
@@ -205,37 +188,11 @@ closed evidence's candidate set cannot move under any admissible future.
 
 ## `Uwueave/Exits.lean`
 
-### [`Uwueave/Exits.lean:139`](../Uwueave/Exits.lean#L139)
-
-````text
-## What a menu does NOT do — ⟨UNDONE U-0043⟩, and it is the biggest gap
-````
-
-### [`Uwueave/Exits.lean:147`](../Uwueave/Exits.lean#L147)
+### [`Uwueave/Exits.lean:156`](../Uwueave/Exits.lean#L156)
 
 ````text
 prior art; it is the next thing to build, and it is named ⟨UNDONE U-0044⟩ rather than
 paved over. Concretely, what is missing is a function
-````
-
-### [`Uwueave/Exits.lean:160`](../Uwueave/Exits.lean#L160)
-
-````text
-  * ⟨UNDONE U-0045⟩ **The menu is not proved exhaustive.** `menu_sound` says every
-    *listed* exit applies. Nothing says an unlisted exit does not — except
-    where a named refutation says so (`pin_escrow_starves`,
-    `balance_total_not_a_seam`, `duel_escrow_starves`). An absent row means
-    "nobody proved it", not "impossible".
-````
-
-### [`Uwueave/Exits.lean:165`](../Uwueave/Exits.lean#L165)
-
-````text
-  * ⟨UNDONE U-0046⟩ **`Exit.seam`'s `floor` field is free data.** `Applies` certifies
-    the *seam*; it does not certify the *number*. `seam_price_is_forced` is the
-    theorem that makes a floor honest, and each worked menu with a seam entry
-    discharges it separately (`ceiling_seam_floor_is_zero`). Nothing in the type
-    forces that discharge, and that is a hole in the type, not in the proofs.
 ````
 
 ## `Uwueave/ForkGrade.lean`
@@ -533,16 +490,6 @@ remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
     combiner is what an implementation would want and is not here.
 ````
 
-## `Uwueave/LiveSegmented.lean`
-
-### [`Uwueave/LiveSegmented.lean:82`](../Uwueave/LiveSegmented.lean#L82)
-
-````text
-  * ⟨UNDONE U-0093⟩ **Minimum live colourings.** As in `SeamColoring`, nothing synthesises
-    *the* minimum. §4's optima are proved by exhibiting a seam and refuting the
-    next width down on one concrete carrier, not by an algorithm.
-````
-
 ## `Uwueave/MenuTotality.lean`
 
 ### [`Uwueave/MenuTotality.lean:12`](../Uwueave/MenuTotality.lean#L12)
@@ -558,39 +505,11 @@ the missing signature,
 that ⟨UNDONE U-0095⟩ — synthesising a quota partition — is untouched here and survives.
 ````
 
-### [`Uwueave/MenuTotality.lean:27`](../Uwueave/MenuTotality.lean#L27)
-
-````text
-`Exits.lean:101-105` — ⟨UNDONE U-0096 in `Exits`, TERMINAL here for the explicitly
-finite seam row⟩ **"The menu is not proved exhaustive."** §2 and §3 make the
-greedy row decidable; §7 closes the finite seam-search case. Availability of
-the greedy seam row becomes **decidable**
-(`decidableSeamApplies`, and `pin_seam_row_decided` discharges by `decide` what
-`Cost.seamFalse_segmented` spends thirty-five lines on), so a row that is
-available is now *found* rather than waited for; and `seam_row_dichotomy` says
-the synthesiser either returns a certified row or reports a failure **located in
-the stability clause** — never in the colouring clause, which
-`greedySeamFor_properColoring` supplies unconditionally.
-````
-
-### [`Uwueave/MenuTotality.lean:60`](../Uwueave/MenuTotality.lean#L60)
-
-````text
-`SeamColoring.lean:87-89` lists as ⟨UNDONE U-0098⟩: *"a `k`-clique in the clash graph
-forces `k` fibers, hence `k-1` crossings — is not here."* It is here.
-````
-
-### [`Uwueave/MenuTotality.lean:99`](../Uwueave/MenuTotality.lean#L99)
+### [`Uwueave/MenuTotality.lean:101`](../Uwueave/MenuTotality.lean#L101)
 
 ````text
   * ⟨UNDONE U-0099⟩ **Escrow synthesis.** `Exits.lean`'s ⟨UNDONE U-0100⟩ names two searches;
     only the seam one is answered here.
-````
-
-### [`Uwueave/MenuTotality.lean:194`](../Uwueave/MenuTotality.lean#L194)
-
-````text
-not one of the two trivial inhabitants that ⟨UNDONE U-0101⟩ note rules out. -/
 ````
 
 ## `Uwueave/MergeModel.lean`
@@ -748,15 +667,7 @@ minimal — see the module header. -/
 
 ## `Uwueave/RepairMenu.lean`
 
-### [`Uwueave/RepairMenu.lean:98`](../Uwueave/RepairMenu.lean#L98)
-
-````text
-`Exits.lean` those rows are *absent*, and its own ⟨UNDONE U-0130⟩ says an absent row
-means "nobody proved it". Here an absent row and a refuted row are different
-constructors.
-````
-
-### [`Uwueave/RepairMenu.lean:139`](../Uwueave/RepairMenu.lean#L139)
+### [`Uwueave/RepairMenu.lean:140`](../Uwueave/RepairMenu.lean#L140)
 
 ````text
   * ⟨UNDONE U-0132⟩ **The generated menus are not proved exhaustive** either.
@@ -765,7 +676,7 @@ constructors.
     silently absent, but no theorem says the catalog contains every repair.
 ````
 
-### [`Uwueave/RepairMenu.lean:271`](../Uwueave/RepairMenu.lean#L271)
+### [`Uwueave/RepairMenu.lean:272`](../Uwueave/RepairMenu.lean#L272)
 
 ````text
 `Exits.lean`'s biggest ⟨UNDONE U-0133⟩ is "a menu is not a solver": it reports a seam
@@ -774,7 +685,7 @@ whose only missing piece is named, and the displayed price and delta are pinned
 to the repair the residual buys. -/
 ````
 
-### [`Uwueave/RepairMenu.lean:640`](../Uwueave/RepairMenu.lean#L640)
+### [`Uwueave/RepairMenu.lean:641`](../Uwueave/RepairMenu.lean#L641)
 
 ````text
 handed and cannot decide. `Exits.lean`'s ⟨UNDONE U-0134⟩ — *"it reports that a seam exit

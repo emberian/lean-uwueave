@@ -24,8 +24,9 @@ strictly fewer crossings than the identity seam on a workload where the identity
 seam charges one (`pin_synth_beats_full_coordination`). ⚠ The escrow half of
 that ⟨UNDONE U-0095⟩ — synthesising a quota partition — is untouched here and survives.
 
-`Exits.lean:101-105` — ⟨UNDONE U-0096 in `Exits`, TERMINAL here for the explicitly
-finite seam row⟩ **"The menu is not proved exhaustive."** §2 and §3 make the
+`Exits.lean:101-105` — ⟨DONE here for the explicit finite covering carrier and
+palette; unrestricted menus remain outside this result⟩ **"The menu is not
+proved exhaustive."** §2 and §3 make the
 greedy row decidable; §7 closes the finite seam-search case. Availability of
 the greedy seam row becomes **decidable**
 (`decidableSeamApplies`, and `pin_seam_row_decided` discharges by `decide` what
@@ -57,8 +58,9 @@ valid seam, not just the carried one (`CertifiedSeam.floor_is_forced`).
 
 ## §4 is the new mathematics: the clique bound
 
-`SeamColoring.lean:87-89` lists as ⟨UNDONE U-0098⟩: *"a `k`-clique in the clash graph
-forces `k` fibers, hence `k-1` crossings — is not here."* It is here.
+`SeamColoring.lean:87-89` lists as ⟨DONE here in the clash-graph model for every
+supplied finite clique⟩: *"a `k`-clique in the clash graph forces `k` fibers,
+hence `k-1` crossings — is not here."* It is here.
 
   * **(a) Do ceiling clashes form a clique?** As stated, **no**, and the witness
     is `ceiling_graph_is_not_complete`: the empty set is legal, distinct from a
@@ -191,7 +193,8 @@ theorem pin_seam_row_decided :
 
 `Exits.lean:89-97` asks for `synth`. Here it is, built from
 `SeamColoring.synthesizeSeam?`, together with the two theorems that say it is
-not one of the two trivial inhabitants that ⟨UNDONE U-0101⟩ note rules out. -/
+not one of the two trivial inhabitants that ⟨DONE here on the finite four-state
+pin fixture⟩ note rules out. -/
 
 /-- **`synth`, at the signature `Exits.lean:91` writes out.** An `Option` of a
 segment type together with a projection carrying its own `SegmentedIConfluent`

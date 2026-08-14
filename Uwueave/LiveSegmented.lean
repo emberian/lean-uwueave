@@ -79,9 +79,16 @@ was computed under — §4's whole content is that the two numbers differ.
     strategy pays `0`, every global seam pays at least `1`, and a global seam
     paying exactly `1` is exhibited. The force comes from global fiber stability
     closing three same-coloured legal generators into their illegal triple join.
-  * ⟨UNDONE U-0093⟩ **Minimum live colourings.** As in `SeamColoring`, nothing synthesises
-    *the* minimum. §4's optima are proved by exhibiting a seam and refuting the
-    next width down on one concrete carrier, not by an algorithm.
+  * ⟨DONE U-0093 — see `Uwueave.FiniteProductSearch`⟩ **Minimum live
+    colourings on an explicit finite scope.**
+    `synthesizeMinimumLiveSeamCapped` exhaustively searches the supplied
+    proof-carrying finite carrier and palette; its result carries either a
+    least valid strategy or exhaustive semantic refusal, and it refuses before
+    enumeration when a work cap is exceeded. The Slot fixture admits that
+    capped search and independently certifies live width `2`. This is
+    deliberately bounded: it neither enumerates an arbitrary carrier nor
+    invents an unbounded palette, and its objective is the number of colours
+    used on the declared carrier, not `ForkGrade.liveCost`.
   * Classical logic: the properness ⇒ safety direction is excluded middle on
     `I (x ⊔ y)`, exactly as in `SeamColoring.separatesOn_of_properColoring`.
     `Classical.byContradiction` is Lean's, not an added axiom.

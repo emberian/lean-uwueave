@@ -129,11 +129,19 @@ theorem is not the same as having it.
   * ⟨scope⟩ `LiveWidth` is protocol-relative and inherits `LiveSegmented`'s
     ⟨PREMISE U-0016⟩ "faithfulness of `P` is the modeller's": a live clique bound issued
     against an under-permissive `RunModel` is unsound for the real deployment.
-  * ⟨UNDONE U-0017⟩ No clique is *synthesised*. Every bound below consumes a clique
-    somebody exhibits; finding the maximum one is the same search
-    `SeamColoring.lean` leaves open for minimum colourings.
-  * ⟨UNDONE U-0018⟩ `no_live_triangle` is proved for the slot carrier by exhausting its
-    four legal states. Nothing here computes a live clique number in general.
+  * ⟨DONE downstream in `Uwueave.FiniteProductSearch`⟩ Maximum cliques are
+    synthesised over a declared finite carrier, behind explicit work caps.
+    `MaximumClique.greatestSupported` extends the canonical search result to
+    every duplicate-free supported clique, and `c5_maximum_clique_is_two`
+    computes the nontrivial C₅ maximum exactly. The construction and both
+    guarantees are packaged by `tests/DebtClosures/U_0017.lean`.
+  * ⟨DONE downstream in `Uwueave.FiniteProductSearch`⟩ Maximum live cliques
+    are likewise synthesised over a declared finite protocol scope, behind
+    explicit work caps. `MaximumLiveClique.greatestSupported` supplies the
+    supported maximality theorem, while
+    `slot_exact_maximum_scenario_clique_is_two` computes the slot scenario's
+    exact maximum. `tests/DebtClosures/U_0018.lean` packages that finite-scope
+    contract; no arbitrary infinite live-clique search is claimed.
 
 This file edits none of the three modules; it imports them and relates them by
 theorem.

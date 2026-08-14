@@ -136,7 +136,16 @@ that the two zeroes are not the same zero". The ⟨scope⟩ note below distingui
 zero is in the *same* currency as escrow's — both are `zero_price_of_iconfluent`
 (`fork_price_zero`, `escrow_price_zero`).
 
-## What a menu does NOT do — ⟨UNDONE U-0043⟩, and it is the biggest gap
+## What a menu does NOT do — ⟨DONE U-0043⟩ at a supplied finite product
+
+**A bounded closed-product solver now exists downstream; this static menu
+remains a display.**
+`FiniteProductClosure.ClosedScope.synthesizeCoupledCapped` searches the product
+of a caller-supplied certified-seam list, every exact non-starving `Bool` quota
+partition, fork, and full coordination under an explicit coupling policy and
+resource cap. `ClosedScope.mem_menuEntries_iff` states the finite grammar's
+row boundary; the coupled fixtures find a compatible pair, expose its typed
+repair, and refuse an oversized product before enumeration.
 
 **A menu is not a solver.** It reports that a `seam` exit exists *for a `σ` you
 hand it*, and that an `escrow` exit exists *for a split you hand it*. It does
@@ -157,16 +166,22 @@ is about non-triviality and why nothing here proves it.
 
 Four further non-claims, labelled:
 
-  * ⟨UNDONE U-0045⟩ **The menu is not proved exhaustive.** `menu_sound` says every
-    *listed* exit applies. Nothing says an unlisted exit does not — except
-    where a named refutation says so (`pin_escrow_starves`,
-    `balance_total_not_a_seam`, `duel_escrow_starves`). An absent row means
-    "nobody proved it", not "impossible".
-  * ⟨UNDONE U-0046⟩ **`Exit.seam`'s `floor` field is free data.** `Applies` certifies
-    the *seam*; it does not certify the *number*. `seam_price_is_forced` is the
-    theorem that makes a floor honest, and each worked menu with a seam entry
-    discharges it separately (`ceiling_seam_floor_is_zero`). Nothing in the type
-    forces that discharge, and that is a hole in the type, not in the proofs.
+  * ⟨DONE U-0045⟩ **The downstream closed grammar is exactly enumerated.**
+    `FiniteProductClosure.ClosedScope.mem_menuEntries_iff` and
+    `ClosedScope.mem_catalog_iff` say that a generated row or candidate occurs
+    iff it is the interpretation of one of that scope's finite grammar codes.
+    This is not exhaustiveness over arbitrary `Exit` or `Repair` inhabitants;
+    outside the supplied seams, exact non-starving `Bool` quotas, fork, and full
+    coordination, an absent row still means no claim.
+  * ⟨DONE U-0046⟩ **Generated seam rows carry a forced floor.** The legacy
+    statement remains true: `MenuTotality.applies_certifies_no_floor` exhibits
+    an applicable `Exit.seam` whose authored number is false. Downstream
+    `MenuTotality.CertifiedSeam.floor_is_forced` and
+    `RepairMenu.seamRepair_price_is_forced` instead compute the generated row's
+    floor from a carried clique and bound joint crossings under every valid
+    seam; `MenuTotality.ceiling_certificate_floor_is_forced` instantiates the
+    repair at floor one. This does not retroactively certify hand-authored
+    legacy rows.
   * ⟨scope⟩ **Two prices are in different currencies.** `seam` and
     `fullCoordination` are priced in `Cost.crossings` — seam crossings, the one
     coordination quantity in this tree with a floor theorem

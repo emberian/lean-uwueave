@@ -95,8 +95,9 @@ prose. Three findings fall out of the comparison, and each is a theorem here:
 And two rows appear that the hand menus do not have: the ceiling's and the
 duel's **escrow** rows, `impossible` with `Exits.pin_escrow_starves` /
 `Exits.duel_escrow_starves` — theorems quantified over every quota. In
-`Exits.lean` those rows are *absent*, and its own ⟨UNDONE U-0130⟩ says an absent row
-means "nobody proved it". Here an absent row and a refuted row are different
+`Exits.lean` those rows are *absent*. ⟨DONE downstream: the explicit universal
+starvation witnesses and impossible-row constructors distinguish "nobody listed
+it" from "the row is refuted".⟩ Here an absent row and a refuted row are different
 constructors.
 
 ## The seam row takes all three constructors — the acceptance test
@@ -878,6 +879,20 @@ def ceilingEscrowRow : RepairCandidate ceilingPromise :=
     "escrow (starves a slot at every quota)"
     (.escrowStarves Exits.pinCharge Exits.pin_escrow_starves)
 
+/-- The ceiling refutation is universal over the quota design freedom. This is
+strictly stronger than failing to find one quota: every quota is ruled out. -/
+theorem ceiling_escrow_refutation_is_universal :
+    ∀ q : Bool → Nat,
+      ¬ (Exit.escrow (S := Cost.PinSet) Bool q Exits.pinCharge).Applies
+          ceilingPromise.inv :=
+  Exits.pin_escrow_starves
+
+/-- The ceiling escrow row records a refutation, rather than merely disappearing
+from the menu when no candidate was found. -/
+theorem ceilingEscrowRow_is_impossible :
+    ceilingEscrowRow.shape = Shape.impossible :=
+  rfl
+
 /-- **The ceiling's menu, generated.** Three discriminating rows — a synthesised
 seam at the forced floor, the arbitration with its charged premise, and the
 escrow *refuted* — plus the two unconditional rows. -/
@@ -893,6 +908,10 @@ def ceilingMenu : Menu ceilingPromise where
       .available (Exit.arbitration Exits.pinKeepTrue) "arbitration"
         arbitratedCeilingPromise pinArbitrate,
       ceilingEscrowRow ]
+
+/-- The universally refuted ceiling escrow is still an explicit menu row. -/
+theorem ceilingEscrowRow_is_present : ceilingEscrowRow ∈ ceilingMenu.rows := by
+  simp [ceilingMenu, Menu.rows]
 
 /-- ⚠ **The ceiling's seam row DISAGREES with the hand menu, and by how much.**
 `Exits.ceilingMenu` prints `0`; the generated row prints the clique-forced `1`;
@@ -1232,6 +1251,19 @@ def duelEscrowRow : RepairCandidate duelPromise :=
     "escrow (starves every id but one, at every quota)"
     (.escrowStarves Exits.grantCharge Exits.duel_escrow_starves)
 
+/-- The duel refutation is universal over the quota design freedom. This is not
+the weaker observation that one attempted quota failed. -/
+theorem duel_escrow_refutation_is_universal :
+    ∀ q : Nat → Nat,
+      ¬ (Exit.escrow (S := Authority.GrantSet) Nat q Exits.grantCharge).Applies
+          duelPromise.inv :=
+  Exits.duel_escrow_starves
+
+/-- The duel escrow row records a refutation, rather than merely disappearing
+from the menu when no candidate was found. -/
+theorem duelEscrowRow_is_impossible : duelEscrowRow.shape = Shape.impossible :=
+  rfl
+
 /-- **The duel's menu, generated.** The arbitration and the rollback are two
 display tags over **one** repair; the escrow is refuted; the two unconditional
 rows follow. -/
@@ -1248,6 +1280,10 @@ def duelMenu : Menu duelPromise where
       .available (Exit.rollback (Exits.arbKeep 1)) "rollback"
         arbitratedDuelPromise duelArbitrate,
       duelEscrowRow ]
+
+/-- The universally refuted duel escrow is still an explicit menu row. -/
+theorem duelEscrowRow_is_present : duelEscrowRow ∈ duelMenu.rows := by
+  simp [duelMenu, Menu.rows]
 
 /-- ⚑ **The duel's two hand rows are one repair.** `Exits.duelMenu` prints an
 arbitration row and a rollback row, both at `0`, and its own docstring says they
