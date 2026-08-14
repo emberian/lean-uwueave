@@ -748,6 +748,81 @@ mod tests {
     }
 
     #[test]
+    fn open_failure_creates_no_journal_or_in_memory_state() {
+        let nonce = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "uwueave-raw-open-failure-{}-{nonce}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        let non_directory = root.join("not-a-directory");
+        std::fs::write(&non_directory, b"unchanged sentinel").unwrap();
+        let journal_path = non_directory.join("journal");
+
+        assert!(matches!(
+            RawJournal::open(
+                &journal_path,
+                test_spec(),
+                JournalOptions {
+                    torn_tail: TornTailPolicy::Refuse,
+                    sync: SyncPolicy::Buffered,
+                    max_record_bytes: 1024,
+                },
+            ),
+            Err(RawJournalError::Io(_))
+        ));
+        assert_eq!(
+            std::fs::read(&non_directory).unwrap(),
+            b"unchanged sentinel"
+        );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+
+        std::fs::remove_file(non_directory).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn write_failure_poisons_without_committing_in_memory_record() {
+        let nonce = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "uwueave-raw-write-failure-{}-{nonce}.journal",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut journal = RawJournal::open(
+            &path,
+            test_spec(),
+            JournalOptions {
+                torn_tail: TornTailPolicy::Refuse,
+                sync: SyncPolicy::Buffered,
+                max_record_bytes: 1024,
+            },
+        )
+        .unwrap();
+
+        // A read-only descriptor deterministically refuses `write_all` on Unix.
+        // Replacing only this private test handle does not model a filesystem
+        // crash or make any claim about stable storage.
+        journal.file = File::open("/dev/null").unwrap();
+        assert!(matches!(
+            journal.append_at(0, b"must not commit"),
+            Err(RawJournalError::Io(_))
+        ));
+        assert!(journal.poisoned);
+        assert!(journal.records().is_empty());
+        assert_eq!(journal.next_sequence(), 0);
+        assert!(matches!(
+            journal.append_at(0, b"must not commit"),
+            Err(RawJournalError::Poisoned)
+        ));
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
+
+        drop(journal);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn sync_all_accepts_a_bare_relative_new_journal_path() {
         let nonce = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
         let path = PathBuf::from(format!(
@@ -771,7 +846,7 @@ mod tests {
     }
 
     #[test]
-    fn idempotent_retry_repeats_sync_and_poisons_on_sync_failure() {
+    fn idempotent_retry_sync_failure_poisons_until_reopen() {
         let nonce = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "uwueave-raw-retry-sync-{}-{nonce}.journal",
@@ -801,10 +876,37 @@ mod tests {
             journal.append_at(0, b"accepted"),
             Err(RawJournalError::Io(_))
         ));
+        assert!(journal.poisoned);
+        assert_eq!(journal.records(), &[b"accepted".to_vec()]);
+        assert_eq!(journal.next_sequence(), 1);
         assert!(matches!(
             journal.append_at(0, b"accepted"),
             Err(RawJournalError::Poisoned)
         ));
-        let _ = std::fs::remove_file(path);
+
+        // The poisoned handle cannot make progress. A fresh production open
+        // re-scans the real journal rather than trusting the poisoned memory.
+        drop(journal);
+        let mut reopened = RawJournal::open(
+            &path,
+            test_spec(),
+            JournalOptions {
+                torn_tail: TornTailPolicy::Refuse,
+                sync: SyncPolicy::Buffered,
+                max_record_bytes: 1024,
+            },
+        )
+        .unwrap();
+        assert!(!reopened.poisoned);
+        assert_eq!(reopened.records(), &[b"accepted".to_vec()]);
+        assert_eq!(reopened.next_sequence(), 1);
+        reopened.append_at(1, b"after reopen").unwrap();
+        assert_eq!(
+            reopened.records(),
+            &[b"accepted".to_vec(), b"after reopen".to_vec()]
+        );
+
+        drop(reopened);
+        std::fs::remove_file(path).unwrap();
     }
 }
