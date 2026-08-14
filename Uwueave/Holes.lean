@@ -151,7 +151,7 @@ one and the earlier one never learns it was superseded. So, from this side:
 ## Honest boundary
 
 Each item is labelled ⟨TERMINAL⟩ (a theorem *of the model* — no work would
-remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
+remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
 
   * **The generic carrier accepts arbitrary functions; a typed expression
     adapter now exists.** ⟨DONE for `Preo.Expr`, terminal for arbitrary `f`⟩
@@ -161,7 +161,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     merge/monotonicity classifier's positive and negative cases. `f : World → α`
     here remains intentionally unrestricted and therefore cannot itself be
     classified by syntax inspection.
-  * **`f` may read the representation, not just the valuation.** ⟨UNDONE⟩ A
+  * **`f` may read the representation, not just the valuation.** ⟨UNDONE U-0079⟩ A
     `World` is a `List Val` — register `r` reads `read w r`, everything past
     the end reads `0` (`read_beyond`), so finite support is structural. But
     `[1]` and `[1, 0]` are distinct worlds with identical reads, and an
@@ -194,7 +194,7 @@ remove it) or ⟨UNDONE⟩ (work, wearing a caveat's clothes).
     `coordination_free_iff_iconfluent` and the seam refinement
     `seam_coordination_free`. It is kept in this list rather than deleted only
     because the sentence is the one Choreo quotes.
-  * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE, and narrowed⟩ §6's
+  * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE U-0080, and narrowed⟩ §6's
     stability licence is abstract (`Stable Arriving P`), and
     `stable_inputs_seal_the_result` proves the *mechanism* — stability of the
     inputs transports to stability of the result, along the headline. What is

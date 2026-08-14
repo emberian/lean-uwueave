@@ -56,7 +56,7 @@ the verdict is indexed by.
 
 ## Non-claims, labelled
 
-  * ⟨UNDONE⟩ **Crossings are not meetings.** Repeated from `Cost.lean` rather
+  * ⟨UNDONE U-0003⟩ **Crossings are not meetings.** Repeated from `Cost.lean` rather
     than inherited from it: a "coordination event" here is a seam crossing on
     one replica's stream. How many peers must attend, and whether two replicas
     crossing "the same" boundary hold one meeting or two, is not determined by
@@ -71,7 +71,7 @@ the verdict is indexed by.
     acceptance of **one replica's stream against one seam**, and a concurrent
     session's true cost is not bounded by it. This is not repairable inside this
     file's measure; it is the measure's domain of validity.
-  * ⟨UNDONE⟩ **`unavoidableFloor` is not a function.** The floor is a supremum
+  * ⟨UNDONE U-0004⟩ **`unavoidableFloor` is not a function.** The floor is a supremum
     over clash decompositions, and nothing here computes that global supremum.
     `ForcedFloor wl n` says "`n` is *a* forced floor", witnessed by a
     decomposition; `rejected` carries that witness. §2.1 now computes a
@@ -79,7 +79,7 @@ the verdict is indexed by.
     an explicit finite list of witnessed plans. Its refusal quantifies only over
     that list. Reading either a `ForcedFloor` or a finite-menu minimum as "the"
     unrestricted floor is exactly the scope error the types prevent.
-  * ⟨UNDONE⟩ **Composition is sequential only.** `accepted_andThen` composes two
+  * ⟨UNDONE U-0005⟩ **Composition is sequential only.** `accepted_andThen` composes two
     accepted stretches *of one stream under one seam*, from `crossings_append`.
     Two **concurrent** accepted sessions under one budget need the profile
     discipline — a sibling lane is proving `opt_compose_ge_sum_opt` in
@@ -733,7 +733,7 @@ example : (budgetSharePlan.cost, batchSharePlan.cost,
 Two accepted stretches **of one stream under one seam** compose at the summed
 budget, from `Cost.crossings_append`. That is the whole of what composes here.
 Concurrent composition of two accepted *sessions* is a different theorem and a
-harder one — see the module docstring's ⟨UNDONE⟩ and the sibling
+harder one — see the module docstring's ⟨UNDONE U-0006⟩ and the sibling
 `Uwueave/CoordEffect.lean`, deliberately not imported. -/
 
 /-- Extend a workload by a further stretch of ops whose run is also legal. -/

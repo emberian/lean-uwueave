@@ -66,7 +66,7 @@ Four results:
 ## The honest boundary
 
 Each item is labelled **TERMINAL** (a theorem *of the model* — no work would
-remove it) or **UNDONE** (work, in a caveat's clothes). The list used to open
+remove it) or **⟨UNDONE U-0051⟩** (work, in a caveat's clothes). The list used to open
 with "this gates the abstract op layer, not the shipping kernel", followed by
 the recipe for fixing that; the recipe was executed, and the item is gone
 rather than reworded.
@@ -91,7 +91,7 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     concrete forgery witness. `Uwueave.Byzantine.unauthenticated_submission_can_pass_the_gate`
     separately proves the exact attack here: a submitter not represented in
     `GOp` can cite somebody else's live grant and pass the ordinary gate.
-    ⟨UNDONE at the shipping boundary; model admission paid⟩
+    ⟨UNDONE U-0052 at the shipping boundary; model admission paid⟩
     `AuthenticatedAdmission.AuthenticatedGatedOp` now connects a received,
     accepted signed `MoveClaim` to the abstract gated feed under
     `Authenticity.AuthenticIssuer` and explicit `GrantHolder` binding. FORMAT
@@ -99,7 +99,7 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     authenticates the request reaching the kernel; no concrete EUF-CMA proof is
     present. The gate bounds what a cited grant can DO, not who may cite it.
   * **The kernel searches grants by FIRST match; `permitted` quantifies over
-    all of them.** ⟨TERMINAL under content addressing, else UNDONE⟩ On a
+    all of them.** ⟨TERMINAL under content addressing, else ⟨UNDONE U-0053⟩⟩ On a
     substrate satisfying `UniqueGrant` the two coincide, and that is exactly
     the hypothesis `kernel_gate_agrees` carries. Without it the kernel can
     only admit FEWER ops than the abstraction (`kernel_admits_only_authorised`
@@ -123,7 +123,7 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     happened" is wrong; what holds is that no unauthorised op is replayed,
     and that de-authorisation is forever (`Exec.gated_unauthorised_is_forever`).
   * **The substrate travels in the request; the kernel neither fetches nor
-    audits it.** ⟨UNDONE — and the sharpest remaining seam⟩ The gate decides
+    audits it.** ⟨UNDONE U-0054 — and the sharpest remaining seam⟩ The gate decides
     against the grants and revocations *the caller marshalled*. A caller that
     omits a revocation it has seen gets a more permissive answer, and nothing
     in Lean can tell: `replay`'s theorems quantify over the decoded arrays,
@@ -133,7 +133,7 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     substrate it was built from — a digest the caller cannot vary per call —
     and that is unbuilt.
   * **Scope is a `Nat` ceiling on node ids — and in the kernel, on node
-    INDICES.** ⟨UNDONE⟩ Enough to make covering decidable and the theorems
+    INDICES.** ⟨UNDONE U-0055⟩ Enough to make covering decidable and the theorems
     honest, and now enough to make the kernel's coverage check one
     comparison. But note what the port made concrete: `GOp.node` is an id
     here and `Exec.Op.child` is an index into the request's node block, so a
@@ -155,7 +155,7 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     complete under `WF` + `UniqueGrant`. The undecidability is a fact about
     the abstraction, not a hole under the implementation.
   * **Below the Lean, the execution TCB — and it is NOT terminal.**
-    ⟨UNDONE, in eight named pieces⟩ This item used to read "⟨TERMINAL for this
+    ⟨UNDONE U-0056, in eight named pieces⟩ This item used to read "⟨TERMINAL for this
     repo⟩ … the Rust marshaller's bytes and Lean's C backend", which is exactly
     the claim `docs/TRUST.md` exists to retract: an external reviewer (codex)
     read "the C backend TCB is terminal" and demolished it, and Ledger 2 is the

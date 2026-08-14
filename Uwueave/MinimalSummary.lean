@@ -90,7 +90,7 @@ context is observable, so a set-valued carrier does not degrade to a counter.
 ## Honest boundary
 
   * **The global quotient still has no message representation.**
-    ⟨UNDONE beyond an explicit finite universe⟩ The coarsest *partition* is not the
+    ⟨UNDONE U-0110 beyond an explicit finite universe⟩ The coarsest *partition* is not the
     smallest *message*. `CtxQuot f` is a quotient type: no bound on the bits a
     class takes, no encoding, and no cost model. `ContextCompiler.Spec.classKeys`
     does make class membership computable for caller-supplied finite state,
@@ -99,7 +99,7 @@ context is observable, so a set-valued carrier does not degrade to a counter.
     The membership pole remains the one global case where the class itself is
     exhibited as a `Bool` (`mem_quot_bit`).
   * **`decodeSummary` is `Classical.choice`, not a global algorithm.**
-    ⟨UNDONE beyond an explicit finite universe⟩ Same caveat as
+    ⟨UNDONE U-0111 beyond an explicit finite universe⟩ Same caveat as
     `JoinHom.canonicalCombine`: it witnesses that a decoder exists. The
     quotient's own decoder `ctxAnswer` is choice-free (`Quotient.lift f`), and
     `ContextCompiler.Spec.representative?` now gives a second, executable,
@@ -107,7 +107,7 @@ context is observable, so a set-valued carrier does not degrade to a counter.
     enumeration; `representative_sound`, `representative_complete`, and
     `encode_decode_exact` state its exact scope.
   * **`∀ z` still ranges over the whole carrier, including unreachable
-    states.** ⟨UNDONE beyond a supplied finite context universe⟩
+    states.** ⟨UNDONE U-0112 beyond a supplied finite context universe⟩
     `ContextCompiler` can instead compile exactly the contexts a caller lists;
     `signature_eq_iff` proves exactness for that relative relation, and
     `restricted_contexts_can_coarsen` exhibits `{0}` and `{1}` collapsing when
@@ -123,11 +123,11 @@ context is observable, so a set-valued carrier does not degrade to a counter.
     complete, and `sufficient_refines_signature` proves the partition-order
     universal property. Heterogeneous or infinite query families are outside
     that compiler's claim.
-  * **No syntax, so no classifier.** ⟨UNDONE⟩ `f` is an arbitrary Lean
+  * **No syntax, so no classifier.** ⟨UNDONE U-0113⟩ `f` is an arbitrary Lean
     function; the quotient is computed per query by hand. Exactly the unbuilt
     part named in `Holes.lean` and `JoinHom.lean`, unchanged.
   * **The counted quotients are for the exhibited carriers only.** ⟨TERMINAL
-    for the refutations, ⟨UNDONE⟩ for a formula⟩ Two- and three-element
+    for the refutations, ⟨UNDONE U-0114⟩ for a formula⟩ Two- and three-element
     universes: a counterexample only needs to be a counterexample, and the
     positive results (§1–§3) carry no carrier assumption. But "five classes"
     is a fact about `|U| = 3, k = 2`; no general formula for the threshold

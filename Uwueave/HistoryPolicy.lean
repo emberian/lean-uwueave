@@ -104,7 +104,7 @@ its witness.
 
 ## Non-claims
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0074⟩ = work wearing a caveat's clothes.
 
   * ⟨TERMINAL⟩ **`HistoryConvergent` is convergence of a derived function, not of
     a protocol.** Its two "replicas" are two derivations over records that
@@ -120,7 +120,7 @@ its witness.
     `any_selector_has_a_sound_policy` proves *every* selector has a
     `selectSound` policy — declare the empty scope. Each witness therefore proves
     its scope contains the pair its judgement is asked at.
-  * ⟨UNDONE, narrowed to automatic semantic decision synthesis⟩ **Declared
+  * ⟨UNDONE U-0075, narrowed to automatic semantic decision synthesis⟩ **Declared
     policy decisions and higher judgements are now swept.** Downstream
     `HistoryEngine.semanticSweep` evaluates `HistoryMerge.select` and `apply`
     over every ordered pair of an explicitly enumerated history, returning
@@ -132,7 +132,7 @@ its witness.
     whole-policy judgements. Their semantic decision procedures are explicit
     inputs; automatically synthesizing them, and tying `HistoryConvergent` to
     an authenticated/out-of-order delivery protocol, remain open.
-  * ⟨UNDONE, narrowed to unrestricted selection and kernel synthesis⟩ **A
+  * ⟨UNDONE U-0076, narrowed to unrestricted selection and kernel synthesis⟩ **A
     total finite selector is now computed from a covered DAG.** Downstream
     `HistoryEngine.decidePair` performs proof-carrying four-way search under an
     explicit finite enumeration and computes selected, ambiguous, unavailable,
@@ -147,7 +147,7 @@ its witness.
     counterexample, while `orderAgreement_iff_selector_symmetric_at` gives the
     exact necessity theorem under named reconcile-symmetry and
     decision-separation premises.
-  * ⟨UNDONE⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
+  * ⟨UNDONE U-0077⟩ **`Type 0` only**, inherited from `MergeModel.BaseDecision` and
     `Histories`.
 
 Literature: as `Histories.lean` — Kaki et al. (MRDT, OOPSLA 2019) for the

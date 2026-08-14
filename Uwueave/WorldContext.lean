@@ -29,7 +29,7 @@ capability set, causal cut, or known base differs.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = deliberately outside it.
+⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0151⟩ = deliberately outside it.
 
   * ⟨TERMINAL⟩ **Capabilities are active grants, not opaque booleans.** A source
     is licensed only by a grant present in `outstanding`, active in the carried
@@ -40,7 +40,7 @@ capability set, causal cut, or known base differs.
     `Histories.Reaches` in a real labelled `History`.  Turning a base into a
     state-level merge decision additionally requires `Histories.RunRealized`
     and a genuine `CommonAncestor`; `known_base_selected_valid` exposes both.
-  * ⟨DONE in the proof-carrying successor; UNDONE for deployment crypto⟩
+  * ⟨DONE in the proof-carrying successor; ⟨UNDONE U-0152⟩ for deployment crypto⟩
     **Authentication and capability consumption remain outside this carrier.**
     `Uwueave.AuthenticatedWorldContext` adds accepted-and-issued signed typed
     position claims and grow-only consumption tombstones while projecting its

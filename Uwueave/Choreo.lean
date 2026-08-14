@@ -146,11 +146,11 @@ depends on it):
     recursion through fuel-bounded approximants. `approximate_embed` and
     `projection_sound_approx` prove conservativity and projection soundness at
     every finite fuel.
-  * ⟨UNDONE only for infinitary recursion⟩ **No coinductive or infinite-trace
+  * ⟨UNDONE U-0013 only for infinitary recursion⟩ **No coinductive or infinite-trace
     semantics.** The finite approximants do not define a limit object, a
     bisimulation on infinite behavior, or temporal liveness of a recursive
     protocol. Those stronger claims remain unbuilt.
-  * ⟨UNDONE as temporal liveness⟩ **Deadlock-freedom in their sense.** Our only
+  * ⟨UNDONE U-0014 as temporal liveness⟩ **Deadlock-freedom in their sense.** Our only
     blocking construct is `barrier`. `Uwueave.ChoreoRec` now proves the narrow
     operational facts that one guarded barrier loop can take a step and one
     mismatched barrier is deadlocked. Whether every roster replica eventually
@@ -170,7 +170,7 @@ depends on it):
     replica views; `twoParty_remote_missing_label` refuses to invent an absent
     label. This is finite safety over generated traces, not channel duality,
     recursion liveness, fairness, authenticity, or eventual delivery.
-  * ⟨UNDONE⟩ **Liveness of delivery.** `coordination_free_converges` says *given*
+  * ⟨UNDONE U-0015⟩ **Liveness of delivery.** `coordination_free_converges` says *given*
     that a delivery list contains the run's results, every replica agrees. That every
     result is eventually delivered is the CRDT premise and is not proved here.
 -/

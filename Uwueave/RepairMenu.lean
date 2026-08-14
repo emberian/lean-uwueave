@@ -95,7 +95,7 @@ prose. Three findings fall out of the comparison, and each is a theorem here:
 And two rows appear that the hand menus do not have: the ceiling's and the
 duel's **escrow** rows, `impossible` with `Exits.pin_escrow_starves` /
 `Exits.duel_escrow_starves` — theorems quantified over every quota. In
-`Exits.lean` those rows are *absent*, and its own ⟨UNDONE⟩ says an absent row
+`Exits.lean` those rows are *absent*, and its own ⟨UNDONE U-0130⟩ says an absent row
 means "nobody proved it". Here an absent row and a refuted row are different
 constructors.
 
@@ -131,12 +131,12 @@ identity seam and refutes it at `Exits.balTotal`.
     meeting count. `balanceEscrow_price_and_delta` couples that price projection
     to the exact `PromiseRelation.strengthened` delta and a concrete source-legal
     state the escrowed promise forbids.
-  * ⟨UNDONE, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+  * ⟨UNDONE U-0131, narrowed to unrestricted candidate discovery⟩ **No unrestricted
     menu search.** `MenuTotality.synth` searches for a seam over a covering pool,
     while downstream `FiniteRepairMenu` chooses from an explicitly supplied,
     checked finite catalog. The escrow partition and candidate universe are still
     handed in rather than discovered.
-  * ⟨UNDONE⟩ **The generated menus are not proved exhaustive** either.
+  * ⟨UNDONE U-0132⟩ **The generated menus are not proved exhaustive** either.
     `FiniteRepairMenu` refusal is exhaustive only for the supplied checked rows.
     An unavailable row can be *printed with its refutation* instead of being
     silently absent, but no theorem says the catalog contains every repair.
@@ -268,7 +268,7 @@ inductive Refutation (P : Promise) : Type 1 where
 /-! ## §3. `RepairObligation` — a repair minus one named proposition.
 
 The conditional constructor is what a menu prints where a *search* would go.
-`Exits.lean`'s biggest ⟨UNDONE⟩ is "a menu is not a solver": it reports a seam
+`Exits.lean`'s biggest ⟨UNDONE U-0133⟩ is "a menu is not a solver": it reports a seam
 row for a σ you hand it. This is that sentence with a type: the row is a repair
 whose only missing piece is named, and the displayed price and delta are pinned
 to the repair the residual buys. -/
@@ -637,7 +637,7 @@ theorem seamRepair_price_is_forced {P : Promise} (Seg : Type) (σ : P.State → 
   f.forced τ hτ
 
 /-- **The seam obligation**: the row a menu prints for a projection it was
-handed and cannot decide. `Exits.lean`'s ⟨UNDONE⟩ — *"it reports that a seam exit
+handed and cannot decide. `Exits.lean`'s ⟨UNDONE U-0134⟩ — *"it reports that a seam exit
 exists for a σ you hand it; it does not synthesize the σ"* — with a type. -/
 def seamObligation (P : Promise) (Seg : Type) (σ : P.State → Seg)
     (f : SeamFloor P) : RepairObligation P P where
@@ -872,7 +872,7 @@ theorem ceiling_seam_tag_applies (n : Nat) :
 
 /-- The ceiling's escrow row: **impossible**, for every quota, by
 `Exits.pin_escrow_starves`. `Exits.ceilingMenu` has no escrow row at all, and its
-own ⟨UNDONE⟩ says an absent row means "nobody proved it". -/
+own ⟨UNDONE U-0135⟩ says an absent row means "nobody proved it". -/
 def ceilingEscrowRow : RepairCandidate ceilingPromise :=
   .impossible (Exit.escrow (S := Cost.PinSet) Bool (fun _ => 1) Exits.pinCharge)
     "escrow (starves a slot at every quota)"

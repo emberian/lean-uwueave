@@ -1,7 +1,7 @@
 /-
 # Uwueave.EraCertificate — ERA's finalisation, run through the certificate machinery.
 
-**Origin: the oldest named ⟨UNDONE⟩ in the tree.** `Holes.lean` §6 built the
+**Origin: the oldest named ⟨UNDONE U-0028⟩ in the tree.** `Holes.lean` §6 built the
 abstract collapse licence `Stable Arriving P`, named `Era.final_view_immune` as
 "the intended implementing instance of the input-side licence", and closed with
 the admission that *"the transport from Era's event lists into a `Stable`
@@ -13,7 +13,7 @@ narrowed the hole — `closed_freezes` derives the licence from evidence — and
 `no_sound_key_cert_accepts`) while recording, in its own boundary, that nobody
 had run Era through it:
 
-> ⟨UNDONE⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
+> ⟨UNDONE U-0029⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
 > implementation. What is proved here is about `World.epoch`, the producer's
 > counter `WorldFuture.lean` defines; `Era.lean`'s arbiter cut is *not*
 > transported to this carrier […] `epoch_sufficient_on_wellformed` is a fact
@@ -115,7 +115,7 @@ id collision does the same with an honest arbiter).
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0030⟩ = work wearing a caveat's clothes.
 
   * ⟨TERMINAL⟩ **The certificate is about the finalised view, not the view.**
     `finalView` is what `Era.resolveFinal` reports; `fullView` is `Era.resolve`.
@@ -138,24 +138,24 @@ id collision does the same with an honest arbiter).
     reverses the duel. The conditional model theorem has now landed in
     `Uwueave.Byzantine.authentic_issuance_preserves_finality`, under `Settled`,
     `AnnouncementsGrounded`, `IdAuthentic`, and `Issuance`; its exact
-    contrapositive is `finality_failure_refutes_id_authenticity`. ⟨UNDONE at the
+    contrapositive is `finality_failure_refutes_id_authenticity`. ⟨UNDONE U-0031 at the
     deployment boundary⟩ Recursive hash/signature binding, fraud-proof
     detection, and the bridge from accepted bytes to those predicates remain
     unproved.
-  * ⟨UNDONE⟩ **`HonestExtension` is a hypothesis, not a detection.** It is
+  * ⟨UNDONE U-0032⟩ **`HonestExtension` is a hypothesis, not a detection.** It is
     satisfiable (`honest_setup_to_later`) and refutable
     (`backdating_is_not_honest`) and nothing here decides which one a live
     announcement is. The paper answers with signatures and fraud proofs (§5.1);
     both are out of scope in `Era.lean` and remain out of scope here.
-  * ⟨UNDONE⟩ **The announcement future has no certificate at all.** §5 says what
+  * ⟨UNDONE U-0033⟩ **The announcement future has no certificate at all.** §5 says what
     an honest announcement *does* to the finalised view; it exhibits no
     predicate on a world that licenses a stop under `Announcement`, and
     `announcement_moves_the_finalised_view` shows quiescence is not one. What
     would serve is a bound on the arbiter's remaining announcements — the pool
     the arbiter does not have.
-  * ⟨UNDONE⟩ **One evaluator at a time**, and `Type 0` only —
+  * ⟨UNDONE U-0034⟩ **One evaluator at a time**, and `Type 0` only —
     `CertificateScope`'s two, inherited.
-  * ⟨UNDONE⟩ **The witnesses are witnesses.** §3-§6's separations run on
+  * ⟨UNDONE U-0035⟩ **The witnesses are witnesses.** §3-§6's separations run on
     `Era.duelLog` and its two cut sets. No theorem here characterises which
     worlds a key glues, and there is no decision procedure for `Settled` over
     unbounded pools.
@@ -929,7 +929,7 @@ finalised prefix, and reverses the duel.
 
 So the certificate of §3 is unsound for `Issuance` as well as for
 `Announcement`, and for a different reason: not the arbiter acting, but a cut
-naming an id rather than an event. ⟨UNDONE⟩ in the boundary — the repair is
+naming an id rather than an event. ⟨UNDONE U-0036⟩ in the boundary — the repair is
 §2's hash linking, which this miniature drops by design. -/
 theorem an_event_born_finalised_rewrites_the_view :
     Era.finalized Era.laterCuts eForged = true

@@ -76,7 +76,7 @@ sanctioned renderer *does* make, at six named pieces of evidence.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0119⟩ = work wearing a caveat's clothes.
 
   * **The split costs the badge's extension-finality at the zero row.** ⟨TERMINAL⟩
     `statusOf_not_extension_final_at_emptyClosedW`. A six-status surface must
@@ -86,7 +86,7 @@ sanctioned renderer *does* make, at six named pieces of evidence.
     `Evidence.render_retracts_when_a_new_source_appears` reaching the row it
     always applied to, and `SealedFuture` is where both rows are final.
   * **`pending_escapable` is the weakest honest liveness.**
-    ⟨UNDONE as temporal/all-path liveness⟩ It says *some* permitted future is
+    ⟨UNDONE U-0120 as temporal/all-path liveness⟩ It says *some* permitted future is
     not `pending`, not that every path leaves it and not that any path is taken.
     `RenderProgress.pending_progress_under_fair_delivery` now proves that a
     finite fair schedule of genuine deliveries reaches a non-pending status

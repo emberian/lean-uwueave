@@ -77,25 +77,25 @@ flat enum all four are peers in one list.
 
 ## Non-claims, labelled
 
-  * ⟨UNDONE, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+  * ⟨UNDONE U-0121, narrowed to unrestricted candidate discovery⟩ **No unrestricted
     search.** A `Repair` is a value someone *constructs*. Downstream
     `RepairSynthesis` and `FiniteRepairMenu` search an explicitly supplied finite
     catalog and return exhaustive refusal only inside it; they do not discover a
     non-trivial seam, an escrow partition, or a complete universe of repairs.
-  * ⟨UNDONE⟩ **`Price.add` is a declared accumulation, not a minimum.** Chaining
+  * ⟨UNDONE U-0122⟩ **`Price.add` is a declared accumulation, not a minimum.** Chaining
     adds the fields. It is NOT claimed that the sum is the least price achievable
     for the composite: `SeamAlgebra.linked_segmented` is a case where two seams
     share one crossing, and codex's own structural verdict on our cost measure
     (`min_σ (c₁ + c₂) ≠ min_σ c₁ + min_σ c₂`) says a scalar minimum is not
     compositional at all. A cost *profile over the strategy space*, minimised only
     when the session closes, is what a budgeting language needs; this is not it.
-  * ⟨UNDONE⟩ **`singularObservation` is the provable fragment of "the
+  * ⟨UNDONE U-0123⟩ **`singularObservation` is the provable fragment of "the
     observation changed".** A full account would compare `Demand` types up to
     equivalence and say what downstream must rewrite. What is proved here is the
     one component this tree can refute: singularity of the read
     (`fork_loses_singularity`). A repair that changes the observation type while
     keeping singularity is not distinguished by this axis.
-  * ⟨UNDONE⟩ **`rollbackWindow` is a declared bound, not a derived one.**
+  * ⟨UNDONE U-0124⟩ **`rollbackWindow` is a declared bound, not a derived one.**
     `Era.final_view_immune` proves the exposure is confined to the *pending*
     suffix — that the window exists and is not everything. Nothing here computes
     its size from a log, so the field is an author's claim about their own
@@ -195,7 +195,7 @@ structure Price where
   Justified by `GatedEra.ge_not_antitone` (an arriving event flips a verdict)
   and bounded — that the window is not "everything" — by
   `Era.final_view_immune` (a finalised prefix is immune to every pending
-  event). ⟨UNDONE⟩ the *number* is declared, not derived. -/
+  event). ⟨UNDONE U-0125⟩ the *number* is declared, not derived. -/
   rollbackWindow : Nat
   /-- Resolution writes left for the application or the user to issue.
   Justified by `MVRegister.resolution_is_a_write`: a surfaced conflict is
@@ -243,7 +243,7 @@ def free : Price :=
     restrictsReachability := false, assumptions := [] }
 
 /-- Chained repairs pay both bills: counts add, flags disjoin, premises
-accumulate. ⟨UNDONE⟩ this is a *declared* accumulation and is not claimed
+accumulate. ⟨UNDONE U-0126⟩ this is a *declared* accumulation and is not claimed
 minimal — see the module header. -/
 def add (p q : Price) : Price :=
   { seamCrossings := p.seamCrossings + q.seamCrossings,
@@ -373,7 +373,7 @@ workload's coordination frequency, not a bound on it. -/
 def seamPrice : Price := { Price.free with seamCrossings := 3 }
 
 /-- Arbitration's price: one trusted announcement, one epoch of rollback
-exposure, two charged premises — **and zero crossings**. ⟨UNDONE⟩ the two `1`s
+exposure, two charged premises — **and zero crossings**. ⟨UNDONE U-0127⟩ the two `1`s
 are declared; §3.2 and §3.3 prove the currencies are real, not that these are
 their amounts. -/
 def arbitrationPrice : Price :=
@@ -382,7 +382,7 @@ def arbitrationPrice : Price :=
     assumptions := [Premise.trustedAnnouncer, Premise.verdictKnownEverywhere] }
 
 /-- The fork's price: the read goes plural, and somebody must eventually write a
-resolution — **and zero crossings**. ⟨UNDONE⟩ the `1` is declared; §3.4 proves
+resolution — **and zero crossings**. ⟨UNDONE U-0128⟩ the `1` is declared; §3.4 proves
 only that no merge issues the write. -/
 def forkPrice : Price :=
   { Price.free with resolutionWrites := 1, pluralRead := true }
@@ -448,7 +448,7 @@ structure PromiseRelation where
   admitsOriginal : Bool
   /-- The read is still singular: at most one demand is admitted at a legal
   state. Forking spends this axis, and the downstream contract changes with
-  it. ⟨UNDONE⟩ this is the provable fragment of "the observation changed"; see
+  it. ⟨UNDONE U-0129⟩ this is the provable fragment of "the observation changed"; see
   the module header. -/
   singularObservation : Bool
   /-- Growth of the state never enlarges what is admitted —

@@ -76,7 +76,7 @@ seam in this library actually discharges.
   * ⟨TERMINAL⟩ Colouring does not characterise the closure clause. This is not
     undone work: `coloring_alone_does_not_segment` proves no such implication
     exists, and the extra hypothesis in the headline is `SeamStableOn`, exactly.
-  * ⟨UNDONE⟩ **Infinite carriers.** Every statement that turns a colouring back
+  * ⟨UNDONE U-0140⟩ **Infinite carriers.** Every statement that turns a colouring back
     into a segmentation takes a covering pool `hV : ∀ s : S, s ∈ V`. Nothing
     here reasons about a reachable *fragment* of an infinite carrier as such;
     `SegmentedIConfluentOn` states what a non-covering pool does buy, which is
@@ -87,7 +87,7 @@ seam in this library actually discharges.
     finite covering carrier by a supplied finite palette and returns a genuine
     minimum, or an exhaustive refusal theorem for exactly that space. It does
     not pretend to enumerate an arbitrary universe-polymorphic seam type.
-  * ⟨UNDONE⟩ **Clique lower bounds.** §6 proves the two-stream floor from a
+  * ⟨UNDONE U-0141⟩ **Clique lower bounds.** §6 proves the two-stream floor from a
     single edge. The graph-theoretic generalisation — a `k`-clique in the clash
     graph forces `k` fibers, hence `k-1` crossings — is not here.
   * Classical logic: turning "no monochromatic edge" back into "same colour

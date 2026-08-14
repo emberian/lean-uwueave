@@ -34,14 +34,14 @@ claim because the unseen issued pool remains load-bearing.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = deliberately outside it.
+⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0048⟩ = deliberately outside it.
 
   * **Frontiers are genuine antichains in a partial order.** ⟨TERMINAL⟩ Their
     upward closures give may-arrive sets, and advance is reverse inclusion of
     those closures.  The two-dimensional witness below contains two
     incomparable points.
   * **Progress is authenticated by the proof-model successor, not generated.**
-    ⟨DONE at the model boundary; UNDONE for runtime and deployment⟩
+    ⟨DONE at the model boundary; ⟨UNDONE U-0049⟩ for runtime and deployment⟩
     `DeliveryAdvance` checks only the semantic price of an advance.
     `Uwueave.AuthenticatedFrontier` separately retains a received, accepted and
     genuinely issued signed progress event, binds its decoded issued/delivered
@@ -49,7 +49,7 @@ claim because the unseen issued pool remains load-bearing.
     manufactures the message, instantiates deployed cryptography, or proves a
     runtime advances honestly.
   * **Timestamps label candidate events externally.** ⟨TERMINAL for the
-    bridge, ⟨UNDONE⟩ for the old carrier⟩ `ResultEvidence` stores no timestamp,
+    bridge, ⟨UNDONE U-0050⟩ for the old carrier⟩ `ResultEvidence` stores no timestamp,
     so a bridge takes `stamp : (alpha x Source) -> T`.  Smuggling a timestamp
     into `Source` would recreate the flat model rather than repair it.
   * **Candidate stability is not render stability.** ⟨TERMINAL⟩ The proved

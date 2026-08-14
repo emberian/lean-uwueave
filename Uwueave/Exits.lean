@@ -136,7 +136,7 @@ that the two zeroes are not the same zero". The ⟨scope⟩ note below distingui
 zero is in the *same* currency as escrow's — both are `zero_price_of_iconfluent`
 (`fork_price_zero`, `escrow_price_zero`).
 
-## What a menu does NOT do — ⟨UNDONE⟩, and it is the biggest gap
+## What a menu does NOT do — ⟨UNDONE U-0043⟩, and it is the biggest gap
 
 **A menu is not a solver.** It reports that a `seam` exit exists *for a `σ` you
 hand it*, and that an `escrow` exit exists *for a split you hand it*. It does
@@ -144,7 +144,7 @@ not **synthesize** the `σ`, and it does not **synthesize** the escrow's quota
 partition. That is a search problem over projections of the state space, and
 nothing here searches. LoRe does not synthesize these either — it inserts
 coordination from a fixed repertoire — so this gap is not a gap against the
-prior art; it is the next thing to build, and it is named ⟨UNDONE⟩ rather than
+prior art; it is the next thing to build, and it is named ⟨UNDONE U-0044⟩ rather than
 paved over. Concretely, what is missing is a function
 
     synth : (I : Invariant S) → Option (Σ Seg, {σ : S → Seg // SegmentedIConfluent σ I})
@@ -157,12 +157,12 @@ is about non-triviality and why nothing here proves it.
 
 Four further non-claims, labelled:
 
-  * ⟨UNDONE⟩ **The menu is not proved exhaustive.** `menu_sound` says every
+  * ⟨UNDONE U-0045⟩ **The menu is not proved exhaustive.** `menu_sound` says every
     *listed* exit applies. Nothing says an unlisted exit does not — except
     where a named refutation says so (`pin_escrow_starves`,
     `balance_total_not_a_seam`, `duel_escrow_starves`). An absent row means
     "nobody proved it", not "impossible".
-  * ⟨UNDONE⟩ **`Exit.seam`'s `floor` field is free data.** `Applies` certifies
+  * ⟨UNDONE U-0046⟩ **`Exit.seam`'s `floor` field is free data.** `Applies` certifies
     the *seam*; it does not certify the *number*. `seam_price_is_forced` is the
     theorem that makes a floor honest, and each worked menu with a seam entry
     discharges it separately (`ceiling_seam_floor_is_zero`). Nothing in the type

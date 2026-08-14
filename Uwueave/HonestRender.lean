@@ -119,7 +119,7 @@ committed one. `ResultStatus` still imports nothing from here.
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0081⟩ = work wearing a caveat's clothes.
 
   * **Salience is not typable.** ⟨TERMINAL⟩ `salience_is_not_enforceable` is the
     statement, and no strengthening of the interface removes it: a presentation
@@ -128,7 +128,7 @@ committed one. `ResultStatus` still imports nothing from here.
     *observable*; whether the pixels differ is outside every type system, not
     outside this one.
   * **`report` is public, so a lie is constructible.** ⟨TERMINAL for this file's
-    question, ⟨UNDONE⟩ as deployment⟩ Honesty is a predicate on renderers, not a
+    question, ⟨UNDONE U-0082⟩ as deployment⟩ Honesty is a predicate on renderers, not a
     property of the carrier. A deployment that wants the *type* to refuse must
     export `renderReport` and not `report`; nothing here enforces that, and no
     theorem below assumes it.
@@ -144,12 +144,12 @@ committed one. `ResultStatus` still imports nothing from here.
     that five-way carrier. `RenderSix.Carrier6`, `statusOf_sound6`, and
     `the_named_limit_is_retired` implement and prove the six-way successor while
     preserving the exact fold back to this carrier.
-  * **The eliminator is `Type 0`-valued.** ⟨UNDONE⟩ `Carrier.elim` eliminates
+  * **The eliminator is `Type 0`-valued.** ⟨UNDONE U-0083⟩ `Carrier.elim` eliminates
     into `Type`; a `Prop`-valued consumer goes through `Says`, and
     `Classical.choice` can turn `says_total` into a projection. So the barrier
     against extraction is `no_honest_projection` — a statement about what such a
     function can *mean* — and never the absence of one.
-  * **The future index is phantom in the data.** ⟨UNDONE⟩ `Result F α` mentions
+  * **The future index is phantom in the data.** ⟨UNDONE U-0084⟩ `Result F α` mentions
     `F` in its type and in every honesty statement, and
     `ResultStatus.exact_does_not_strengthen` prices dropping it. Nothing
     prevents a `cast` between `Result F α` and `Result G α`; the index is a
@@ -176,7 +176,7 @@ committed one. `ResultStatus` still imports nothing from here.
     leaves `pending`. `statusOf_pendingActionable` constructs the offer only
     from live authority, while `a_revoked_actor_gets_no_button` rejects the
     same affordance after revocation.
-  * **The empirical claim of §8 is untouched.** ⟨UNDONE⟩ *That a recurring class
+  * **The empirical claim of §8 is untouched.** ⟨UNDONE U-0085⟩ *That a recurring class
     of local-first UI misrepresentations consists of unproved coercions from
     open/forked evidence to exact singular presentation* needs a defect corpus
     and a coding protocol. This file proves the coercions are unsound; it says

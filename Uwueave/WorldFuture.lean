@@ -142,11 +142,11 @@ projection, and:
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's
+⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0153⟩ = work wearing a caveat's
 clothes.
 
   * **No deployed network, scheduler proof, or time.** ⟨TERMINAL for this
-    file's question, ⟨UNDONE⟩ as a system model⟩ A delivery future here is a
+    file's question, ⟨UNDONE U-0154⟩ as a system model⟩ A delivery future here is a
     *relation between two worlds*, not a run of a protocol. The successor
     `Uwueave.Temporal` now supplies the missing formal run layer:
     `WorldAdapter.pendingDeliveryTrace_adjacent` is an infinite adjacent trace
@@ -166,13 +166,13 @@ clothes.
     boundary with accepted-and-issued signed typed-position claims, exact
     signed world/value/position binding, signed-decoded origin/version checks,
     authenticated lawful frontier progress, and grow-only capability-use
-    receipts. ⟨UNDONE at deployment boundaries⟩
+    receipts. ⟨UNDONE U-0155 at deployment boundaries⟩
     the decoder and signature security premise remain external, and
     `ResultEvidence` still carries neither id automatically.
   * **The frontier here is still a flat set of sources.**
     `Uwueave.Frontier` now supplies the Timely-style antichain whose advance
     retires a timestamp range and a narrow theorem transporting complete,
-    settled worlds to stability of `Evidence.values`. ⟨UNDONE for this carrier
+    settled worlds to stability of `Evidence.values`. ⟨UNDONE U-0156 for this carrier
     and deployment⟩ `World.frontier` remains a `GSet Source`, and timestamps or
     authentication records are not stored in `ResultEvidence`.
     `Uwueave.AuthenticatedFrontier` and
@@ -181,7 +181,7 @@ clothes.
     or discharges the deployed signature premise. Full `render` stability is
     not claimed. `roster` bounds accepted membership, but a roster is not an
     antichain.
-  * **A seal is still trusted, not verified.** ⟨UNDONE⟩ `epoch` and `sealed`
+  * **A seal is still trusted, not verified.** ⟨UNDONE U-0157⟩ `epoch` and `sealed`
     are a producer's announcement, exactly as `Era.advance` announces a cut
     unconditionally. What is *new* here and not in `Evidence.lean` is that the
     announcement is **priced**: `no_closure_within_an_epoch` proves no
@@ -189,7 +189,7 @@ clothes.
     can never be earned by delivery or by application writes alone. That makes
     the trust in the arbiter a load-bearing hypothesis with a theorem attached
     rather than an unremarked one; it does not make the arbiter honest.
-  * **`Wf` and `RosterKnown` are hypotheses, not invariants.** ⟨UNDONE⟩
+  * **`Wf` and `RosterKnown` are hypotheses, not invariants.** ⟨UNDONE U-0158⟩
     Wellformedness (`observe w ⊑ pool w`) is carried as a side condition on the
     future relations and proved for the concrete witnesses. No theorem says a
     running system's worlds are wellformed, because there is no running system
@@ -198,7 +198,7 @@ clothes.
   * **`renderW` is noncomputable.** ⟨TERMINAL at this carrier⟩ It is
     `Evidence.render` composed with a projection, and `render` quantifies over
     an unbounded value type. `Classical.choice` is inside the audit floor.
-  * **The separation is one witness, not a classification.** ⟨UNDONE⟩ §3 proves
+  * **The separation is one witness, not a classification.** ⟨UNDONE U-0159⟩ §3 proves
     that *some* pair of worlds is separated by the pool, which is what refutes
     the collapse. It does **not** characterise which state/world pairs are
     separated, or give a decidable test for when a state-indexed reading is

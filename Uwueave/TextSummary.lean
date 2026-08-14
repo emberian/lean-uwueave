@@ -138,7 +138,7 @@ works, with no hypothesis, because the class map is always a join homomorphism.
 ## Honest boundary
 
   * **Content is a global labelling, not a field of the op.** ⟨TERMINAL for the
-    refutations, ⟨UNDONE⟩ as a model⟩ `glyph : Nat → Glyph` is faithful exactly
+    refutations, ⟨UNDONE U-0142⟩ as a model⟩ `glyph : Nat → Glyph` is faithful exactly
     because ids are content-addressed in the crate (`blake3("uwueave.seq.v1" ‖
     anchor ‖ contents)`), so an id determines its character; what it drops is two
     ops disagreeing about one id's content, which the crate's identity scheme
@@ -146,7 +146,7 @@ works, with no hypothesis, because the class map is always a join homomorphism.
     which is therefore stated over *labellings* rather than as a `CtxEquiv`
     collapse: content is not in the carrier, so the quotient cannot be asked
     about it directly.
-  * **This is the model, not the kernel.** ⟨UNDONE⟩ `visible` is
+  * **This is the model, not the kernel.** ⟨UNDONE U-0143⟩ `visible` is
     `Sequence.linearize` plus an output filter — `linearizeK`'s shape, one line
     apart, and deliberately so — but there are no arrays, no byte codec, no
     `SeqKernel.WFK` rank discipline, and no storage economics. A separation
@@ -154,7 +154,7 @@ works, with no hypothesis, because the class map is always a join homomorphism.
     with the model is `SeqKernel.lean`'s business and is by construction only
     where that file says so.
   * **Contexts are unrestricted, and causal stability is not modelled.**
-    ⟨UNDONE⟩ `CtxEquiv`'s `∀ z` ranges over every state, including ones the
+    ⟨UNDONE U-0144⟩ `CtxEquiv`'s `∀ z` ranges over every state, including ones the
     shipping merge refuses. So `no_gc_summary_sufficient` proves garbage
     collection unsound **on local state alone**; it does not prove GC
     impossible. The real escape — knowing no future op can name the element
@@ -167,7 +167,7 @@ works, with no hypothesis, because the class map is always a join homomorphism.
     the model's malformed corner rather than assuming it away — saturation
     violates both `WF` and `UniqueAnchor`, yet omitting one edge changes the
     traversal. Thus the quotient drops exactly pairs outside the fixed window.
-  * **Fugue is entered through a wrapper.** ⟨UNDONE⟩ `Fugue.docOrder` is called
+  * **Fugue is entered through a wrapper.** ⟨UNDONE U-0145⟩ `Fugue.docOrder` is called
     for real, but `Fugue.OpSet` is a `List InsOp` merged by append — associative,
     not commutative, not idempotent, hence not a `MergeState` — so §6 uses
     `GSet InsOp` materialised in a canonical enumeration order, and filters the
@@ -180,7 +180,7 @@ works, with no hypothesis, because the class map is always a join homomorphism.
     `addressable_op_observable`, `tombstoned_content_never_read`,
     `rendered_order_requiresEvidence`, `text_view_sec` — carry no carrier
     assumption.
-  * **No cost model, no representation, no classifier.** ⟨UNDONE⟩ Inherited
+  * **No cost model, no representation, no classifier.** ⟨UNDONE U-0146⟩ Inherited
     verbatim from `JoinHom.lean` and `MinimalSummary.lean`: `IncrementallyMergeable`
     asks only that a combiner exist, `CtxQuot` is a partition with no bound on
     the bits a class takes, and the verdict is proved per computation by hand

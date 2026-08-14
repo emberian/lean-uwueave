@@ -72,7 +72,7 @@ numbers.
     witness — one crossing, two forced peer meetings. An upper-bound reading
     needs an **at-most-one demand per crossing** interpretation; pure coalescing
     alone is not enough.
-  * ⟨UNDONE⟩ Participants are declared, not proved online; there is no runtime
+  * ⟨UNDONE U-0139⟩ Participants are declared, not proved online; there is no runtime
     liveness, deadlock-freedom, message-loss, or elapsed-time model, and no
     unbounded deployment-complete schedule-catalog generator. Finite catalog
     search does not establish any of those operational properties.

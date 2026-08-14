@@ -105,7 +105,7 @@ and the answer is split, both halves proved:
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0007⟩ = work wearing a caveat's clothes.
 
   * ⟨TERMINAL⟩ **The universal property is cheap here, and is stated as such.**
     "Coarsest" means terminal in the partition order and nothing else: no bound
@@ -124,7 +124,7 @@ and the answer is split, both halves proved:
     unstable one because the unstable one has no future of itself. At
     `World α` the condition is `Wf` (`WorldFuture.delivery_refl`), which
     `WorldFuture.lean` already carries as a hypothesis and not an invariant.
-  * ⟨UNDONE⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
+  * ⟨UNDONE U-0008⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
     implementation. What is proved here is about `World.epoch`, the producer's
     counter `WorldFuture.lean` defines; `Era.lean`'s arbiter cut is *not*
     transported to this carrier, and `WorldFuture.lean`'s boundary ("a seal is
@@ -137,14 +137,14 @@ and the answer is split, both halves proved:
     repair: a known roster turns every delivery into an `Evidence.SealedFuture`,
     and `Evidence.render_congr` transports stability of `(values, Closed)` to
     the rendered view.
-  * ⟨UNDONE outside finite context-indexed query families⟩ **One residual
+  * ⟨UNDONE U-0009 outside finite context-indexed query families⟩ **One residual
     evaluator at a time.** `ContextCompiler` now constructs the common
     refinement for a finite homogeneous family of merge-context-indexed
     queries. That is not this file's residual construction: a residual forgets
     which future produced an answer and keeps only the image. Common refinements
     of arbitrary future relations, residual images, heterogeneous queries, or
     infinite evaluator families remain unstated.
-  * ⟨UNDONE beyond a supplied finite contextual compiler⟩ **The witnesses
+  * ⟨UNDONE U-0010 beyond a supplied finite contextual compiler⟩ **The witnesses
     are witnesses.** §5's separations are the three worlds `WorldFuture.lean`
     built. `ContextCompiler.sameClass` decides equality of its own finite,
     context-indexed signature and `sufficient_refines_signature` proves that
@@ -152,7 +152,7 @@ and the answer is split, both halves proved:
     preserves this file's residual images. No theorem here characterises every
     world-pair a given residual key glues, and general key sufficiency remains
     undecidable by this development.
-  * ⟨UNDONE⟩ **The evidence/world boundary remains `Type 0`.** Residuals,
+  * ⟨UNDONE U-0011⟩ **The evidence/world boundary remains `Type 0`.** Residuals,
     sufficient keys, their quotient, and the `MinimalSummary` bridges are now
     universe-polymorphic. The theorems phrased through
     `Evidence.FreeTermination`, `Holes.Partial`, or `WorldFuture.World` remain
@@ -1316,7 +1316,7 @@ noncomputable def arriving {α : Type uA} (w : WorldFuture.World α) :
 evaluator.** `Holes.lean` §6 left `Arriving` abstract and named the transport
 from a real closure as unbuilt; this discharges it for *one* concrete
 `Arriving` — the deliveries of a world — by an iff rather than an implication.
-⟨UNDONE⟩ It says nothing about an Era cut, which is the instance `Holes.lean`
+⟨UNDONE U-0012⟩ It says nothing about an Era cut, which is the instance `Holes.lean`
 was reaching for. -/
 theorem stable_iff_freeTermination_values {α : Type uA} (w : WorldFuture.World α) :
     Holes.Stable (arriving w) (Evidence.values (WorldFuture.observe w))

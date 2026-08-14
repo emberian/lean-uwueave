@@ -66,7 +66,7 @@ was computed under — §4's whole content is that the two numbers differ.
   * ⟨TERMINAL⟩ `LiveSegmented` is **not** robust under enlarging `Op`. That is a
     property of the definition, not a gap: it quantifies over the runs of the `P`
     it is given. This is the whole reason the global certificate is kept.
-  * ⟨UNDONE⟩ **Faithfulness of `P` is the modeller's.** Nothing here checks that a
+  * ⟨UNDONE U-0092⟩ **Faithfulness of `P` is the modeller's.** Nothing here checks that a
     `RunModel`'s `step` is the protocol the deployment actually runs. A live
     certificate issued against an over-permissive `P` is weaker than it looks, and
     against an under-permissive `P` it is unsound for the real deployment. This is
@@ -79,7 +79,7 @@ was computed under — §4's whole content is that the two numbers differ.
     strategy pays `0`, every global seam pays at least `1`, and a global seam
     paying exactly `1` is exhibited. The force comes from global fiber stability
     closing three same-coloured legal generators into their illegal triple join.
-  * ⟨UNDONE⟩ **Minimum live colourings.** As in `SeamColoring`, nothing synthesises
+  * ⟨UNDONE U-0093⟩ **Minimum live colourings.** As in `SeamColoring`, nothing synthesises
     *the* minimum. §4's optima are proved by exhibiting a seam and refuting the
     next width down on one concrete carrier, not by an algorithm.
   * Classical logic: the properness ⇒ safety direction is excluded middle on

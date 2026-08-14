@@ -127,12 +127,12 @@ theorem is not the same as having it.
   * ⟨scope⟩ Everything here is `Cost.crossings` currency and inherits
     `Cost.lean`'s "crossings are not meetings" whole.
   * ⟨scope⟩ `LiveWidth` is protocol-relative and inherits `LiveSegmented`'s
-    ⟨UNDONE⟩ "faithfulness of `P` is the modeller's": a live clique bound issued
+    ⟨UNDONE U-0016⟩ "faithfulness of `P` is the modeller's": a live clique bound issued
     against an under-permissive `RunModel` is unsound for the real deployment.
-  * ⟨UNDONE⟩ No clique is *synthesised*. Every bound below consumes a clique
+  * ⟨UNDONE U-0017⟩ No clique is *synthesised*. Every bound below consumes a clique
     somebody exhibits; finding the maximum one is the same search
     `SeamColoring.lean` leaves open for minimum colourings.
-  * ⟨UNDONE⟩ `no_live_triangle` is proved for the slot carrier by exhausting its
+  * ⟨UNDONE U-0018⟩ `no_live_triangle` is proved for the slot carrier by exhausting its
     four legal states. Nothing here computes a live clique number in general.
 
 This file edits none of the three modules; it imports them and relates them by

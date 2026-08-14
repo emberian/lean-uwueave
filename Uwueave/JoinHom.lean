@@ -89,7 +89,7 @@ filtered views answer `fromResults`; counting answers `needsEvidence`.
     exists, and every impossibility here bottoms out in `decide` on it. The
     *positive* results (§1–§3, §5, §6.1) are general and carry no carrier
     assumption.
-  * **`IncrementallyMergeable` says nothing about cost.** ⟨UNDONE⟩ It asks for a
+  * **`IncrementallyMergeable` says nothing about cost.** ⟨UNDONE U-0086⟩ It asks for a
     combiner to exist, not for it to be cheap, small or shippable — the
     `canonicalCombine` witnessing the ⟸ direction of
     `incrementallyMergeable_iff_resultDetermined` is built from

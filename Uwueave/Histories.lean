@@ -9,7 +9,7 @@ that we had been quoting `Ancestral.clash_dichotomy` past that scope: it is
 proved for *a supplied common ancestor, one operation per branch, one
 fork-and-join*, and it establishes nothing about repeated merging, merge-base
 selection, criss-cross histories, or convergence over a version DAG.
-`Ancestral.lean`'s own §"Honest scope" and `MergeModel.lean`'s last ⟨UNDONE⟩ say
+`Ancestral.lean`'s own §"Honest scope" and `MergeModel.lean`'s last ⟨UNDONE U-0059⟩ say
 the same thing in the other direction ("Repeated/criss-cross merging needs Kaki
 et al.'s further conditions and gets no verdict here"). The flag was right. This
 file is the frontier it named.
@@ -143,7 +143,7 @@ replaced.
 
 ## Non-claims
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0060⟩ = work wearing a caveat's clothes.
 
   * ⟨TERMINAL⟩ **The negative is a counterexample, not an impossibility.** §5
     exhibits one merge (the counter MRDT) and one history where repeated merging
@@ -159,7 +159,7 @@ replaced.
     that they need not: `base_accident_decides_the_invariant` (results 5 vs 4)
     and `swap_never_converges` (an eternal two-cycle under a state-level base
     policy `MergeModel.BaseDecision.Valid` fully licenses).
-  * ⟨UNDONE, narrowed to unrestricted/infinite selection⟩ **No total
+  * ⟨UNDONE U-0061, narrowed to unrestricted/infinite selection⟩ **No total
     merge-base procedure for an arbitrary `VersionDag`.** Downstream
     `FiniteHistory.Enumeration` makes finiteness an explicit coverage premise;
     under it, `FiniteHistory.reaches_iff_bounded` and
@@ -173,7 +173,7 @@ replaced.
     excludes its fourth branch under finite coverage, and `decideTotal` returns
     a `BaseSelection` for every covered pair. What remains is discovering or
     deciding adequate coverage for unrestricted/infinite DAGs.
-  * ⟨UNDONE⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE⟩: the bridge
+  * ⟨UNDONE U-0062⟩ **`Type 0` only**, matching `MergeModel`'s own ⟨UNDONE U-0063⟩: the bridge
     theorems in §4 target `MergeModel.BaseDecision.Valid`, which is fixed at
     `Type`. Universe-polymorphising §1–§3 alone would buy nothing.
   * ⟨TERMINAL⟩ **`MergeClosedFrom` is sufficient, not necessary.** §7.3 proves
@@ -183,7 +183,7 @@ replaced.
     root-reachable set is not merge-closed. The exact replacement is
     `HistorySafeFrom`, characterized by `historySafeFrom_iff`; the ceiling
     counter refutes it and the lock satisfies it.
-  * ⟨UNDONE, narrowed to repeated/generalized version growth⟩ **The
+  * ⟨UNDONE U-0064, narrowed to repeated/generalized version growth⟩ **The
     selected-pair patch seam is now operational.** Downstream
     `HistoryEngine.VersionPatch`
     ties a `VersionDag` reachability witness to the exact admitted patch between

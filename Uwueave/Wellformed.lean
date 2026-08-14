@@ -110,14 +110,14 @@ theorem is about the join of two states. `WovenEdit.lean` now supplies the
 smaller local operational layer over this exact predicate; the remaining
 differences below are not erased by that layer.
 
-  * ⟨UNDONE, narrowed to bidirectional term typing⟩ **Typed edits are not a
+  * ⟨UNDONE U-0147, narrowed to bidirectional term typing⟩ **Typed edits are not a
     typed term language.** `WovenEdit.Edit` is a state-indexed command type:
     its constructors carry freshness, target-existence, and clock/horizon
     evidence. That pays operation admissibility, but there is still no term
     AST, synthesis/checking judgement, or hole-aware bidirectional typing;
     `WellFormed` remains referential integrity plus per-structure
     well-formedness, not a term-typing judgement.
-  * ⟨UNDONE, narrowed to the CmRDT delivery quantifier⟩ **There is no edit-log
+  * ⟨UNDONE U-0148, narrowed to the CmRDT delivery quantifier⟩ **There is no edit-log
     CmRDT, so this is still not Grove's quantifier.** `WovenEdit.apply_preserves`
     proves every typed local create/reference/update/tombstone step preserves
     `WellFormed`; `WovenEdit.Trace.preserves` and
@@ -127,7 +127,7 @@ differences below are not erased by that layer.
     histories, delivery/redelivery semantics, and a CmRDT theorem quantifying
     over their interleavings. This file still quantifies over pairs and folds
     of states, not delivered edit logs.
-  * ⟨UNDONE⟩ **No cross-tree references and no holes.** Our conflict
+  * ⟨UNDONE U-0149⟩ **No cross-tree references and no holes.** Our conflict
     representation is *retention* — both pins present, both writes in view —
     not a hole term carrying provenance. Retention is a different
     representation, not a weaker one, but nothing here defines how a renderer
@@ -359,7 +359,7 @@ immaterial by the merge laws; this statement does not need that, since it
 holds for *every* list.) `WovenEdit.lean` separately proves local typed-edit
 and checked-list preservation. What neither theorem is yet: the CmRDT claim
 over concurrent delivery interleavings named in the header's narrowed
-⟨UNDONE⟩ item. -/
+⟨UNDONE U-0150⟩ item. -/
 theorem mergeAll_wellformed (n root : Nat) :
     ∀ (ds : List WovenDoc) (base : WovenDoc), WellFormed n root base →
       (∀ d ∈ ds, WellFormed n root d) → WellFormed n root (mergeAll base ds) := by

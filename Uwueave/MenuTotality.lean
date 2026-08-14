@@ -9,7 +9,7 @@ everything below relates them by theorem.
 
 ## The two limits, quoted, and their verdicts here
 
-`Exits.lean:80-97` — ⟨UNDONE⟩ **"A menu is not a solver."** It even spells out
+`Exits.lean:80-97` — ⟨UNDONE U-0094⟩ **"A menu is not a solver."** It even spells out
 the missing signature,
 
     synth : (I : Invariant S) → Option (Σ Seg, {σ : S → Seg // SegmentedIConfluent σ I})
@@ -22,9 +22,9 @@ ceiling it returns `some` (`synth_pin_isSome`), the projection it returns
 identifies two **distinct** states (`pin_synth_is_non_trivial`), and it charges
 strictly fewer crossings than the identity seam on a workload where the identity
 seam charges one (`pin_synth_beats_full_coordination`). ⚠ The escrow half of
-that ⟨UNDONE⟩ — synthesising a quota partition — is untouched here and survives.
+that ⟨UNDONE U-0095⟩ — synthesising a quota partition — is untouched here and survives.
 
-`Exits.lean:101-105` — ⟨UNDONE in `Exits`, TERMINAL here for the explicitly
+`Exits.lean:101-105` — ⟨UNDONE U-0096 in `Exits`, TERMINAL here for the explicitly
 finite seam row⟩ **"The menu is not proved exhaustive."** §2 and §3 make the
 greedy row decidable; §7 closes the finite seam-search case. Availability of
 the greedy seam row becomes **decidable**
@@ -47,7 +47,7 @@ covering pool does not exist; §4 shows that this is a real obstruction via
 here is that bar on one clash, not a general theorem that synthesis always
 beats the identity.
 
-`Exits.lean:106-110` — ⟨UNDONE⟩ **"`Exit.seam`'s `floor` field is free data."**
+`Exits.lean:106-110` — ⟨UNDONE U-0097⟩ **"`Exit.seam`'s `floor` field is free data."**
 §1 proves that it is: `seam_applies_ignores_the_floor` is `Iff.rfl`, so no
 property of the number is derivable from `Applies`, and
 `applies_certifies_no_floor` exhibits an applicable row whose quoted floor `5`
@@ -57,7 +57,7 @@ valid seam, not just the carried one (`CertifiedSeam.floor_is_forced`).
 
 ## §4 is the new mathematics: the clique bound
 
-`SeamColoring.lean:87-89` lists as ⟨UNDONE⟩: *"a `k`-clique in the clash graph
+`SeamColoring.lean:87-89` lists as ⟨UNDONE U-0098⟩: *"a `k`-clique in the clash graph
 forces `k` fibers, hence `k-1` crossings — is not here."* It is here.
 
   * **(a) Do ceiling clashes form a clique?** As stated, **no**, and the witness
@@ -96,7 +96,7 @@ forces `k` fibers, hence `k-1` crossings — is not here."* It is here.
 
 ## Non-claims
 
-  * ⟨UNDONE⟩ **Escrow synthesis.** `Exits.lean`'s ⟨UNDONE⟩ names two searches;
+  * ⟨UNDONE U-0099⟩ **Escrow synthesis.** `Exits.lean`'s ⟨UNDONE U-0100⟩ names two searches;
     only the seam one is answered here.
   * ⟨TERMINAL at an explicit finite carrier and palette⟩ **Minimum colourings.**
     §7 consumes `SeamColoring.synthesizeMinimumSeam`: the found branch carries
@@ -191,7 +191,7 @@ theorem pin_seam_row_decided :
 
 `Exits.lean:89-97` asks for `synth`. Here it is, built from
 `SeamColoring.synthesizeSeam?`, together with the two theorems that say it is
-not one of the two trivial inhabitants that ⟨UNDONE⟩ note rules out. -/
+not one of the two trivial inhabitants that ⟨UNDONE U-0101⟩ note rules out. -/
 
 /-- **`synth`, at the signature `Exits.lean:91` writes out.** An `Option` of a
 segment type together with a projection carrying its own `SegmentedIConfluent`
@@ -232,7 +232,7 @@ def seamRow? {S : Type} [DecidableEq S] [MergeState S] (I : Invariant S)
 pool the synthesiser either returns a row — whose exit is the synthesised seam,
 carrying its proof — or returns nothing, and in that case the colouring clause
 still holds (`greedySeamFor_properColoring`, unconditionally) and the failure is
-**exactly** a failure of fiber stability. So the ⟨UNDONE⟩ "an absent row means
+**exactly** a failure of fiber stability. So the ⟨UNDONE U-0102⟩ "an absent row means
 nobody proved it" weakens for this row to something checkable: an absent seam
 row means a decided stability failure of the *greedy* colouring over the pool.
 
@@ -300,7 +300,7 @@ theorem pin_synth_beats_full_coordination :
 
 /-! ## §4. The clique bound.
 
-`SeamColoring.lean:87-89` lists this as ⟨UNDONE⟩. The graph vocabulary is that
+`SeamColoring.lean:87-89` lists this as ⟨UNDONE U-0103⟩. The graph vocabulary is that
 file's; the bound, the ceiling characterisation and the coordination floor are
 new here. -/
 
@@ -579,7 +579,7 @@ because two streams sitting in one fiber would have their endpoints certified
 mergeable by the seam, and the clique says they are not.
 
 `SeamColoring.clash_edge_forces_crossing` is the case `k = 2`; this is the
-`⟨UNDONE⟩` generalisation named in that file's non-claims. No ordering between
+`⟨UNDONE U-0104⟩` generalisation named in that file's non-claims. No ordering between
 the streams appears anywhere — which is the whole difference from
 `Cost.ClashBlocks`, and the reason the bound survives where the block calculus
 reports nothing (see `the_clique_floor_is_invisible_to_the_block_calculus`). -/

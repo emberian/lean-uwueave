@@ -115,7 +115,7 @@ prize:
 
 ## Non-claims
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0065⟩ = work wearing a caveat's clothes.
 
   * ⟨TERMINAL⟩ **`ValidInHistory` is not a procedure.** It is what a merge-base
     procedure's output must *prove*, exactly as `Histories.BaseSelection` is.
@@ -132,23 +132,23 @@ prize:
     op-reachable region has it. That is not a defect of the transport: it is the
     diagnosis. Where the bridge is unavailable the history-level notion still
     certifies, which is the whole point of defining it.
-  * ⟨UNDONE⟩ **No convergence, still.** Nothing here says two replicas agree.
+  * ⟨UNDONE U-0066⟩ **No convergence, still.** Nothing here says two replicas agree.
     `selected_unique` narrows the licence — the state level licenses the two
     bases `Histories.swap_never_converges` builds its eternal two-cycle from,
     and the history level licenses at most one of them
     (`the_two_cycle_needs_two_bases_the_history_licenses_one`) — but "at most one
     valid base" is not a proof that a run converges, and no such proof is here.
-  * ⟨UNDONE⟩ **The version index buys scoping, not separating power.** §6's
+  * ⟨UNDONE U-0067⟩ **The version index buys scoping, not separating power.** §6's
     `VersionCert` is strictly a *name* for a world: `versionCertSound_of_
     worldCertSound` is one line and there is no theorem that a version index
     separates two worlds a `WorldFuture.WorldCert` cannot. What it buys is a
     **base to scope to**, which a bare world has no room for.
-  * ⟨UNDONE⟩ **The history/world bridge remains `Type 0`.** The state-level
+  * ⟨UNDONE U-0068⟩ **The history/world bridge remains `Type 0`.** The state-level
     `BaseDecision` facts and the standalone `VersionCert` are now
     universe-polymorphic. `ValidInHistory` and `BasedWorld` cannot follow yet:
     imported `Histories.VersionDag` / `Histories.History` and
     `WorldFuture.World` still require their carriers in `Type 0`.
-  * ⟨UNDONE⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
+  * ⟨UNDONE U-0069⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
     expressible at the state level in the lock, where it costs nothing, and
     inexpressible in the counter, where it decides the invariant — is two
     histories. No theorem here says that is the general pattern.
@@ -261,7 +261,7 @@ The same three-valued shape, re-obligated over versions. Three differences from
     ever selectable for a pair;
   * `ambiguous` demands two **maximal** common bases, so
     `Histories.ambiguous_excludes_lowest` makes it a *proof* that no `selected`
-    answer exists — the ⟨UNDONE⟩ `MergeModel` §9's own docstring records;
+    answer exists — the ⟨UNDONE U-0070⟩ `MergeModel` §9's own docstring records;
   * `unavailable` refutes the existence of a common ancestor **version**, which
     is the obligation §9 says it wants and the state level cannot carry. -/
 
@@ -511,7 +511,7 @@ licence is exactly what the state index fails to withhold. -/
 /-- ⚠ **The eternal two-cycle needs two valid bases, and `ValidInHistory`
 licenses at most one.** The first three conjuncts are `Histories.
 lock_two_valid_bases` and `swap_never_converges`, quoted; the last is
-`selected_unique`, which forbids the pair at the history level. ⟨UNDONE⟩ This
+`selected_unique`, which forbids the pair at the history level. ⟨UNDONE U-0071⟩ This
 withdraws the *licence*; it is not a convergence proof. -/
 theorem the_two_cycle_needs_two_bases_the_history_licenses_one :
     (MergeModel.BaseDecision.selected (⟨true, false⟩ : Lock)).Valid lockImpl
@@ -1077,7 +1077,7 @@ def BasedCertSound {α : Type uA} {V : Type uV} (B : BasedWorld α V) (b : V) (C
     Evidence.FreeTermination WorldFuture.DeliveryFuture WorldFuture.renderW (B.world v)
 
 /-- A world-indexed certificate names a version's world; the version index is a
-name for it, no more. ⟨UNDONE⟩ There is no theorem here that the version index
+name for it, no more. ⟨UNDONE U-0072⟩ There is no theorem here that the version index
 separates worlds a `WorldFuture.WorldCert` cannot — it does not. -/
 theorem versionCertSound_of_worldCertSound {α : Type uA} {V : Type uV} (B : BasedWorld α V)
     {C : WorldFuture.WorldCert α} (h : WorldFuture.WorldCertSound C) :
@@ -1275,7 +1275,7 @@ valid there (`Histories.lock_ambiguous_valid`) — and the base choice costs
 nothing (`lock_join_base_insensitive`). In the counter no state-level `ambiguous`
 decision is valid at all — and the base choice decides the invariant.
 
-⟨UNDONE⟩ Two histories, not a classification: nothing here says visibility and
+⟨UNDONE U-0073⟩ Two histories, not a classification: nothing here says visibility and
 harmlessness are always anti-correlated. -/
 theorem ambiguity_is_visible_where_it_is_free :
     (MergeModel.BaseDecision.ambiguous (lvState .alice) (lvState .bob)).Valid lockImpl

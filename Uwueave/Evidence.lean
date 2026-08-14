@@ -82,7 +82,7 @@ that sets `ready` must still be right at every larger instance it may yet see.
 ## What is earned rather than assumed
 
 `Holes.lean`'s boundary listed "the `Stable` → `Era` bridge is prose" as
-⟨UNDONE⟩: its collapse licence `Stable Arriving P` was abstract in what may
+⟨UNDONE U-0037⟩: its collapse licence `Stable Arriving P` was abstract in what may
 still arrive. Here the licence is **read off the evidence**: `Closed e` says
 every source `e` is still waiting on carries a closure certificate, and
 `closed_freezes` (§8) proves that a closed evidence's candidate set cannot move
@@ -144,21 +144,21 @@ Two prices are paid in public, not deferred:
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE⟩ = work wearing a caveat's
+⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0038⟩ = work wearing a caveat's
 clothes.
 
   * **`obligations` here is a flat set of source names, not an antichain of
     timestamps.** `Uwueave.Frontier` now supplies genuine timestamp antichains,
     range retirement, the flat-model separation, and — under explicit world
     well-formedness, completeness, and settlement hypotheses — stability of
-    `Evidence.values`. ⟨UNDONE for this old carrier and deployment⟩
+    `Evidence.values`. ⟨UNDONE U-0039 for this old carrier and deployment⟩
     `ResultEvidence` still stores no timestamp. `AuthenticatedFrontier` now
     authenticates an accepted-and-issued progress record and binds its decoded
     sets to a lawful advance; `AuthenticatedWorldContext` binds that advance to
     an exact typed consuming delivery. No theorem generates those messages or
     proves a runtime honestly advances its frontier, and full `render`
     stability is still not claimed.
-  * **A certificate is trusted, not verified.** ⟨UNDONE⟩ Nothing here says a
+  * **A certificate is trusted, not verified.** ⟨UNDONE U-0040⟩ Nothing here says a
     certificate was *earned*: `certify` adds one unconditionally, exactly as
     `Era.advance` announces a cut unconditionally, and the price is the same
     trust in the arbiter that `Era.lean`'s §5.1 prices. The transport from
@@ -166,7 +166,7 @@ clothes.
     `certificates` bit is still prose — `Holes.lean` listed that bridge as
     unbuilt and this file narrows it to one component rather than closing it.
   * **`SealedFuture` closes the source set by fiat.** ⟨TERMINAL for soundness,
-    ⟨UNDONE⟩ as deployment⟩ The retraction theorem shows why the restriction is
+    ⟨UNDONE U-0041⟩ as deployment⟩ The retraction theorem shows why the restriction is
     needed; what is *not* built is any mechanism that establishes membership
     closure in a running system. A deployment that cannot close its source set
     gets `provisional`, correctly, forever. `Uwueave.WorldFuture` is the next
@@ -862,7 +862,7 @@ theorem futures_not_interchangeable :
 /-! ## §8. The licence, earned — and the price of an open source set.
 
 `Holes.lean` §6 assumed its collapse licence (`Stable Arriving P`, abstract in
-what may still arrive) and listed the bridge to a real closure as ⟨UNDONE⟩.
+what may still arrive) and listed the bridge to a real closure as ⟨UNDONE U-0042⟩.
 Here the licence is a **theorem about the evidence**: `closed_freezes` says a
 closed evidence's candidate set cannot move under any admissible future.
 

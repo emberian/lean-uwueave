@@ -49,7 +49,7 @@ premise that real storage produces such an image.
   * The logical layer is paid for artifact projections:
     `Preo.ArtifactDurable` supplies canonical `List UInt8`, version/domain
     separation, and logical torn-tail recovery.
-  * ⟨UNDONE⟩ No refinement proves that a host serializer emits those bytes
+  * ⟨UNDONE U-0027⟩ No refinement proves that a host serializer emits those bytes
     byte-for-byte, or connects a file descriptor, database transaction, flush
     primitive, or filesystem crash observation to the required prefix shape.
     `DeploymentAssumptions` names that missing boundary.

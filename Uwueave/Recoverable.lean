@@ -103,7 +103,7 @@ iff-shaped form of the dichotomy the two files together now have.
 
 ## Honest boundary — what is claimed and what is not
 
-  * ⟨UNDONE, narrowed to endpoint-only reconstruction/generic merge synthesis⟩
+  * ⟨UNDONE U-0117, narrowed to endpoint-only reconstruction/generic merge synthesis⟩
     **This file's converse is proved at one-operation resolution**
     (`StepConfluent`), which is the resolution `Ancestral.Serializing` and
     `serialization_clash_defeats_every_merge` are stated in. §5 lifts it with

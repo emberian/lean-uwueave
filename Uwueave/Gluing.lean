@@ -62,7 +62,7 @@ is vacuous, and with three witnesses beside it, one of which shows the iff is **
   discipline is on the far side of the confluence wall (`Catalog.gset_atMostOne_not_iconfluent`),
   yet `oneShotOwner` makes it glue inside each owner fiber, and every valid seam must separate
   distinct singleton fills.
-* §10 **Non-claims**, labelled ⟨TERMINAL⟩ / ⟨UNDONE⟩.
+* §10 **Non-claims**, labelled ⟨TERMINAL⟩ / ⟨UNDONE U-0057⟩.
 
 Literature: Bailis et al. VLDB'15 (I-confluence); Whittaker–Hellerstein VLDB'19 (segmentation);
 Almeida–Shoker–Baquero (delta mutators, the shape a fill takes here).
@@ -891,7 +891,7 @@ theorem oneshot_orthogonal_to_gluing :
   (`oneShotOwner_eq_some_of_mem`), but deployment code should carry the owner explicitly or use a
   finite searchable representation rather than extract this noncomputable definition.
 
-**⟨UNDONE⟩ — real work, not done here.**
+**⟨UNDONE U-0058⟩ — real work, not done here.**
 
 * *Hole identity.* A hole here is a position in the lattice, not a named slot: two holes in one
   document are two `GuardedHole` values with no shared index. The keyed family `K → GuardedHole S`

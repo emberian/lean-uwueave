@@ -18,7 +18,7 @@ refutable. This checks claims against the declared policy; as in
 ## Honest boundary
 
   * **External observation authenticity is supplied, not manufactured.**
-    ⟨UNDONE at the deployment observation boundary⟩
+    ⟨UNDONE U-0116 at the deployment observation boundary⟩
     `ObservationBoundary.Authentic` names the relation between an external
     world and the Lean state evaluated here. `ObservedReport.attach` requires a
     proof of that relation, `authentic_site` transports it to the carrier site,

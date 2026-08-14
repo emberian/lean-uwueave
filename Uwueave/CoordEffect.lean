@@ -118,7 +118,7 @@ is exactly the number the scalar grade computes.
     protocol may emit zero, one, or several schedulable demands per crossing.
     Therefore no generic inequality converts this `optimum` into meetings, and
     nothing in this file calls it one.
-  * ⟨UNDONE, narrowed to the native surface and general subsumption⟩ **The
+  * ⟨UNDONE U-0019, narrowed to the native surface and general subsumption⟩ **The
     semantic typing target has landed.** `Protocol.Elaboration` produces checked
     schedules and exact currency-profile bounds, and Preo has checked
     `protocol`/`session` forms whose bodies are typed `Protocol.Term`s. What is
@@ -130,7 +130,7 @@ is exactly the number the scalar grade computes.
     can compute, because seams range over every type in every universe.
     `Cost.coordination_forced` is the tool for statements over all seams, and
     §4 is the only bridge claimed.
-  * ⟨UNDONE⟩ **No liveness, no delivery, no time** — as in `Cost.lean`. A
+  * ⟨UNDONE U-0020⟩ **No liveness, no delivery, no time** — as in `Cost.lean`. A
     profile counts events, never wall-clock.
 -/
 import Uwueave.Cost

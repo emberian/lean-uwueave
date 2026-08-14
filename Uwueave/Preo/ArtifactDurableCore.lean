@@ -36,7 +36,7 @@ byte string authoritative.
   * The canonical-byte and logical torn-tail layers are paid:
     `projectionBytes` is exact and `two_frames_then_torn_third` proves recovery
     under an explicit `Durable.TornFrame` premise.
-  * ⟨UNDONE⟩ No deployment refinement proves that a host serializer agrees
+  * ⟨UNDONE U-0115⟩ No deployment refinement proves that a host serializer agrees
     byte-for-byte with `projectionBytes`, or that filesystem, flush,
     atomic-sector, or power-loss observations satisfy `Durable.TornFrame` and
     its prefix premise. `Durable` names rather than manufactures those

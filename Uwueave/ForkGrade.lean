@@ -97,7 +97,7 @@ fork-aware quantity, where `Bounds` §4 proved the per-stream one cannot.
     `0` and a global seam at exactly `1`. The earlier §9 pin scenario remains a
     useful weaker witness: its constant seam fails globally, but another global
     seam happens to pay zero.
-  * ⟨UNDONE⟩ **Minimum colourings.** `SeamColoring`'s greedy colourer synthesises
+  * ⟨UNDONE U-0047⟩ **Minimum colourings.** `SeamColoring`'s greedy colourer synthesises
     *a* proper colouring, never the minimum one; nothing here computes an optimal
     live strategy, only bounds the optimum.
 

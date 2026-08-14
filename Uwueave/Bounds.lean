@@ -110,7 +110,7 @@ the modal model*, which is the contact this file was looking for.
   * ⟨TERMINAL for this file⟩ **Crossings are not meetings**, inherited whole from
     `Cost.lean` and `CoordEffect.lean`. Every `Nat` here is a seam crossing on a
     replica's stream; nothing in this file models attendance or coalescing.
-  * ⟨UNDONE⟩ **No exact modal/quantitative correspondence is claimed or
+  * ⟨UNDONE U-0002⟩ **No exact modal/quantitative correspondence is claimed or
     available.** §4 is a proof that none exists at zero for the per-stream
     measure, and §6 is a one-directional bridge at the session level. What a
     quantity whose zero *is* the modal zero would look like — a fork-aware floor,
