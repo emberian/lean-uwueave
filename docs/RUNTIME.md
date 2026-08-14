@@ -93,13 +93,14 @@ does not relabel existing data or APIs.
 
 **Implemented as a fail-closed build control, not a compiler proof.**
 `Uwueave/RuntimeInit.lean` is a deliberately data-free native root. It directly
-imports exactly the five exported-kernel modules:
+imports exactly the six exported-kernel modules:
 
 - `Uwueave.Exec`
 - `Uwueave.SeqKernel`
 - `Uwueave.EraKernel`
 - `Uwueave.Preo.ArtifactJournalKernel`
 - `Uwueave.RuntimeAuthV4Kernel` (which imports `RuntimeAuthV4`)
+- `Uwueave.RuntimeAuthV4AdmissionTraceKernel`
 
 That import list owns two decisions together: the one generated initializer the
 C shim calls and the transitive native-object closure the Rust crate links.
@@ -122,13 +123,15 @@ queries must return the same RuntimeInit target and object paths; the setup,
 closure, every object, every Lean source, `Uwueave.lean`, Lake/toolchain files,
 shim, build script, Cargo manifest, and lockfile must also be unchanged.
 
-`rust/shim.c` first calls `lean_initialize_runtime_module`, then only
+The exact source-level surface is pinned by the
+[Ledger 2 machine manifest](trust/ledger2-v1.json). `rust/shim.c` first calls
+`lean_initialize_runtime_module`, then only
 `initialize_uwueave_Uwueave_RuntimeInit(1)`. Rust serializes that process-global
 initialization with `Once`; failure aborts rather than exposing a partly
-initialized runtime. The current native-closure gate observes 15 Lake-owned
-objects (1,049,544 bytes before archiving) and 16 archive members including
-the shim (1,249,984 bytes including the archive index; SHA-256
-`1b0deb1bcfcaa79f66ba7f880a340605a9055e655820888a2ebcb6110b528d8e`).
+initialized runtime. Each supported native build records its actual Cargo
+target, exact closure and member identities, archive digest, selected native
+tools, and selected `libleanshared` in a new per-build observation. Counts,
+sizes, and digests are deliberately not stable prose claims.
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native

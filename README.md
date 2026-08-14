@@ -49,7 +49,7 @@ short and honest rather than a list of vague possibilities.
 Those two phones are a program. You need [elan](https://elan.lean-lang.org) on
 your `PATH` — the decision layers are compiled from the Lean, so the Rust build
 insists on a working Lean toolchain rather than linking whatever was on disk
-last time. A data-free `RuntimeInit` module names the five native-kernel modules;
+last time. A data-free `RuntimeInit` module names the six native-kernel modules;
 the build takes their exact transitive closure from Lake, byte-snapshots it, and
 refuses stale, extra, missing, or mixed-generation archive members. The first
 build is slow; after that it's incremental.
@@ -351,6 +351,9 @@ not something you crash on.
   that must reject a custom axiom, `sorry`, `native_decide`, and a vacuous
   namespace; the Preoscript acceptance suite repeats the forbidden-proof cases
   at generated declarations and covers failure honesty and resource caps.
+- **[Ledger 2 manifest](docs/trust/ledger2-v1.json)** — the machine-readable
+  execution-TCB inventory checked against debt lineage, runtime surfaces,
+  Rust `unsafe` tokens, live documentation, and each native evidence run.
 - **[Runtime architecture](docs/RUNTIME.md)** — the shipping FORMAT-v3 path,
   exact RuntimeInit/Lake native closure, five pure-Rust journal domains, checked V3
   Quickstart and bounded diagnostic inspection, exact durability assumptions,

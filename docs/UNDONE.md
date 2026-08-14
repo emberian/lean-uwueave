@@ -4,8 +4,8 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 110
-- **Extracted blocks (marker-bearing source lines):** 108
+- **Marker occurrences:** 109
+- **Extracted blocks (marker-bearing source lines):** 107
 - **Lean files containing markers:** 35
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
@@ -322,23 +322,6 @@ remove it) or **⟨UNDONE U-0051⟩** (work, in a caveat's clothes). The list us
 with "this gates the abstract op layer, not the shipping kernel", followed by
 the recipe for fixing that; the recipe was executed, and the item is gone
 rather than reworded.
-````
-
-### [`Uwueave/Gated.lean:162`](../Uwueave/Gated.lean#L162)
-
-````text
-    ⟨UNDONE U-0160⟩ The former umbrella is now a registry-integrity
-    obligation, not a claim that one aggregate test closes the execution TCB.
-    A machine-readable Ledger 2 gate must preserve the exact mapping to Lean
-    code generation ⟨DEBT-REF U-0161⟩, the host C toolchain
-    ⟨DEBT-REF U-0162⟩, the Lean runtime ⟨DEBT-REF U-0163⟩, `shim.c`
-    ⟨DEBT-REF U-0164⟩, ABI/FFI ⟨DEBT-REF U-0165⟩, Rust `unsafe`
-    ⟨DEBT-REF U-0166⟩, storage/index glue ⟨DEBT-REF U-0167⟩, the
-    filesystem/crash premise ⟨DEBT-REF U-0168⟩, the supported native scope
-    ⟨DEBT-REF U-0169⟩, and canonical host durability
-    ⟨DEBT-REF U-0170⟩. The two paid controls remain Lean-owned request
-    encoding and fail-closed native-closure freshness. Nothing else is paid by
-    this decomposition.
 ````
 
 ### [`Uwueave/Gated.lean:174`](../Uwueave/Gated.lean#L174)

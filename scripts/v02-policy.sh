@@ -55,12 +55,18 @@ PY
 echo 'v0.2 policy: running isolated debt-registry tests'
 python3 tests/debt_gate_test.py
 
+echo 'v0.2 policy: running isolated Ledger-2 integrity tests'
+python3 tests/ledger2_gate_test.py
+
 echo 'v0.2 policy: running fully mocked hbox helper tests'
 bash tests/hbox-checkpoint.sh
 
 echo 'v0.2 policy: checking the immutable debt registry and committed ancestry'
 readonly debt_registry_base=6331af269f80c25c26775299b4678c29b45716cc
 scripts/debt-gate.py check --base "$debt_registry_base" "${debt_policy_args[@]}"
+
+echo 'v0.2 policy: checking the machine-readable execution-TCB ledger'
+python3 scripts/ledger2-gate.py check
 
 echo 'v0.2 policy: checking the lexical UNDONE census'
 LC_ALL=C scripts/undone-census.sh --check

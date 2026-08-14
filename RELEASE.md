@@ -15,6 +15,8 @@ package or a binary distribution. It requires:
 - the debt tool's isolated tests and audit-only inventory, followed by stable
   debt IDs and a classified registry before the final v0.2 tag;
 - a current lexical UNDONE census before the final v0.2 tag;
+- the canonical [Ledger 2 manifest](docs/trust/ledger2-v1.json) checked against
+  debt lineage, runtime/export/FFI surfaces, unsafe inventory, and live docs;
 - frozen, all-target Rust tests on native Linux and macOS;
 - zero unclassified or P0 release debt at the final tag; and
 - exact agreement among the `v0.2.0` tag, Cargo/Lake metadata, lockfile,
@@ -35,6 +37,18 @@ closure—fails under Rust 1.88.0 at the then-unstable standard-library file-loc
 API and succeeds under Rust 1.89.0. Native CI runs that exact compiler on both
 supported development hosts and checks it against Cargo metadata before the
 frozen suite.
+
+Each native CI run must also emit and validate one per-build Ledger 2
+observation. The record names Cargo's actual target triple, the exact selected
+compiler, archiver, linker, Lean/Lake executables and `libleanshared`, the source and
+setup snapshots, and the exact archive/member identities. The two accepted
+triples are `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`; runner labels
+are not architecture evidence. CI creates and retains the record only in a
+post-suite closure probe after the frozen all-target suite has succeeded; the
+record itself attests to that exact native build, not to test success. These
+records are reproducibility observations,
+not proofs of code generation, toolchain/runtime semantics, ABI/ownership, or
+durability.
 
 The v0.2 contract makes no C ABI promise. The C shim and Lean exports remain
 private implementation details. It also makes no relocatable-binary promise:

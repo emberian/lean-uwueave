@@ -10,19 +10,28 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::{
+    fs::OpenOptions,
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
+};
 
 const PACKAGE: &str = "uwueave";
 const RUNTIME_ROOT: &str = "Uwueave.RuntimeInit";
-const REQUIRED_KERNELS: [&str; 5] = [
+const REQUIRED_KERNELS: [&str; 6] = [
     "Uwueave.Exec",
     "Uwueave.SeqKernel",
     "Uwueave.EraKernel",
     "Uwueave.Preo.ArtifactJournalKernel",
     "Uwueave.RuntimeAuthV4Kernel",
+    "Uwueave.RuntimeAuthV4AdmissionTraceKernel",
 ];
+const LEDGER2_MANIFEST: &str = "docs/trust/ledger2-v1.json";
+const LEDGER2_OBSERVATION_ENV: &str = "UWUEAVE_LEDGER2_OBSERVATION_OUT";
+const SUPPORTED_TARGETS: [&str; 2] = ["aarch64-apple-darwin", "x86_64-unknown-linux-gnu"];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct FileState {
@@ -32,6 +41,23 @@ struct FileState {
 
 type SourceSnapshot = BTreeMap<PathBuf, FileState>;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ArchiveMemberObservation {
+    bytes: usize,
+    kind: &'static str,
+    module: Option<String>,
+    name: String,
+    sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ToolIdentity {
+    argv: Vec<String>,
+    path: PathBuf,
+    sha256: String,
+    version: String,
+}
+
 fn main() {
     let manifest = required_env_path("CARGO_MANIFEST_DIR");
     let repo = manifest
@@ -39,18 +65,23 @@ fn main() {
         .expect("rust crate must live directly below the repository root")
         .to_path_buf();
 
-    guard_native_build();
+    let target = guard_native_build();
+    let observation_out = std::env::var_os(LEDGER2_OBSERVATION_ENV).map(PathBuf::from);
+    let prefix = lean_prefix(&repo);
+    let lake = prefix.join("bin/lake");
+    executable_path(&lake)
+        .unwrap_or_else(|e| panic!("cannot resolve authoritative Lake executable: {e}"));
     emit_rerun_inputs(&repo, &manifest);
     let before = snapshot_inputs(&repo).unwrap_or_else(|e| panic!("source snapshot failed: {e}"));
 
     // This broad proof gate is intentional. A targeted runtime build must not
     // let Cargo go green while some other theorem/module in the Lean library
     // is red, nor may old generated output substitute for a failed build.
-    run_lake_status(&repo, &["build"], "full `lake build`");
+    run_lake_status(&lake, &repo, &["build"], "full `lake build`");
 
     // Ask Lake for the root C path solely to derive the corresponding setup
     // path. No emitted filename or IR directory is guessed here.
-    let root_c = query_paths(&repo, false, &[format!("+{RUNTIME_ROOT}:c")]);
+    let root_c = query_paths(&lake, &repo, false, &[format!("+{RUNTIME_ROOT}:c")]);
     let root_c = exactly_one(root_c, "RuntimeInit C query");
     validate_lake_output_path(RUNTIME_ROOT, &root_c, ".c", &repo)
         .unwrap_or_else(|e| panic!("invalid RuntimeInit C result: {e}"));
@@ -71,7 +102,7 @@ fn main() {
         .iter()
         .map(|module| format!("+{module}:c.o"))
         .collect();
-    let objects = query_paths(&repo, false, &object_targets);
+    let objects = query_paths(&lake, &repo, false, &object_targets);
     validate_object_results(&modules, &objects, &repo)
         .unwrap_or_else(|e| panic!("invalid Lake object result: {e}"));
 
@@ -89,7 +120,6 @@ fn main() {
         object_bytes
     );
 
-    let prefix = lean_prefix(&repo);
     let out_dir = required_env_path("OUT_DIR");
     let staged_objects = stage_object_snapshots(&out_dir, &modules, &object_states)
         .unwrap_or_else(|e| panic!("cannot stage stable Lake object snapshots: {e}"));
@@ -102,18 +132,34 @@ fn main() {
     cc.objects(&staged_objects);
     cc.warnings(false);
     cc.opt_level(2);
+    let compiler_tool = cc.get_compiler();
+    let compiler_command = compiler_tool.to_command();
+    let compiler_identity = command_identity(&compiler_command)
+        .unwrap_or_else(|e| panic!("cannot identify selected C compiler command: {e}"));
+    let compiler_path = executable_path(compiler_tool.path())
+        .unwrap_or_else(|e| panic!("cannot resolve selected C compiler: {e}"));
+    if observation_out.is_some() && compiler_identity.path != compiler_path {
+        panic!(
+            "compiler wrappers are outside the reproducible native-evidence policy: selected {} around {}",
+            compiler_identity.path.display(),
+            compiler_path.display()
+        );
+    }
+    let archiver_command = cc.get_archiver();
+    let archiver_identity = command_identity(&archiver_command)
+        .unwrap_or_else(|e| panic!("cannot identify selected archiver: {e}"));
     cc.compile("uwueave_kernel");
-    verify_archive(
-        &prefix.join("bin/llvm-ar"),
-        &out_dir.join("libuwueave_kernel.a"),
-        &staged_objects,
-    )
-    .unwrap_or_else(|e| panic!("runtime archive postcondition failed: {e}"));
+    let verifier_archiver = prefix.join("bin/llvm-ar");
+    let archive_path = out_dir.join("libuwueave_kernel.a");
+    let archive_members =
+        verify_archive(&verifier_archiver, &archive_path, &staged_objects, &modules)
+            .unwrap_or_else(|e| panic!("runtime archive postcondition failed: {e}"));
 
     // Close both TOCTOU windows. First, the entire default Lean target must
     // still be current without building. Then the root C and every selected
     // object must still be current, and Lake must return the identical paths.
     run_lake_status(
+        &lake,
         &repo,
         &["--no-build", "build"],
         "final no-build Lean proof gate",
@@ -121,7 +167,7 @@ fn main() {
     let mut final_targets = Vec::with_capacity(1 + object_targets.len());
     final_targets.push(format!("+{RUNTIME_ROOT}:c"));
     final_targets.extend(object_targets);
-    let final_paths = query_paths(&repo, true, &final_targets);
+    let final_paths = query_paths(&lake, &repo, true, &final_targets);
     if final_paths.first() != Some(&root_c) || final_paths.get(1..) != Some(objects.as_slice()) {
         panic!(
             "Lake runtime outputs changed during the Cargo build; refusing to link a mixed generation"
@@ -152,6 +198,38 @@ fn main() {
         );
     }
 
+    if let Some(path) = observation_out {
+        let linker = cargo_linker(&target)
+            .unwrap_or_else(|e| panic!("native observation requires an exact Cargo linker: {e}"));
+        let linker_identity = tool_identity(&linker, &[])
+            .unwrap_or_else(|e| panic!("cannot identify selected Cargo linker: {e}"));
+        let verifier_identity = tool_identity(&verifier_archiver, &[])
+            .unwrap_or_else(|e| panic!("cannot identify Lean archive verifier: {e}"));
+        let lean_identity = tool_identity(&prefix.join("bin/lean"), &[])
+            .unwrap_or_else(|e| panic!("cannot identify authoritative Lean executable: {e}"));
+        let lake_identity = tool_identity(&prefix.join("bin/lake"), &[])
+            .unwrap_or_else(|e| panic!("cannot identify authoritative Lake executable: {e}"));
+        write_native_observation(
+            &path,
+            &repo,
+            &target,
+            &before,
+            &setup_path,
+            &setup_state,
+            &modules,
+            &archive_path,
+            &archive_members,
+            &compiler_identity,
+            &archiver_identity,
+            &linker_identity,
+            &verifier_identity,
+            &lean_identity,
+            &lake_identity,
+            &prefix,
+        )
+        .unwrap_or_else(|e| panic!("cannot write Ledger-2 native observation: {e}"));
+    }
+
     // Preserve the existing dynamic Lean-runtime link contract.
     let libdir = prefix.join("lib/lean");
     println!("cargo:rustc-link-search=native={}", libdir.display());
@@ -176,7 +254,7 @@ fn required_env_path(name: &str) -> PathBuf {
     )
 }
 
-fn guard_native_build() {
+fn guard_native_build() -> String {
     let host = std::env::var("HOST").expect("Cargo did not provide HOST");
     let target = std::env::var("TARGET").expect("Cargo did not provide TARGET");
     if host != target {
@@ -184,11 +262,23 @@ fn guard_native_build() {
             "cross-compilation is unsupported: Lake emitted host objects for {host}, but Cargo requested {target}"
         );
     }
+    if !SUPPORTED_TARGETS.contains(&target.as_str()) {
+        panic!(
+            "unsupported native target {target}; v0.2 evidence is scoped exactly to {}",
+            SUPPORTED_TARGETS.join(" and ")
+        );
+    }
     let os = std::env::var("CARGO_CFG_TARGET_OS")
         .expect("Cargo did not provide CARGO_CFG_TARGET_OS to the build script");
-    if os != "macos" && os != "linux" {
-        panic!("the Lean shared-runtime link contract supports native macOS and Linux, not {os}");
+    let expected_os = if target == "aarch64-apple-darwin" {
+        "macos"
+    } else {
+        "linux"
+    };
+    if os != expected_os {
+        panic!("Cargo target {target} reported inconsistent target OS {os}");
     }
+    target
 }
 
 fn emit_rerun_inputs(repo: &Path, manifest: &Path) {
@@ -198,12 +288,20 @@ fn emit_rerun_inputs(repo: &Path, manifest: &Path) {
         repo.join("lakefile.toml"),
         repo.join("lake-manifest.json"),
         repo.join("lean-toolchain"),
+        repo.join(LEDGER2_MANIFEST),
         manifest.join("shim.c"),
         manifest.join("build.rs"),
         manifest.join("Cargo.toml"),
         manifest.join("Cargo.lock"),
     ] {
         println!("cargo:rerun-if-changed={}", path.display());
+    }
+    println!("cargo:rerun-if-env-changed={LEDGER2_OBSERVATION_ENV}");
+    for target in SUPPORTED_TARGETS {
+        println!(
+            "cargo:rerun-if-env-changed=CARGO_TARGET_{}_LINKER",
+            target.replace('-', "_").to_ascii_uppercase()
+        );
     }
 }
 
@@ -213,6 +311,7 @@ fn snapshot_inputs(repo: &Path) -> Result<SourceSnapshot, String> {
         repo.join("lakefile.toml"),
         repo.join("lake-manifest.json"),
         repo.join("lean-toolchain"),
+        repo.join(LEDGER2_MANIFEST),
         repo.join("rust/shim.c"),
         repo.join("rust/build.rs"),
         repo.join("rust/Cargo.toml"),
@@ -234,32 +333,101 @@ fn snapshot_inputs(repo: &Path) -> Result<SourceSnapshot, String> {
     Ok(snapshot)
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn stable_file_state(path: &Path) -> Result<FileState, String> {
-    let before = fs::symlink_metadata(path)
+    stable_file_state_with_pre_open(path, || {})
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn stable_file_state(path: &Path) -> Result<FileState, String> {
+    Err(format!(
+        "descriptor-bound no-follow reads are unsupported on this target: {}",
+        path.display()
+    ))
+}
+
+#[cfg(target_os = "linux")]
+const O_NOFOLLOW_FLAG: i32 = 0x20000;
+#[cfg(target_os = "macos")]
+const O_NOFOLLOW_FLAG: i32 = 0x0100;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn metadata_identity(metadata: &fs::Metadata) -> (u64, u64, u32, u64, i64, i64, i64, i64) {
+    (
+        metadata.dev(),
+        metadata.ino(),
+        metadata.mode(),
+        metadata.len(),
+        metadata.mtime(),
+        metadata.mtime_nsec(),
+        metadata.ctime(),
+        metadata.ctime_nsec(),
+    )
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn stable_file_state_with_pre_open<F>(path: &Path, pre_open: F) -> Result<FileState, String>
+where
+    F: FnOnce(),
+{
+    let path_before = fs::symlink_metadata(path)
         .map_err(|e| format!("cannot inspect {}: {e}", path.display()))?;
-    if before.file_type().is_symlink() || !before.is_file() {
+    if path_before.file_type().is_symlink() || !path_before.is_file() {
         return Err(format!(
             "path is not a non-symlink regular file: {}",
             path.display()
         ));
     }
-    let bytes = fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    let after = fs::symlink_metadata(path)
-        .map_err(|e| format!("cannot re-inspect {}: {e}", path.display()))?;
-    if after.file_type().is_symlink()
-        || !after.is_file()
-        || before.len() != after.len()
-        || before.modified().ok() != after.modified().ok()
-        || after.len() != bytes.len() as u64
+    let canonical = fs::canonicalize(path)
+        .map_err(|e| format!("cannot canonicalize {}: {e}", path.display()))?;
+    if canonical != path {
+        return Err(format!("path is not canonical: {}", path.display()));
+    }
+
+    // Unit tests use this hook to deterministically reproduce the exact race
+    // between pathname validation and descriptor acquisition.
+    pre_open();
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NOFOLLOW_FLAG)
+        .open(path)
+        .map_err(|e| format!("cannot open no-follow descriptor {}: {e}", path.display()))?;
+    let descriptor_before = file
+        .metadata()
+        .map_err(|e| format!("cannot inspect opened descriptor {}: {e}", path.display()))?;
+    if !descriptor_before.is_file()
+        || metadata_identity(&descriptor_before) != metadata_identity(&path_before)
     {
         return Err(format!(
-            "file changed while it was read: {}",
+            "path changed before its descriptor was opened: {}",
+            path.display()
+        ));
+    }
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|e| format!("cannot read opened descriptor {}: {e}", path.display()))?;
+    let descriptor_after = file.metadata().map_err(|e| {
+        format!(
+            "cannot re-inspect opened descriptor {}: {e}",
+            path.display()
+        )
+    })?;
+    let path_after = fs::symlink_metadata(path)
+        .map_err(|e| format!("cannot re-inspect {}: {e}", path.display()))?;
+    if path_after.file_type().is_symlink()
+        || !path_after.is_file()
+        || metadata_identity(&descriptor_before) != metadata_identity(&descriptor_after)
+        || metadata_identity(&descriptor_after) != metadata_identity(&path_after)
+        || descriptor_after.len() != bytes.len() as u64
+    {
+        return Err(format!(
+            "file changed while its descriptor was read: {}",
             path.display()
         ));
     }
     Ok(FileState {
         bytes,
-        modified: after.modified().ok(),
+        modified: descriptor_after.modified().ok(),
     })
 }
 
@@ -287,8 +455,8 @@ fn collect_lean_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> 
     Ok(())
 }
 
-fn run_lake_status(repo: &Path, args: &[&str], label: &str) {
-    let status = Command::new("lake")
+fn run_lake_status(lake: &Path, repo: &Path, args: &[&str], label: &str) {
+    let status = Command::new(lake)
         .args(args)
         .current_dir(repo)
         .status()
@@ -300,8 +468,8 @@ fn run_lake_status(repo: &Path, args: &[&str], label: &str) {
     }
 }
 
-fn lake_query(repo: &Path, no_build: bool, targets: &[String]) -> Output {
-    let mut command = Command::new("lake");
+fn lake_query(lake: &Path, repo: &Path, no_build: bool, targets: &[String]) -> Output {
+    let mut command = Command::new(lake);
     if no_build {
         command.arg("--no-build");
     }
@@ -313,8 +481,8 @@ fn lake_query(repo: &Path, no_build: bool, targets: &[String]) -> Output {
         .unwrap_or_else(|e| panic!("failed to launch Lake query: {e}"))
 }
 
-fn query_paths(repo: &Path, no_build: bool, targets: &[String]) -> Vec<PathBuf> {
-    let output = lake_query(repo, no_build, targets);
+fn query_paths(lake: &Path, repo: &Path, no_build: bool, targets: &[String]) -> Vec<PathBuf> {
+    let output = lake_query(lake, repo, no_build, targets);
     if !output.status.success() {
         panic!(
             "Lake {}query failed for exact runtime targets.\nstdout:\n{}\nstderr:\n{}",
@@ -644,7 +812,11 @@ fn verify_archive(
     llvm_ar: &Path,
     archive: &Path,
     staged_objects: &[PathBuf],
-) -> Result<(), String> {
+    modules: &[String],
+) -> Result<Vec<ArchiveMemberObservation>, String> {
+    if staged_objects.len() != modules.len() {
+        return Err("archive observation module/object count mismatch".into());
+    }
     if !llvm_ar.is_absolute() || !llvm_ar.is_file() {
         return Err(format!(
             "Lean toolchain llvm-ar is missing: {}",
@@ -678,7 +850,8 @@ fn verify_archive(
     }
 
     let mut expected = BTreeSet::new();
-    for object in staged_objects {
+    let mut observations = Vec::with_capacity(members.len());
+    for (object, module) in staged_objects.iter().zip(modules) {
         let name = object
             .file_name()
             .and_then(OsStr::to_str)
@@ -705,6 +878,13 @@ fn verify_archive(
         if extracted.stdout != source.bytes {
             return Err(format!("archived bytes differ for Lake object {name:?}"));
         }
+        observations.push(ArchiveMemberObservation {
+            bytes: extracted.stdout.len(),
+            kind: "lake",
+            module: Some(module.clone()),
+            name: name.to_string(),
+            sha256: sha256_hex(&extracted.stdout),
+        });
     }
     let extras: Vec<&str> = members
         .iter()
@@ -716,11 +896,517 @@ fn verify_archive(
             "archive's sole non-Lake member is not the compiled shim: {extras:?}"
         ));
     }
+    let shim_name = extras[0];
+    let shim = Command::new(llvm_ar)
+        .args([
+            "p",
+            archive.to_str().ok_or("archive path is not UTF-8")?,
+            shim_name,
+        ])
+        .output()
+        .map_err(|e| format!("cannot extract compiled shim {shim_name:?}: {e}"))?;
+    if !shim.status.success() {
+        return Err(format!(
+            "llvm-ar could not extract shim {shim_name:?}: {}",
+            String::from_utf8_lossy(&shim.stderr)
+        ));
+    }
+    observations.push(ArchiveMemberObservation {
+        bytes: shim.stdout.len(),
+        kind: "shim",
+        module: None,
+        name: shim_name.to_string(),
+        sha256: sha256_hex(&shim.stdout),
+    });
+    let observations: Vec<ArchiveMemberObservation> = members
+        .iter()
+        .map(|name| {
+            observations
+                .iter()
+                .find(|entry| entry.name == **name)
+                .cloned()
+                .ok_or_else(|| format!("archive member {name:?} lacks an observation"))
+        })
+        .collect::<Result<_, _>>()?;
     let after = stable_file_state(archive)?;
     if before != after {
         return Err("archive changed while its exact membership was verified".into());
     }
+    Ok(observations)
+}
+
+fn locate_executable(program: &Path) -> Result<(PathBuf, PathBuf), String> {
+    let invocation = if program.components().count() > 1 || program.is_absolute() {
+        program.to_path_buf()
+    } else {
+        let path = std::env::var_os("PATH").ok_or("PATH is absent")?;
+        std::env::split_paths(&path)
+            .map(|directory| directory.join(program))
+            .find(|candidate| candidate.is_file())
+            .ok_or_else(|| format!("executable {:?} is absent from PATH", program))?
+    };
+    let canonical = fs::canonicalize(&invocation).map_err(|e| {
+        format!(
+            "cannot canonicalize executable {}: {e}",
+            invocation.display()
+        )
+    })?;
+    stable_file_state(&canonical)?;
+    Ok((invocation, canonical))
+}
+
+fn executable_path(program: &Path) -> Result<PathBuf, String> {
+    Ok(locate_executable(program)?.1)
+}
+
+fn tool_identity(program: &Path, args: &[std::ffi::OsString]) -> Result<ToolIdentity, String> {
+    let (invocation, path) = locate_executable(program)?;
+    let argv: Vec<String> = args
+        .iter()
+        .map(|arg| {
+            arg.to_str()
+                .map(str::to_string)
+                .ok_or_else(|| "selected tool argument is not UTF-8".to_string())
+        })
+        .collect::<Result<_, _>>()?;
+    let output = Command::new(&invocation)
+        .arg("--version")
+        .output()
+        .map_err(|e| format!("cannot query {} --version: {e}", path.display()))?;
+    let mut version = format!("exit={}\n", output.status.code().unwrap_or(-1));
+    version.push_str(&String::from_utf8_lossy(&output.stdout));
+    version.push_str(&String::from_utf8_lossy(&output.stderr));
+    if version.len() > 64 * 1024 {
+        return Err(format!(
+            "tool version output is unbounded: {}",
+            path.display()
+        ));
+    }
+    if version.contains('\0') {
+        return Err(format!(
+            "tool version output contains NUL: {}",
+            path.display()
+        ));
+    }
+    let state = stable_file_state(&path)?;
+    Ok(ToolIdentity {
+        argv,
+        path,
+        sha256: sha256_hex(&state.bytes),
+        version,
+    })
+}
+
+fn command_identity(command: &Command) -> Result<ToolIdentity, String> {
+    let args: Vec<std::ffi::OsString> = command.get_args().map(OsStr::to_os_string).collect();
+    tool_identity(Path::new(command.get_program()), &args)
+}
+
+fn cargo_linker(target: &str) -> Result<PathBuf, String> {
+    let key = format!(
+        "CARGO_TARGET_{}_LINKER",
+        target.replace('-', "_").to_ascii_uppercase()
+    );
+    let value = std::env::var_os(&key)
+        .ok_or_else(|| format!("{key} is absent; CI must select the linker explicitly"))?;
+    executable_path(Path::new(&value))
+}
+
+fn runtime_library(prefix: &Path, target: &str) -> Result<PathBuf, String> {
+    let extension = if target == "aarch64-apple-darwin" {
+        "dylib"
+    } else {
+        "so"
+    };
+    let path = prefix.join(format!("lib/lean/libleanshared.{extension}"));
+    let canonical = fs::canonicalize(&path)
+        .map_err(|e| format!("cannot find selected Lean runtime {}: {e}", path.display()))?;
+    stable_file_state(&canonical)?;
+    Ok(canonical)
+}
+
+fn tool_json(identity: &ToolIdentity) -> Value {
+    serde_json::json!({
+        "argv": identity.argv,
+        "path": identity.path,
+        "sha256": identity.sha256,
+        "version": identity.version,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_native_observation(
+    output: &Path,
+    repo: &Path,
+    target: &str,
+    snapshot: &SourceSnapshot,
+    setup_path: &Path,
+    setup: &FileState,
+    modules: &[String],
+    archive: &Path,
+    members: &[ArchiveMemberObservation],
+    compiler: &ToolIdentity,
+    archiver: &ToolIdentity,
+    linker: &ToolIdentity,
+    verifier_archiver: &ToolIdentity,
+    lean: &ToolIdentity,
+    lake: &ToolIdentity,
+    prefix: &Path,
+) -> Result<(), String> {
+    let parent = observation_output_parent(output)?;
+    let archive_state = stable_file_state(archive)?;
+    let runtime_path = runtime_library(prefix, target)?;
+    let runtime_state = stable_file_state(&runtime_path)?;
+    let manifest_path = repo.join(LEDGER2_MANIFEST);
+    let manifest_state = stable_file_state(&manifest_path)?;
+    let toolchain = stable_file_state(&repo.join("lean-toolchain"))?;
+    let toolchain = std::str::from_utf8(&toolchain.bytes)
+        .map_err(|e| format!("lean-toolchain is not UTF-8: {e}"))?
+        .trim();
+    if toolchain.is_empty() || toolchain.contains(['\n', '\r']) {
+        return Err("lean-toolchain does not contain one exact toolchain name".into());
+    }
+    let member_values: Vec<Value> = members
+        .iter()
+        .map(|member| {
+            serde_json::json!({
+                "bytes": member.bytes,
+                "kind": member.kind,
+                "module": member.module,
+                "name": member.name,
+                "sha256": member.sha256,
+            })
+        })
+        .collect();
+    let source_files: Vec<Value> = snapshot
+        .iter()
+        .map(|(relative, state)| {
+            let path = relative
+                .to_str()
+                .ok_or_else(|| format!("snapshot path is not UTF-8: {}", relative.display()))?;
+            Ok(serde_json::json!({
+                "bytes": state.bytes.len(),
+                "path": path,
+                "sha256": sha256_hex(&state.bytes),
+            }))
+        })
+        .collect::<Result<_, String>>()?;
+    let value = serde_json::json!({
+        "archive": {
+            "bytes": archive_state.bytes.len(),
+            "members": member_values,
+            "path": fs::canonicalize(archive).map_err(|e| format!("cannot canonicalize archive: {e}"))?,
+            "sha256": sha256_hex(&archive_state.bytes),
+        },
+        "closure": {
+            "modules": modules,
+            "setup_sha256": sha256_hex(&setup.bytes),
+            "source_files": source_files,
+            "source_snapshot_sha256": source_snapshot_sha256(snapshot)?,
+        },
+        "manifest_sha256": sha256_hex(&manifest_state.bytes),
+        "runtime": {
+            "bytes": runtime_state.bytes.len(),
+            "lean_toolchain": toolchain,
+            "path": runtime_path,
+            "sha256": sha256_hex(&runtime_state.bytes),
+        },
+        "schema": 1,
+        "target": target,
+        "tools": {
+            "archiver": tool_json(archiver),
+            "compiler": tool_json(compiler),
+            "lake": tool_json(lake),
+            "lean": tool_json(lean),
+            "linker": tool_json(linker),
+            "verifier_archiver": tool_json(verifier_archiver),
+        },
+    });
+    let tools = [
+        ("compiler", compiler),
+        ("archiver", archiver),
+        ("linker", linker),
+        ("verifier_archiver", verifier_archiver),
+        ("lean", lean),
+        ("lake", lake),
+    ];
+    recheck_observation_inputs(
+        repo,
+        snapshot,
+        setup_path,
+        setup,
+        archive,
+        &archive_state,
+        &runtime_path,
+        &runtime_state,
+        &manifest_path,
+        &manifest_state,
+        &tools,
+    )?;
+    let mut bytes =
+        serde_json::to_vec(&value).map_err(|e| format!("cannot encode observation JSON: {e}"))?;
+    bytes.push(b'\n');
+    let (temporary, mut file) = create_observation_temp(&parent)?;
+    file.write_all(&bytes)
+        .map_err(|e| format!("cannot write {}: {e}", temporary.display()))?;
+    file.sync_all()
+        .map_err(|e| format!("cannot sync {}: {e}", temporary.display()))?;
+    drop(file);
+    // Serialization and temporary-file I/O are deliberately inside the race
+    // window.  Recheck every live authority immediately before publication.
+    if let Err(error) = recheck_observation_inputs(
+        repo,
+        snapshot,
+        setup_path,
+        setup,
+        archive,
+        &archive_state,
+        &runtime_path,
+        &runtime_state,
+        &manifest_path,
+        &manifest_state,
+        &tools,
+    ) {
+        let temporary_rollback = fs::remove_file(&temporary);
+        let directory_rollback = sync_directory(&parent);
+        return Err(format!(
+            "{error}; temporary rollback: {temporary_rollback:?}; rollback directory sync: \
+             {directory_rollback:?}"
+        ));
+    }
+    if let Err(error) = fs::hard_link(&temporary, output) {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!(
+            "cannot install new observation {}: {error}",
+            output.display()
+        ));
+    }
+    if let Err(error) = sync_directory(&parent) {
+        return Err(rollback_observation(
+            output,
+            Some(&temporary),
+            &parent,
+            format!("cannot durably install observation: {error}"),
+        ));
+    }
+    if let Err(error) = fs::remove_file(&temporary) {
+        return Err(rollback_observation(
+            output,
+            Some(&temporary),
+            &parent,
+            format!("cannot remove temporary observation: {error}"),
+        ));
+    }
+    if let Err(error) = sync_directory(&parent) {
+        return Err(rollback_observation(
+            output,
+            None,
+            &parent,
+            format!("cannot durably remove temporary observation: {error}"),
+        ));
+    }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn recheck_observation_inputs(
+    repo: &Path,
+    snapshot: &SourceSnapshot,
+    setup_path: &Path,
+    setup: &FileState,
+    archive: &Path,
+    archive_state: &FileState,
+    runtime_path: &Path,
+    runtime_state: &FileState,
+    manifest_path: &Path,
+    manifest_state: &FileState,
+    tools: &[(&str, &ToolIdentity)],
+) -> Result<(), String> {
+    if snapshot_inputs(repo)? != *snapshot {
+        return Err("source generation changed while the observation was assembled".into());
+    }
+    if stable_file_state(setup_path)? != *setup {
+        return Err("RuntimeInit setup changed while the observation was assembled".into());
+    }
+    if stable_file_state(archive)? != *archive_state {
+        return Err("runtime archive changed while the observation was assembled".into());
+    }
+    if stable_file_state(runtime_path)? != *runtime_state {
+        return Err("Lean runtime changed while the observation was assembled".into());
+    }
+    if stable_file_state(manifest_path)? != *manifest_state {
+        return Err("Ledger-2 manifest changed while the observation was assembled".into());
+    }
+    for (role, identity) in tools {
+        let state = stable_file_state(&identity.path)?;
+        if sha256_hex(&state.bytes) != identity.sha256 {
+            return Err(format!(
+                "selected {role} executable changed while the observation was assembled"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn rollback_observation(
+    output: &Path,
+    temporary: Option<&Path>,
+    parent: &Path,
+    reason: String,
+) -> String {
+    let output_rollback = fs::remove_file(output);
+    let temporary_rollback = temporary.map(fs::remove_file);
+    let directory_rollback = sync_directory(parent);
+    format!(
+        "{reason}; output rollback: {output_rollback:?}; temporary rollback: \
+         {temporary_rollback:?}; rollback directory sync: {directory_rollback:?}"
+    )
+}
+
+fn create_observation_temp(parent: &Path) -> Result<(PathBuf, fs::File), String> {
+    for attempt in 0..128_u32 {
+        let path = parent.join(format!(
+            ".uwueave-ledger2-observation-{}-{attempt}.tmp",
+            std::process::id()
+        ));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("cannot create {}: {error}", path.display())),
+        }
+    }
+    Err("cannot reserve a unique observation temporary after 128 attempts".into())
+}
+
+fn sync_directory(path: &Path) -> Result<(), String> {
+    fs::File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| {
+            format!(
+                "cannot sync observation directory {}: {error}",
+                path.display()
+            )
+        })
+}
+
+fn observation_output_parent(output: &Path) -> Result<PathBuf, String> {
+    if !output.is_absolute() {
+        return Err(format!(
+            "observation output is not absolute: {}",
+            output.display()
+        ));
+    }
+    match fs::symlink_metadata(output) {
+        Ok(_) => {
+            return Err(format!(
+                "observation output already exists: {}",
+                output.display()
+            ))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("cannot inspect {}: {error}", output.display())),
+    }
+    let parent = output.parent().ok_or("observation output has no parent")?;
+    let parent = fs::canonicalize(parent)
+        .map_err(|e| format!("cannot canonicalize observation directory: {e}"))?;
+    if output.parent() != Some(parent.as_path()) {
+        return Err("observation output parent is not already canonical".into());
+    }
+    Ok(parent)
+}
+
+fn source_snapshot_sha256(snapshot: &SourceSnapshot) -> Result<String, String> {
+    let mut bytes = b"uwueave.ledger2.source-snapshot.v1\0".to_vec();
+    for (relative, state) in snapshot {
+        let name = relative
+            .to_str()
+            .ok_or_else(|| format!("snapshot path is not UTF-8: {}", relative.display()))?
+            .as_bytes();
+        bytes.extend_from_slice(&(name.len() as u64).to_be_bytes());
+        bytes.extend_from_slice(name);
+        bytes.extend_from_slice(&(state.bytes.len() as u64).to_be_bytes());
+        bytes.extend_from_slice(&state.bytes);
+    }
+    Ok(sha256_hex(&bytes))
+}
+
+fn sha256_hex(input: &[u8]) -> String {
+    const INITIAL: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let bit_len = (input.len() as u64).wrapping_mul(8);
+    let mut padded = input.to_vec();
+    padded.push(0x80);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
+    }
+    padded.extend_from_slice(&bit_len.to_be_bytes());
+    let mut state = INITIAL;
+    for chunk in padded.chunks_exact(64) {
+        let mut w = [0u32; 64];
+        for (index, word) in w[..16].iter_mut().enumerate() {
+            *word = u32::from_be_bytes(chunk[index * 4..index * 4 + 4].try_into().unwrap());
+        }
+        for index in 16..64 {
+            let s0 = w[index - 15].rotate_right(7)
+                ^ w[index - 15].rotate_right(18)
+                ^ (w[index - 15] >> 3);
+            let s1 = w[index - 2].rotate_right(17)
+                ^ w[index - 2].rotate_right(19)
+                ^ (w[index - 2] >> 10);
+            w[index] = w[index - 16]
+                .wrapping_add(s0)
+                .wrapping_add(w[index - 7])
+                .wrapping_add(s1);
+        }
+        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = state;
+        for index in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let choice = (e & f) ^ ((!e) & g);
+            let t1 = h
+                .wrapping_add(s1)
+                .wrapping_add(choice)
+                .wrapping_add(K[index])
+                .wrapping_add(w[index]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let majority = (a & b) ^ (a & c) ^ (b & c);
+            let t2 = s0.wrapping_add(majority);
+            h = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(t1);
+            d = c;
+            c = b;
+            b = a;
+            a = t1.wrapping_add(t2);
+        }
+        state[0] = state[0].wrapping_add(a);
+        state[1] = state[1].wrapping_add(b);
+        state[2] = state[2].wrapping_add(c);
+        state[3] = state[3].wrapping_add(d);
+        state[4] = state[4].wrapping_add(e);
+        state[5] = state[5].wrapping_add(f);
+        state[6] = state[6].wrapping_add(g);
+        state[7] = state[7].wrapping_add(h);
+    }
+    state.iter().map(|word| format!("{word:08x}")).collect()
 }
 
 fn lean_prefix(repo: &Path) -> PathBuf {
@@ -754,6 +1440,9 @@ fn lean_prefix(repo: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEST_REPO: AtomicU64 = AtomicU64::new(0);
 
     struct TestRepo(PathBuf);
 
@@ -763,8 +1452,9 @@ mod tests {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
+            let serial = NEXT_TEST_REPO.fetch_add(1, Ordering::Relaxed);
             let path = std::env::temp_dir().join(format!(
-                "uwueave-runtime-closure-test-{}-{nonce}",
+                "uwueave-runtime-closure-test-{}-{nonce}-{serial}",
                 std::process::id()
             ));
             fs::create_dir(&path).unwrap();
@@ -808,6 +1498,92 @@ mod tests {
         assert!(parse_query_paths(b"\"/a\"\n", 2).is_err());
         assert!(parse_query_paths(b"null\n", 1).is_err());
         assert!(parse_query_paths(b"\"/a\" trailing", 1).is_err());
+    }
+
+    #[test]
+    fn sha256_implementation_matches_standard_vectors() {
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn source_snapshot_hash_is_path_and_content_bound() {
+        let state = |bytes: &[u8]| FileState {
+            bytes: bytes.to_vec(),
+            modified: None,
+        };
+        let mut first = SourceSnapshot::new();
+        first.insert(PathBuf::from("a"), state(b"bc"));
+        let mut changed_path = SourceSnapshot::new();
+        changed_path.insert(PathBuf::from("ab"), state(b"c"));
+        let mut changed_bytes = SourceSnapshot::new();
+        changed_bytes.insert(PathBuf::from("a"), state(b"bd"));
+        assert_ne!(
+            source_snapshot_sha256(&first).unwrap(),
+            source_snapshot_sha256(&changed_path).unwrap()
+        );
+        assert_ne!(
+            source_snapshot_sha256(&first).unwrap(),
+            source_snapshot_sha256(&changed_bytes).unwrap()
+        );
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn stable_file_state_rejects_symlink_swap_before_descriptor_open() {
+        let repo = TestRepo::new();
+        let path = repo.0.join("observed");
+        let moved = repo.0.join("observed-original");
+        let replacement = repo.0.join("replacement");
+        fs::write(&path, b"trusted generation").unwrap();
+        fs::write(&replacement, b"swapped generation").unwrap();
+        let result = stable_file_state_with_pre_open(&path, || {
+            fs::rename(&path, &moved).unwrap();
+            std::os::unix::fs::symlink(&replacement, &path).unwrap();
+        });
+        assert!(
+            result
+                .unwrap_err()
+                .contains("cannot open no-follow descriptor"),
+            "a final-component symlink swap must fail at descriptor acquisition"
+        );
+    }
+
+    #[test]
+    fn native_observation_scope_is_exact() {
+        assert_eq!(
+            SUPPORTED_TARGETS,
+            ["aarch64-apple-darwin", "x86_64-unknown-linux-gnu"]
+        );
+    }
+
+    #[test]
+    fn observation_output_must_be_new_absolute_and_canonical() {
+        assert!(observation_output_parent(Path::new("relative.json")).is_err());
+        let repo = TestRepo::new();
+        let existing = repo.0.join("existing.json");
+        fs::write(&existing, b"occupied").unwrap();
+        assert!(observation_output_parent(&existing).is_err());
+        let fresh = repo.0.join("fresh.json");
+        assert_eq!(observation_output_parent(&fresh).unwrap(), repo.0);
+    }
+
+    #[test]
+    fn observation_temporary_skips_a_poisoned_pid_name() {
+        let repo = TestRepo::new();
+        let poisoned = repo.0.join(format!(
+            ".uwueave-ledger2-observation-{}-0.tmp",
+            std::process::id()
+        ));
+        fs::write(&poisoned, b"occupied").unwrap();
+        let (selected, _file) = create_observation_temp(&repo.0).unwrap();
+        assert_ne!(selected, poisoned);
     }
 
     #[test]

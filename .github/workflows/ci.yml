@@ -82,7 +82,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15]
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            linker_env: CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER
+          - os: macos-15
+            target: aarch64-apple-darwin
+            linker_env: CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -109,5 +115,34 @@ jobs:
       - name: Hydrate locked Cargo dependencies
         run: cargo fetch --manifest-path rust/Cargo.toml --locked
 
+      - name: Select exact native target, linker, and observation path
+        shell: bash
+        env:
+          UWUEAVE_NATIVE_TARGET: ${{ matrix.target }}
+          UWUEAVE_LINKER_ENV: ${{ matrix.linker_env }}
+        run: |
+          set -euo pipefail
+          actual=$(rustc -vV | sed -n 's/^host: //p')
+          test "$actual" = "$UWUEAVE_NATIVE_TARGET"
+          compiler=$(command -v cc)
+          archiver=$(command -v ar)
+          test -n "$compiler" && test -n "$archiver"
+          printf 'CC=%s\nAR=%s\n' "$compiler" "$archiver" >> "$GITHUB_ENV"
+          printf '%s=%s\n' "$UWUEAVE_LINKER_ENV" "$compiler" >> "$GITHUB_ENV"
+          printf 'UWUEAVE_LEDGER2_OBSERVATION_PATH=%s/ledger2-native-%s.json\n' \
+            "$RUNNER_TEMP" "$UWUEAVE_NATIVE_TARGET" >> "$GITHUB_ENV"
+
       - name: Frozen all-target native suite
         run: cargo test --manifest-path rust/Cargo.toml --frozen --all-targets
+
+      - name: Validate and retain native Ledger-2 observation
+        env:
+          UWUEAVE_NATIVE_TARGET: ${{ matrix.target }}
+        run: |
+          UWUEAVE_LEDGER2_OBSERVATION_OUT="$UWUEAVE_LEDGER2_OBSERVATION_PATH" \
+            cargo test --manifest-path rust/Cargo.toml --frozen \
+              --test runtime_build_closure
+          python3 scripts/ledger2-gate.py observation \
+            --expect-target "$UWUEAVE_NATIVE_TARGET" \
+            "$UWUEAVE_LEDGER2_OBSERVATION_PATH"
+          python3 -m json.tool "$UWUEAVE_LEDGER2_OBSERVATION_PATH"

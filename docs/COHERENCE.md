@@ -61,7 +61,7 @@ was repaired during this audit and is now complete in the live working tree.
 | Performance/resource gate | The serialized typed Preoscript corpus measures **3.940 MiB incremental peak RSS per item** at N=16 (`1,252,671,488 B` at N=0; `1,318,780,928 B` at N=16), below the unchanged 4 MiB/item threshold. It uses `-j1`, two warmups, median runs, and a nine-run retry when dispersion exceeded policy. The same gate preserves **88** pinned constants plus exact rows, diagnostics, rollback, and report goldens; Typed16's olean remains **736,048 B**. The final Wave-27 `preo_export_v3` N=16 corpus measures **6.706 MiB/item** and therefore fails that same ceiling. Wave 29's finite repair and history layers measure **441,344 B/item** and **440,320 B/item**, both passing; one RepairMenu N=16 row remains infrastructure-noisy and comparison exits 3 honestly. The final serialized Rust regression path passed **177/177** in **125.72s real** after **10.49s** compilation, with **1,274,494,976 B** maximum RSS; the 10-test runtime target used **85.31s**. | **The established typed and new finite scaling gates pass; the V3 command remains functionally green but scale-red, and the runtime is correctness-green without a throughput claim.** These are serialized measured-corpus regression guards, not general memory-complexity or admission-latency theorems. |
 | UNDONE ledger | `scripts/undone-census.sh --check` and the generated ledger agree on **155 markers / 153 blocks / 43 source files**. | **Marker prose and generated inventory are synchronized.** This is work accounting, not proof coverage. |
 | Execution bytes | `Exec.encodeRequestKernel` invokes `encodeRequest`; Rust supplies typed records and no longer owns FORMAT-v3 bytes. `RuntimeAuthV4.decodeCanonicalKernel` exposes legacy kind-1 syntax, while `RuntimeAuthV4Kernel.projectAdmissionKernel` owns kind-3 decode/shape/width and exact kind-4 projection. Rust interprets Lean-owned response grammars but has no UWV4 request parser or encoder; `AuthenticatedRuntime` composes only the raw kind-3 path and delegates prospective replay to `LeanMoveExecution`. | The v3 wire encoder and both v4 request decisions are single-sourced in Lean; the ordered host path now covers nonce, resolution, authority, membership, execution and append. Its deployment traits, formal refinement, ABI, shim, native runtime, codegen, cryptography, external pin and filesystem behavior remain open trust obligations. |
-| Native closure and initialization | The data-free `RuntimeInit` directly imports `Exec`, `SeqKernel`, `EraKernel`, `Preo.ArtifactJournalKernel`, and the leaf `RuntimeAuthV4Kernel`. `build.rs` takes Lake's setup description as the sole transitive-closure authority, snapshots and stages the exact native objects, verifies the archive member set and bytes, then rechecks Lake paths, setup, objects, every Lean source, and build configuration. The shim calls only the RuntimeInit initializer. The native-closure gate is **15** Lake objects / **1,049,544 bytes** and **16** archive members including the shim / **1,249,984 bytes** including the archive index (SHA-256 `1b0deb1bcfcaa79f66ba7f880a340605a9055e655820888a2ebcb6110b528d8e`). | Stale, extra, missing, or mixed-generation native objects and initializer drift fail closed. Code generation, compiler/linker correctness, ABI, ownership, runtime behavior, and filesystem semantics remain execution-TCB obligations. |
+| Native closure and initialization | The data-free `RuntimeInit` directly imports every exported-kernel root. `build.rs` takes Lake's setup description as the sole transitive-closure authority, snapshots and stages the exact native objects, verifies the archive member set and bytes, then rechecks Lake paths, setup, objects, every Lean source, and build configuration. The shim calls only the RuntimeInit initializer. The [Ledger 2 machine manifest](trust/ledger2-v1.json) pins the source surface; each native run records the actual target and exact closure, member, archive, tool, and runtime identities instead of making their changing counts, sizes, or digests source-level claims. | Stale, extra, missing, or mixed-generation native objects and initializer drift fail closed. Code generation, compiler/linker correctness, ABI, ownership, runtime behavior, and filesystem semantics remain execution-TCB obligations. |
 
 Cycle 20 adds:
 
@@ -310,20 +310,23 @@ Two former seams are now tied at their model boundaries:
 
 The implementation, source headers, MAP and `docs/TRUST.md` now agree:
 
-- `Exec.lean`, `Gated.lean`, and MAP record ten rows: eight open execution
-  obligations and two paid controls.
+- `Exec.lean`, `Gated.lean`, MAP, and the machine manifest preserve ten named
+  execution boundaries plus two separately paid controls. Premises and scope
+  remain explicit rather than being counted as paid obligations.
 - The Rust byte marshaller is gone; production obtains canonical FORMAT-v3
   bytes from `Exec.encodeRequestKernel` over typed lanes.
 - `Uwueave.RuntimeInit` is the data-free native root for `Exec`, `SeqKernel`,
   `EraKernel`, `Preo.ArtifactJournalKernel`, and `RuntimeAuthV4Kernel`. Lake reports that exact
-  transitive closure, `build.rs` archives and byte-verifies only its objects plus
+  transitive closure; `RuntimeAuthV4AdmissionTraceKernel` is the sixth direct
+  import. `build.rs` archives and byte-verifies only the closure objects plus
   the shim, and `rust/shim.c` calls only the RuntimeInit initializer.
 
 The FFI surface is still closed by name, but the old count is obsolete. There
-are now **eight** Lean exports: request encoding, replay, FORMAT-v3 canonical
+are now **nine** Lean exports: request encoding, replay, FORMAT-v3 canonical
 compatibility, sequence, ERA, exact-one Preoscript artifact-v2 validation, and
 bounded canonical legacy UWV4 syntax classification plus context-bound
-admission projection. All eight have C callers; the
+admission projection, and fail-closed admission-certificate checking. All nine
+have C callers; the
 FORMAT-v3 canonical checker is a test/audit endpoint, while the encoder and
 artifact validator are on production paths. The kind-3 endpoint reaches exact
 admission inputs and shape/width checks, not complete authenticated admission.
@@ -656,8 +659,9 @@ builds" — `rust/src/movelog.rs:322` is a `debug_assert!`, compiled out of rele
 > **Still open**, and not claimed — **the list is now exactly the TCB, no undone
 > proof work hiding in its clothes**
 
-Same boundary, one file over. Ledger 2 of `docs/TRUST.md` is nine rows of undone
-work about precisely this list.
+Same boundary, one file over. Ledger 2 of `docs/TRUST.md` and its machine
+manifest retain the decomposed open work and external premises about precisely
+this list.
 
 ### B.5 P1 — `Uwueave/ORMap.lean` contradicts itself about causal reachability
 

@@ -308,8 +308,8 @@
         <div class="s">each tagged with a generality and a reachability axis</div></div>
       <div class="stat"><div class="n">8</div><div class="l">priced exits</div>
         <div class="s">each with an availability check and a price</div></div>
-      <div class="stat"><div class="n">5</div><div class="l">native-kernel modules</div>
-        <div class="s">eight exports in one exact RuntimeInit closure</div></div>
+      <div class="stat"><div class="n">6</div><div class="l">native-kernel modules</div>
+        <div class="s">nine exports in one exact RuntimeInit closure</div></div>
       <div class="stat"><div class="n">177/177</div><div class="l">Rust tests</div>
         <div class="s">serialized all-target gate, zero failures</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
@@ -330,7 +330,7 @@ awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 # 8 exits — the constructors of `inductive Exit`
 sed -n '/^inductive Exit/,/^\/-!/p' Uwueave/Exits.lean | grep -cE '^  \| [a-z]'
 
-# 8 exports across the five RuntimeInit kernel modules
+# 9 exports across the six RuntimeInit kernel modules
 grep -RFn '@[export ' Uwueave/
 
 # `"packages": []` — no dependencies, mathlib included
@@ -1778,12 +1778,12 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
 
   <section id="kernel">
     <p class="kicker">The implementation, without a twin</p>
-    <h2 class="prose">Five kernel modules, one exact native closure</h2>
+    <h2 class="prose">Six kernel modules, one exact native closure</h2>
     <div class="prose">
       <p>In most &ldquo;verified design&rdquo; projects the delicate logic gets re-implemented
       in the production language, and the proofs and the code start drifting the day the
       re-implementation lands. Here they cannot, because <strong>there is no second copy of the
-      rules</strong>. Four runtime-kernel modules are authored in Lean and imported by the
+      rules</strong>. Six runtime-kernel modules are authored in Lean and imported by the
       deliberately data-free <code>Uwueave.RuntimeInit</code>. Lake owns their exact transitive
       native-object closure; <code>build.rs</code> validates, snapshots and archives that closure
       rather than scanning a generated directory:</p>
@@ -1800,8 +1800,11 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
         <li><code>uwueave_runtime_auth_v4_decode_canonical</code> and
         <code>uwueave_runtime_auth_v4_project_admission</code> &mdash; legacy kind-1 syntax and
         context-bound kind-3 decode/shape/width/exact kind-4 projection.</li>
+        <li><code>uwueave_runtime_auth_v4_check_admission_trace</code>
+        (<code>Uwueave/RuntimeAuthV4AdmissionTraceKernel.lean</code>) &mdash; fail-closed
+        checking of the bounded admission certificate against its cited projection and replay.</li>
       </ul>
-      <p>Those modules expose eight functions in total. The request encoder itself is
+      <p>Those modules expose nine functions in total. The request encoder itself is
       <code>uwueave_encode_request</code>; <code>uwueave_request_canonical</code> remains a
       compatibility/test audit. The Rust side supplies typed lanes but owns no second FORMAT-v3
       encoder, UWV4 request parser, or ArtifactEncoding decoder.</p>
@@ -1920,7 +1923,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
 
     <figure class="flow">
       <div class="scroller">
-        <svg class="wide" viewBox="0 0 880 200" role="img" aria-label="Pipeline: the data-free RuntimeInit root selects five kernel modules; Lake reports and compiles their exact transitive closure; build.rs snapshots those objects, compiles one shim, verifies the archive, and links it with the Lean runtime into the uwueave Rust crate.">
+        <svg class="wide" viewBox="0 0 880 200" role="img" aria-label="Pipeline: the data-free RuntimeInit root selects six kernel modules; Lake reports and compiles their exact transitive closure; build.rs snapshots those objects, compiles one shim, verifies the archive, and links it with the Lean runtime into the uwueave Rust crate.">
           <defs>
             <marker id="fl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -1935,15 +1938,16 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           <text x="20" y="80" font-size="9.5" font-family="var(--mono)" fill="currentColor">Exec · SeqKernel</text>
           <text x="20" y="95" font-size="9.5" font-family="var(--mono)" fill="currentColor">EraKernel · RuntimeAuthV4Kernel</text>
           <text x="20" y="110" font-size="9.5" font-family="var(--mono)" fill="currentColor">ArtifactJournalKernel</text>
-          <text x="20" y="129" font-size="10.5" fill="var(--muted)">one initializer and one</text>
-          <text x="20" y="144" font-size="10.5" fill="var(--muted)">closure source of truth</text>
+          <text x="20" y="125" font-size="8.5" font-family="var(--mono)" fill="currentColor">RuntimeAuthV4AdmissionTraceKernel</text>
+          <text x="20" y="144" font-size="10.5" fill="var(--muted)">one initializer; one closure</text>
+          <text x="20" y="158" font-size="10.5" fill="var(--muted)">source of truth</text>
 
           <line x1="212" y1="100" x2="246" y2="100" stroke="currentColor" stroke-width="1.6" marker-end="url(#fl-arrow)"/>
 
           <rect x="252" y="36" width="176" height="130" rx="10" fill="var(--bg)" stroke="var(--border)"/>
           <text x="264" y="60" font-size="12.5" font-weight="650" fill="currentColor">Lake-owned objects</text>
-          <text x="264" y="82" font-size="10" font-family="var(--mono)" fill="currentColor">15 exact members</text>
-          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">1,049,544 bytes</text>
+          <text x="264" y="82" font-size="10" font-family="var(--mono)" fill="currentColor">exact Lake members</text>
+          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">per-build identities</text>
           <text x="264" y="120" font-size="10.5" fill="var(--muted)">setup schema + paths</text>
           <text x="264" y="133" font-size="10.5" fill="var(--muted)">validated; bytes stable</text>
           <text x="264" y="146" font-size="10.5" fill="var(--muted)">before and after archive</text>
@@ -1952,9 +1956,9 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
 
           <rect x="472" y="36" width="192" height="130" rx="10" fill="var(--bg)" stroke="var(--border)"/>
           <text x="484" y="60" font-size="12.5" font-weight="650" fill="currentColor">verified archive set</text>
-          <text x="484" y="82" font-size="9.5" font-family="var(--mono)" fill="currentColor">15 Lake objects + shim</text>
-          <text x="484" y="96" font-size="9.5" font-family="var(--mono)" fill="currentColor">16 archive members</text>
-          <text x="484" y="120" font-size="10.5" fill="var(--muted)">1,249,984 bytes;</text>
+          <text x="484" y="82" font-size="9.5" font-family="var(--mono)" fill="currentColor">Lake closure + shim</text>
+          <text x="484" y="96" font-size="9.5" font-family="var(--mono)" fill="currentColor">exact member set</text>
+          <text x="484" y="120" font-size="10.5" fill="var(--muted)">per-build digest;</text>
           <text x="484" y="133" font-size="10.5" fill="var(--muted)">one root initializer;</text>
           <text x="484" y="146" font-size="10.5" fill="var(--muted)">every object byte checked</text>
 
@@ -1966,7 +1970,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           <text x="720" y="95" font-size="10.5" fill="var(--muted)">no decision procedure</text>
           <text x="720" y="108" font-size="10.5" fill="var(--muted)">in Rust to drift</text>
           <text x="720" y="130" font-size="10" font-family="var(--mono)" fill="currentColor">+ libleanshared</text>
-          <text x="720" y="148" font-size="10.5" fill="var(--muted)">17 `unsafe` blocks, ffi.rs</text>
+          <text x="720" y="148" font-size="10.5" fill="var(--muted)">unsafe source inventory gated</text>
         </svg>
       </div>
       <figcaption><code>build.rs</code> requires a full green <code>lake build</code>, takes closure
@@ -2046,9 +2050,12 @@ def replayKernel (input : ByteArray) : ByteArray :=
       them is terminal.</strong> That correction came from an outside reviewer and it stands:
       <code>docs/TRUST.md</code> Ledger&nbsp;2 breaks &ldquo;the C backend&rdquo; into Lean&rsquo;s
       C code generator, the C compiler and linker, the Lean runtime, <code>shim.c</code>, the
-      ABI/FFI boundary, Rust&rsquo;s 14 textual <code>unsafe</code> occurrences (all in
-      <code>ffi.rs</code>), Lean-owned request encoding, storage glue, and native build closure.
-      Eight rows remain obligations and two controls are paid. RuntimeInit now closes exact
+      ABI/FFI boundary, Rust&rsquo;s 21 source <code>unsafe</code> blocks (18 in
+      <code>ffi.rs</code>, 3 in the kernel benchmark), Lean-owned request encoding,
+      storage glue, filesystem/crash behavior, distribution scope, host durability, and
+      native build closure. The <a href="trust/ledger2-v1.json">Ledger 2 machine manifest</a>
+      gates the exact mapping and inventory while leaving premises and obligations open.
+      RuntimeInit now closes exact
       object/initializer selection and the Lean encoder closes the duplicate FORMAT-v3 byte
       decision; neither closure proves code generation, compiler/linker, runtime, shim, ABI,
       unsafe ownership, storage, or durability. Compiling the exact emitted closure with
@@ -2088,8 +2095,9 @@ def replayKernel (input : ByteArray) : ByteArray :=
       <li><strong>Three ledgers, not one list of &ldquo;premises&rdquo;.</strong>
       <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/TRUST.md">docs/TRUST.md</a>
       sorts what this repository asks you to believe into the <em>logical</em> TCB (eight rows:
-      two premise, three obligation, three narrowable), the <em>execution</em> TCB (ten rows:
-      zero premise, eight obligation, two paid controls) and <em>environment and model</em>
+      two premise, three obligation, three narrowable), the <em>execution</em> TCB (twelve
+      semantic rows: three premise, six obligation, one scope, and two paid controls) and
+      <em>environment and model</em>
       premises (seventeen rows across delivery, cryptography and Bailis&rsquo;s generality). The
       rule it enforces: <strong>every boundary is decomposed into its irreducible premise and
       its remaining transmutable obligations, and a row with no next step must say why there is
@@ -2131,7 +2139,7 @@ def replayKernel (input : ByteArray) : ByteArray :=
 <pre><code># every proof, plus the total axiom gate; Lean core only, so it is seconds
 lake build
 
-# compiles the exact five-module RuntimeInit kernel closure and links it (needs elan)
+# compiles the exact six-module RuntimeInit kernel closure and links it (needs elan)
 cd rust &amp;&amp; CARGO_BUILD_JOBS=1 cargo test --all-targets -- --test-threads=1</code></pre>
     <p>Further reading in the repo:
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/MAP.md">docs/MAP.md</a>

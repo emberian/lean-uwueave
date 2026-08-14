@@ -159,9 +159,9 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     complete under `WF` + `UniqueGrant`. The undecidability is a fact about
     the abstraction, not a hole under the implementation.
   * **Below the Lean, the execution TCB — and it is NOT terminal.**
-    ⟨UNDONE U-0160⟩ The former umbrella is now a registry-integrity
-    obligation, not a claim that one aggregate test closes the execution TCB.
-    A machine-readable Ledger 2 gate must preserve the exact mapping to Lean
+    The former umbrella is paid only as a registry-integrity control, not as a
+    claim that one aggregate test closes the execution TCB. The machine-readable
+    Ledger 2 gate preserves the exact mapping to Lean
     code generation ⟨DEBT-REF U-0161⟩, the host C toolchain
     ⟨DEBT-REF U-0162⟩, the Lean runtime ⟨DEBT-REF U-0163⟩, `shim.c`
     ⟨DEBT-REF U-0164⟩, ABI/FFI ⟨DEBT-REF U-0165⟩, Rust `unsafe`
