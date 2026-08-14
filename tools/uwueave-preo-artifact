@@ -6,4 +6,9 @@ repo_dir=$(dirname -- "$tool_dir")
 cd "$repo_dir"
 # ArtifactEmit supplies a proved-equal tail-safe framing implementation so the
 # ordinary Lean interpreter can execute large canonical artifacts directly.
-exec lake env lean --run Uwueave/Preo/ArtifactEmitMain.lean "$@"
+# Build the audited Main module first, then run it through an import-only stdin
+# root.  Elaborating Main directly prints its trust-floor audit diagnostic to
+# stdout, which would corrupt the command's binary `--stdout` contract.
+lake build Uwueave.Preo.ArtifactEmitMain >/dev/null
+printf '%s\n' 'import Uwueave.Preo.ArtifactEmitMain' |
+  lake env lean --stdin --run /dev/stdin "$@"

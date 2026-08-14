@@ -87,6 +87,24 @@ fn emit_to_stdout(name: &str) -> Vec<u8> {
 }
 
 #[test]
+fn emitter_refusal_status_propagates_without_binary_stdout() {
+    let output = Command::new(emitter())
+        .args(["not-a-real-artifact", "--stdout"])
+        .current_dir(repo())
+        .output()
+        .expect("launch explicit Lean artifact emitter");
+    assert!(!output.status.success());
+    assert!(
+        output.stdout.is_empty(),
+        "a refused artifact must not emit a binary-looking stdout prefix"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("unknown artifact"),
+        "the exact Main refusal should propagate through the import-only runner"
+    );
+}
+
+#[test]
 fn real_export_bytes_survive_syncdata_reopen_and_refuse_damage() {
     let emitted_path = TempPath::new("semantic-export", "preo");
     let path_bytes = emit_to_path(&emitted_path.0);

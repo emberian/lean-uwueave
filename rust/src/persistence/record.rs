@@ -24,6 +24,17 @@ pub(crate) struct RawOpenReport {
     pub created: bool,
 }
 
+/// Result of parsing one immutable physical journal image.
+///
+/// This is a byte-codec result, not evidence that a filesystem or storage
+/// device can produce only prefix-shaped crash images.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RawScan {
+    pub records: Vec<Vec<u8>>,
+    pub valid_bytes: u64,
+    pub torn_bytes: u64,
+}
+
 #[derive(Debug)]
 pub(crate) enum RawJournalError {
     Io(io::Error),
@@ -154,7 +165,11 @@ impl RawJournal {
         }
 
         let file_len = file.metadata()?.len();
-        let (records, valid_bytes, torn_bytes) = scan(&mut file, file_len, spec, options)?;
+        let RawScan {
+            records,
+            valid_bytes,
+            torn_bytes,
+        } = scan_image(&mut file, file_len, spec, options.max_record_bytes)?;
         if torn_bytes != 0 {
             match options.torn_tail {
                 TornTailPolicy::Refuse => {
@@ -251,12 +266,9 @@ impl RawJournal {
             return Err(RawJournalError::SequenceExhausted);
         }
 
-        let header = encode_header(self.spec, requested, body_len);
-        let checksum = body_hash(self.spec, requested, body_len, body);
+        let record = encode_record(self.spec, requested, body, self.options.max_record_bytes)?;
         let write_result = (|| -> io::Result<()> {
-            self.file.write_all(&header)?;
-            self.file.write_all(body)?;
-            self.file.write_all(checksum.as_bytes())?;
+            self.file.write_all(&record)?;
             apply_sync(&mut self.file, self.options.sync)
         })();
         if let Err(source) = write_result {
@@ -282,33 +294,91 @@ impl RawJournal {
     }
 }
 
-fn scan(
-    file: &mut File,
-    file_len: u64,
+/// Encode one complete physical record while preserving `body` byte-for-byte.
+/// The returned image is the exact production image passed to `write_all`.
+/// No filesystem, synchronization, or power-loss behavior is implied.
+pub(crate) fn encode_record(
     spec: RecordSpec,
-    options: JournalOptions,
-) -> Result<(Vec<Vec<u8>>, u64, u64), RawJournalError> {
-    file.seek(SeekFrom::Start(0))?;
+    sequence: u64,
+    body: &[u8],
+    max_record_bytes: u64,
+) -> Result<Vec<u8>, RawJournalError> {
+    let body_len = u64::try_from(body.len()).map_err(|_| RawJournalError::RecordTooLarge {
+        actual: u64::MAX,
+        maximum: max_record_bytes,
+    })?;
+    if body_len > max_record_bytes {
+        return Err(RawJournalError::RecordTooLarge {
+            actual: body_len,
+            maximum: max_record_bytes,
+        });
+    }
+
+    let capacity = HEADER_BYTES
+        .checked_add(body.len())
+        .and_then(|length| length.checked_add(HASH_BYTES))
+        .ok_or_else(|| {
+            RawJournalError::Io(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "physical record framing length overflows the address space",
+            ))
+        })?;
+    let header = encode_header(spec, sequence, body_len);
+    let checksum = body_hash(spec, sequence, body_len, body);
+    let mut record = Vec::new();
+    record.try_reserve_exact(capacity).map_err(|_| {
+        RawJournalError::Io(io::Error::other(
+            "physical record framing allocation failed",
+        ))
+    })?;
+    record.extend_from_slice(&header);
+    record.extend_from_slice(body);
+    record.extend_from_slice(checksum.as_bytes());
+    Ok(record)
+}
+
+/// Parse one supplied physical journal image into exact complete record bodies
+/// plus at most one syntactically matching final-record prefix.
+///
+/// The production path supplies its locked file and measured length; pure
+/// codec tests supply a `Cursor<&[u8]>`. Acceptance proves only a property of
+/// those supplied bytes, not that a real crash, flush, filesystem, or storage
+/// device must yield such an image.
+///
+/// No individual allocation or read request is based on the full image length:
+/// each body read is bounded by `max_record_bytes`. Complete bodies are retained
+/// in the result, as they were by the original streaming scanner.
+pub(crate) fn scan_image<R: Read + Seek>(
+    reader: &mut R,
+    image_len: u64,
+    spec: RecordSpec,
+    max_record_bytes: u64,
+) -> Result<RawScan, RawJournalError> {
+    reader.seek(SeekFrom::Start(0))?;
     let mut records = Vec::new();
     let mut offset = 0u64;
-    while offset < file_len {
+    while offset < image_len {
         let expected = records.len() as u64;
-        let remaining = file_len - offset;
+        let remaining = image_len - offset;
         if remaining < HEADER_BYTES as u64 {
             let mut partial = vec![0; remaining as usize];
-            file.read_exact(&mut partial)?;
-            validate_partial_header(&partial, spec, expected, options.max_record_bytes).map_err(
+            reader.read_exact(&mut partial)?;
+            validate_partial_header(&partial, spec, expected, max_record_bytes).map_err(
                 |reason| RawJournalError::Corrupt {
                     sequence: expected,
                     offset,
                     reason,
                 },
             )?;
-            return Ok((records, offset, remaining));
+            return Ok(RawScan {
+                records,
+                valid_bytes: offset,
+                torn_bytes: remaining,
+            });
         }
 
         let mut header = [0u8; HEADER_BYTES];
-        file.read_exact(&mut header)?;
+        reader.read_exact(&mut header)?;
         if header[..MARKER_BYTES] != spec.marker {
             return Err(RawJournalError::Corrupt {
                 sequence: expected,
@@ -325,10 +395,10 @@ fn scan(
             });
         }
         let body_len = u64::from_le_bytes(header[16..24].try_into().expect("fixed slice"));
-        if body_len > options.max_record_bytes {
+        if body_len > max_record_bytes {
             return Err(RawJournalError::RecordTooLarge {
                 actual: body_len,
-                maximum: options.max_record_bytes,
+                maximum: max_record_bytes,
             });
         }
         let expected_header = header_hash(spec, sequence, body_len);
@@ -344,23 +414,27 @@ fn scan(
             .and_then(|n| n.checked_add(HASH_BYTES as u64))
             .ok_or(RawJournalError::RecordTooLarge {
                 actual: body_len,
-                maximum: options.max_record_bytes,
+                maximum: max_record_bytes,
             })?;
         let bytes_after_header = remaining - HEADER_BYTES as u64;
         if bytes_after_header < body_len {
-            return Ok((records, offset, remaining));
+            return Ok(RawScan {
+                records,
+                valid_bytes: offset,
+                torn_bytes: remaining,
+            });
         }
 
         let body_size = usize::try_from(body_len).map_err(|_| RawJournalError::RecordTooLarge {
             actual: body_len,
-            maximum: options.max_record_bytes,
+            maximum: max_record_bytes,
         })?;
         let mut body = vec![0; body_size];
-        file.read_exact(&mut body)?;
+        reader.read_exact(&mut body)?;
         let checksum_bytes = bytes_after_header - body_len;
         if checksum_bytes < HASH_BYTES as u64 {
             let mut checksum_prefix = vec![0; checksum_bytes as usize];
-            file.read_exact(&mut checksum_prefix)?;
+            reader.read_exact(&mut checksum_prefix)?;
             let expected_checksum = body_hash(spec, sequence, body_len, &body);
             if checksum_prefix != expected_checksum.as_bytes()[..checksum_prefix.len()] {
                 return Err(RawJournalError::Corrupt {
@@ -369,10 +443,14 @@ fn scan(
                     reason: "partial physical record body checksum mismatch",
                 });
             }
-            return Ok((records, offset, remaining));
+            return Ok(RawScan {
+                records,
+                valid_bytes: offset,
+                torn_bytes: remaining,
+            });
         }
         let mut checksum = [0u8; HASH_BYTES];
-        file.read_exact(&mut checksum)?;
+        reader.read_exact(&mut checksum)?;
         let expected_checksum = body_hash(spec, sequence, body_len, &body);
         if checksum != *expected_checksum.as_bytes() {
             return Err(RawJournalError::Corrupt {
@@ -384,7 +462,11 @@ fn scan(
         records.push(body);
         offset += total;
     }
-    Ok((records, offset, 0))
+    Ok(RawScan {
+        records,
+        valid_bytes: offset,
+        torn_bytes: 0,
+    })
 }
 
 fn validate_partial_header(
@@ -480,6 +562,173 @@ fn sync_parent(path: &Path) -> io::Result<()> {
         File::open(parent)?.sync_all()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod codec_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    const TEST_MAX: u64 = 257;
+
+    fn test_spec() -> RecordSpec {
+        RecordSpec {
+            marker: *b"UWCODEC1",
+            hash_domain: b"uwueave.test.physical-codec.v1",
+        }
+    }
+
+    fn scan_bytes(bytes: &[u8], maximum: u64) -> Result<RawScan, RawJournalError> {
+        scan_image(
+            &mut Cursor::new(bytes),
+            bytes.len() as u64,
+            test_spec(),
+            maximum,
+        )
+    }
+
+    #[test]
+    fn physical_codec_preserves_exact_bodies_order_and_length_boundaries() {
+        let lengths = [0usize, 1, 31, 32, 55, 56, 57, TEST_MAX as usize];
+        let bodies: Vec<Vec<u8>> = lengths
+            .into_iter()
+            .enumerate()
+            .map(|(seed, length)| {
+                (0..length)
+                    .map(|offset| (seed as u8).wrapping_mul(37).wrapping_add(offset as u8))
+                    .collect()
+            })
+            .collect();
+        let mut image = Vec::new();
+        for (sequence, body) in bodies.iter().enumerate() {
+            let record = encode_record(test_spec(), sequence as u64, body, TEST_MAX).unwrap();
+            assert_eq!(record.len(), HEADER_BYTES + body.len() + HASH_BYTES);
+            assert_eq!(&record[HEADER_BYTES..HEADER_BYTES + body.len()], body);
+            image.extend_from_slice(&record);
+        }
+
+        let scan = scan_bytes(&image, TEST_MAX).unwrap();
+        assert_eq!(scan.records, bodies);
+        assert_eq!(scan.valid_bytes, image.len() as u64);
+        assert_eq!(scan.torn_bytes, 0);
+
+        let oversized = vec![0; TEST_MAX as usize + 1];
+        assert!(matches!(
+            encode_record(test_spec(), 0, &oversized, TEST_MAX),
+            Err(RawJournalError::RecordTooLarge {
+                actual,
+                maximum: TEST_MAX
+            }) if actual == TEST_MAX + 1
+        ));
+        let oversized_image = encode_record(test_spec(), 0, &oversized, TEST_MAX + 1).unwrap();
+        assert!(matches!(
+            scan_bytes(&oversized_image, TEST_MAX),
+            Err(RawJournalError::RecordTooLarge {
+                actual,
+                maximum: TEST_MAX
+            }) if actual == TEST_MAX + 1
+        ));
+    }
+
+    #[test]
+    fn every_strict_final_record_cut_recovers_only_complete_bodies() {
+        let first = b"first exact body".to_vec();
+        let second = Vec::new();
+        let third: Vec<u8> = (0..TEST_MAX).map(|byte| byte as u8).collect();
+        let mut prefix = encode_record(test_spec(), 0, &first, TEST_MAX).unwrap();
+        prefix.extend_from_slice(&encode_record(test_spec(), 1, &second, TEST_MAX).unwrap());
+        let third_record = encode_record(test_spec(), 2, &third, TEST_MAX).unwrap();
+
+        for cut in 0..third_record.len() {
+            let mut image = prefix.clone();
+            image.extend_from_slice(&third_record[..cut]);
+            let scan = scan_bytes(&image, TEST_MAX).unwrap();
+            assert_eq!(scan.records, [first.clone(), second.clone()], "cut {cut}");
+            assert_eq!(scan.valid_bytes, prefix.len() as u64, "cut {cut}");
+            assert_eq!(scan.torn_bytes, cut as u64, "cut {cut}");
+        }
+    }
+
+    #[test]
+    fn physical_corruption_is_never_reclassified_as_a_torn_prefix() {
+        let body = b"body whose exact bytes are checksummed";
+        let complete = encode_record(test_spec(), 0, body, TEST_MAX).unwrap();
+        let body_start = HEADER_BYTES;
+        let checksum_start = body_start + body.len();
+
+        for index in [0, 8, 24, body_start, complete.len() - 1] {
+            let mut corrupt = complete.clone();
+            corrupt[index] ^= 0x80;
+            assert!(matches!(
+                scan_bytes(&corrupt, TEST_MAX),
+                Err(RawJournalError::Corrupt { sequence: 0, .. })
+            ));
+        }
+
+        for checksum_start in [MARKER_BYTES + U64_BYTES + U64_BYTES, checksum_start] {
+            for checksum_prefix in 1..HASH_BYTES {
+                let mut corrupt = complete[..checksum_start + checksum_prefix].to_vec();
+                *corrupt.last_mut().unwrap() ^= 0x80;
+                assert!(matches!(
+                    scan_bytes(&corrupt, TEST_MAX),
+                    Err(RawJournalError::Corrupt { sequence: 0, .. })
+                ));
+            }
+        }
+
+        let first = encode_record(test_spec(), 0, b"first", TEST_MAX).unwrap();
+        let mut middle = encode_record(test_spec(), 1, b"middle", TEST_MAX).unwrap();
+        middle[HEADER_BYTES] ^= 0x40;
+        let third = encode_record(test_spec(), 2, b"third", TEST_MAX).unwrap();
+        let mut image = first.clone();
+        image.extend_from_slice(&middle);
+        image.extend_from_slice(&third);
+        assert!(matches!(
+            scan_bytes(&image, TEST_MAX),
+            Err(RawJournalError::Corrupt {
+                sequence: 1,
+                offset,
+                ..
+            }) if offset == first.len() as u64
+        ));
+    }
+
+    struct BoundedRead<R> {
+        inner: R,
+        largest_request: usize,
+    }
+
+    impl<R: Read> Read for BoundedRead<R> {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.largest_request = self.largest_request.max(buffer.len());
+            self.inner.read(buffer)
+        }
+    }
+
+    impl<R: Seek> Seek for BoundedRead<R> {
+        fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+            self.inner.seek(position)
+        }
+    }
+
+    #[test]
+    fn production_scanner_never_requests_the_whole_large_image() {
+        let body = vec![0x5a; TEST_MAX as usize];
+        let mut image = Vec::new();
+        for sequence in 0..1024 {
+            image
+                .extend_from_slice(&encode_record(test_spec(), sequence, &body, TEST_MAX).unwrap());
+        }
+        let mut reader = BoundedRead {
+            inner: Cursor::new(&image),
+            largest_request: 0,
+        };
+        let scan = scan_image(&mut reader, image.len() as u64, test_spec(), TEST_MAX).unwrap();
+        assert_eq!(scan.records.len(), 1024);
+        assert_eq!(scan.valid_bytes, image.len() as u64);
+        assert_eq!(scan.torn_bytes, 0);
+        assert!(reader.largest_request <= TEST_MAX as usize);
+    }
 }
 
 #[cfg(all(test, unix))]

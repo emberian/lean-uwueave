@@ -13,6 +13,7 @@ path-hardening claim.
 -/
 import Uwueave.Preo.Demo
 import Uwueave.Preo.ProjectionV2Examples
+import Uwueave.Preo.ArtifactJournalKernel
 
 namespace Uwueave.Preo.ArtifactEmit
 
@@ -83,6 +84,13 @@ theorem semanticEncoding_eq_generated :
     semanticEncoding = Demo.SemanticExport.Encoding := by
   rfl
 
+/-- The exact first-order encoding selected by each stable command name.
+Keeping this selector public lets the emitted byte theorem state which value
+the host buffer represents without asking Rust to reconstruct artifact data. -/
+noncomputable def encoding : Name → ArtifactEncoding
+  | .semanticExport => Demo.SemanticExport.Encoding
+  | .fullExport => ProjectionV2.Examples.fullExport.encoding
+
 /-- The compiler implementation. It remains Lean's canonical codec applied to
 whole-value checked encodings, through ArtifactDurable's proved-equal
 stack-safe framing path; Rust neither constructs nor interprets payload fields. -/
@@ -98,15 +106,13 @@ def bytesImpl : Name → ArtifactDurable.Bytes
 names the actual generated `ArtifactDurableBytes`; `implemented_by` supplies
 the definitionally equal computable reification above to native execution. -/
 @[implemented_by bytesImpl]
-noncomputable def bytes : Name → ArtifactDurable.Bytes
-  | .semanticExport => Demo.SemanticExport.ArtifactDurableBytes
-  | .fullExport =>
-      ArtifactDurable.projectionBytes ProjectionV2.Examples.fullExport.encoding
+noncomputable def bytes (name : Name) : ArtifactDurable.Bytes :=
+  ArtifactDurable.projectionBytes (encoding name)
 
 theorem bytesImpl_eq_bytes (name : Name) : bytesImpl name = bytes name := by
   cases name with
   | semanticExport =>
-      simp only [bytesImpl, bytes, Demo.SemanticExport.ArtifactDurableBytes,
+      simp only [bytesImpl, bytes, encoding,
         ArtifactDurable.stackSafeEncodeValue_eq,
         ArtifactDurable.projectionBytes]
       rw [semanticEncoding_eq_generated]
@@ -114,11 +120,25 @@ theorem bytesImpl_eq_bytes (name : Name) : bytesImpl name = bytes name := by
       exact ArtifactDurable.stackSafeEncodeValue_eq _ _ _
 
 theorem bytes_semanticExport :
-    bytes .semanticExport = Demo.SemanticExport.ArtifactDurableBytes := rfl
+    bytes .semanticExport = Demo.SemanticExport.ArtifactDurableBytes := by
+  rfl
 
 theorem bytes_fullExport :
     bytes .fullExport =
       ArtifactDurable.projectionBytes ProjectionV2.Examples.fullExport.encoding := rfl
+
+/-- Every named output is the canonical durable projection of the exact
+first-order encoding selected by that name. -/
+theorem bytes_eq_projectionBytes (name : Name) :
+    bytes name = ArtifactDurable.projectionBytes (encoding name) := rfl
+
+/-- The same Lean validator used by Rust accepts every named emitted frame and
+recovers its exact first-order encoding.  This is a byte-codec theorem only;
+it says nothing about filesystem writes, synchronization, or power loss. -/
+theorem validateOne_bytes (name : Name) :
+    ArtifactJournalKernel.validateOne (bytes name) = some (encoding name) := by
+  rw [bytes_eq_projectionBytes]
+  exact ArtifactJournalKernel.validateOne_projectionBytes (encoding name)
 
 /-- A fresh runtime byte array containing exactly `bytes name`. -/
 def byteArray (name : Name) : ByteArray := (bytes name).toByteArray
