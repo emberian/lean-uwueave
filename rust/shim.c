@@ -25,6 +25,12 @@ extern lean_object *uwueave_seq_kernel(lean_object *bytes);
 extern lean_object *uwueave_era_resolve(lean_object *bytes);
 extern lean_object *
 uwueave_preo_artifact_v2_validate_one(lean_object *bytes);
+extern lean_object *
+uwueave_runtime_auth_v4_decode_canonical(lean_object *maximum_bytes,
+                                         lean_object *bytes);
+extern lean_object *
+uwueave_runtime_auth_v4_project_admission(lean_object *maximum_bytes,
+                                          lean_object *bytes);
 
 static int g_initialized = 0;
 
@@ -222,4 +228,39 @@ uint8_t shim_uweave_preo_artifact_v2_validate_one(const uint8_t *in,
   uint8_t v = lean_sarray_size(out) == 1 ? lean_sarray_cptr(out)[0] : 0;
   lean_dec_ref(out);
   return v;
+}
+
+/* Ask Lean to bound and canonically decode one UWV4 signed-move request.
+ * The output is a stable one-byte status; accepted output appends the exact
+ * canonical request bytes, while refusals contain no payload. This endpoint
+ * performs syntax classification only and does not verify a signature or
+ * authorize/execute/store the request.
+ * SAFETY CONTRACT: `in` is readable for len bytes when nonempty; no Rust
+ * pointer is retained; the runtime and RuntimeAuthV4 module are initialized. */
+uint8_t *shim_uweave_runtime_auth_v4_decode_canonical(
+    size_t maximum_bytes, const uint8_t *in, size_t len, size_t *out_len) {
+  lean_object *maximum = lean_usize_to_nat(maximum_bytes);
+  lean_object *arr = copy_rust_bytes(in, len);
+  lean_object *out =
+      uwueave_runtime_auth_v4_decode_canonical(maximum, arr); /* consumes both */
+  return copy_lean_bytes(out, out_len);
+}
+
+/* Ask Lean to bound, canonically decode, shape-check, host-width-check, and
+ * project one context-bound UWV4 request (request kind 3). The result is the
+ * canonical admission-projection response grammar (response kind 4), not a
+ * Rust-side UWV4 interpretation. This endpoint does not verify a signature,
+ * resolve a node, decide nonce freshness/authority/membership, execute, or
+ * persist anything.
+ * SAFETY CONTRACT: `in` is readable for len bytes when nonempty; out_len is
+ * writable; no Rust pointer is retained; the runtime and projection-kernel
+ * module are initialized. Both fresh Lean arguments are consumed by the
+ * export, and the returned buffer is non-null and malloc-owned. */
+uint8_t *shim_uweave_runtime_auth_v4_project_admission(
+    size_t maximum_bytes, const uint8_t *in, size_t len, size_t *out_len) {
+  lean_object *maximum = lean_usize_to_nat(maximum_bytes);
+  lean_object *arr = copy_rust_bytes(in, len);
+  lean_object *out =
+      uwueave_runtime_auth_v4_project_admission(maximum, arr); /* consumes both */
+  return copy_lean_bytes(out, out_len);
 }

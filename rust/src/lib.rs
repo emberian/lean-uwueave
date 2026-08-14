@@ -10,6 +10,26 @@
 //!
 //! What each module corresponds to:
 //!
+//! * [`auth`] — two narrow Lean-owned UWV4 boundaries. The legacy kind-1
+//!   endpoint bounds and canonically classifies signed-request bytes with five
+//!   decode refusals. The context-bound kind-3 endpoint additionally enforces
+//!   eight shape and three host-width refusals and returns the exact canonical
+//!   kind-4 projection. Rust parses only the Lean-owned response grammars; this
+//!   module does not verify signatures, decide authority or membership,
+//!   execute a move, or persist anything.
+//! * [`auth_verifier`] — a deployment-owned verifier seam plus one
+//!   context/document/genesis/issuer/epoch-scoped keyed-BLAKE3 symmetric-MAC
+//!   profile. Its acceptance is trusted host evidence, not a public-key
+//!   signature proof or an authorization decision.
+//! * [`auth_runtime`] — the fail-closed raw kind-3 admission orchestrator. It
+//!   orders Lean projection, exact-byte verification, durable retry/collision
+//!   classification, fixed document/genesis/context/execution scope, immutable
+//!   context pinning, stable-id resolution, independent authority and
+//!   membership checks, concrete Lean move preflight, durable append, then
+//!   in-memory commit. Externally pinned recovery repeats those
+//!   checks and exact-record comparison before replaying each stored move.
+//!   Policy providers, the verifier, the external pin, host storage, and the
+//!   FFI remain trusted deployment boundaries.
 //! * [`causal`] — an append-only, content-addressed DAG store.
 //!   `Grounded` (every edge descends in rank) is enforced *by construction* at
 //!   insert; the Lean results `grounded_iconfluent` + `grounded_acyclic` are
@@ -62,13 +82,15 @@
 //!
 //!   The root Lean module also imports `Uwueave.EraKernel`, so the same plain
 //!   `lake build` refreshes this generated C boundary.
-//! * [`persistence`] — two deliberately distinct pure-Rust append logs. Exact
-//!   Lean-owned Preoscript artifact-v2 frames are canonical-validated by a
-//!   narrow Lean endpoint and stored unchanged inside checksummed physical
-//!   records. A separate typed operation/checkpoint journal reconstructs the
-//!   authoritative [`MoveLog`] substrate through its public APIs; derived
-//!   replay views are never persisted. Flush/sync and torn-tail recovery are
-//!   explicit deployment policies, not filesystem theorems.
+//! * [`persistence`] — five deliberately distinct pure-Rust journal domains:
+//!   canonical Lean-owned Preoscript artifacts, typed operation/checkpoint
+//!   reconstruction of the authoritative [`MoveLog`] substrate, causally
+//!   closed history, durable out-of-order arrival, and checked authenticated
+//!   moves. The authenticated domain adds nonce/operation indexes, an unkeyed
+//!   prior-head chain, and reopen relative to an exact caller-supplied external
+//!   pin. Domain separation prevents one format being decoded as another;
+//!   flush/sync, torn-tail recovery, external pin custody, and stable-media
+//!   behavior remain deployment policies rather than filesystem theorems.
 //!
 //! ## What is and is not claimed
 //!
@@ -89,6 +111,9 @@
 //! scenario-for-scenario through the real kernel, which makes them good
 //! tests and zero formal evidence.
 
+pub mod auth;
+pub mod auth_runtime;
+pub mod auth_verifier;
 pub mod causal;
 pub mod era;
 mod ffi;

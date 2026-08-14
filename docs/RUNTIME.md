@@ -24,9 +24,9 @@ Status words used below:
   refine or instantiate it end to end.
 - **Next** means proposed architecture, not a compatibility promise.
 
-## 1. What ships today: the FORMAT-v3 path
+## 1. What ships today: legacy FORMAT-v3 and one authenticated move path
 
-The current public Rust path is a deterministic but unauthenticated runtime:
+The original public Rust path remains deterministic but unauthenticated:
 
 1. `Weave::record_membership` accepts a bare `EraEvent` into
    `EraGroup::record`. `Weave::record_cut` similarly records an unsigned cut.
@@ -54,7 +54,7 @@ They do **not** contain a document id, genesis id, operation id, nonce, key
 epoch, signature algorithm, signature, or commitment to the full substrate
 from which the caller selected its lanes.
 
-Important current gaps:
+Important gaps in that legacy path:
 
 - `MoveLog::record`, `MoveLog::issue`, and `MoveLog::revoke` remain public
   direct mutation APIs. Merge imports structurally valid set members; it does
@@ -81,16 +81,25 @@ composition. They explicitly do not authenticate the shipping FORMAT-v3/FFI
 path. Their `SignatureScheme`/`AuthenticIssuer` premises are not an EUF-CMA
 proof for a deployed primitive.
 
+Separately, `AuthenticatedRuntime` now exposes the raw kind-3 move path detailed
+in §5.2. It verifies and persists one context-bound move before committing it
+to its owned execution state. That additive wrapper does not authenticate or
+remove the public legacy `Weave`, `MoveLog`, grant/revocation, membership, ERA,
+causal, sequence, or other mutation surfaces. A deployment must expose only the
+appropriate wrapper and policies; the presence of the authenticated move path
+does not relabel existing data or APIs.
+
 ### 1.1 Native closure and initialization
 
 **Implemented as a fail-closed build control, not a compiler proof.**
 `Uwueave/RuntimeInit.lean` is a deliberately data-free native root. It directly
-imports exactly the four exported-kernel modules:
+imports exactly the five exported-kernel modules:
 
 - `Uwueave.Exec`
 - `Uwueave.SeqKernel`
 - `Uwueave.EraKernel`
 - `Uwueave.Preo.ArtifactJournalKernel`
+- `Uwueave.RuntimeAuthV4Kernel` (which imports `RuntimeAuthV4`)
 
 That import list owns two decisions together: the one generated initializer the
 C shim calls and the transitive native-object closure the Rust crate links.
@@ -116,11 +125,10 @@ shim, build script, Cargo manifest, and lockfile must also be unchanged.
 `rust/shim.c` first calls `lean_initialize_runtime_module`, then only
 `initialize_uwueave_Uwueave_RuntimeInit(1)`. Rust serializes that process-global
 initialization with `Once`; failure aborts rather than exposing a partly
-initialized runtime. The current native-closure gate observed 13 Lake-owned
-objects (659,152 bytes before archiving) and 14 archive members including the
-shim (803,520 bytes; archive SHA-256 prefix `29cea783`). The serialized Wave-29
-`cargo test --all-targets` gate passed 147/147 tests in 23.98 seconds, including
-2.38 seconds of compilation.
+initialized runtime. The current native-closure gate observes 15 Lake-owned
+objects (1,049,544 bytes before archiving) and 16 archive members including
+the shim (1,249,984 bytes including the archive index; SHA-256
+`1b0deb1bcfcaa79f66ba7f880a340605a9055e655820888a2ebcb6110b528d8e`).
 
 This closes stale, extra, missing, and mixed-generation object selection plus
 initializer drift. It does **not** prove Lean's IR-to-C lowering, either native
@@ -130,7 +138,7 @@ rows in `docs/TRUST.md`.
 
 ## 2. The pure-Rust persistence and inspection surfaces
 
-The runtime now has four deliberately different pure-Rust journals under
+The runtime now has five deliberately different pure-Rust journal domains under
 `rust/src/persistence/`. They share a private physical record mechanism, not a
 semantic wire format.
 
@@ -391,7 +399,8 @@ These layers must remain explicit:
 | History logical journal | Canonical explicit-id events whose parents are already accepted | Causally closed host prefix; IDs remain unauthenticated |
 | History physical file | Checksummed `UWHIST01` records containing canonical event bodies | Physical recovery evidence only |
 | FORMAT v3 request | Lean-owned execution request bytes | Derived execution input, never journal authority |
-| FORMAT v4 request | Canonical signed-request bytes from `RuntimeAuthV4` | Future authenticated admission record; not wired today |
+| FORMAT v4 legacy request | Canonical kind-1 signed-request bytes from `RuntimeAuthV4` | Syntax compatibility/audit path; not context-bound admission |
+| FORMAT v4 context request | Canonical kind-3 bytes and exact kind-4 projection from `RuntimeAuthV4Kernel` | Implemented admission-input boundary; later runtime stages remain separate |
 | Derived views/statuses | replay outputs, roles, trees, traces | Cache/output only; never recovery authority |
 
 Authoritative recovery starts from accepted operation/event records in order.
@@ -468,12 +477,15 @@ defend against symlink/path replacement. Durable use begins only after those
 emitted bytes are admitted and appended through `ArtifactJournal` under a
 deployment-chosen sync and recovery policy.
 
-## 5. FORMAT v4: authenticated admission plan
+## 5. FORMAT v4: authenticated admission assembly
 
-`Uwueave/RuntimeAuthV4.lean` is the smallest honest v4 foundation. It is a
-**contract/model and canonical codec**, not a shipping Rust endpoint.
+`Uwueave/RuntimeAuthV4.lean` is the original v4 model and legacy kind-1 codec.
+`Uwueave/RuntimeAuthV4Kernel.lean` adds a separate context-bound kind-3 request
+and kind-4 host projection. These native boundaries now supply canonical
+syntax, shape, host-width, and exact projection decisions without giving any
+one of them a broader admission meaning.
 
-The one currently modeled request is a signed move. `SignedContent` binds:
+The legacy kind-1 request is a signed move. `SignedContent` binds:
 
 - length-delimited `document` and `genesis` stable ids;
 - `signatureAlgorithm`, `issuer`, and `keyEpoch`;
@@ -494,26 +506,48 @@ requires every signed stable node id to map to its signed request-local kernel
 index for the bound document and genesis. A resolver may not silently replace
 an id or guess an index.
 
-Admission must be an ordered pipeline:
+The executable context-bound request carries the same move fields plus a
+nonempty opaque `contextCommitment`. That commitment is inside the distinct
+kind-3 signing domain, so changing it changes the exact bytes presented to the
+verifier. The codec assigns it no digest, availability, historical-state, or
+authorization semantics; the host must supply those.
 
-1. Bound and decode with `decodeBounded`; distinguish `tooLarge`, `badMagic`,
-   `unsupportedVersion`, `wrongKind`, and `malformed`.
-2. Run `validateShape`; empty document/genesis/nonce/operation/node ids and an
-   empty signature are explicit refusals.
-3. Verify the exact `signingBytesV4` under the registered issuer/key epoch and
-   named algorithm.
-4. Compare the scoped nonce key `(document, genesis, issuer, keyEpoch, nonce)`.
-   Identical signed content is an idempotent replay even if signature bytes
-   differ; the same nonce with different signed content is a collision and is
-   refused.
-5. Resolve stable ids and verify the included request-local indices.
-6. Evaluate authority and membership independently against a committed,
-   authoritative substrate. Both must pass.
-7. Project with `toExecOp` and invoke the existing FORMAT-v3 execution
-   semantics. Do not rewrite the sort/fold in Rust.
-8. Append the exact canonical authenticated request, its admission decision,
-   and the substrate reference required to reproduce that decision before
-   acknowledging acceptance.
+The shipping `AuthenticatedRuntime` is a raw-only ordered boundary: its public
+`admit` method accepts the caller's byte slice, not a caller-authored
+projection or checked record. Its stages are:
+
+1. Bound and decode kind 3 with `decodeContextRequestBounded`; distinguish
+   `tooLarge`, `badMagic`, `unsupportedVersion`, `wrongKind`, and `malformed`.
+2. Run `validateContextShape`; empty document, genesis, context commitment,
+   nonce, operation/node ids, or signature are eight explicit refusals. Then
+   refuse child/citation values above unsigned 64-bit range and destination
+   indices above signed 64-bit range before crossing the FORMAT-v3 ABI.
+3. Verify the exact kind-3 `RuntimeAuthV4Kernel.contextSigningBytes` under the
+   registry scope and named algorithm, then require the returned trusted-host
+   receipt to match every verification input. These bytes are explicitly not
+   the legacy kind-1 `RuntimeAuthV4.signingBytesV4`.
+4. Classify both the scoped nonce key
+   `(document, genesis, issuer, keyEpoch, nonce)` and operation key
+   `(document, genesis, operationId)` against the authenticated journal.
+   Identical signing bytes are an idempotent retry even if signature bytes
+   differ; reuse with different signing bytes is a nonce or operation
+   collision and is refused.
+5. Require the request to match the runtime instance's fixed `RuntimeScope`
+   `(document, genesis, contextCommitment, executionBinding)`. Pin that exact
+   historical context; require its returned document, genesis, commitment and
+   execution binding to match; then resolve every stable id and require both
+   the provider's and the concrete execution weave's kernel index to equal the
+   signed index.
+6. Evaluate deployment-owned authority and membership policies independently
+   against that same immutable context. Both must pass.
+7. Construct the exact `MoveOp` and ask the concrete `LeanMoveExecution` for a
+   prospective outcome. It clones its `MoveLog` and invokes the existing
+   FORMAT-v3 replay. Only `Applied` and `SkippedCycle` are admissible;
+   unauthorised, invalid, and unknown-node results are refusals.
+8. Construct the crate-private checked record, append it under the journal's
+   chosen sync policy with its nonce/operation reservations, and only then call
+   the concrete Lean execution commit. An indeterminate append result makes no
+   execution commit and requires pinned reopen before retry.
 
 `VerificationBoundary.Accepts`, `Verified`, `ResolverBoundary`,
 `ReadyForExecution`, `StorageBoundary`, and `StorageReceipt` name the premises
@@ -522,7 +556,102 @@ without upstream success. `ResponseCode` and `encodeResponse` give v4
 nonempty, version-bound outcomes for decode, authenticity, nonce, authority,
 membership, execution, and storage refusal.
 
-### 5.1 Checked V4 sidecar: a different wire and a one-way boundary
+The exported legacy `decodeCanonicalKernel` performs kind-1 step 1 and nothing
+later. Its
+result is exactly one tag byte for a refusal, or tag `0` followed by the exact
+`encodeRequestV4` bytes reconstructed from Lean's decoded value. The public
+Rust `auth::decode_runtime_auth_v4_canonical` interprets only those six tags;
+it contains no UWV4 parser or encoder. The linked 107-byte fixture round-trips,
+and focused canaries distinguish size, magic, version, kind, truncated, and
+trailing-byte refusals. The size bound controls entry to the logical Lean
+parser after the host already allocated the input.
+
+### 5.1 Context-bound projection and concrete verifier boundary
+
+`RuntimeAuthV4Kernel.projectAdmissionKernel` is the next executable rung. It
+accepts only request kind 3, performs the five decode, eight shape, and three
+host-width decisions above, and returns a canonical kind-4 response. Success
+contains Lean's exact canonical request and signing bytes, signature and
+algorithm, document/genesis/context/issuer/key-epoch/nonce/operation identities,
+stable child/destination references, and every projected FORMAT-v3 execution
+lane. The response has roundtrip, injectivity, kind-binding, exact-output, and
+distinct-refusal theorems. Rust parses this response grammar only; it has no
+kind-3 UWV4 request parser or encoder.
+
+The safe Rust APIs refuse `input.len() > maximum_bytes` before entering FFI,
+so an oversize slice is not copied into Lean. That does not bound allocation
+which already occurred before the borrowed slice existed; network/file
+transports need their own pre-read ceiling. Direct native-export callers also
+cross a complete `ByteArray`, whose kernel path converts to a list before the
+logical Lean bound. The transport and logical bounds are complementary.
+
+`rust/src/auth_verifier.rs` supplies a pluggable `RequestVerifier` and
+deployment-owned `KeyRegistry`. The concrete algorithm-tag-1 profile is a
+32-byte keyed-BLAKE3 **symmetric MAC**, scoped by the exact context commitment,
+document, genesis, issuer, and key epoch. It distinguishes unknown context,
+document, genesis, issuer, epoch, revoked key, unavailable registry, unknown
+algorithm, and bad MAC. `VerificationAcceptance` retains the exact context,
+document, genesis, signing and signature byte vectors plus their unkeyed hashes,
+and the algorithm/issuer/epoch scalars. `matches_input` compares the exact
+vectors and scalars; the hashes are observations, not its only binding.
+
+That acceptance is an ordinary trusted-host attestation: its public constructor
+allows external verifier implementations to create it and performs no
+verification itself. It is not an unforgeable Rust capability, public-key
+signature, EUF-CMA argument, legal identity, key-ownership proof, authority,
+membership, nonce, execution, or storage receipt. The in-memory registry makes
+ordinary process copies and claims neither zeroization nor locked memory or
+durable key lifecycle. The fixed 32-byte comparison accumulates all content
+differences after a public length check; no machine-checked constant-time or
+side-channel theorem is claimed.
+
+### 5.2 Raw admission and externally pinned recovery
+
+`rust/src/auth_runtime.rs` composes those seams without adding a second UWV4
+parser. `AuthenticatedRuntime::new` requires an externally pinned empty
+`AuthenticatedMoveJournal`, an empty execution move log, and a concrete Lean
+execution-base digest equal to the fixed `RuntimeScope`; a nonempty journal must
+use `recover`. Admission returns five top-level outcome classes: an appended or
+idempotent-retry receipt, a typed refusal, a dependency-unavailable result, a
+definite `StorageRefused`, or `StorageIndeterminate`. The receipt names the
+sequence, disposition, exact prefix head and kernel observation while the
+journal retains the exact canonical request/signing/signature bytes. A definite
+storage refusal is known not to append a new record. An indeterminate result
+means no execution commit occurred, not that the disk write definitely failed.
+
+The execution binding is a domain-separated, length-framed BLAKE3 digest over
+the concrete weave's ordered node ids, ranks and parent lists plus the exact
+grant and revocation lanes. Node ids already commit to contents and parents;
+move operations are deliberately excluded because admission appends them only
+after the base has been checked. This binds the executor to the context supplied
+for one runtime instance; it is an unkeyed identity digest, not authentication.
+
+`AuthenticatedRuntime::recover` also refuses an unpinned journal. For every
+record in sequence it sends the stored canonical request back through Lean's
+kind-3 projection, reruns exact-byte verification, pins the named historical
+context, resolves stable ids, rechecks authority and membership, and performs
+the concrete Lean execution preflight. It then requires the newly constructed
+complete checked record—including context/policy versions, execution binding,
+previous head, request, signature, projections and observation—to equal the stored record before
+committing that move to the isolated recovery execution state. Any refusal,
+unavailable dependency, projection error, or field mismatch prevents a ready
+runtime.
+
+This is an executable host composition boundary, exercised by **10/10 focused
+end-to-end tests**, not a formal end-to-end authentication theorem.
+The final serialized all-target checkpoint passed **177/177** in **125.72s
+real** after **10.49s** compilation; the runtime target accounted for
+**85.31s** because it repeatedly launches the Lean-owned corpus. This is
+regression-path evidence, not admission throughput.
+`RequestVerifier`, context, resolver, authority, and membership are deployment-
+owned traits; `VerificationAcceptance` is constructible trusted-host evidence;
+the context commitment remains opaque;
+and recovery is authoritative only relative to caller custody of the external
+head pin and availability of the exact historical policy data. The journal and
+runtime do not prove cryptographic hardness, pin freshness, filesystem crash
+behavior, stable media, or policy correctness.
+
+### 5.3 Checked V4 sidecar: a different wire and a one-way boundary
 
 The Preoscript V4 sidecar is a neutral deployment manifest, not a replacement
 for the `UWV4` request above. `RuntimeAuthV4Checked.CheckedManifest.ofReady`
@@ -555,7 +684,7 @@ Lean fixtures for authenticated context/frontier and the V4 sidecar, delegates
 the unchanged three-green/fifteen-red-command transactional V3 suite, and runs
 four focused durable-arrival recovery/refusal tests.
 
-### 5.2 Authenticated ERA certificate: exact delivery scope
+### 5.4 Authenticated ERA certificate: exact delivery scope
 
 `AuthenticatedEraCertificate.Verification` is the bridge from the signed
 frontier layer into ERA's existing certificate machinery. It consumes one
@@ -571,7 +700,8 @@ artifact is exactly an ERA delivery key and proof that `settledCert` accepts
 it. Exact-key equality licenses reuse through `KeyCertSound`; it does not
 replay verification, authenticate storage, or survive a new announcement
 under the old key. There is still no certificate for the unbounded announcement
-future and no concrete cryptographic verifier.
+future. The separate host keyed-BLAKE3 MAC verifier does not instantiate this
+certificate proof bridge or supply its issuance/announcement premises.
 
 The Wave-28 subprocess gate has one positive and five exact-red fixtures. It
 pins verification, reusable-certificate soundness and seal survival, then
@@ -579,7 +709,7 @@ refuses the wrong event domain, accepted-but-unissued input, incomplete
 announcement/frontier, and wrong reusable key. Its prefix checks audit 118
 production constants and four test-support constants.
 
-### 5.3 Finite authoring and delivery are proof leaves, not runtime widening
+### 5.5 Finite authoring and delivery are proof leaves, not runtime widening
 
 Wave 29 adds two import-pure proof leaves and deliberately leaves
 `RuntimeInit`, the FFI, and the native closure unchanged. `FiniteRepairMenu`
@@ -603,13 +733,17 @@ least-authored-ID, exact full price, and exact-list refusal boundaries. Both
 incremental RSS slopes pass: 441,344 B/item for repair and 440,320 B/item for
 history.
 
-### 5.4 Records v4 still needs
+### 5.6 Paid authenticated-move record and remaining v4 records
 
-The next runtime journal schema should use explicit typed lanes rather than a
-generic byte/event escape hatch:
+The first typed lane has landed in the separate `AuthenticatedMoveJournal`:
+exact kind-3 request/signing/signature bytes, context and policy versions,
+the exact execution-base binding, nonce/operation scopes, stable references,
+projected and concrete move fields, kernel observation, and prior head. Section
+6.1 gives its physical contract.
+It is intentionally not a generic byte/event escape hatch.
 
-- `AuthenticatedMove`: exact canonical v4 request bytes plus a stable
-  substrate reference and the admitted `Exec.Op` projection.
+The remaining authoritative runtime schema still needs explicit lanes:
+
 - `AuthorityGrantIssued` and `AuthorityGrantRevoked`: signed issuer/holder,
   stable scope, key epoch, nonce, and operation id; the current numeric
   `(id,parent,scope)` alone is insufficient for authenticated durable policy.
@@ -622,27 +756,30 @@ generic byte/event escape hatch:
 - `Checkpoint`: a versioned candidate over an exact authoritative prefix and
   state/substrate commitment, validated by replay before use.
 
-The substrate reference should commit to the ordered authoritative prefix (or
-to a separately specified canonical authenticated state root), not merely the
-four arrays a caller chose to marshal. No such commitment is present in
-`RuntimeAuthV4.SignedContent` today; adding it is a v4 schema revision that
-must receive its own field tag and codec-separation theorems.
+Kind-3 `ContextSignedContent.contextCommitment` is the new field-tagged,
+domain-separated substrate reference. The codec proves only that it is
+nonempty, signed, and preserved exactly. A deployment must define whether it
+commits to an ordered authoritative prefix or a canonical authenticated state
+root and provide historical availability and recomputation. The journal's
+unkeyed chain head and arbitrary nonempty context bytes do not create those
+semantics.
 
-### 5.5 Authenticity, authority, membership, and execution
+### 5.7 Authenticity, authority, membership, and execution
 
 Composition is conjunctive, not substitutive:
 
 - **Authenticity:** concrete verification says the issuer/key epoch accepted
-  these canonical bytes. A future deployment must supply the cryptographic
-  implementation and its security argument; Lean currently treats acceptance
-  as a premise.
-- **Authority:** the authenticated issuer holds an active grant whose stable
-  scope covers the move. Grant-holder binding must be explicit; possessing
-  someone else's grant id is not authority.
-- **Membership:** the authenticated issuer is live and has the required ERA
-  role in the committed membership prefix. Decide whether the runtime uses
-  `Era.resolve` arbitration or `Era.resolveGated` lifecycle discipline and
-  make that policy/version explicit.
+  these canonical bytes. The keyed-BLAKE3 profile is one concrete symmetric-
+  MAC implementation; other `RequestVerifier` implementations are trusted
+  deployment code, and no cryptographic security theorem follows. Lean treats
+  acceptance as a premise.
+- **Authority:** the configured `MoveAuthority` must accept the issuer and move
+  under the pinned context. The runtime stores the returned context's authority
+  policy version, but the trait implementation owns grant-holder and stable
+  scope semantics.
+- **Membership:** the independent `MoveMembership` must accept the same issuer
+  under the same pinned context. The runtime stores its policy version, but the
+  deployment still chooses and implements the ERA/lifecycle discipline.
 - **Execution:** only after all three checks may `toExecOp` enter the existing
   Lean `Exec` semantics. Execution status does not retroactively authenticate
   a request.
@@ -655,14 +792,16 @@ and a storage service assumption.
 
 ## 6. Migration and backward refusal
 
-FORMAT v3 remains the shipping execution ABI while v4 admission is built. The
-migration should be additive and loud:
+FORMAT v3 remains the internal execution ABI while the raw kind-3 authenticated
+move orchestrator now guards one admission path. Complete migration remains
+additive and loud:
 
 1. Keep the current v3 FFI entry point for internal execution only. Do not
    reinterpret v3 bytes as v4 requests.
-2. Add a distinct v4 decode/admission entry point. `UWV4`, version, and kind
-   must be checked before any semantic field is used; v4 responses are always
-   nonempty and version-bound.
+2. Keep both distinct bounded v4 entry points: legacy kind-1 syntax and kind-3
+   context projection. The runtime consumes the latter's version-bound kind-4
+   response and then performs its host admission stages; never reinterpret
+   either Lean syntax/projection success as verification.
 3. Add a new versioned `DocumentEntry` variant that stores exact canonical v4
    bytes. Never relabel existing `Move`/`Grant`/`Revocation` entries as
    authenticated.
@@ -677,6 +816,40 @@ migration should be additive and loud:
 6. Retain old decoders only for declared migration/read-only paths. Unknown
    versions, kinds, record tags, and complete malformed records are refusals;
    they are never guessed or skipped.
+
+### 6.1 Authenticated-move journal rung
+
+`rust/src/persistence/authenticated.rs` is a separate physical domain, not a
+new tag in legacy `UWDJRN01`. `AuthenticatedMoveJournal` uses marker
+`UWAMV401` and domain `uwueave.authenticated-move-journal.v1`. Each canonical
+v1 body preserves one crate-private already-checked kind-3 record: exact request,
+signing and signature bytes; nonce and operation scopes; nonempty context plus
+the exact framed execution-base binding and resolver/authority/membership
+policy versions; stable ids, projection and
+concrete `MoveOp`; prior head; and the prefix-relative `Applied` or
+`SkippedCycle` observation.
+
+The same record owns nonce/operation retry-versus-collision indexing and the
+append. Indexes advance only after the physical append succeeds. A domain-
+separated BLAKE3 chain (`uwueave.authenticated-move-journal.v1.chain\0`) binds
+the ordered bodies, including each execution binding. Pinned reopen requires
+the exact external last-sequence and
+head expectation and therefore refuses clean suffix rollback relative to that
+pin. Unpinned reopen is inspection-only and cannot append. The shared raw
+journal still supplies record bounds, exact-sequence retry plus resync,
+explicit sync/torn-tail policies, locking, checksums, and poisoning after
+uncertain I/O.
+
+The crate-private constructor and append method are now reachable only through
+the ordered raw-request runtime boundary described in §5.2 (or internal module
+code). Storage itself still does not parse UWV4, verify the signature or
+context, rerun resolution/authority/membership, make unpinned recovery ready
+for execution, defeat rollback without an external pin, or prove filesystem/
+stable-media durability. Its six focused module tests cover retry/collision,
+pinned rollback, unpinned read-only behavior, torn recovery, legacy-domain
+isolation, and oversize atomicity. This is a concrete persistence and host-
+composition API—not a cryptographic, policy-correctness, or crash-safety
+theorem.
 
 ## 7. Optional future redb backend
 
@@ -723,32 +896,28 @@ power-loss theorem.
   retry the same sequence and exact bytes.
 - Back up authoritative journal files and migration manifests. Derived views,
   caches, and unvalidated checkpoints are rebuildable and are not backups.
-- Do not call current document records authenticated. Do not enable secure v4
-  mode until concrete verification, key history, nonce persistence,
-  authority, membership, and authenticated append are all in the path.
+- Do not call legacy document records authenticated. Expose the raw v4 runtime
+  as a secure deployment path only with production verifier/key history,
+  historical context, resolver, authority and membership providers, explicit
+  external-pin custody, and a declared storage failure model; the traits and
+  journal do not manufacture those premises.
 
 ## 9. Next two implementation slices
 
-### Slice A: one authenticated move, end to end
+### Slice A: one authenticated move, end to end — landed host boundary
 
-Land the smallest slice that improves the boundary without rewriting `Exec`:
-
-1. Export the canonical v4 bounded decoder/encoder and refusal codes through a
-   narrow typed FFI, as was done for artifact validation.
-2. Add a Rust `AuthenticatedRuntime` wrapper with a pluggable verifier and
-   explicit key registry, stable-id resolver, authority predicate, membership
-   predicate, and persistent nonce index rebuilt from authoritative records.
-3. Add a versioned `AuthenticatedMove` document record carrying the exact v4
-   bytes and a reproducible substrate-prefix reference.
-4. Admit only after decode, shape, concrete verification, nonce, resolution,
-   authority, and membership checks; project with `toExecOp`; append before
-   returning accepted. Keep FORMAT v3 as the internal execution kernel.
-5. Test every layer's refusal, cross-document/genesis/key-epoch substitution,
-   retry versus nonce collision, stable-id/index mismatch, omitted/stale
-   substrate, append ambiguity and reopen, and exact v4-to-`Exec.Op` fields.
-
-This slice may claim codec binding and tested verification behavior for the
-chosen implementation. It must not claim EUF-CMA security or crash safety.
+The smallest slice has landed without rewriting `Exec`: legacy kind-1 syntax,
+kind-3 decode/shape/width/projection, scoped verifier, authenticated journal,
+and `AuthenticatedRuntime` now form the exact raw-only order documented in
+§5.2. One `RuntimeScope` fixes document, genesis, context and the concrete Lean
+execution base. Recovery requires an external pin and revalidates the complete
+historical prefix before it yields a ready runtime. The focused suite is
+**10/10 green**. The remaining work here is stronger
+evidence: exhaustive adversarial runtime tests, formal refinement of the host
+composition to the Lean layered model, production policy implementations and
+their historical-data/key lifecycles, a filesystem/crash model, and a
+cryptographic security argument. The landed API does not by itself supply any
+of those claims.
 
 ### Slice B: complete authoritative document recovery
 

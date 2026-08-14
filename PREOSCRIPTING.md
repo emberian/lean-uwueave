@@ -372,6 +372,39 @@ caller-authored, nonempty opaque byte bindings. Roster and participant lists
 are finite canonical manifests, not proofs that membership is globally
 complete.
 
+The signed-request row now has two deliberately separated executable
+boundaries. `RuntimeAuthV4.decodeCanonicalKernel` retains the legacy kind-1
+syntax checkpoint: explicit bound, five exact refusal reasons, and canonical
+re-encoding of the **107-byte** fixture. `RuntimeAuthV4Kernel` owns a distinct
+context-bound kind-3 request and kind-4 projection response. Its signing bytes
+include the nonempty opaque context commitment; its native endpoint performs
+the same five decode checks, eight nonempty-field checks, and three exact
+FORMAT-v3 host-width checks before projecting canonical request/signing bytes,
+signature and scope identities, stable ids, and every execution lane. Rust
+interprets only the Lean-owned response grammar, never either UWV4 request
+wire. A pluggable host verifier and keyed-BLAKE3 symmetric-MAC profile consume
+the exact projected bytes under a context/document/genesis/issuer/epoch-scoped
+registry. Their acceptance is ordinary trusted-host evidence—not public-key
+verification—retaining exact scope/signing/signature vectors plus unkeyed
+hashes. It is not EUF-CMA, resolution, nonce freshness, authority, membership,
+execution, append, or durability.
+
+The Rust `AuthenticatedRuntime` now composes a separate raw-only admission
+boundary around kind 3: Lean projection; exact-input verification; durable
+nonce/operation retry or collision classification; one immutable historical
+context under one fixed document/genesis/context/execution-base scope, where
+the last value is a domain-separated framed digest of concrete topology plus
+grant/revocation lanes rather than an authenticator; stable-id/index resolution
+against both the provider and concrete execution
+weave; independent authority and membership; concrete Lean move preflight;
+journal append; then in-memory commit. Definite storage refusal is separated
+from indeterminate I/O. Recovery requires an externally pinned journal, reruns
+those stages for every canonical
+stored request, compares the complete checked record, and replays the prefix in
+order. Those deployment traits, historical context availability, external pin,
+MAC security and filesystem behavior remain premises—not facts reconstructed
+from the V4 sidecar or proofs supplied by the host composition itself.
+
 [`RuntimeAuthV4ProjectionCore`](Uwueave/Preo/RuntimeAuthV4ProjectionCore.lean)
 validates the neutral sidecar's schema, resource bounds, canonical lists,
 grant/reference relationships, scope, and listed membership. Only its private
@@ -584,9 +617,10 @@ duplicate-parent refusal. Declaration-prefix floors cover 228
 shared-support constants; all were clean, with no `native_decide`, `sorry`,
 `admit`, or `axiom`.
 
-At this freeze the aggregate census was 184 Lean source modules, 185 full-build
-jobs, 161 direct proof-root imports excluding `Audit`, and 25,333 audited
-constants, with 721 MAP keystones and 132 documented transports. Exact
+At this checkpoint the aggregate census is 185 Lean source modules / 186
+full-build jobs and 162 direct proof-root imports excluding `Audit`, with
+25,747 constants checked by the total axiom gate, 731 MAP keystones and 135
+documented transports. Exact
 benchmark-facing API/output goldens are available without rebuilding
 dependencies:
 
@@ -603,11 +637,19 @@ growth; both RSS slopes pass the 4 MiB/item cap. The new APIs had only a frozen
 header-only `MISSING_API` baseline, so comparison reports
 `NO_BASELINE_MISSING_API`, not a historical speedup. Repair N16 remained
 infrastructure-noisy after nine retries (wall MAD 10.576923%, user MAD 2.5%);
-the other rows finished noise-free. The final all-target Cargo gate remained
-**147/147 green** in **23.98s real**, including **2.38s** of compilation; no
-Rust target or test count changed, and the native closure remained 13 objects /
-659,152 B. These are checkpoint measurements, not substitutes for the
+the other rows finished noise-free. The earlier kind-1 syntax all-target Cargo
+checkpoint was **148/148 green** in **31.02s real**, including **0.14s** of warm compilation;
+the later context-projection closure is 15 objects / 1,049,544 B. These are checkpoint
+measurements, not substitutes for the
 executable gates.
+
+The final serialized whole-tree gate
+`CARGO_BUILD_JOBS=1 cargo test --all-targets -- --test-threads=1` passed
+**177/177** tests in **125.72s real** after **10.49s** compilation, with
+**35.60s user**, **37.86s sys**, and **1,274,494,976 B** maximum RSS. The
+10-test authenticated-runtime matrix
+accounted for 85.31s because it repeatedly launches the Lean-owned corpus;
+this is fail-closed regression evidence, not a latency or throughput benchmark.
 
 ## 1. The thesis
 
@@ -1267,7 +1309,7 @@ threshold query should land in between. (`Uwueave/MinimalSummary.lean`.)
 | ✅ **authenticated observed V3 export** | `Preo.ObservedBoundResult`, `Preo.ArtifactV3Checked`, `Preo.ProjectionV3Core`, `Preo.ArtifactV3Surface`, `preo_export_v3` | **BUILT AND SURFACED for one exact observed typed program.** The command consumes separate authenticity, running-reach, authored-reach, certificate, plan and budget proofs; projects checked query/result/world/certificate rows plus positional reads/holes/analyses/effects; enforces work and validator resource caps; and publishes only after the whole environment transaction succeeds. Canonical bytes are generically framed under the distinct V3 format tag. The caller still supplies observation/authenticity and stable name registries; decoded validation cannot reconstruct proofs or check every semantic association. |
 | ✅ authenticated frontier + consuming world context | `AuthenticatedFrontier`, `AuthenticatedWorldContext` | **PROVED for explicit deployment premises.** A signed, received, genuinely issued progress event is conjoined with a lawful delivery advance; exact signed positions, active causal grants and fresh consumption tombstones justify each newly delivered candidate. Stale version, wrong origin and consumed-token reuse refuse. No signature hardness, network observation, roster completeness or host execution is inferred. |
 | ✅ authenticated ERA delivery certificate | `AuthenticatedEraCertificate`, `EraCertificate` | **PROVED as an exact model-level bridge.** One signed, received and genuinely issued progress event is joined to a separate complete, lawful ERA announcement at the same decoded event; this yields `Settled`, an exact-key reusable `settledCert`, and role sealing under `Delivery`. Cut membership need not be newly added, canonical-candidate equivalences do not exclude malformed extra frontier points, and no free-termination result is claimed for `Announcement`, `Issuance`, or `fullView`. Cryptography, decoding and deployment premises remain external. |
-| ✅ runtime-auth V4 sidecar | `RuntimeAuthV4Checked`, `RuntimeAuthV4Durable`, `RuntimeAuthV4Projection` | **BUILT as a one-way checked projection.** Exact `ReadyForExecution`, active grant and finite context produce neutral canonical format-`⟨4,162⟩` rows/bytes and a validated Rust DTO. The frozen fixture is 369 bytes. This sidecar is not the `UWV4` signed request, and decode/render/storage reconstruct no verifier, authority, membership or frontier proof. |
+| ✅ runtime-auth V4 syntax, projection, host admission + sidecar | `RuntimeAuthV4`, `RuntimeAuthV4Kernel`, Rust `auth_runtime`, `RuntimeAuthV4Checked`, `RuntimeAuthV4Durable`, `RuntimeAuthV4Projection` | **BUILT as separated boundaries.** Legacy request kind 1 retains its five-refusal syntax checkpoint. Context-bound kind 3 signs an opaque context commitment and reaches Lean-owned decode, shape, host-width and exact kind-4 projection. The raw-only host runtime fixes document/genesis/context/execution scope, then orders scoped verification, journal identity classification, pinned context, provider+execution index agreement, independent authority/membership, concrete Lean move preflight, append and in-memory commit; the checked journal body stores the execution binding and externally pinned recovery revalidates the exact prefix. Definite storage refusal is distinct from indeterminate I/O. The focused suite is **10/10** green. Separately, exact `ReadyForExecution`, active grant and finite context produce neutral canonical format-`⟨4,162⟩` rows/bytes and a validated Rust DTO. Host policies and the external pin remain trusted; sidecar decode/render/storage reconstruct no verifier, authority, membership or frontier proof. |
 | **declaration composition** | `Preo.Export.DeclarationBundle` is one checked declaration bundle, not composition | **unbuilt across declarations**: composing two independently authored declarations still needs formulas, footprints, futures, strategies and promise deltas rather than concatenating artifacts |
 | ✅ **scheduling judgement** | `Scheduling.Session`, `Obligation`, `Schedule`, `ProfilePlan`, `ProfileUpperBound`, `Protocol.Term`, `Preo.Planning` | **built and surfaced**: typed origins, metadata-rich demands, separate currencies, witnessed pointwise limits, bounded protocol semantics, shared-strategy composition, bounded authored action-subset search, and exact crossing/meeting non-function refutations. **Unbuilt:** arbitrary schedule discovery and the pretty inline budget block. |
 | recursive protocols | `ChoreoRec` | **built as guarded finite approximants** with recursion-free conservativity and a concrete barrier deadlock; temporal liveness/fair delivery remain explicit hypotheses, not syntax-derived claims |

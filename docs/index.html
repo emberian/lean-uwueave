@@ -300,28 +300,28 @@
     face &mdash; the theorem names, the refutations, the prices, and the compiled kernels.</p>
 
     <div class="stats">
-      <div class="stat"><div class="n">184</div><div class="l">Lean modules</div>
-        <div class="s">182 library modules plus two separate CLI mains</div></div>
-      <div class="stat"><div class="n">25,333</div><div class="l">constants audited</div>
-        <div class="s">the live Lean&nbsp;4.30 floor gate</div></div>
-      <div class="stat"><div class="n">721</div><div class="l">keystones in the ledger</div>
+      <div class="stat"><div class="n">185</div><div class="l">Lean modules</div>
+        <div class="s">183 library modules plus two separate CLI mains</div></div>
+      <div class="stat"><div class="n">25,747</div><div class="l">constants audited</div>
+        <div class="s">the total Lean&nbsp;4.30 axiom gate</div></div>
+      <div class="stat"><div class="n">731</div><div class="l">keystones in the ledger</div>
         <div class="s">each tagged with a generality and a reachability axis</div></div>
       <div class="stat"><div class="n">8</div><div class="l">priced exits</div>
         <div class="s">each with an availability check and a price</div></div>
-      <div class="stat"><div class="n">4</div><div class="l">native-kernel modules</div>
-        <div class="s">six exports in one exact RuntimeInit closure</div></div>
-      <div class="stat"><div class="n">147</div><div class="l">Rust tests</div>
-        <div class="s">all targets green in the Wave-29 aggregate</div></div>
+      <div class="stat"><div class="n">5</div><div class="l">native-kernel modules</div>
+        <div class="s">eight exports in one exact RuntimeInit closure</div></div>
+      <div class="stat"><div class="n">177/177</div><div class="l">Rust tests</div>
+        <div class="s">serialized all-target gate, zero failures</div></div>
       <div class="stat"><div class="n">0</div><div class="l">mathlib</div>
         <div class="s">Lean core only &mdash; nothing to vendor, nothing to pin</div></div>
     </div>
     <p style="font-size:.9rem;color:var(--muted);max-width:78ch;margin-top:1.1rem"><strong>Check
     every cell.</strong> These commands were run against this repository to produce the numbers
     above &mdash; a stat with no command under it is decoration:</p>
-<pre><code># 184 Lean modules in the assembled worktree
+<pre><code># 185 Lean modules in the assembled worktree
 rg --files Uwueave -g '*.lean' | wc -l
 
-# 721 rows in the keystone ledger
+# 731 rows in the keystone ledger
 awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 
 # 155 UNDONE markers / 153 blocks / 43 source files
@@ -330,25 +330,28 @@ awk '/^## Keystone ledger/,0' docs/MAP.md | grep -c '^| `'
 # 8 exits — the constructors of `inductive Exit`
 sed -n '/^inductive Exit/,/^\/-!/p' Uwueave/Exits.lean | grep -cE '^  \| [a-z]'
 
-# 6 exports across the four RuntimeInit kernel modules
+# 8 exports across the five RuntimeInit kernel modules
 grep -RFn '@[export ' Uwueave/
 
 # `"packages": []` — no dependencies, mathlib included
 grep '"packages"' lake-manifest.json
 
-# the root/Audit gate: 185 jobs; prints `#audit_floor: N constants audited`
+# 186 full-build jobs; root/Audit prints `#audit_floor: 25747 constants audited`
 lake build</code></pre>
     <p style="font-size:.85rem;color:var(--muted);max-width:78ch"><strong>The audit count is a
     moving floor, not a protocol constant.</strong> The number your own <code>lake build</code>
     prints is authoritative. Root coverage is checked separately: Lean parses the real root
-    header, including indented imports. It reports 161 direct root modules excluding
-    <code>Audit</code>; the transitive root/gate closure reaches all 182 import-pure library
+    header, including indented imports. It reports 162 direct root modules excluding
+    <code>Audit</code>; the transitive root/gate closure reaches all 183 import-pure library
     modules. <code>ArtifactEmitMain</code> and <code>ArtifactInspectionMain</code> are compiled
     separately because both own a root-level <code>main</code>; the proof aggregate covers their
-    pure library modules instead. The same checkpoint has 721 MAP keystones, 132 documented
+    pure library modules instead. The same checkpoint has 186 full-build jobs, 25,747 audited
+    constants, 731 MAP keystones, 135 documented
     transports and 155 UNDONE markers in 153 blocks across 43 source files. The serialized
-    Wave-29 <code>cargo test --all-targets</code> gate passed all 147 tests in 23.98 seconds,
-    including 2.38 seconds of compilation.</p>
+    earlier kind-1 syntax checkpoint passed all 148 tests in 31.02 seconds. The final serialized
+    all-target gate passed 177/177 tests in 125.72 seconds, including 10.49 seconds of
+    compilation (35.60 seconds user, 37.86 seconds sys, 1,274,494,976 bytes maximum RSS);
+    this is regression-path evidence, not runtime throughput.</p>
 
     <h2 style="margin-top:2.2rem">The shape of the whole thing</h2>
     <ol class="three">
@@ -1775,7 +1778,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
 
   <section id="kernel">
     <p class="kicker">The implementation, without a twin</p>
-    <h2 class="prose">Four kernel modules, one exact native closure</h2>
+    <h2 class="prose">Five kernel modules, one exact native closure</h2>
     <div class="prose">
       <p>In most &ldquo;verified design&rdquo; projects the delicate logic gets re-implemented
       in the production language, and the proofs and the code start drifting the day the
@@ -1794,11 +1797,14 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
         <li><code>uwueave_preo_artifact_v2_validate_one</code>
         (<code>Uwueave/Preo/ArtifactJournalKernel.lean</code>) &mdash; exact-one canonical
         Preoscript artifact-v2 validation.</li>
+        <li><code>uwueave_runtime_auth_v4_decode_canonical</code> and
+        <code>uwueave_runtime_auth_v4_project_admission</code> &mdash; legacy kind-1 syntax and
+        context-bound kind-3 decode/shape/width/exact kind-4 projection.</li>
       </ul>
-      <p>Those modules expose six functions in total. The request encoder itself is
+      <p>Those modules expose eight functions in total. The request encoder itself is
       <code>uwueave_encode_request</code>; <code>uwueave_request_canonical</code> remains a
       compatibility/test audit. The Rust side supplies typed lanes but owns no second FORMAT-v3
-      encoder or ArtifactEncoding decoder.</p>
+      encoder, UWV4 request parser, or ArtifactEncoding decoder.</p>
       <p>Preoscript artifacts now cross one further explicit boundary. The opt-in
       <code>uwueave-preo-artifact</code> command selects real checked Lean values and emits exact
       <code>ArtifactDurable.projectionBytes</code>; importing its library module performs no I/O.
@@ -1833,10 +1839,30 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       silently double-spending a token.</p>
       <p>A new checked V4 sidecar carries these deployment bindings as bounded neutral data.
       Its canonical fixture is 369 bytes under format/domain <code>&lang;4,162&rang;</code>, not the
-      existing <code>UWV4</code> signed-request wire. Only the proof-indexed builder accepts
+      <code>UWV4</code> signed-request wires. Only the proof-indexed builder accepts
       verification, shape, grant and context receipts; canonical decoding returns a neutral
       <code>Manifest</code> and cannot reconstruct <code>CheckedManifest</code>, signature validity,
       authority or membership.</p>
+      <p>The legacy 107-byte UWV4 kind-1 request retains a five-refusal syntax checkpoint.
+      Separate request kind 3 signs a nonempty opaque context commitment; Lean performs five
+      decode, eight shape, and three exact host-width decisions and emits every later-stage input
+      in canonical response kind 4. A pluggable verifier includes a concrete registry-scoped
+      keyed-BLAKE3 symmetric-MAC profile. Its receipt retains the exact scope/signing/signature
+      byte vectors plus unkeyed hashes, but remains trusted host evidence, not a public-key
+      signature or EUF-CMA theorem; it decides no nonce, stable-ID resolution, authority,
+      membership, execution, append, durability, context availability, or anti-rollback fact.</p>
+      <p>The landed <code>AuthenticatedRuntime</code> composes a separate raw-only kind-3 host
+      boundary. It orders Lean projection, exact-input verification, durable nonce/operation
+      retry or collision classification, and one fixed document/genesis/context scope plus a
+      framed digest of the concrete topology and grant/revocation base. It requires provider and
+      execution index agreement, independent authority and membership, concrete Lean move
+      replay, journal append, then in-memory commit. Definite storage refusal is distinct from
+      indeterminate I/O. Recovery requires an external journal head pin; it reprojects and
+      reverifies every canonical stored request, reruns the historical policy and execution
+      checks, compares the complete checked record, and replays the prefix in order. The host
+      traits, historical data, external pin, MAC security and filesystem remain trusted
+      deployment boundaries, not reconstructed proofs. The focused end-to-end suite passes
+      10/10 tests.</p>
       <p>Wave 28 carries the authenticated progress event into ERA&rsquo;s concrete certificate
       machinery without treating a signature as semantic completeness. One independent
       <code>CompleteAnnouncement</code> binds the same event to the exact before/after worlds,
@@ -1856,7 +1882,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       eight-red subprocess gate covers least-ID, price, exhaustive/bound/order and malformed/
       collision seams. It does not infer global discovery, semantic-history convergence,
       authentication, delivery, bytes, Rust, or filesystem refinement.</p>
-      <p>The pure-Rust storage layer now has four distinct journal surfaces. In addition to artifact and
+      <p>The pure-Rust storage layer now has five distinct journal domains. In addition to artifact and
       typed MoveLog storage, <code>HistoryJournal</code> stores canonical explicit 32-byte event
       IDs with strictly ordered parents that must already be accepted. Every admitted prefix is
       causally closed; exact retries write nothing, while missing parents and same-ID/different-
@@ -1878,11 +1904,23 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
       version-mutated sidecar as an opaque payload: persistence preserves bytes, but does not
       authenticate or validate them. Lean/Rust refinement, parent-order reconciliation,
       authenticated IDs and a filesystem model remain explicit work.</p>
+      <p>The fifth domain, <code>AuthenticatedMoveJournal</code>, uses the distinct
+      <code>UWAMV401</code> marker. It stores only a crate-private already-checked kind-3 record,
+      including exact signed bytes, context/policy versions, the exact execution-base binding,
+      nonce and operation scopes,
+      stable/projection/concrete move fields, kernel observation and a domain-separated prior
+      head. The ordered chain therefore commits to the execution binding. Indexes advance only
+      after append. Pinned reopen requires the caller&rsquo;s exact
+      external sequence/head and refuses relative rollback; unpinned reopen is inspection-only.
+      The raw-only runtime now creates this value only after its ordered host checks and appends
+      before committing in-memory execution; pinned recovery revalidates the whole stored prefix.
+      The store itself still does not parse UWV4, verify the MAC or policies, defeat rollback
+      without a trustworthy external pin, or prove stable-media durability.</p>
     </div>
 
     <figure class="flow">
       <div class="scroller">
-        <svg class="wide" viewBox="0 0 880 200" role="img" aria-label="Pipeline: the data-free RuntimeInit root selects four kernel modules; Lake reports and compiles their exact transitive closure; build.rs snapshots those objects, compiles one shim, verifies the archive, and links it with the Lean runtime into the uwueave Rust crate.">
+        <svg class="wide" viewBox="0 0 880 200" role="img" aria-label="Pipeline: the data-free RuntimeInit root selects five kernel modules; Lake reports and compiles their exact transitive closure; build.rs snapshots those objects, compiles one shim, verifies the archive, and links it with the Lean runtime into the uwueave Rust crate.">
           <defs>
             <marker id="fl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -1895,7 +1933,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           <rect x="8" y="36" width="200" height="130" rx="10" fill="var(--bg)" stroke="var(--free)"/>
           <text x="20" y="60" font-size="12.5" font-weight="650" fill="currentColor">RuntimeInit (data-free)</text>
           <text x="20" y="80" font-size="9.5" font-family="var(--mono)" fill="currentColor">Exec · SeqKernel</text>
-          <text x="20" y="95" font-size="9.5" font-family="var(--mono)" fill="currentColor">EraKernel</text>
+          <text x="20" y="95" font-size="9.5" font-family="var(--mono)" fill="currentColor">EraKernel · RuntimeAuthV4Kernel</text>
           <text x="20" y="110" font-size="9.5" font-family="var(--mono)" fill="currentColor">ArtifactJournalKernel</text>
           <text x="20" y="129" font-size="10.5" fill="var(--muted)">one initializer and one</text>
           <text x="20" y="144" font-size="10.5" fill="var(--muted)">closure source of truth</text>
@@ -1904,8 +1942,8 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
 
           <rect x="252" y="36" width="176" height="130" rx="10" fill="var(--bg)" stroke="var(--border)"/>
           <text x="264" y="60" font-size="12.5" font-weight="650" fill="currentColor">Lake-owned objects</text>
-          <text x="264" y="82" font-size="10" font-family="var(--mono)" fill="currentColor">13 exact members</text>
-          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">659,152 bytes</text>
+          <text x="264" y="82" font-size="10" font-family="var(--mono)" fill="currentColor">15 exact members</text>
+          <text x="264" y="96" font-size="10" font-family="var(--mono)" fill="currentColor">1,049,544 bytes</text>
           <text x="264" y="120" font-size="10.5" fill="var(--muted)">setup schema + paths</text>
           <text x="264" y="133" font-size="10.5" fill="var(--muted)">validated; bytes stable</text>
           <text x="264" y="146" font-size="10.5" fill="var(--muted)">before and after archive</text>
@@ -1914,9 +1952,9 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
 
           <rect x="472" y="36" width="192" height="130" rx="10" fill="var(--bg)" stroke="var(--border)"/>
           <text x="484" y="60" font-size="12.5" font-weight="650" fill="currentColor">verified archive set</text>
-          <text x="484" y="82" font-size="9.5" font-family="var(--mono)" fill="currentColor">13 Lake objects + shim</text>
-          <text x="484" y="96" font-size="9.5" font-family="var(--mono)" fill="currentColor">14 unique members</text>
-          <text x="484" y="120" font-size="10.5" fill="var(--muted)">803,520 bytes;</text>
+          <text x="484" y="82" font-size="9.5" font-family="var(--mono)" fill="currentColor">15 Lake objects + shim</text>
+          <text x="484" y="96" font-size="9.5" font-family="var(--mono)" fill="currentColor">16 archive members</text>
+          <text x="484" y="120" font-size="10.5" fill="var(--muted)">1,249,984 bytes;</text>
           <text x="484" y="133" font-size="10.5" fill="var(--muted)">one root initializer;</text>
           <text x="484" y="146" font-size="10.5" fill="var(--muted)">every object byte checked</text>
 
@@ -1928,7 +1966,7 @@ def arbKeep (w : Nat) (s : Authority.GrantSet) : Authority.GrantSet :=
           <text x="720" y="95" font-size="10.5" fill="var(--muted)">no decision procedure</text>
           <text x="720" y="108" font-size="10.5" fill="var(--muted)">in Rust to drift</text>
           <text x="720" y="130" font-size="10" font-family="var(--mono)" fill="currentColor">+ libleanshared</text>
-          <text x="720" y="148" font-size="10.5" fill="var(--muted)">14 `unsafe`, all in ffi.rs</text>
+          <text x="720" y="148" font-size="10.5" fill="var(--muted)">17 `unsafe` blocks, ffi.rs</text>
         </svg>
       </div>
       <figcaption><code>build.rs</code> requires a full green <code>lake build</code>, takes closure
@@ -2035,7 +2073,7 @@ def replayKernel (input : ByteArray) : ByteArray :=
       <code>Classical.choice</code>, <code>Quot.sound</code>) is fatal: a <code>sorry</code>
       (<code>sorryAx</code>), custom axiom, or Lean-4.30 <code>native_decide</code>
       (<code>_native.native_decide.ax_…</code>) goes red. The whole-tree command retains its
-      300-constant tripwire and currently audits 25,333 constants. Seven trust subprocess fixtures
+      300-constant tripwire; the live gate prints its audited count. Seven trust subprocess fixtures
       exercise the exact allowed floor, indented/root header parsing, prefix vacuity, and all
       three forbidden dependency classes. They prove the gate can fail, but share its
       <code>collectAxioms</code> implementation and are not an independent checker. A separate
@@ -2093,11 +2131,11 @@ def replayKernel (input : ByteArray) : ByteArray :=
 <pre><code># every proof, plus the total axiom gate; Lean core only, so it is seconds
 lake build
 
-# compiles the exact four-module RuntimeInit kernel closure and links it (needs elan)
-cd rust &amp;&amp; cargo test</code></pre>
+# compiles the exact five-module RuntimeInit kernel closure and links it (needs elan)
+cd rust &amp;&amp; CARGO_BUILD_JOBS=1 cargo test --all-targets -- --test-threads=1</code></pre>
     <p>Further reading in the repo:
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/MAP.md">docs/MAP.md</a>
-    (every module, what it settles, and the 721-row keystone ledger with its generality and
+    (every module, what it settles, and the 731-row keystone ledger with its generality and
     reachability axes) ·
     <a href="https://github.com/emberian/lean-uwueave/blob/dev/docs/TRUST.md">docs/TRUST.md</a>
     (the three ledgers) ·

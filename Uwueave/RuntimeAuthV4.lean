@@ -20,7 +20,7 @@ append, flush behavior, or crash durability.  Those stages remain separate
 premises and outcomes below.
 -/
 import Uwueave.Exec
-import Uwueave.Preo.ArtifactDurable
+import Uwueave.Preo.ArtifactDurableCore
 
 namespace Uwueave.RuntimeAuthV4
 
@@ -736,5 +736,57 @@ theorem empty_nonce_shape_refused :
 
 theorem fixture_replica_has_no_independent_actor :
     (toExecOp fixtureRequest).replica = fixtureContent.issuer := rfl
+
+/-! ## §8. Narrow executable codec boundary -/
+
+/-- Stable one-byte result tags for the host adapter. Accepted output carries
+the exact canonical request bytes after the tag; every refusal is exactly its
+single tag byte. These are syntax outcomes only: shape, authenticity, nonce,
+resolution, authority, membership, execution, and storage remain separate
+stages. -/
+def decodeAcceptedTag : UInt8 := 0
+
+def decodeRefusalTag : DecodeRefusal → UInt8
+  | .tooLarge => 1
+  | .badMagic => 2
+  | .unsupportedVersion => 3
+  | .wrongKind => 4
+  | .malformed => 5
+
+/-- Convert the host-owned byte array to the logical codec input without
+changing byte order. -/
+def bytesOfByteArray (input : ByteArray) : Bytes := input.data.toList
+
+/-- Bounded canonical decode followed by the one proved v4 encoder. Rust sees
+only a result tag and, on success, the exact canonical request bytes. This
+does not expose a verifier, manufacture `ReadyForExecution`, or execute the
+move. -/
+def decodeCanonicalKernelBytes (maximumBytes : Nat)
+    (input : ByteArray) : ByteArray :=
+  match decodeBounded maximumBytes (bytesOfByteArray input) with
+  | .accepted request =>
+      (decodeAcceptedTag :: encodeRequestV4 request).toByteArray
+  | .refused reason => [decodeRefusalTag reason].toByteArray
+
+theorem decodeCanonicalKernelBytes_accepted (maximumBytes : Nat)
+    (input : ByteArray) (request : SignedRequest)
+    (hdecode : decodeBounded maximumBytes (bytesOfByteArray input) =
+      .accepted request) :
+    decodeCanonicalKernelBytes maximumBytes input =
+      (decodeAcceptedTag :: encodeRequestV4 request).toByteArray := by
+  simp [decodeCanonicalKernelBytes, hdecode]
+
+theorem decodeCanonicalKernelBytes_refused (maximumBytes : Nat)
+    (input : ByteArray) (reason : DecodeRefusal)
+    (hdecode : decodeBounded maximumBytes (bytesOfByteArray input) =
+      .refused reason) :
+    decodeCanonicalKernelBytes maximumBytes input =
+      [decodeRefusalTag reason].toByteArray := by
+  simp [decodeCanonicalKernelBytes, hdecode]
+
+@[export uwueave_runtime_auth_v4_decode_canonical]
+def decodeCanonicalKernel (maximumBytes : Nat)
+    (input : ByteArray) : ByteArray :=
+  decodeCanonicalKernelBytes maximumBytes input
 
 end Uwueave.RuntimeAuthV4

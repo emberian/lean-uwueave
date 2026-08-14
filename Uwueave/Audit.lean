@@ -205,6 +205,7 @@ import Uwueave.StatusSemanticsAcceptance
 import Uwueave.RepairSynthesis
 import Uwueave.FiniteRepairMenu
 import Uwueave.RuntimeAuthV4
+import Uwueave.RuntimeAuthV4Kernel
 import Uwueave.Preo.RuntimeAuthV4Data
 import Uwueave.Preo.RuntimeAuthV4Checked
 import Uwueave.Preo.RuntimeAuthV4Durable

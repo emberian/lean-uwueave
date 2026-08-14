@@ -49,7 +49,7 @@ short and honest rather than a list of vague possibilities.
 Those two phones are a program. You need [elan](https://elan.lean-lang.org) on
 your `PATH` — the decision layers are compiled from the Lean, so the Rust build
 insists on a working Lean toolchain rather than linking whatever was on disk
-last time. A data-free `RuntimeInit` module names the four native-kernel modules;
+last time. A data-free `RuntimeInit` module names the five native-kernel modules;
 the build takes their exact transitive closure from Lake, byte-snapshots it, and
 refuses stale, extra, missing, or mixed-generation archive members. The first
 build is slow; after that it's incremental.
@@ -242,7 +242,41 @@ is a bigger, real schema that deliberately contains one.
   an active one-use grant. A canonical 369-byte V4 sidecar retains those checked
   request/context facts as bounded neutral data, but decoding it cannot recreate
   the private checked value. Its `⟨4,162⟩` durable framing is intentionally not
-  the existing `UWV4` signed-request wire and is not a verifier.
+  the `UWV4` signed-request wires and is not a verifier. The legacy 107-byte
+  kind-1 fixture still crosses the narrow five-refusal syntax endpoint. A new
+  context-bound kind-3 request signs a nonempty opaque context commitment;
+  Lean alone decodes it, enforces eight shape and three host-width checks, and
+  emits the exact kind-4 projection consumed by later host stages. Rust never
+  parses either request wire. A separately pluggable verifier includes a
+  concrete keyed-BLAKE3 symmetric-MAC profile scoped to context, document,
+  genesis, issuer, and key epoch. Its acceptance is a trusted host attestation,
+  retaining the exact scope/signing/signature byte vectors plus unkeyed hashes,
+  not a public-key signature proof, EUF-CMA result, authority, membership,
+  nonce, execution, or storage decision. A separate `UWAMV401`
+  `AuthenticatedMoveJournal` can atomically retain one crate-private
+  already-checked record with its nonce/operation scopes, exact execution-base
+  binding, and hash-chained prior head. The externally pinned head therefore
+  commits to that binding and detects rollback relative to the caller's pin. The landed
+  `AuthenticatedRuntime` exposes only raw kind-3 admission and orders Lean
+  projection, exact-byte verification, retry/collision classification, pinned
+  context under one fixed document/genesis/context/execution binding. The last
+  is a domain-separated framed digest of the concrete topology and grant/
+  revocation base, not an authenticator. Stable-id resolution must agree in
+  both the provider and actual execution weave; independent
+  authority and membership checks, concrete Lean move preflight, durable append,
+  then in-memory commit. Definite storage refusal is distinct from indeterminate
+  I/O. Externally pinned recovery reprojects and reverifies every stored
+  request, reruns the historical
+  context/policy/execution checks, compares the complete checked record, and
+  replays in prefix order. Storage itself still performs none of those checks;
+  unpinned reopen is inspection-only, the policy traits and verifier are trusted
+  host code, and neither the external pin nor filesystem durability is proved.
+  The focused authenticated runtime/projection suite passes **10/10** end-to-end
+  tests. The final serialized `CARGO_BUILD_JOBS=1 cargo test --all-targets --
+  --test-threads=1` gate passes **177/177** tests in
+  **125.72s real** (**10.49s** compilation, **35.60s user**, **37.86s sys**,
+  **1,274,494,976 B** maximum RSS); this is regression-path evidence, not
+  admission throughput.
 
 - **Authenticated ERA finality now reaches the certificate layer without
   laundering its premises.** One exact signed progress event supplies accepted
@@ -318,9 +352,11 @@ not something you crash on.
   namespace; the Preoscript acceptance suite repeats the forbidden-proof cases
   at generated declarations and covers failure honesty and resource caps.
 - **[Runtime architecture](docs/RUNTIME.md)** — the shipping FORMAT-v3 path,
-  exact RuntimeInit/Lake native closure, four pure-Rust journals, checked V3
+  exact RuntimeInit/Lake native closure, five pure-Rust journal domains, checked V3
   Quickstart and bounded diagnostic inspection, exact durability assumptions,
-  and the canonical but not-yet-shipping authenticated FORMAT-v4 foundation.
+  and the canonical FORMAT-v4 syntax, context-bound projection, and verifier
+  boundaries now composed into the raw-only authenticated-move host path and
+  externally pinned recovery contract.
 - **[The bibliography](docs/BIBLIOGRAPHY.md)** — every paper behind this, what it
   established, what we took, what we declined. Several entries exist to record
   claims of *ours* that the literature refuted.
@@ -334,16 +370,19 @@ lake build              # every proof + the total axiom gate (Lean core only, no
 ./scripts/preo-quickstart-canaries.sh # coherent V3 journey + five typed refusals
 ./scripts/preo-v3-acceptance-canaries.sh # observed V3 export, rollback, floor, caps
 ./scripts/wave27-acceptance-canaries.sh # signed context/frontier/V4/durable arrival
+./scripts/wave30-auth-runtime-canaries.sh # context-bound projection/refusal/floor matrix
 cd rust && cargo test   # asks Lake for the exact native closure, verifies it, and links it
 ```
 
-The current checkpoint is **184** Lean source modules (**161** direct proof-root
-imports excluding `Audit`, **185** full-build jobs) and **25,333** audited
-constants, with **721** MAP keystones and **132** documented transports. The
+The current checkpoint is **185** Lean source modules / **186** full-build jobs
+(**162** direct proof-root imports excluding `Audit`) with **25,747** constants
+checked by the total axiom gate, **731** MAP keystones, and **135** documented transports. The
 generated work ledger records **155** `⟨UNDONE⟩`
-markers in **153** blocks across **43** source files. The serialized Wave-29
-Rust aggregate passed **147/147** tests in **23.98s** (including **2.38s** of
-compilation). Counts are checkpoints; the commands and fail-closed gates are
+markers in **153** blocks across **43** source files. The earlier serialized
+kind-1 syntax checkpoint passed **148/148** Rust tests in **31.02s** (including
+**0.14s** of warm compilation). The final serialized all-target checkpoint is
+**177/177** in **125.72s real**, as reported above. Counts are checkpoints; the
+commands and fail-closed gates are
 the durable contract.
 
 ## How to read our claims

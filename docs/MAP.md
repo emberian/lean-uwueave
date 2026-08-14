@@ -9,15 +9,15 @@ that policy to every constant in this namespace. A stray `sorry` or
 (That total coverage is a fact about the **gate**, not about this table; the
 [ledger](#keystone-ledger) below is a reading aid, not a trust mechanism.)
 
-✅ **Coverage, 2026-08-12.** The file table below has one row for each of the
-184 Lean module files under `Uwueave/`, including the nested `Preo` and
+✅ **Coverage, 2026-08-13.** The file table below has one row for each of the
+185 Lean module files under `Uwueave/`, including the nested `Preo` and
 `Tactics` modules. This is a documentation invariant rather than a trust
 mechanism: the root aggregator and `#gate_covers_root` remain the authorities
 for transitive gate coverage. Re-derive the table's coverage instead of
 trusting this prose after adding or moving a module:
 
-The frozen Wave 29 gate built 185 jobs, found 161 direct root modules below
-the gated closure, and audited 25,333 `Uwueave` constants. Those are mechanical
+The Wave 30 gate built 186 jobs, found 162 direct root modules below the gated
+closure, and audited 25,747 `Uwueave` constants. Those are mechanical
 snapshot counts, not a semantic-adequacy claim.
 
 ```sh
@@ -30,7 +30,7 @@ source = re.split(
 mapped = set(re.findall(r"^\| `([^`]+\.lean)` \|", source, re.MULTILINE))
 present = {str(path) for path in Path("Uwueave").rglob("*.lean")}
 assert mapped == present, (sorted(present - mapped), sorted(mapped - present))
-assert len(mapped) == 184
+assert len(mapped) == 185
 PY
 ```
 
@@ -245,7 +245,8 @@ curiosity.)
 | `Uwueave/Preo/ArtifactInspectionV1.lean` | Pure bounded inspection of canonical V2/V3 frames and concatenated journals. A stack-safe outer-envelope scan delegates payload decoding to the Lean-owned durable codecs and structural admission to `ProjectionV2`/`ProjectionV3`, then returns deterministic diagnostic-only JSON with offsets and typed V3 rows. Input/record/reference bounds, torn/corrupt suffixes, wrong formats, and structural invalidity refuse the whole request. It proves neither denial-of-service resistance nor host-file authenticity/durability. |
 | `Uwueave/Preo/ArtifactInspectionMain.lean` | Explicit binary-input CLI for frame/journal inspection via file or stdin. It is mapped and separately built/run but excluded from root and Audit aggregates because its root-level `main` cannot coexist with `ArtifactEmitMain.main`; the pure inspection library is root-imported and trust-gated. File reads and printed diagnostics confer no proof, permit, atomicity, fsync, permissions, or path-hardening guarantee. |
 | `Uwueave/Preo/Quickstart.lean` | One executable custom-state journey: `preo_program` binds state to a typed derived query; `BoundResult` attaches the exact named world future and certificate; native protocol/planning produce one exact five-currency plan and budget; proof-indexed V3 builders retain stable query/result/future/world/certificate identity; ProjectionV3 validates; canonical bytes reopen and inspect. `v3_bytes_executable_exact` proves the stack-safe emitted bytes equal the logical durable frame. The 71,011-byte canary writes/reopens a frame and two-record journal and rejects wrong projection/future/certificate/plan/world, but host I/O remains a test, not a filesystem refinement theorem. |
-| `Uwueave/RuntimeAuthV4.lean` | A staged authenticated FORMAT-v4 record model, deliberately not wired into the shipping v3 entry point. Canonical signed bytes bind document/genesis, algorithm, issuer/epoch/nonce, stable ids, and every projected `Exec.Op` field; bounded decoding, shape checks, exact replay/collision classification, verification and resolver premises, layered outcomes, and nonempty versioned responses stay separate. Substitution and collision fixtures are concrete. No cryptographic hardness, authorization, membership, actual execution, append, or durability theorem is claimed. |
+| `Uwueave/RuntimeAuthV4.lean` | A staged authenticated FORMAT-v4 record model, deliberately not wired into the shipping v3 execution entry point. Canonical signed bytes bind document/genesis, algorithm, issuer/epoch/nonce, stable ids, and every projected `Exec.Op` field; bounded decoding, shape checks, exact replay/collision classification, verification and resolver premises, layered outcomes, and nonempty versioned responses stay separate. The narrow exported `decodeCanonicalKernel` now performs only bounded canonical syntax classification and proved re-encoding, with exact one-byte tags for all five refusals. Substitution, collision, and real Rust-FFI codec fixtures are concrete. No shape admission, cryptographic hardness, authorization, membership, execution, append, or durability theorem is claimed. |
+| `Uwueave/RuntimeAuthV4Kernel.lean` | The narrow context-bound admission-projection kernel. Request kind 3 signs every legacy move field plus a nonempty opaque context commitment and is byte-separated from legacy request kind 1, layered response kind 2, and projection response kind 4. Bounded canonical decoding, eight nonempty shape checks, and exact FORMAT-v3 host-width checks yield a self-decoding neutral projection that retains the canonical request, signing bytes, signature, context, stable IDs, and every execution lane; 16 distinct refusal tags roundtrip injectively. The exported endpoint performs none of context interpretation, signature verification, stable-ID resolution, nonce freshness, authority, membership, execution, or persistence. |
 | `Uwueave/Preo/RuntimeAuthV4Data.lean` | Neutral first-order manifest-sidecar rows mirroring every signed-move field plus cited grant scope and authored context identities/roster/participants. Stable IDs and digests are opaque bytes, not hashes or authority. `schema` belongs to the untrusted host projection; the durable outer format is the sole byte-level sidecar version. |
 | `Uwueave/Preo/RuntimeAuthV4Checked.lean` | One-way construction from the exact existing `RuntimeAuthV4.SignedRequest`, `ReadyForExecution`, a live cited-grant/scope receipt, and finite context receipt. UInt fields only widen through `toNat`; `sourceSigningBytes_exact` retains the old canonical signing message, which is explicitly not the sidecar frame. Ready's authority/membership predicates remain independent premises; the grant receipt proves no holder possession, and authored context digests/origin/version are not verified. Decoded rows never reconstruct proof. |
 | `Uwueave/Preo/RuntimeAuthV4Durable.lean` | Canonical version/domain-framed bytes for the neutral manifest sidecar, with exact prefix/whole-frame roundtrips and bounded whole-frame refusal. Its `(4,162)` durable envelope is **not** the existing `UWV4` request wire and must never be submitted as request or signing bytes. Prefix decoding preserves journal suffixes; exact and bounded decoding reject trailing, malformed, oversized, or changed-format frames while returning data only. |
@@ -253,7 +254,7 @@ curiosity.)
 | `Uwueave/Preo/RuntimeAuthV4Projection.lean` | Deterministic Rust DTO rendering from only the private validated sidecar. Decimal strings avoid host integer truncation and byte identities remain exact slices; lookup conveniences are neutral. `renderRustSource_eq_of_manifest_eq` and `validateAndRender_error` preserve exact accepted data and refusal. Generated Rust is not a verifier or permit. |
 | `Uwueave/Preo/RuntimeAuthV4Examples.lean` | Opt-in proof-originated full sidecar and adversarial validation suite. It pins exact request-field/signing-byte preservation and rejects wrong schema/grant/scope, noncanonical or outsider membership, empty identities, width errors, and inconsistent node references. The fixture verifier/authority predicates are explicit toy premises. |
 | `Uwueave/Preo/RuntimeAuthV4Fixtures.lean` | Golden sidecar metadata: exact 369-byte frame, prefix `[213,74,4,162]`, exact Lean reopen, and host SHA-256 regression label `a9f32051b0e1e328ab08b253a808ba54cc5c4a4e9cb2b5d2550c3811cf03b819`. The digest is a test label, not a cryptographic theorem; this opt-in leaf never enters the runtime object closure. |
-| `Uwueave/RuntimeInit.lean` | The declaration- and data-free native initializer root. Its four imports (`Exec`, `SeqKernel`, `EraKernel`, and `Preo/ArtifactJournalKernel`) are the single source of truth for the Rust-linked Lean object graph; Lake derives their transitive module/object closure, and the C shim calls only this root initializer. Diagnostics, checked artifact constructors, examples, and unrelated proof modules stay outside that closure unless a runtime kernel imports them. |
+| `Uwueave/RuntimeInit.lean` | The declaration- and data-free native initializer root. Its five imports (`Exec`, `SeqKernel`, `EraKernel`, `Preo/ArtifactJournalKernel`, and `RuntimeAuthV4Kernel`) are the single source of truth for the Rust-linked Lean object graph; Lake derives their transitive module/object closure, and the C shim calls only this root initializer. Diagnostics, checked artifact constructors, examples, and unrelated proof modules stay outside that closure unless a runtime kernel imports them. |
 
 ## Keystone ledger
 
@@ -264,7 +265,7 @@ each `Live` / `LatticeOnly` tag cites nothing beyond the named module's own
 docstrings (upgraded by `CausalReach` theorems where those supersede them);
 `—` marks rows the axis does not apply to. Every row is covered by
 `#audit_floor`'s total gate — there is no per-row trust column to read. The
-table currently holds 721 rows:
+table currently holds 731 rows:
 
 | Theorem | Module | Generality | Reachability |
 |---|---|---|---|
@@ -775,9 +776,19 @@ table currently holds 721 rows:
 | `byteArray_data_toList` | Preo/ArtifactEmit | parametric | — |
 | `signingBytesV4_injective` | RuntimeAuthV4 | ∀-general | — |
 | `bounded_roundtrip` | RuntimeAuthV4 | ∀-general | — |
+| `decodeCanonicalKernelBytes_accepted` | RuntimeAuthV4 | ∀-general | — |
+| `decodeCanonicalKernelBytes_refused` | RuntimeAuthV4 | ∀-general | — |
 | `compareNonce_collision_iff` | RuntimeAuthV4 | ∀-general | — |
 | `toExecOp_exact_fields` | RuntimeAuthV4 | ∀-general | — |
 | `fixture_document_substitution_refused` | RuntimeAuthV4 | finite-story | — |
+| `contextRequest_roundtrip` | RuntimeAuthV4Kernel | ∀-general | — |
+| `context_commitment_is_signed` | RuntimeAuthV4Kernel | ∀-general | — |
+| `context_bounded_roundtrip` | RuntimeAuthV4Kernel | ∀-general | — |
+| `AdmissionProjection.ofRequest_exact` | RuntimeAuthV4Kernel | ∀-general | — |
+| `admissionResponse_roundtrip` | RuntimeAuthV4Kernel | ∀-general | — |
+| `encodeAdmissionResponse_injective` | RuntimeAuthV4Kernel | ∀-general | — |
+| `decode_projectAdmissionBytes` | RuntimeAuthV4Kernel | ∀-general | — |
+| `distinct_refusals_have_distinct_responses` | RuntimeAuthV4Kernel | ∀-general | — |
 | `Program.inferred` | Preo/Expr | ∀-general | — |
 | `updateProgramCache_correct` | Preo/Incremental | ∀-general | — |
 | `TypedResult.totalSound` | Preo/Incremental | ∀-general | — |

@@ -1,6 +1,7 @@
 //! Filesystem persistence with explicit recovery and synchronization policies.
 //!
-//! The three stores in this module intentionally do not share a wire format:
+//! The five durable domains in this module intentionally do not share a wire
+//! format:
 //!
 //! * [`ArtifactJournal`] stores the exact bytes produced by Lean's
 //!   `Preo.ArtifactDurable.projectionBytes` as unchanged payloads inside a
@@ -11,6 +12,10 @@
 //! * [`DocumentJournal`] owns a separate, checksummed operation/event and
 //!   checkpoint log. Its byte records are a runtime storage format, not a
 //!   Preoscript artifact schema.
+//! * [`AuthenticatedMoveJournal`] is an authenticated-admission-only
+//!   wire. Its distinct marker prevents mixing legacy document records; its
+//!   internal chain and indexes preserve checked-runtime receipts, while a
+//!   secure reopen still requires an external head pin and revalidation.
 //! * [`HistoryJournal`] stores a causally closed set of explicit-id history
 //!   events. Canonical parent sets, immediate missing-parent refusal, and
 //!   collision checks make every accepted physical prefix a valid causal
@@ -53,8 +58,10 @@
 //! The bounds here are per-record, plus a stricter pre-FFI artifact-frame
 //! bound. Total file bytes and record count are not yet bounded. Paths are
 //! caller-trusted rather than symlink-hardened. Checksums detect accidental
-//! corruption but neither authenticate a writer nor pin a journal head, so
-//! rollback detection and authenticated recovery remain separate open work.
+//! corruption but do not authenticate a writer or intrinsically pin any
+//! journal head. [`AuthenticatedMoveJournal`] can detect rollback relative to
+//! an exact head supplied by its caller; protecting and retrieving that pin,
+//! and revalidating the recovered admissions, remain deployment obligations.
 //!
 //! The current backend is a small `std` + BLAKE3 append log because it most
 //! directly exercises the proved complete-prefix/torn-tail model while making
@@ -64,6 +71,7 @@
 //! format or turn a database transaction into a durability theorem.
 
 mod artifact;
+mod authenticated;
 mod document;
 mod history;
 mod record;
@@ -72,6 +80,12 @@ pub use artifact::{
     decode_artifact_frame_stream, encode_artifact_frame_stream, ArtifactFrame, ArtifactFrameError,
     ArtifactJournal, ArtifactJournalError, ArtifactOpenReport, ArtifactStreamError,
     ARTIFACT_DOMAIN, ARTIFACT_FORMAT_VERSION, MAX_ARTIFACT_FRAME_BYTES,
+};
+pub(crate) use authenticated::StorePreview;
+pub use authenticated::{
+    AdmissionContextRef, AuthenticatedJournalError, AuthenticatedMoveJournal,
+    AuthenticatedMoveRecord, AuthenticatedOpenReport, CheckedAdmission, KernelAdmissionObservation,
+    KernelObservation, NonceKey, OperationKey, RecoveryExpectation, StoreDecision,
 };
 pub use document::{
     DocumentEntry, DocumentEntryKind, DocumentJournal, DocumentJournalError, DocumentOpenReport,

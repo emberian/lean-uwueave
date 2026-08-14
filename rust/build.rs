@@ -16,11 +16,12 @@ use std::process::{Command, Output};
 
 const PACKAGE: &str = "uwueave";
 const RUNTIME_ROOT: &str = "Uwueave.RuntimeInit";
-const REQUIRED_KERNELS: [&str; 4] = [
+const REQUIRED_KERNELS: [&str; 5] = [
     "Uwueave.Exec",
     "Uwueave.SeqKernel",
     "Uwueave.EraKernel",
     "Uwueave.Preo.ArtifactJournalKernel",
+    "Uwueave.RuntimeAuthV4Kernel",
 ];
 
 #[derive(Clone, Debug, Eq, PartialEq)]

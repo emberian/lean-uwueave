@@ -19,7 +19,7 @@ finished.
 Read it as the answer to *"is this one thing?"*. It is one thing **exactly
 when these crossings are first-class**.
 
-**Ledger total: 132 numbered transport rows.** Wave 24's elaborator and
+**Ledger total: 135 numbered transport rows.** Wave 24's elaborator and
 projection splits changed owners and proof routes without changing the earlier
 judgements. Wave 25 adds five crossings: application state into typed query
 semantics; checked state results into exact world futures/certificates; checked
@@ -44,6 +44,13 @@ Wave 29 adds two explicitly finite crossings: checked authored repair rows to
 an exact dependent menu result, and an authored coherent history plus assumed
 successful logical replay to arrival-order-independent event-set observation.
 Neither discovers its finite universe or closes a marker.
+Wave 30 begins with two deliberately different wire crossings: legacy kind-1
+UWV4 bytes to bounded canonical syntax, and context-bound kind-3 bytes through
+shape/word-width checks to a neutral admission projection. A third crossing
+joins the latter projection to deployment-owned verification, one pinned
+historical context, exact resolution and policy checks, the existing move
+kernel, and an authenticated-only journal. Those host premises remain explicit;
+the first two crossings alone authenticate or authorize nothing.
 
 ---
 
@@ -1919,6 +1926,89 @@ shape, and nothing here authenticates IDs, builds repeated fresh versions,
 relates Rust's strictly ordered parent bytes to Lean, observes a network, or
 proves a host/filesystem refinement.
 
+**45x. Host UWV4 bytes plus explicit size bound → Lean-classified canonical syntax** ⚠
+*source* one host-owned byte slice and a caller-selected maximum length ·
+*target* either the exact proved canonical request encoding or one distinct
+refusal among `tooLarge`, `badMagic`, `unsupportedVersion`, `wrongKind`, and
+`malformed` · *transport* `RuntimeAuthV4.decodeCanonicalKernel`, exported
+through the single RuntimeInit closure and interpreted by
+`rust::auth::decode_runtime_auth_v4_canonical`; accepted output is
+`encodeRequestV4` from the decoded Lean value, never a Rust re-encoding ·
+*needs* the ordinary C/Lean/Rust ABI and code-generation trust boundary, plus
+the explicit logical byte bound · *without later admission premises* this
+transport establishes syntax only: it does not run `validateShape`, verify a
+signature, decide nonce freshness/resolution/authority/membership, execute the
+move, or append anything. The 107-byte fixture and all five refusal tags pass
+through the linked endpoint; host allocation precedes the logical bound.
+
+**45y. Context-bound UWV4 syntax → exact neutral admission projection** ⚠
+*source* bounded canonical kind-3 request bytes whose signed content includes
+one nonempty opaque context commitment · *target* either the exact kind-4
+`RuntimeAuthV4Kernel.AdmissionProjection` or one of 16 distinct decode, shape,
+or FORMAT-v3 host-width refusals · *transport*
+`RuntimeAuthV4Kernel.projectAdmission`, with
+`AdmissionProjection.ofRequest_exact` pinning the canonical request, exact
+signing bytes/signature, context and stable identities, and every projected
+execution lane; `decode_projectAdmissionBytes`,
+`admissionResponse_roundtrip`, and `distinct_refusals_have_distinct_responses`
+pin the self-decoding response. The native route is
+`projectAdmissionKernel` →
+`shim_uweave_runtime_auth_v4_project_admission` →
+`rust::auth::project_runtime_auth_v4_admission` · *needs* the explicit byte
+bound and ordinary Lean/C/Rust code-generation and ABI trust boundary; later
+host decisions must use the returned values rather than reparse UWV4 ·
+*without the new signing domain* `context_commitment_is_signed` shows why the
+context cannot be appended after signing, while
+`context_request_separated_from_legacy` makes a legacy kind-1 request
+`wrongKind`; empty semantic identities and unrepresentable child,
+destination, or citation indices refuse before projection. **Accepted means
+only canonical syntax, shape, and exact host representability**: the opaque
+commitment is not interpreted, and no signature, key, stable-id resolution,
+nonce, operation-id uniqueness, authority, membership, execution, or storage
+decision occurs.
+
+**45z. Neutral admission projection plus deployed checks → exactly one authenticated move record** ⚠
+*source* the exact kind-4 host projection from row 45y, a configured
+`RequestVerifier`, one `AdmissionContextProvider`, `StableIdResolver`,
+`MoveAuthority`, `MoveMembership`, one fixed `RuntimeScope`, the concrete
+`LeanMoveExecution`, and an externally pinned `AuthenticatedMoveJournal` ·
+*target* a stage-specific refusal/unavailability, definite no-write
+`StorageRefused`, storage-indeterminate result, or `AdmissionOutcome::Accepted` naming either one
+new append or an exact verified retry · *transport*
+`AuthenticatedRuntime::admit`: it verifies the returned projection's exact
+context/document/genesis/algorithm/issuer/epoch/signing/signature input and
+checks the verifier receipt names that same input; the journal classifies
+nonce and operation keys by **exact signing bytes**; fresh input pins the exact
+signed context, independently resolves each stable ID and checks its signed
+kernel index against both the provider and the execution weave, requires the
+fixed document/genesis/context and framed topology/grant/revocation execution
+binding, runs independent authority and membership policies, accepts only
+the existing kernel's `Applied` or `SkippedCycle`, privately constructs one
+`CheckedAdmission`, and atomically appends the one record that reserves both
+keys before updating the journal's recovered indexes and committing the
+in-memory `MoveLog`. The wire is isolated in the separate `UWAMV401` journal. Exact
+verified retries create no second record or execution and repeat the configured
+physical sync; `AuthenticatedRuntime::recover` reprojects, reverifies,
+reresolves, rechecks both policies and execution, compares the complete rebuilt
+record, and refuses any unpinned journal · *needs* correctness and historical
+availability of every deployment-owned trait, a truthful external
+`RecoveryExpectation`, the configured journal sync policy, and the ordinary
+Lean/C/Rust/OS/filesystem trust boundaries. The supplied algorithm-1 verifier
+is keyed BLAKE3 with a shared secret—not a public-key signature or an EUF-CMA
+theorem—and custom verifiers may construct their own trusted-boundary receipt ·
+*without those premises* projection acceptance remains neutral; bad or
+mismatched verification receipts, unknown/mismatched contexts, missing or
+wrong-index nodes, policy denials, kernel seam refusals, nonce/operation
+collisions, corrupt chains, and external-head mismatches all fail closed or
+remain explicitly unavailable/indeterminate. The internal hash chain cannot
+detect clean suffix rollback without the external pin, buffered sync is not a
+stable-media guarantee, and acceptance licenses only this move-log record—not
+whole-Weave authentication, consensus, liveness, or finality.
+The focused host canaries exercise the real Lean-emitted kind-3 path through
+keyed verification, `LeanMoveExecution`, append-before-ack, exact retry,
+externally pinned reopen/recovery, both collision indexes, and resolver,
+authority, membership, and storage refusal without an in-memory commit.
+
 ---
 
 ## The meta-row
@@ -1975,15 +2065,17 @@ temporal fairness, and checked woven edits. Rows 45–45g connect the covered
 history engine, logical persistent runtime, canonical artifact journal,
 bounded planning generator, native protocol syntax, total result/report
 program, staged authenticated-v4 boundary, and the explicit canonical-byte
-emitter. Rows 45h–45w add explicit application-state query semantics, exact
+emitter. Rows 45h–45z add explicit application-state query semantics, exact
 world/certificate binding, proof-indexed V3 erasure, validated V3
 rendering/durability/inspection, finite causal-history persistence, typed
 position attribution, authenticated running observation, and transactional V3
 export, then authenticated one-use context delivery, the checked `UWV4`-to-
 sidecar boundary, bounded sidecar rendering/framing, shared canonical effect
 reification, the durable-arrival callback/host separation, authenticated ERA
-finalisation, checked finite repair-menu selection, and authored finite-history
-event-set observation. What
+finalisation, checked finite repair-menu selection, authored finite-history
+event-set observation, bounded canonical UWV4 syntax classification, the
+separate context-bound syntax/shape/host-width projection, and its explicitly
+premised checked host admission into the authenticated-only journal. What
 remains is different work:
 declarations still carry no operation vocabulary from which to derive
 reachability, no Preo rule produces a typed `Repair P Q`, multi-field derives

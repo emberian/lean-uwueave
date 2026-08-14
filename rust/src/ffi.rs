@@ -27,6 +27,18 @@ extern "C" {
     fn shim_uweave_seq(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
     fn shim_uweave_era(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
     fn shim_uweave_preo_artifact_v2_validate_one(input: *const u8, len: usize) -> u8;
+    fn shim_uweave_runtime_auth_v4_decode_canonical(
+        maximum_bytes: usize,
+        input: *const u8,
+        len: usize,
+        out_len: *mut usize,
+    ) -> *mut u8;
+    fn shim_uweave_runtime_auth_v4_project_admission(
+        maximum_bytes: usize,
+        input: *const u8,
+        len: usize,
+        out_len: *mut usize,
+    ) -> *mut u8;
 }
 
 static INIT: Once = Once::new();
@@ -178,4 +190,48 @@ pub(crate) fn preo_artifact_v2_validate_one(input: &[u8]) -> bool {
     // shim copies it into a Lean ByteArray, retains no pointer, consumes the
     // Lean input, and reduces the exactly-one-byte output to a scalar.
     unsafe { shim_uweave_preo_artifact_v2_validate_one(input.as_ptr(), input.len()) == 1 }
+}
+
+/// Run the Lean-owned bounded canonical UWV4 decoder. The returned byte vector
+/// is the kernel's tagged response; [`crate::auth`] owns its small typed host
+/// interpretation, not the signed-request codec.
+pub(crate) fn runtime_auth_v4_decode_canonical(maximum_bytes: usize, input: &[u8]) -> Vec<u8> {
+    ensure_initialized();
+    let mut out_len = 0usize;
+    // SAFETY: `input` is readable for `input.len()` bytes and `out_len` is
+    // writable. The shim copies both the exact bound and bytes into Lean,
+    // retains no Rust pointer, and returns one non-null malloc-owned buffer.
+    let ptr = unsafe {
+        shim_uweave_runtime_auth_v4_decode_canonical(
+            maximum_bytes,
+            input.as_ptr(),
+            input.len(),
+            &mut out_len,
+        )
+    };
+    // SAFETY: established by the shim call's ABI contract.
+    unsafe { take_shim_bytes(ptr, out_len) }
+}
+
+/// Run the Lean-owned bounded context-bound admission projection. The bytes
+/// are the kind-4 kernel response grammar; [`crate::auth`] may interpret that
+/// response but must not parse the kind-3 UWV4 request itself. This adapter
+/// makes no admission decision and preserves Lean's exact refusal/projection.
+pub(crate) fn runtime_auth_v4_project_admission(maximum_bytes: usize, input: &[u8]) -> Vec<u8> {
+    ensure_initialized();
+    let mut out_len = 0usize;
+    // SAFETY: `input` is readable for `input.len()` bytes and `out_len` is
+    // writable. The shim copies the exact bound and input into fresh Lean
+    // objects, retains no Rust pointer, and returns one non-null malloc-owned
+    // buffer whose exact length it writes to `out_len`.
+    let ptr = unsafe {
+        shim_uweave_runtime_auth_v4_project_admission(
+            maximum_bytes,
+            input.as_ptr(),
+            input.len(),
+            &mut out_len,
+        )
+    };
+    // SAFETY: established by the shim call's ABI contract.
+    unsafe { take_shim_bytes(ptr, out_len) }
 }

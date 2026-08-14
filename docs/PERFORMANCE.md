@@ -1653,3 +1653,67 @@ including **2.38 s** of compilation. No Rust target or test count changed, and
 the native closure remained exactly **13 objects / 659,152 B**. This is
 aggregate validation-path time, not evidence that the new proof leaves execute
 through the native runtime.
+
+## 19. Wave 30 UWV4 syntax, projection and host admission — 2026-08-13
+
+The first runtime-authentication slice began with one executable decision:
+`RuntimeAuthV4.decodeCanonicalKernel` bounds and canonically decodes legacy
+kind-1 host bytes in Lean, then returns either one of five distinct refusal
+tags or the exact reconstructed bytes. The final checkpoint adds the separate
+`RuntimeAuthV4Kernel`: context-bound kind-3 decode, eight shape refusals, three
+exact FORMAT-v3 host-width refusals, and a canonical kind-4 projection. Rust
+interprets only Lean-owned result grammars. The pluggable host verifier includes
+a concrete context-scoped keyed-BLAKE3 symmetric-MAC profile. The landed
+`AuthenticatedRuntime` now orders the raw kind-3 request through journal
+retry/collision classification, one fixed document/genesis/context plus a
+framed concrete topology+grant+revocation binding, provider and actual execution
+index agreement, independent authority and membership, concrete Lean replay,
+durable append, and only then in-memory commit. Definite storage refusal is
+distinct from indeterminate I/O. Externally pinned recovery repeats projection,
+verification, every policy stage and complete-record comparison in prefix
+order. The focused end-to-end suite passes **10/10**. These stages have
+correctness/refusal tests, but no admission-latency,
+throughput, isolated-memory, crash, or recovery-scaling benchmark is claimed.
+
+The canonical signed-request fixture is **107 bytes**, beginning with
+`UWV4 04 01`. The linked focused test passes exact roundtrip plus too-large,
+bad-magic, old-version, wrong-kind, truncated, and trailing-byte refusals. The
+first focused Cargo build took **37.31 s**, of which the test body took
+**2.47 s**; those are one run after changing the native closure, not throughput
+statistics.
+
+Changing `RuntimeAuthV4` from the public `ArtifactDurable` umbrella to the
+already-linked `ArtifactDurableCore` kept every transitive dependency inside
+the previous runtime graph. The legacy syntax checkpoint first moved the
+closure to **14 objects / 875,288 B**. The final leaf-wrapper closure is
+**15 Lake objects / 1,049,544 B**: exactly one further object and **174,256 B**.
+`RuntimeAuthV4Kernel` itself measures **432,753 B C / 174,256 B object /
+1,755,360 B olean**; `RuntimeAuthV4` remains **535,805 / 216,000 / 1,940,312 B**.
+The verified archive is **16 members / 1,249,984 B**, SHA-256
+`1b0deb1bcfcaa79f66ba7f880a340605a9055e655820888a2ebcb6110b528d8e`.
+Relative to Wave 29, the complete closure adds two objects and **390,392 B**.
+
+The safe Rust projection API checks the caller's length bound before FFI, so
+an oversize slice is not copied into Lean. The caller already owns that slice;
+transport allocation/read caps remain independent. Kernel-only callers still
+cross a `ByteArray` and convert it to a list before the logical Lean check.
+A focused five-test run, including real kind-3 Lean bytes through the actual
+kind-4 FFI, passed in **2.68 s** (**1.51 s** compilation, **1.13 s** tests) with
+**620,199,936 B** maximum RSS during concurrent swarm activity. This is one
+validation observation, not a throughput or isolated-memory benchmark.
+
+The intermediate syntax-only gate audited **25,342 constants** and its
+serialized all-target Cargo checkpoint passed **148/148** tests in **31.02 s
+real**, including **0.14 s** of warm compilation. The final tree has **185
+modules / 186 full-build jobs / 162 direct root imports** and the total axiom
+gate checks **25,747 constants**. The final serialized command
+`CARGO_BUILD_JOBS=1 cargo test --all-targets -- --test-threads=1` passed
+**177/177** tests in **125.72 s real** after **10.49 s** compilation
+(user 35.60 s, sys 37.86 s, maximum RSS 1,274,494,976 B). The 10-test runtime
+matrix used 85.31 s because it repeatedly invokes the Lean-owned corpus.
+The breakdown is library 112; check binary 13; artifact emit 1; artifact
+inspect 1; authenticated runtime 10; ergonomics 4; persistence 15; properties
+11; authenticated arrival 1; v4 codec 1; native-closure checks 6; UNDONE census
+2; and artifact binary/examples 0. These timings demonstrate a fresh linked
+boundary and regression coverage; they do not measure authentication latency
+or throughput.
