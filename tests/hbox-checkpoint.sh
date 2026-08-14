@@ -459,7 +459,7 @@ rm "$fixture/secret.pem"
 reset_mock_logs
 expect_failure 'hbox-checkpoint: refusing checkpoint with sensitive untracked paths' \
   env "${mock_env[@]}" UWUEAVE_HBOX_TEST_INJECT_SENSITIVE_DURING_SNAPSHOT=1 \
-    "$helper" lake-build
+    "$helper" --cleanup lake-build
 rg -q 'sensitive untracked path is not allowed: secret\.pem' \
   "$test_root/failure.stderr"
 [[ ! -s $test_root/ssh-hosts.log ]]
@@ -473,7 +473,7 @@ expect_failure \
   'hbox-checkpoint: refusing frozen snapshot with sensitive path names' \
   env "${mock_env[@]}" UWUEAVE_HBOX_TEST_INJECT_SENSITIVE_DURING_SNAPSHOT=1 \
     UWUEAVE_HBOX_TEST_REMOVE_SENSITIVE_AFTER_FINAL_DIFF=1 \
-    "$helper" lake-build
+    "$helper" --cleanup lake-build
 rg -q 'sensitive path is not allowed in frozen snapshot: secret\.pem' \
   "$test_root/failure.stderr"
 [[ ! -e $fixture/secret.pem ]]
