@@ -4,8 +4,8 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 111
-- **Extracted blocks (marker-bearing source lines):** 109
+- **Marker occurrences:** 110
+- **Extracted blocks (marker-bearing source lines):** 108
 - **Lean files containing markers:** 35
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
@@ -324,19 +324,7 @@ the recipe for fixing that; the recipe was executed, and the item is gone
 rather than reworded.
 ````
 
-### [`Uwueave/Gated.lean:94`](../Uwueave/Gated.lean#L94)
-
-````text
-    ⟨UNDONE U-0052 at the shipping boundary; model admission paid⟩
-    `AuthenticatedAdmission.AuthenticatedGatedOp` now connects a received,
-    accepted signed `MoveClaim` to the abstract gated feed under
-    `Authenticity.AuthenticIssuer` and explicit `GrantHolder` binding. FORMAT
-    v3 and `Exec.Op` carry no issuer, key epoch or signature lane, so no theorem
-    authenticates the request reaching the kernel; no concrete EUF-CMA proof is
-    present. The gate bounds what a cited grant can DO, not who may cite it.
-````
-
-### [`Uwueave/Gated.lean:158`](../Uwueave/Gated.lean#L158)
+### [`Uwueave/Gated.lean:162`](../Uwueave/Gated.lean#L162)
 
 ````text
     ⟨UNDONE U-0160⟩ The former umbrella is now a registry-integrity
@@ -353,7 +341,7 @@ rather than reworded.
     this decomposition.
 ````
 
-### [`Uwueave/Gated.lean:170`](../Uwueave/Gated.lean#L170)
+### [`Uwueave/Gated.lean:174`](../Uwueave/Gated.lean#L174)
 
 ````text
   * ⟨UNDONE U-0161⟩ Lean IR-to-C lowering for the exact `RuntimeInit` closure
@@ -362,7 +350,7 @@ rather than reworded.
     lowering.
 ````
 
-### [`Uwueave/Gated.lean:181`](../Uwueave/Gated.lean#L181)
+### [`Uwueave/Gated.lean:185`](../Uwueave/Gated.lean#L185)
 
 ````text
   * ⟨UNDONE U-0164⟩ `shim.c` still needs generated or mechanically checked
@@ -370,7 +358,7 @@ rather than reworded.
     counting, with mutation negatives and sanitizer-backed integration gates.
 ````
 
-### [`Uwueave/Gated.lean:184`](../Uwueave/Gated.lean#L184)
+### [`Uwueave/Gated.lean:188`](../Uwueave/Gated.lean#L188)
 
 ````text
   * ⟨UNDONE U-0165⟩ Rust, C, and generated Lean declarations still need one
@@ -378,7 +366,7 @@ rather than reworded.
     calling conventions, and ownership on both supported native platforms.
 ````
 
-### [`Uwueave/Gated.lean:187`](../Uwueave/Gated.lean#L187)
+### [`Uwueave/Gated.lean:191`](../Uwueave/Gated.lean#L191)
 
 ````text
   * ⟨UNDONE U-0166⟩ Direct unsafe shim calls remain in the benchmark target,
@@ -386,7 +374,7 @@ rather than reworded.
     dedicated FFI boundary. This row also depends on the shim and ABI rows.
 ````
 
-### [`Uwueave/Gated.lean:190`](../Uwueave/Gated.lean#L190)
+### [`Uwueave/Gated.lean:194`](../Uwueave/Gated.lean#L194)
 
 ````text
   * ⟨UNDONE U-0167⟩ Remaining host storage and index transitions still need

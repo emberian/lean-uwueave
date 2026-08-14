@@ -4,10 +4,12 @@
 //! This module performs no request decoding, signature verification, nonce
 //! decision, authorization, membership decision, execution, or storage. It
 //! interprets the legacy kind-1 syntax checkpoint and the kind-4 response from
-//! Lean's kind-3 projection endpoint. Accepted bytes were decoded, checked,
-//! and projected by Lean under the caller's explicit bound. The public Rust
-//! structs are ordinary forgeable data, not evidence that the kernel accepted
-//! a request; admission callers must enter through the raw-request function.
+//! Lean's kind-3 projection endpoint. An accepted projection retains that
+//! exact response for the later semantic trace checker. Accepted bytes were
+//! decoded, checked, and projected by Lean under the caller's explicit bound.
+//! Except for the opaque checker-minted trace token, the public Rust structs
+//! are ordinary forgeable data, not evidence that the kernel accepted a
+//! request; admission callers must enter through the raw-request function.
 
 use crate::ffi;
 
@@ -90,6 +92,11 @@ pub struct RuntimeAuthV4NodeRef {
 /// outside this type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeAuthV4AdmissionProjection {
+    /// The exact canonical kind-4 response returned by Lean and parsed into
+    /// the fields below. This is retained so a later Lean admission-trace
+    /// check can compare the observed projection byte-for-byte rather than
+    /// trusting a Rust reconstruction of it.
+    pub projection_response: Vec<u8>,
     pub canonical_request: Vec<u8>,
     pub signing_bytes: Vec<u8>,
     pub signature_algorithm: u8,
@@ -149,6 +156,59 @@ pub enum RuntimeAuthV4AdmissionOutcome {
     KernelContractViolation,
 }
 
+/// Hard transport bound shared with the Lean admission-trace checker.
+///
+/// This bounds the complete semantic certificate, not the kind-3 request's
+/// independently recorded projection bound.
+pub const MAX_ADMISSION_TRACE_BYTES: usize = 16 * 1024 * 1024;
+
+/// An exact semantic admission certificate accepted by the Lean checker.
+///
+/// The bytes are private so safe Rust cannot manufacture this token without
+/// passing through [`check_runtime_auth_v4_admission_trace`]. The token is
+/// ordinary process-local evidence about the compiled checker invocation,
+/// not a cryptographic proof and not a portable capability.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeanValidatedAdmissionTrace {
+    canonical_certificate: Vec<u8>,
+}
+
+impl LeanValidatedAdmissionTrace {
+    /// Return the exact checker-accepted certificate bytes.
+    pub fn certificate_bytes(&self) -> &[u8] {
+        &self.canonical_certificate
+    }
+}
+
+/// A fail-closed refusal from the admission-trace checker boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeAuthV4AdmissionTraceRefusal {
+    /// The host refused before allocating/copying a Lean input.
+    TooLarge,
+    /// Lean returned its exact one-byte refusal, or the shim observed any
+    /// response outside the exact one-byte acceptance grammar.
+    Refused,
+}
+
+/// Ask Lean to validate one complete semantic admission certificate.
+///
+/// Successful validation returns an opaque token that owns the exact bytes
+/// Lean accepted. The host cap intentionally duplicates Lean's hard cap so an
+/// oversized certificate never crosses the allocation boundary.
+pub fn check_runtime_auth_v4_admission_trace(
+    certificate: &[u8],
+) -> Result<LeanValidatedAdmissionTrace, RuntimeAuthV4AdmissionTraceRefusal> {
+    if certificate.len() > MAX_ADMISSION_TRACE_BYTES {
+        return Err(RuntimeAuthV4AdmissionTraceRefusal::TooLarge);
+    }
+    if !ffi::runtime_auth_v4_check_admission_trace(certificate) {
+        return Err(RuntimeAuthV4AdmissionTraceRefusal::Refused);
+    }
+    Ok(LeanValidatedAdmissionTrace {
+        canonical_certificate: certificate.to_vec(),
+    })
+}
+
 /// Project a context-bound (kind-3) UWV4 admission request in Lean.
 ///
 /// This host code parses only Lean's kind-4 *response*. It does not parse the
@@ -191,7 +251,7 @@ fn interpret_admission_response(bytes: &[u8]) -> RuntimeAuthV4AdmissionOutcome {
         };
     }
 
-    let Some(projection) = parse_projection(&mut cursor) else {
+    let Some(projection) = parse_projection(&mut cursor, bytes) else {
         return RuntimeAuthV4AdmissionOutcome::KernelContractViolation;
     };
     if !cursor.at_end() || !projection_invariants_hold(&projection) {
@@ -224,8 +284,12 @@ fn admission_refusal(tag: u8) -> Option<RuntimeAuthV4AdmissionRefusal> {
     })
 }
 
-fn parse_projection(cursor: &mut ResponseCursor<'_>) -> Option<RuntimeAuthV4AdmissionProjection> {
+fn parse_projection(
+    cursor: &mut ResponseCursor<'_>,
+    response: &[u8],
+) -> Option<RuntimeAuthV4AdmissionProjection> {
     Some(RuntimeAuthV4AdmissionProjection {
+        projection_response: response.to_vec(),
         canonical_request: cursor.field_bytes(161)?,
         signing_bytes: cursor.field_bytes(162)?,
         signature_algorithm: cursor.field_byte(163)?,
@@ -443,6 +507,15 @@ mod tests {
     }
 
     #[test]
+    fn admission_trace_host_bound_refuses_before_ffi() {
+        let oversized = vec![0; MAX_ADMISSION_TRACE_BYTES + 1];
+        assert_eq!(
+            check_runtime_auth_v4_admission_trace(&oversized),
+            Err(RuntimeAuthV4AdmissionTraceRefusal::TooLarge)
+        );
+    }
+
+    #[test]
     fn response_refusals_are_exact_and_trailing_bytes_violate_contract() {
         for tag in 1..=16 {
             let mut response = ADMISSION_RESPONSE_PREFIX.to_vec();
@@ -485,6 +558,7 @@ mod tests {
             panic!("valid response was not accepted")
         };
         assert_eq!(projection.signature_algorithm, 1);
+        assert_eq!(projection.projection_response, accepted_response(2));
         assert_eq!(projection.canonical_request, b"canonical");
         assert_eq!(projection.signing_bytes, b"signing");
         assert_eq!(projection.signature, b"signature");

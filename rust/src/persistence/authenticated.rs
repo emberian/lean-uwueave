@@ -1,15 +1,22 @@
 //! Authenticated-only move admission persistence.
 //!
 //! This wire is intentionally isolated from the legacy `DocumentJournal`.
-//! Every record is one caller-checked UWV4 kind-3 request, its exact Lean
-//! projection, the concrete resolved [`MoveOp`], and the admission context it
-//! used. Storage checks its own canonical envelope, hash chain, and atomic
-//! nonce/operation-id indexes. It does not parse UWV4, verify signatures or
-//! context commitments, or turn an unpinned reopen into a secure ready state.
+//! Every new record is one Lean-validated v2 admission certificate: the
+//! caller's UWV4 kind-3 request, exact kind-4 projection response, normalized
+//! host-stage receipts, exact FORMAT-v3 request/response trace, concrete
+//! resolved [`MoveOp`], and the admission context it used. Storage preserves
+//! the exact checker-accepted certificate bytes while checking its canonical
+//! envelope, hash chain, and atomic nonce/operation-id indexes. A recovered
+//! [`CheckedAdmission`] is only a canonical stored value: the ready runtime
+//! must submit its exact certificate bytes to the Lean trace checker again
+//! before provider replay or execution commit. Storage itself does not verify
+//! signatures or context commitments and cannot turn an unpinned reopen into
+//! a secure ready state.
 
 use super::record::{RawJournal, RawJournalError, RecordSpec};
 use super::{AppendReceipt, JournalOptions, SyncPolicy};
-use crate::MoveOp;
+use crate::auth::LeanValidatedAdmissionTrace;
+use crate::{MoveOp, NodeId};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io;
@@ -19,7 +26,7 @@ const RECORD_SPEC: RecordSpec = RecordSpec {
     marker: *b"UWAMV401",
     hash_domain: b"uwueave.authenticated-move-journal.v1",
 };
-const RECORD_VERSION: u8 = 1;
+const RECORD_VERSION: u8 = 2;
 const CHAIN_DOMAIN: &[u8] = b"uwueave.authenticated-move-journal.v1.chain\0";
 
 /// Nonce scope projected by Lean from one context-bound UWV4 request.
@@ -70,7 +77,17 @@ pub struct KernelObservation {
     pub replica: u64,
     pub cite: u64,
     pub resolved_move: MoveOp,
+    /// Exact dense execution index space used to construct the FORMAT-v3
+    /// request. Signed child/destination indices must select the concrete
+    /// content-addressed nodes in `resolved_move` from this vector.
+    pub execution_nodes: Vec<NodeId>,
     pub admission: KernelAdmissionObservation,
+}
+
+impl KernelObservation {
+    pub fn execution_nodes(&self) -> &[NodeId] {
+        &self.execution_nodes
+    }
 }
 
 /// Lean kernel observation permitted at the authenticated append boundary.
@@ -80,50 +97,203 @@ pub enum KernelAdmissionObservation {
     SkippedCycle,
 }
 
-/// A runtime-created checked admission. Fields are private so callers outside
-/// this crate cannot label arbitrary bytes as authenticated.
+/// Normalized evidence that every host-owned stage accepted the exact values
+/// carried by the certificate.
+///
+/// These are deliberately first-order one-byte receipts rather than claims
+/// inferred later from the presence of ordinary fields. Construction is
+/// crate-private and occurs only after the runtime has consumed and matched
+/// the corresponding provider receipt. The Lean trace checker requires every
+/// canonical byte to be exactly `1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdmissionStageReceipts {
+    verification: bool,
+    context: bool,
+    resolution: bool,
+    authority: bool,
+    membership: bool,
+}
+
+impl AdmissionStageReceipts {
+    pub(crate) const fn all_accepted() -> Self {
+        Self {
+            verification: true,
+            context: true,
+            resolution: true,
+            authority: true,
+            membership: true,
+        }
+    }
+
+    pub const fn verification(&self) -> bool {
+        self.verification
+    }
+    pub const fn context(&self) -> bool {
+        self.context
+    }
+    pub const fn resolution(&self) -> bool {
+        self.resolution
+    }
+    pub const fn authority(&self) -> bool {
+        self.authority
+    }
+    pub const fn membership(&self) -> bool {
+        self.membership
+    }
+
+    const fn all_are_accepted(&self) -> bool {
+        self.verification && self.context && self.resolution && self.authority && self.membership
+    }
+}
+
+/// Exact shipping-kernel evidence appended to the v2 admission certificate.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckedAdmission {
+pub struct AdmissionTrace {
+    /// Exactly the canonical kind-3 request length, retained as the bound
+    /// passed to the Lean projection endpoint. Larger equivalent bounds are
+    /// noncanonical certificate spellings.
+    projection_bound: u64,
+    projection_response: Vec<u8>,
+    format_v3_request: Vec<u8>,
+    format_v3_response: Vec<u8>,
+    selected_request_slot: u64,
+    operation_was_new: bool,
+    stage_receipts: AdmissionStageReceipts,
+}
+
+impl AdmissionTrace {
+    pub(crate) fn new(
+        projection_bound: u64,
+        projection_response: Vec<u8>,
+        format_v3_request: Vec<u8>,
+        format_v3_response: Vec<u8>,
+        selected_request_slot: u64,
+        operation_was_new: bool,
+        stage_receipts: AdmissionStageReceipts,
+    ) -> Self {
+        Self {
+            projection_bound,
+            projection_response,
+            format_v3_request,
+            format_v3_response,
+            selected_request_slot,
+            operation_was_new,
+            stage_receipts,
+        }
+    }
+
+    pub fn projection_bound(&self) -> u64 {
+        self.projection_bound
+    }
+    pub fn projection_response(&self) -> &[u8] {
+        &self.projection_response
+    }
+    pub fn format_v3_request(&self) -> &[u8] {
+        &self.format_v3_request
+    }
+    pub fn format_v3_response(&self) -> &[u8] {
+        &self.format_v3_response
+    }
+    pub fn selected_request_slot(&self) -> u64 {
+        self.selected_request_slot
+    }
+    pub fn operation_was_new(&self) -> bool {
+        self.operation_was_new
+    }
+    pub fn stage_receipts(&self) -> AdmissionStageReceipts {
+        self.stage_receipts
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AdmissionFields {
     canonical_request: Vec<u8>,
     nonce_key: NonceKey,
     operation_key: OperationKey,
     context: AdmissionContextRef,
     observation: KernelObservation,
+    trace: AdmissionTrace,
 }
 
-impl CheckedAdmission {
+/// Canonical v2 bytes awaiting acceptance by the Lean trace checker.
+///
+/// This type is not admission evidence. It exists so `auth_runtime` can build
+/// one exact byte string, submit that same string to Lean, and then consume
+/// the opaque [`LeanValidatedAdmissionTrace`] token when constructing the
+/// persistable value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UncheckedAdmissionCertificate {
+    certificate_bytes: Vec<u8>,
+}
+
+impl UncheckedAdmissionCertificate {
     pub(crate) fn new(
         canonical_request: Vec<u8>,
         nonce_key: NonceKey,
         operation_key: OperationKey,
         context: AdmissionContextRef,
         observation: KernelObservation,
+        trace: AdmissionTrace,
     ) -> Result<Self, &'static str> {
-        let value = Self {
+        let fields = AdmissionFields {
             canonical_request,
             nonce_key,
             operation_key,
             context,
             observation,
+            trace,
         };
-        validate_admission(&value)?;
-        Ok(value)
+        validate_admission(&fields)?;
+        Ok(Self {
+            certificate_bytes: encode_admission(&fields),
+        })
+    }
+
+    pub(crate) fn certificate_bytes(&self) -> &[u8] {
+        &self.certificate_bytes
+    }
+}
+
+/// A runtime-created checked admission. Fields are private so callers outside
+/// this crate cannot label arbitrary bytes as authenticated. Fresh production
+/// construction requires an opaque token returned by the Lean trace checker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckedAdmission {
+    certificate_bytes: Vec<u8>,
+    fields: AdmissionFields,
+}
+
+impl CheckedAdmission {
+    pub(crate) fn from_lean_validated(
+        validated: &LeanValidatedAdmissionTrace,
+    ) -> Result<Self, &'static str> {
+        checked_from_canonical_bytes(validated.certificate_bytes())
+            .ok_or("Lean-validated admission certificate is not canonical v2")
+    }
+
+    /// Exact canonical bytes accepted by Lean and written as the raw journal
+    /// record body. Recovery must recheck these same bytes before use.
+    pub fn certificate_bytes(&self) -> &[u8] {
+        &self.certificate_bytes
     }
 
     pub fn canonical_request(&self) -> &[u8] {
-        &self.canonical_request
+        &self.fields.canonical_request
     }
     pub fn nonce_key(&self) -> &NonceKey {
-        &self.nonce_key
+        &self.fields.nonce_key
     }
     pub fn operation_key(&self) -> &OperationKey {
-        &self.operation_key
+        &self.fields.operation_key
     }
     pub fn context(&self) -> &AdmissionContextRef {
-        &self.context
+        &self.fields.context
     }
     pub fn observation(&self) -> &KernelObservation {
-        &self.observation
+        &self.fields.observation
+    }
+    pub fn trace(&self) -> &AdmissionTrace {
+        &self.fields.trace
     }
 }
 
@@ -344,13 +514,13 @@ impl AuthenticatedMoveJournal {
                     reason: "record count exceeds sequence space",
                 })?;
             let admission = decode_admission(body).ok_or(Self::record_error(sequence))?;
-            if admission.context.previous_admission_commitment != head {
+            if admission.context().previous_admission_commitment != head {
                 return Err(AuthenticatedJournalError::BrokenChain { sequence });
             }
             let commitment = record_commitment(body);
             if let Some((_, prior_sequence)) = nonce_index.insert(
-                admission.nonce_key.clone(),
-                (admission.observation.signing_bytes.clone(), sequence),
+                admission.nonce_key().clone(),
+                (admission.observation().signing_bytes.clone(), sequence),
             ) {
                 return Err(AuthenticatedJournalError::DuplicateNonce {
                     sequence,
@@ -358,8 +528,8 @@ impl AuthenticatedMoveJournal {
                 });
             }
             if let Some((_, prior_sequence)) = operation_index.insert(
-                admission.operation_key.clone(),
-                (admission.observation.signing_bytes.clone(), sequence),
+                admission.operation_key().clone(),
+                (admission.observation().signing_bytes.clone(), sequence),
             ) {
                 return Err(AuthenticatedJournalError::DuplicateOperation {
                     sequence,
@@ -468,12 +638,17 @@ impl AuthenticatedMoveJournal {
         if !self.report.externally_pinned {
             return Err(AuthenticatedJournalError::UnpinnedAppend);
         }
-        validate_admission(&admission)
+        validate_admission(&admission.fields)
             .map_err(|reason| AuthenticatedJournalError::InvalidAdmission { reason })?;
+        if encode_admission(&admission.fields) != admission.certificate_bytes {
+            return Err(AuthenticatedJournalError::InvalidAdmission {
+                reason: "admission certificate bytes are not canonical",
+            });
+        }
         match self.classify(
-            &admission.nonce_key,
-            &admission.operation_key,
-            &admission.observation.signing_bytes,
+            admission.nonce_key(),
+            admission.operation_key(),
+            &admission.observation().signing_bytes,
         ) {
             StorePreview::Fresh => {}
             StorePreview::Retry { existing_sequence } => {
@@ -487,23 +662,24 @@ impl AuthenticatedMoveJournal {
             }
         }
         let expected_head = self.head_commitment();
-        if admission.context.previous_admission_commitment != expected_head {
+        if admission.context().previous_admission_commitment != expected_head {
             return Err(AuthenticatedJournalError::InvalidAdmissionPrefix {
                 expected: expected_head,
-                actual: admission.context.previous_admission_commitment,
+                actual: admission.context().previous_admission_commitment,
             });
         }
-        let body = encode_admission(&admission);
-        let commitment = record_commitment(&body);
-        let receipt = self.raw.append_at(sequence, &body)?;
+        let commitment = record_commitment(admission.certificate_bytes());
+        let receipt = self
+            .raw
+            .append_at(sequence, admission.certificate_bytes())?;
         if receipt.status == super::AppendStatus::Appended {
             self.nonce_index.insert(
-                admission.nonce_key.clone(),
-                (admission.observation.signing_bytes.clone(), sequence),
+                admission.nonce_key().clone(),
+                (admission.observation().signing_bytes.clone(), sequence),
             );
             self.operation_index.insert(
-                admission.operation_key.clone(),
-                (admission.observation.signing_bytes.clone(), sequence),
+                admission.operation_key().clone(),
+                (admission.observation().signing_bytes.clone(), sequence),
             );
             self.records.push(AuthenticatedMoveRecord {
                 sequence,
@@ -547,8 +723,8 @@ impl AuthenticatedMoveJournal {
                 sequence: existing_sequence,
                 reason: "indexed sequence has no recovered record",
             })?;
-        let body = encode_admission(&record.admission);
-        self.raw.append_at(existing_sequence, &body)?;
+        self.raw
+            .append_at(existing_sequence, record.admission.certificate_bytes())?;
         Ok(StoreDecision::Retry {
             existing_sequence,
             head_commitment: self
@@ -562,7 +738,7 @@ impl AuthenticatedMoveJournal {
     }
 }
 
-fn validate_admission(value: &CheckedAdmission) -> Result<(), &'static str> {
+fn validate_admission(value: &AdmissionFields) -> Result<(), &'static str> {
     if !value.canonical_request.starts_with(b"UWV4\x04\x03") {
         return Err("request is not context-bound UWV4 kind 3");
     }
@@ -573,9 +749,28 @@ fn validate_admission(value: &CheckedAdmission) -> Result<(), &'static str> {
         || value.observation.signing_bytes.is_empty()
         || value.observation.signature.is_empty()
         || value.observation.child_stable.is_empty()
+        || value.observation.execution_nodes.is_empty()
         || value.context.commitment.is_empty()
+        || value.trace.projection_response.is_empty()
+        || value.trace.format_v3_request.is_empty()
+        || value.trace.format_v3_response.is_empty()
     {
         return Err("required authenticated field is empty");
+    }
+    if !value
+        .trace
+        .projection_response
+        .starts_with(b"UWV4\x04\x04\x00")
+    {
+        return Err("projection response is not an accepted UWV4 kind 4 response");
+    }
+    let request_length = u64::try_from(value.canonical_request.len())
+        .map_err(|_| "canonical request length exceeds projection bound space")?;
+    if request_length != value.trace.projection_bound {
+        return Err("projection bound is not the exact canonical request length");
+    }
+    if !value.trace.stage_receipts.all_are_accepted() {
+        return Err("normalized admission stage receipt is not accepted");
     }
     if value.nonce_key.document != value.operation_key.document
         || value.nonce_key.genesis != value.operation_key.genesis
@@ -597,6 +792,30 @@ fn validate_admission(value: &CheckedAdmission) -> Result<(), &'static str> {
     {
         return Err("Lean projection and resolved move disagree");
     }
+    let child_index = usize::try_from(value.observation.child_index)
+        .map_err(|_| "child index exceeds execution node address space")?;
+    if value.observation.execution_nodes.get(child_index)
+        != Some(&value.observation.resolved_move.child)
+    {
+        return Err("child index does not select the resolved move node");
+    }
+    match (
+        value.observation.destination_index,
+        value.observation.resolved_move.dest,
+    ) {
+        (None, None) => {}
+        (Some(index), Some(destination)) => {
+            let index = usize::try_from(index)
+                .map_err(|_| "destination index exceeds execution node address space")?;
+            if value.observation.execution_nodes.get(index) != Some(&destination) {
+                return Err("destination index does not select the resolved move node");
+            }
+        }
+        _ => return Err("destination projection and resolved move disagree"),
+    }
+    if value.observation.cite == 0 {
+        return Err("citation zero cannot cross the checked boundary");
+    }
     Ok(())
 }
 
@@ -607,7 +826,7 @@ fn record_commitment(body: &[u8]) -> [u8; 32] {
     *hasher.finalize().as_bytes()
 }
 
-fn encode_admission(value: &CheckedAdmission) -> Vec<u8> {
+fn encode_admission(value: &AdmissionFields) -> Vec<u8> {
     let mut out = vec![RECORD_VERSION];
     put_bytes(&mut out, &value.canonical_request);
     put_bytes(&mut out, &value.nonce_key.document);
@@ -635,19 +854,35 @@ fn encode_admission(value: &CheckedAdmission) -> Vec<u8> {
     put_u64(&mut out, value.observation.replica);
     put_u64(&mut out, value.observation.cite);
     put_move(&mut out, value.observation.resolved_move);
+    put_nodes(&mut out, &value.observation.execution_nodes);
     out.push(match value.observation.admission {
         KernelAdmissionObservation::Applied => 0,
         KernelAdmissionObservation::SkippedCycle => 1,
     });
+    put_u64(&mut out, value.trace.projection_bound);
+    put_bytes(&mut out, &value.trace.projection_response);
+    put_bytes(&mut out, &value.trace.format_v3_request);
+    put_bytes(&mut out, &value.trace.format_v3_response);
+    put_u64(&mut out, value.trace.selected_request_slot);
+    put_bool(&mut out, value.trace.operation_was_new);
+    put_accepted_receipt(&mut out, value.trace.stage_receipts.verification);
+    put_accepted_receipt(&mut out, value.trace.stage_receipts.context);
+    put_accepted_receipt(&mut out, value.trace.stage_receipts.resolution);
+    put_accepted_receipt(&mut out, value.trace.stage_receipts.authority);
+    put_accepted_receipt(&mut out, value.trace.stage_receipts.membership);
     out
 }
 
 fn decode_admission(bytes: &[u8]) -> Option<CheckedAdmission> {
+    checked_from_canonical_bytes(bytes)
+}
+
+fn checked_from_canonical_bytes(bytes: &[u8]) -> Option<CheckedAdmission> {
     let mut c = Cursor { bytes, at: 0 };
     if c.byte()? != RECORD_VERSION {
         return None;
     }
-    let value = CheckedAdmission {
+    let fields = AdmissionFields {
         canonical_request: c.bytes()?,
         nonce_key: NonceKey {
             document: c.bytes()?,
@@ -681,17 +916,36 @@ fn decode_admission(bytes: &[u8]) -> Option<CheckedAdmission> {
             replica: c.u64()?,
             cite: c.u64()?,
             resolved_move: c.move_op()?,
+            execution_nodes: c.nodes()?,
             admission: match c.byte()? {
                 0 => KernelAdmissionObservation::Applied,
                 1 => KernelAdmissionObservation::SkippedCycle,
                 _ => return None,
             },
         },
+        trace: AdmissionTrace {
+            projection_bound: c.u64()?,
+            projection_response: c.bytes()?,
+            format_v3_request: c.bytes()?,
+            format_v3_response: c.bytes()?,
+            selected_request_slot: c.u64()?,
+            operation_was_new: c.bool()?,
+            stage_receipts: AdmissionStageReceipts {
+                verification: c.accepted_receipt()?,
+                context: c.accepted_receipt()?,
+                resolution: c.accepted_receipt()?,
+                authority: c.accepted_receipt()?,
+                membership: c.accepted_receipt()?,
+            },
+        },
     };
-    if !c.done() || validate_admission(&value).is_err() || encode_admission(&value) != bytes {
+    if !c.done() || validate_admission(&fields).is_err() || encode_admission(&fields) != bytes {
         None
     } else {
-        Some(value)
+        Some(CheckedAdmission {
+            certificate_bytes: bytes.to_vec(),
+            fields,
+        })
     }
 }
 
@@ -705,6 +959,15 @@ fn put_bytes(out: &mut Vec<u8>, value: &[u8]) {
     let length = u64::try_from(value.len()).expect("Vec length exceeds u64");
     put_u64(out, length);
     out.extend_from_slice(value);
+}
+fn put_bool(out: &mut Vec<u8>, value: bool) {
+    out.push(u8::from(value));
+}
+fn put_accepted_receipt(out: &mut Vec<u8>, value: bool) {
+    // `validate_admission` admits only true receipts. Keeping the encoder
+    // total makes canonical re-encoding independently reject any future
+    // non-normalized in-memory value.
+    put_bool(out, value);
 }
 fn put_optional_u64(out: &mut Vec<u8>, value: Option<u64>) {
     match value {
@@ -740,6 +1003,13 @@ fn put_move(out: &mut Vec<u8>, op: MoveOp) {
     put_optional_node(out, op.dest);
     put_u64(out, op.cite);
 }
+fn put_nodes(out: &mut Vec<u8>, nodes: &[NodeId]) {
+    let count = u64::try_from(nodes.len()).expect("execution node count exceeds u64");
+    put_u64(out, count);
+    for node in nodes {
+        out.extend_from_slice(node);
+    }
+}
 fn put_optional_node(out: &mut Vec<u8>, value: Option<[u8; 32]>) {
     match value {
         None => out.push(0),
@@ -766,6 +1036,19 @@ impl<'a> Cursor<'a> {
     }
     fn u64(&mut self) -> Option<u64> {
         Some(u64::from_le_bytes(self.take(8)?.try_into().ok()?))
+    }
+    fn bool(&mut self) -> Option<bool> {
+        match self.byte()? {
+            0 => Some(false),
+            1 => Some(true),
+            _ => None,
+        }
+    }
+    fn accepted_receipt(&mut self) -> Option<bool> {
+        match self.byte()? {
+            1 => Some(true),
+            _ => None,
+        }
     }
     fn bytes(&mut self) -> Option<Vec<u8>> {
         let n = usize::try_from(self.u64()?).ok()?;
@@ -810,6 +1093,16 @@ impl<'a> Cursor<'a> {
             dest: self.optional_node()?,
             cite: self.u64()?,
         })
+    }
+    fn nodes(&mut self) -> Option<Vec<NodeId>> {
+        let count = usize::try_from(self.u64()?).ok()?;
+        let encoded_length = count.checked_mul(std::mem::size_of::<NodeId>())?;
+        let encoded = self.take(encoded_length)?;
+        let mut nodes = Vec::with_capacity(count);
+        for node in encoded.chunks_exact(std::mem::size_of::<NodeId>()) {
+            nodes.push(node.try_into().ok()?);
+        }
+        Some(nodes)
     }
     fn done(&self) -> bool {
         self.at == self.bytes.len()
@@ -859,7 +1152,7 @@ mod tests {
         signed_content: u8,
         signature: u8,
     ) -> CheckedAdmission {
-        CheckedAdmission::new(
+        let unchecked = UncheckedAdmissionCertificate::new(
             vec![b'U', b'W', b'V', b'4', 4, 3, signed_content, signature],
             NonceKey {
                 document: vec![1, 2],
@@ -901,26 +1194,97 @@ mod tests {
                     dest: Some([12; 32]),
                     cite: 7,
                 },
+                execution_nodes: vec![[0; 32], [1; 32], [2; 32], [10; 32], [12; 32]],
                 admission: KernelAdmissionObservation::Applied,
             },
+            AdmissionTrace::new(
+                8,
+                b"UWV4\x04\x04\x00projection".to_vec(),
+                b"format-v3-request".to_vec(),
+                b"format-v3-response".to_vec(),
+                0,
+                true,
+                AdmissionStageReceipts::all_accepted(),
+            ),
         )
-        .unwrap()
+        .unwrap();
+        checked_from_canonical_bytes(unchecked.certificate_bytes()).unwrap()
     }
 
     #[test]
     fn kind_three_and_arbitrary_context_roundtrip_but_kind_two_refuses() {
         let value = admission(None, 5, 21, 31, 41);
-        let encoded = encode_admission(&value);
+        let encoded = value.certificate_bytes().to_vec();
         let decoded = decode_admission(&encoded).unwrap();
         assert_eq!(decoded, value);
         assert_eq!(decoded.context().commitment, vec![91, 92, 93]);
+        assert_eq!(decoded.trace().projection_bound(), 8);
+        assert!(decoded.trace().operation_was_new());
+        assert!(decoded.trace().stage_receipts().verification());
+        assert_eq!(decoded.observation().execution_nodes().len(), 5);
 
         let mut wrong_kind = value;
-        wrong_kind.canonical_request[5] = 2;
+        wrong_kind.fields.canonical_request[5] = 2;
         assert_eq!(
-            validate_admission(&wrong_kind),
+            validate_admission(&wrong_kind.fields),
             Err("request is not context-bound UWV4 kind 3")
         );
+
+        let mut non_exact_bound = admission(None, 5, 21, 31, 41);
+        non_exact_bound.fields.trace.projection_bound += 1;
+        assert_eq!(
+            validate_admission(&non_exact_bound.fields),
+            Err("projection bound is not the exact canonical request length")
+        );
+
+        let mut empty_nodes = admission(None, 5, 21, 31, 41);
+        empty_nodes.fields.observation.execution_nodes.clear();
+        assert_eq!(
+            validate_admission(&empty_nodes.fields),
+            Err("required authenticated field is empty")
+        );
+
+        let mut wrong_child_node = admission(None, 5, 21, 31, 41);
+        wrong_child_node.fields.observation.execution_nodes[3] = [99; 32];
+        assert_eq!(
+            validate_admission(&wrong_child_node.fields),
+            Err("child index does not select the resolved move node")
+        );
+
+        let mut wrong_destination_node = admission(None, 5, 21, 31, 41);
+        wrong_destination_node.fields.observation.execution_nodes[4] = [99; 32];
+        assert_eq!(
+            validate_admission(&wrong_destination_node.fields),
+            Err("destination index does not select the resolved move node")
+        );
+    }
+
+    #[test]
+    fn v2_decoder_rejects_noncanonical_boolean_receipts_and_suffixes() {
+        let encoded = admission(None, 5, 21, 31, 41).certificate_bytes().to_vec();
+
+        let mut wrong_version = encoded.clone();
+        wrong_version[0] = 1;
+        assert!(decode_admission(&wrong_version).is_none());
+
+        // The canonical v2 suffix is operation_was_new followed by five
+        // normalized acceptance receipts.
+        let operation_was_new = encoded.len() - 6;
+        let mut non_boolean = encoded.clone();
+        non_boolean[operation_was_new] = 2;
+        assert!(decode_admission(&non_boolean).is_none());
+
+        let mut refused_receipt = encoded.clone();
+        refused_receipt[encoded.len() - 1] = 0;
+        assert!(decode_admission(&refused_receipt).is_none());
+
+        let mut noncanonical_receipt = encoded.clone();
+        noncanonical_receipt[encoded.len() - 1] = 2;
+        assert!(decode_admission(&noncanonical_receipt).is_none());
+
+        let mut trailing = encoded;
+        trailing.push(0);
+        assert!(decode_admission(&trailing).is_none());
     }
 
     #[test]
@@ -952,6 +1316,11 @@ mod tests {
                 ..
             }
         ));
+        assert_eq!(
+            journal.records()[0].admission().certificate_bytes(),
+            first.certificate_bytes(),
+            "journal retains the exact candidate bytes accepted by Lean"
+        );
         let before = fs::read(&temp.0).unwrap();
 
         // Signature bytes are outside signed-content identity. The exact same
@@ -1057,6 +1426,7 @@ mod tests {
         .unwrap();
         assert!(reopened.open_report().externally_pinned);
         assert_eq!(reopened.records().len(), 2);
+        assert_eq!(reopened.records()[0].admission().certificate_bytes()[0], 2);
         assert_eq!(
             reopened.records()[0].admission().context().commitment,
             vec![91, 92, 93]

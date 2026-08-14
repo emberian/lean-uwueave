@@ -31,6 +31,8 @@ uwueave_runtime_auth_v4_decode_canonical(lean_object *maximum_bytes,
 extern lean_object *
 uwueave_runtime_auth_v4_project_admission(lean_object *maximum_bytes,
                                           lean_object *bytes);
+extern lean_object *
+uwueave_runtime_auth_v4_check_admission_trace(lean_object *bytes);
 
 static int g_initialized = 0;
 
@@ -263,4 +265,23 @@ uint8_t *shim_uweave_runtime_auth_v4_project_admission(
   lean_object *out =
       uwueave_runtime_auth_v4_project_admission(maximum, arr); /* consumes both */
   return copy_lean_bytes(out, out_len);
+}
+
+/* Ask Lean to validate one complete canonical admission-trace certificate.
+ * The export consumes a fresh ByteArray and has the exact response grammar
+ * [1] for acceptance or [0] for refusal. Any other length or byte is treated
+ * as refusal here, so no malformed native response can mint a Rust token.
+ * SAFETY CONTRACT: `in` is readable for len bytes when nonempty; no Rust
+ * pointer is retained; the runtime and trace-checker module are initialized.
+ * Rust enforces the shared 16 MiB transport cap before this boundary, and
+ * Lean independently enforces the same hard cap. */
+uint8_t shim_uweave_runtime_auth_v4_check_admission_trace(const uint8_t *in,
+                                                          size_t len) {
+  lean_object *arr = copy_rust_bytes(in, len);
+  lean_object *out =
+      uwueave_runtime_auth_v4_check_admission_trace(arr); /* consumes arr */
+  uint8_t accepted =
+      (lean_sarray_size(out) == 1 && lean_sarray_cptr(out)[0] == 1) ? 1 : 0;
+  lean_dec_ref(out);
+  return accepted;
 }

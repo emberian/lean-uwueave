@@ -91,13 +91,17 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     concrete forgery witness. `Uwueave.Byzantine.unauthenticated_submission_can_pass_the_gate`
     separately proves the exact attack here: a submitter not represented in
     `GOp` can cite somebody else's live grant and pass the ordinary gate.
-    ⟨UNDONE U-0052 at the shipping boundary; model admission paid⟩
-    `AuthenticatedAdmission.AuthenticatedGatedOp` now connects a received,
-    accepted signed `MoveClaim` to the abstract gated feed under
-    `Authenticity.AuthenticIssuer` and explicit `GrantHolder` binding. FORMAT
-    v3 and `Exec.Op` carry no issuer, key epoch or signature lane, so no theorem
-    authenticates the request reaching the kernel; no concrete EUF-CMA proof is
-    present. The gate bounds what a cited grant can DO, not who may cite it.
+    ⟨DONE for the checked source/runtime path; cryptography remains a premise⟩
+    `RuntimeAuthV4AdmissionTraceKernel` now checks a canonical persisted
+    certificate binding the exact kind-4 projection, issuer/epoch/context,
+    resolved dense node indices, holder-backed citation, FORMAT-v3 replay slot
+    and status, and every normalized provider receipt before fresh append or
+    recovery can expose `Accepted`. `RuntimeAuthV4AdmissionTraceRefinement`
+    composes that evidence with
+    `AuthenticatedAdmission.AuthenticatedGatedOp`; verified retries explicitly
+    reference the prior checked certificate rather than claiming a fresh policy
+    run. EUF-CMA, key lifecycle, and accepted-implies-issued remain the separate
+    deployment premise ⟨DEBT-REF U-0001⟩, not a theorem of this gate.
   * **The kernel searches grants by FIRST match; `permitted` quantifies over
     all of them.** ⟨TERMINAL under content addressing, else ⟨PREMISE U-0053⟩⟩ On a
     substrate satisfying `UniqueGrant` the two coincide, and that is exactly

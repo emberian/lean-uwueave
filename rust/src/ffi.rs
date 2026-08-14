@@ -39,6 +39,7 @@ extern "C" {
         len: usize,
         out_len: *mut usize,
     ) -> *mut u8;
+    fn shim_uweave_runtime_auth_v4_check_admission_trace(input: *const u8, len: usize) -> u8;
 }
 
 static INIT: Once = Once::new();
@@ -234,4 +235,16 @@ pub(crate) fn runtime_auth_v4_project_admission(maximum_bytes: usize, input: &[u
     };
     // SAFETY: established by the shim call's ABI contract.
     unsafe { take_shim_bytes(ptr, out_len) }
+}
+
+/// Ask the Lean-owned checker whether the bytes are exactly one canonical,
+/// semantically accepted admission-trace certificate. The public adapter in
+/// [`crate::auth`] enforces the shared host/Lean transport bound before this
+/// allocation boundary and turns acceptance into an opaque owned token.
+pub(crate) fn runtime_auth_v4_check_admission_trace(input: &[u8]) -> bool {
+    ensure_initialized();
+    // SAFETY: `input` is readable for `input.len()` bytes. The initialized
+    // shim copies it into a fresh Lean ByteArray, retains no Rust pointer, and
+    // returns 1 only for the checker's exact one-byte acceptance response.
+    unsafe { shim_uweave_runtime_auth_v4_check_admission_trace(input.as_ptr(), input.len()) == 1 }
 }

@@ -10,13 +10,16 @@
 //!
 //! What each module corresponds to:
 //!
-//! * [`auth`] — two narrow Lean-owned UWV4 boundaries. The legacy kind-1
+//! * [`auth`] — three narrow Lean-owned UWV4 boundaries. The legacy kind-1
 //!   endpoint bounds and canonically classifies signed-request bytes with five
 //!   decode refusals. The context-bound kind-3 endpoint additionally enforces
 //!   eight shape and three host-width refusals and returns the exact canonical
-//!   kind-4 projection. Rust parses only the Lean-owned response grammars; this
-//!   module does not verify signatures, decide authority or membership,
-//!   execute a move, or persist anything.
+//!   kind-4 projection. The admission-trace endpoint validates the complete
+//!   canonical v2 certificate, including that projection and the exact
+//!   FORMAT-v3 request, response, selected slot, operation, and status. Rust
+//!   parses only Lean-owned response grammars; this module does not itself
+//!   verify signatures, decide authority or membership, execute a move, or
+//!   persist anything.
 //! * [`auth_verifier`] — a deployment-owned verifier seam plus one
 //!   context/document/genesis/issuer/epoch-scoped keyed-BLAKE3 symmetric-MAC
 //!   profile. Its acceptance is trusted host evidence, not a public-key
@@ -25,9 +28,12 @@
 //!   orders Lean projection, exact-byte verification, durable retry/collision
 //!   classification, fixed document/genesis/context/execution scope, immutable
 //!   context pinning, stable-id resolution, independent authority and
-//!   membership checks, concrete Lean move preflight, durable append, then
-//!   in-memory commit. Externally pinned recovery repeats those
-//!   checks and exact-record comparison before replaying each stored move.
+//!   membership checks, concrete Lean move preflight, mandatory semantic-trace
+//!   validation, durable append, then in-memory commit. Verified retry is a
+//!   separate prior-certificate reference rather than a claim that later
+//!   policy stages reran. Externally pinned recovery rechecks every stored
+//!   certificate, repeats the providers and shipping kernel, and requires an
+//!   exact rebuilt record before replaying each stored move.
 //!   Policy providers, the verifier, the external pin, host storage, and the
 //!   FFI remain trusted deployment boundaries.
 //! * [`causal`] — an append-only, content-addressed DAG store.
@@ -128,5 +134,8 @@ pub use era::{
     EraEvent, EraEventStatus, EraGroup, EraMergeError, EraMergeStats, EraRecordError,
     EraResolution, EraRole,
 };
-pub use movelog::{Grant, MoveLog, MoveOp, OpOutcome, TracedReplay};
+pub use movelog::{
+    CertifiedReplay, Grant, MoveLog, MoveOp, OpOutcome, ProspectiveCertifiedReplay,
+    ReplayRequestSlot, TracedReplay,
+};
 pub use seq::{SeqCrdt, SeqDeleteError, SeqInsertError, SeqMergeError, SeqMergeStats};

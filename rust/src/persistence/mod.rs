@@ -81,12 +81,13 @@ pub use artifact::{
     ArtifactJournal, ArtifactJournalError, ArtifactOpenReport, ArtifactStreamError,
     ARTIFACT_DOMAIN, ARTIFACT_FORMAT_VERSION, MAX_ARTIFACT_FRAME_BYTES,
 };
-pub(crate) use authenticated::StorePreview;
 pub use authenticated::{
-    AdmissionContextRef, AuthenticatedJournalError, AuthenticatedMoveJournal,
-    AuthenticatedMoveRecord, AuthenticatedOpenReport, CheckedAdmission, KernelAdmissionObservation,
-    KernelObservation, NonceKey, OperationKey, RecoveryExpectation, StoreDecision,
+    AdmissionContextRef, AdmissionStageReceipts, AdmissionTrace, AuthenticatedJournalError,
+    AuthenticatedMoveJournal, AuthenticatedMoveRecord, AuthenticatedOpenReport, CheckedAdmission,
+    KernelAdmissionObservation, KernelObservation, NonceKey, OperationKey, RecoveryExpectation,
+    StoreDecision,
 };
+pub(crate) use authenticated::{StorePreview, UncheckedAdmissionCertificate};
 pub use document::{
     DocumentEntry, DocumentEntryKind, DocumentJournal, DocumentJournalError, DocumentOpenReport,
     DocumentReplay, DocumentReplayError,

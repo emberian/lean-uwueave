@@ -155,6 +155,108 @@ pub struct TracedReplay {
     pub outcomes: Vec<(MoveOp, OpOutcome)>,
 }
 
+/// One exact correspondence between a resolvable log operation and the slot
+/// it occupied in the canonical FORMAT-v3 replay request.
+///
+/// The request slot is this value's index in
+/// [`CertifiedReplay::request_slots`]. `log_index` names the operation's
+/// position in [`MoveLog::ops`] at the time of replay. Keeping both sides of
+/// that correspondence prevents a caller from reconstructing it by sorting
+/// or filtering independently of the bytes Lean actually encoded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReplayRequestSlot {
+    pub log_index: usize,
+    pub operation: MoveOp,
+}
+
+/// A replay result plus the exact production evidence that produced it.
+///
+/// `canonical_request` is returned by Lean's canonical FORMAT-v3 encoder and
+/// `raw_response` is returned verbatim by the Lean replay kernel. The request
+/// slots and statuses are aligned: status `j` is the decoded status for
+/// request slot `j`. All fields are private so the correspondence cannot be
+/// mutated after construction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertifiedReplay {
+    traced: TracedReplay,
+    canonical_request: Vec<u8>,
+    raw_response: Vec<u8>,
+    request_slots: Vec<ReplayRequestSlot>,
+    statuses: Vec<OpOutcome>,
+}
+
+impl CertifiedReplay {
+    pub fn traced(&self) -> &TracedReplay {
+        &self.traced
+    }
+
+    pub fn canonical_request(&self) -> &[u8] {
+        &self.canonical_request
+    }
+
+    pub fn raw_response(&self) -> &[u8] {
+        &self.raw_response
+    }
+
+    pub fn request_slots(&self) -> &[ReplayRequestSlot] {
+        &self.request_slots
+    }
+
+    pub fn statuses(&self) -> &[OpOutcome] {
+        &self.statuses
+    }
+
+    /// Locate an exact operation in the resolvable request. This returns the
+    /// actual encoded request slot, not its position in the full log.
+    pub fn request_slot(&self, operation: &MoveOp) -> Option<usize> {
+        self.request_slots
+            .binary_search_by_key(operation, |slot| slot.operation)
+            .ok()
+    }
+
+    pub fn status(&self, request_slot: usize) -> Option<OpOutcome> {
+        self.statuses.get(request_slot).copied()
+    }
+
+    pub fn into_traced(self) -> TracedReplay {
+        self.traced
+    }
+}
+
+/// Exact certified evidence for replaying a log after prospectively recording
+/// one operation. This names whether the grow-only set insertion changed the
+/// log and, independently, the operation's exact request slot when it was
+/// resolvable against the current weave.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProspectiveCertifiedReplay {
+    replay: CertifiedReplay,
+    operation_was_new: bool,
+    selected_request_slot: Option<usize>,
+}
+
+impl ProspectiveCertifiedReplay {
+    pub fn replay(&self) -> &CertifiedReplay {
+        &self.replay
+    }
+
+    pub fn operation_was_new(&self) -> bool {
+        self.operation_was_new
+    }
+
+    pub fn selected_request_slot(&self) -> Option<usize> {
+        self.selected_request_slot
+    }
+
+    pub fn selected_status(&self) -> Option<OpOutcome> {
+        self.selected_request_slot
+            .and_then(|slot| self.replay.status(slot))
+    }
+
+    pub fn into_replay(self) -> CertifiedReplay {
+        self.replay
+    }
+}
+
 /// The grow-only move log **and its authority substrate** — three grow-only
 /// sets (ops, grants, revocations), merged by union, exactly
 /// `Uwueave/Gated.lean`'s `GatedState` (whose `MergeState` instance is the
@@ -248,6 +350,16 @@ impl MoveLog {
         &self,
         weave: &CausalWeave<T>,
     ) -> TracedReplay {
+        self.replay_certified(weave).into_traced()
+    }
+
+    /// Replay through the same Lean-authored path as [`MoveLog::replay_traced`]
+    /// while retaining the exact canonical request bytes, raw response bytes,
+    /// request-slot mapping, and decoded request statuses.
+    pub fn replay_certified<T: AsRef<[u8]> + Clone + PartialEq>(
+        &self,
+        weave: &CausalWeave<T>,
+    ) -> CertifiedReplay {
         // Dense, deterministic indexing: BTreeMap iteration is sorted by id,
         // identical on every replica with the same weave.
         let ids: Vec<NodeId> = weave.nodes().map(|n| n.id()).collect();
@@ -260,9 +372,9 @@ impl MoveLog {
 
         // Assemble the resolvable typed ops in log order, remembering which
         // log ops were sent: request slot j holds the j-th resolvable op, so
-        // `sent` maps slot j to its position in log order for attribution.
+        // `request_slots[j]` maps that exact slot back to its log operation.
         // Lean, not this code, turns these values into FORMAT-v3 bytes.
-        let mut sent: Vec<usize> = Vec::with_capacity(self.ops.len());
+        let mut request_slots: Vec<ReplayRequestSlot> = Vec::with_capacity(self.ops.len());
         let mut ops_encoded: Vec<ffi::ReplayOpInput> = Vec::with_capacity(self.ops.len());
         for (li, op) in self.ops.iter().enumerate() {
             let (child, dest) = match (
@@ -275,7 +387,10 @@ impl MoveLog {
                 (Some(c), Some(d)) => (*c, d),
                 _ => continue, // unseen node: omitted, reported below
             };
-            sent.push(li);
+            request_slots.push(ReplayRequestSlot {
+                log_index: li,
+                operation: *op,
+            });
             ops_encoded.push(ffi::ReplayOpInput {
                 lamport: op.lamport,
                 replica: op.replica,
@@ -383,10 +498,13 @@ impl MoveLog {
             )
             .collect();
         let mut outcomes = Vec::with_capacity(self.ops.len());
-        let mut sent_cursor = sent.iter().zip(statuses).peekable();
+        let mut sent_cursor = request_slots
+            .iter()
+            .zip(statuses.iter().copied())
+            .peekable();
         for (li, op) in self.ops.iter().enumerate() {
             let outcome = match sent_cursor.peek() {
-                Some(&(&sli, st)) if sli == li => {
+                Some(&(slot, st)) if slot.log_index == li => {
                     sent_cursor.next();
                     st
                 }
@@ -395,7 +513,35 @@ impl MoveLog {
             outcomes.push((*op, outcome));
         }
 
-        TracedReplay { view, outcomes }
+        CertifiedReplay {
+            traced: TracedReplay { view, outcomes },
+            canonical_request: bytes,
+            raw_response: out,
+            request_slots,
+            statuses,
+        }
+    }
+
+    /// Produce exact replay evidence for the log that would result from
+    /// recording `operation`, without mutating this log.
+    ///
+    /// A duplicate operation still selects its existing exact request slot
+    /// while reporting `operation_was_new == false`. An operation naming an
+    /// unseen node has no request slot or status.
+    pub fn prospective_replay_certified<T: AsRef<[u8]> + Clone + PartialEq>(
+        &self,
+        weave: &CausalWeave<T>,
+        operation: MoveOp,
+    ) -> ProspectiveCertifiedReplay {
+        let mut prospective = self.clone();
+        let operation_was_new = prospective.ops.insert(operation);
+        let replay = prospective.replay_certified(weave);
+        let selected_request_slot = replay.request_slot(&operation);
+        ProspectiveCertifiedReplay {
+            replay,
+            operation_was_new,
+            selected_request_slot,
+        }
     }
 }
 
@@ -537,6 +683,74 @@ mod tests {
             "the skip is named"
         );
         assert_eq!(outcome(&o2), Some(OpOutcome::Applied));
+    }
+
+    #[test]
+    fn certified_replay_retains_exact_kernel_evidence_and_slot_mapping() {
+        let (w, n0, n1, mut log) = two_nodes();
+        let later = op(2, 0, n0, Some(n1));
+        let earlier = op(1, 1, n1, Some(n0));
+        log.record(later);
+        log.record(earlier);
+
+        let certified = log.replay_certified(&w);
+        assert!(
+            ffi::request_canonical(certified.canonical_request()),
+            "the retained request is exactly Lean's canonical encoding"
+        );
+        assert_eq!(
+            certified.raw_response(),
+            ffi::replay_kernel(certified.canonical_request()),
+            "the retained response is the kernel's exact bytes"
+        );
+        assert_eq!(
+            certified.request_slots(),
+            [
+                ReplayRequestSlot {
+                    log_index: 0,
+                    operation: earlier,
+                },
+                ReplayRequestSlot {
+                    log_index: 1,
+                    operation: later,
+                },
+            ]
+        );
+        assert_eq!(
+            certified.statuses(),
+            [OpOutcome::Applied, OpOutcome::SkippedCycle]
+        );
+        assert_eq!(certified.request_slot(&earlier), Some(0));
+        assert_eq!(certified.request_slot(&later), Some(1));
+        assert_eq!(certified.status(1), Some(OpOutcome::SkippedCycle));
+        assert_eq!(certified.traced(), &log.replay_traced(&w));
+    }
+
+    #[test]
+    fn prospective_certified_replay_distinguishes_new_and_duplicate_ops() {
+        let (w, n0, n1, mut log) = two_nodes();
+        let existing = op(1, 0, n0, Some(n1));
+        log.record(existing);
+
+        let duplicate = log.prospective_replay_certified(&w, existing);
+        assert!(!duplicate.operation_was_new());
+        assert_eq!(duplicate.selected_request_slot(), Some(0));
+        assert_eq!(duplicate.selected_status(), Some(OpOutcome::Applied));
+        assert_eq!(
+            duplicate.replay().request_slots()[0].operation,
+            existing,
+            "a duplicate selects its already encoded exact slot"
+        );
+
+        let fresh = op(2, 0, n1, None);
+        let inserted = log.prospective_replay_certified(&w, fresh);
+        assert!(inserted.operation_was_new());
+        let slot = inserted
+            .selected_request_slot()
+            .expect("a resolvable fresh operation has a request slot");
+        assert_eq!(inserted.replay().request_slots()[slot].operation, fresh);
+        assert_eq!(inserted.selected_status(), Some(OpOutcome::Applied));
+        assert_eq!(log.len(), 1, "prospective replay does not mutate the log");
     }
 
     /// Move-to-root is an override too, distinct from "no override".

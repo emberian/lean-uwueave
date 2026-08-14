@@ -4,14 +4,21 @@
 //! bounded decoding, shape/width checks, canonical signing bytes, and the
 //! neutral projection.  The host then verifies those exact bytes, classifies
 //! durable nonce and operation identities, pins one immutable context, resolves
-//! stable ids, applies independent authority and membership policies, asks the
-//! existing Lean-authored move kernel for the prospective outcome, and appends
-//! one checked record before committing the in-memory move log.
+//! stable ids, retains exact positive authority and membership receipts, and
+//! asks the existing Lean-authored move kernel for exact prospective request,
+//! response, slot, status, and set-insertion evidence. Those actual locals form
+//! one canonical v2 semantic certificate. Lean must accept its exact bytes
+//! before storage can construct or append a checked record, and the in-memory
+//! move log commits only after append. A verified retry cites that prior
+//! accepted certificate and does not claim to rerun later policy stages.
 //!
 //! Every policy trait in this module is a deployment-owned trust boundary.  A
 //! successful call is evidence about the configured implementations, not a
-//! cryptographic theorem.  Recovery is authoritative only relative to the
-//! externally supplied journal head pin and the historical context provider.
+//! cryptographic theorem. Recovery first rechecks every stored certificate in
+//! Lean, then exactly rebuilds it through the historical providers and shipping
+//! replay kernel before committing that operation. It remains authoritative
+//! only relative to the externally supplied journal head pin and historical
+//! context provider.
 //!
 //! Construction and recovery do not claim Lean `Authority.WF` or
 //! `Authority.UniqueGrant` for the provider's grant substrate. The runtime
@@ -23,14 +30,18 @@
 //! safety direction; exact substrate premises remain provider obligations.
 
 use crate::auth::{
-    project_runtime_auth_v4_admission, RuntimeAuthV4AdmissionOutcome,
-    RuntimeAuthV4AdmissionProjection, RuntimeAuthV4AdmissionRefusal,
+    check_runtime_auth_v4_admission_trace, project_runtime_auth_v4_admission,
+    LeanValidatedAdmissionTrace, RuntimeAuthV4AdmissionOutcome, RuntimeAuthV4AdmissionProjection,
+    RuntimeAuthV4AdmissionRefusal, RuntimeAuthV4AdmissionTraceRefusal,
 };
-use crate::auth_verifier::{RequestVerifier, VerificationInput, VerificationRefusal};
+use crate::auth_verifier::{
+    RequestVerifier, VerificationAcceptance, VerificationInput, VerificationRefusal,
+};
 use crate::persistence::{
-    AdmissionContextRef, AppendStatus, AuthenticatedJournalError, AuthenticatedMoveJournal,
-    CheckedAdmission, KernelAdmissionObservation, KernelObservation, NonceKey, OperationKey,
-    StoreDecision, StorePreview,
+    AdmissionContextRef, AdmissionStageReceipts, AdmissionTrace, AppendStatus,
+    AuthenticatedJournalError, AuthenticatedMoveJournal, CheckedAdmission,
+    KernelAdmissionObservation, KernelObservation, NonceKey, OperationKey, StoreDecision,
+    StorePreview, UncheckedAdmissionCertificate,
 };
 use crate::{CausalWeave, MoveLog, MoveOp, NodeId, OpOutcome};
 use std::collections::BTreeSet;
@@ -237,6 +248,55 @@ pub enum MembershipRefusal {
     Unavailable,
 }
 
+/// The exact values presented to a membership policy.
+///
+/// This is distinct from [`AuthorityInput`]: membership is an independent
+/// deployment boundary with its own immutable policy identity. Keeping its
+/// complete input lets admission retain positive evidence for the exact
+/// resolved operation rather than reducing the call to an unbound boolean.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MembershipInput<'a> {
+    pub context_commitment: &'a [u8],
+    pub membership_policy: u64,
+    pub issuer: u64,
+    pub operation: &'a MoveOp,
+}
+
+/// Runtime-normalized evidence that a trusted membership provider accepted one
+/// exact membership check.
+///
+/// This is not a formal proof or an unforgeable capability. Its constructor is
+/// crate-private: the runtime creates it only after the deployment-owned
+/// [`MoveMembership`] implementation returned success for the same context,
+/// issuer, and resolved move.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MembershipAcceptance {
+    context_commitment: Vec<u8>,
+    membership_policy: u64,
+    issuer: u64,
+    operation: MoveOp,
+}
+
+impl MembershipAcceptance {
+    /// Normalize one successful trusted membership call into exact evidence.
+    pub(crate) fn from_membership_acceptance(input: MembershipInput<'_>) -> Self {
+        Self {
+            context_commitment: input.context_commitment.to_vec(),
+            membership_policy: input.membership_policy,
+            issuer: input.issuer,
+            operation: *input.operation,
+        }
+    }
+
+    /// Check that this trusted-boundary receipt names exactly `input`.
+    pub fn matches_input(&self, input: MembershipInput<'_>) -> bool {
+        self.context_commitment == input.context_commitment
+            && self.membership_policy == input.membership_policy
+            && self.issuer == input.issuer
+            && self.operation == *input.operation
+    }
+}
+
 pub trait MoveMembership<C> {
     fn allows_move(
         &self,
@@ -305,18 +365,37 @@ impl<T> LeanMoveExecution<T> {
         *hasher.finalize().as_bytes()
     }
 
-    fn preflight(&self, operation: MoveOp) -> OpOutcome
+    fn preflight(&self, operation: MoveOp) -> Result<KernelPreflightEvidence, ExecutionRefusal>
     where
         T: AsRef<[u8]> + Clone + PartialEq,
     {
-        let mut prospective = self.log.clone();
-        prospective.record(operation);
-        prospective
-            .replay_traced(&self.weave)
-            .outcomes
-            .into_iter()
-            .find_map(|(candidate, outcome)| (candidate == operation).then_some(outcome))
-            .unwrap_or(OpOutcome::OmittedUnknownNode)
+        let prospective = self
+            .log
+            .prospective_replay_certified(&self.weave, operation);
+        let selected_request_slot = prospective
+            .selected_request_slot()
+            .ok_or(ExecutionRefusal::OmittedUnknownNode)?;
+        let selected_request_slot = u64::try_from(selected_request_slot)
+            .map_err(|_| ExecutionRefusal::RequestSlotTooLarge)?;
+        let admission = match prospective.selected_status() {
+            Some(OpOutcome::Applied) => KernelAdmissionObservation::Applied,
+            Some(OpOutcome::SkippedCycle) => KernelAdmissionObservation::SkippedCycle,
+            Some(OpOutcome::SkippedUnauthorised) => {
+                return Err(ExecutionRefusal::SkippedUnauthorised)
+            }
+            Some(OpOutcome::SkippedInvalid) => return Err(ExecutionRefusal::SkippedInvalid),
+            Some(OpOutcome::OmittedUnknownNode) | None => {
+                return Err(ExecutionRefusal::OmittedUnknownNode)
+            }
+        };
+        Ok(KernelPreflightEvidence {
+            execution_nodes: self.weave.nodes().map(|node| node.id()).collect(),
+            canonical_request: prospective.replay().canonical_request().to_vec(),
+            raw_response: prospective.replay().raw_response().to_vec(),
+            selected_request_slot,
+            operation_was_new: prospective.operation_was_new(),
+            admission,
+        })
     }
 
     fn commit(&mut self, operation: MoveOp) {
@@ -335,8 +414,22 @@ impl<T> LeanMoveExecution<T> {
     }
 }
 
+/// Exact native replay evidence used to construct the semantic certificate.
+/// The dense node-id vector comes from the same weave order used to encode
+/// FORMAT-v3 indices; all request/response bytes come from the production Lean
+/// encoder/kernel path retained by [`MoveLog::prospective_replay_certified`].
+struct KernelPreflightEvidence {
+    execution_nodes: Vec<NodeId>,
+    canonical_request: Vec<u8>,
+    raw_response: Vec<u8>,
+    selected_request_slot: u64,
+    operation_was_new: bool,
+    admission: KernelAdmissionObservation,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionRefusal {
+    RequestSlotTooLarge,
     SkippedUnauthorised,
     SkippedInvalid,
     OmittedUnknownNode,
@@ -358,6 +451,7 @@ pub enum AdmissionRefusal {
     AuthorityReceiptMismatch,
     MembershipDenied,
     Execution(ExecutionRefusal),
+    TraceCertificate(RuntimeAuthV4AdmissionTraceRefusal),
     CheckedBoundary(&'static str),
     StoreContractViolation,
 }
@@ -377,12 +471,37 @@ pub enum AdmissionDisposition {
     Retry,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The evidence exposed by one accepted runtime call.
+///
+/// Fresh admission returns the exact semantic certificate accepted by Lean.
+/// A retry is deliberately a different claim: it cites a previously
+/// validated durable certificate and carries only the current verifier's exact
+/// receipt. It does not pretend that authority, membership, or replay
+/// preflight ran again for the retry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AdmissionCertificate {
+    Fresh {
+        trace: LeanValidatedAdmissionTrace,
+        verification: VerificationAcceptance,
+        authority: AuthorityAcceptance,
+        membership: MembershipAcceptance,
+    },
+    VerifiedRetry {
+        prior_sequence: u64,
+        prior_commitment: [u8; 32],
+        prior_certificate: LeanValidatedAdmissionTrace,
+        current_projection: RuntimeAuthV4AdmissionProjection,
+        current_verification: VerificationAcceptance,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmissionReceipt {
     pub sequence: u64,
     pub disposition: AdmissionDisposition,
     pub kernel_observation: KernelAdmissionObservation,
     pub head_commitment: [u8; 32],
+    pub certificate: AdmissionCertificate,
 }
 
 #[derive(Debug)]
@@ -423,6 +542,10 @@ pub enum RuntimeRecoveryError {
     Projection {
         sequence: u64,
     },
+    Certificate {
+        sequence: u64,
+        reason: RuntimeAuthV4AdmissionTraceRefusal,
+    },
     Refused {
         sequence: u64,
         reason: AdmissionRefusal,
@@ -434,6 +557,24 @@ pub enum RuntimeRecoveryError {
     RecordMismatch {
         sequence: u64,
     },
+}
+
+/// One durable record whose exact semantic certificate was rechecked by Lean
+/// and whose provider/replay trace was rebuilt exactly during this runtime's
+/// construction. A successfully recovered runtime exposes one entry per
+/// journal record, in sequence order, including the actual positive provider
+/// receipts and resolved kernel result rebuilt for that record. Failed
+/// recovery returns no runtime and therefore no partial validated prefix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedRecoveryRecord {
+    pub sequence: u64,
+    pub commitment: [u8; 32],
+    pub certificate: LeanValidatedAdmissionTrace,
+    pub operation: MoveOp,
+    pub kernel_observation: KernelAdmissionObservation,
+    pub verification: VerificationAcceptance,
+    pub authority: AuthorityAcceptance,
+    pub membership: MembershipAcceptance,
 }
 
 /// One fixed document/genesis/context scope served by a runtime instance.
@@ -454,6 +595,7 @@ pub struct AuthenticatedRuntime<V, C, R, A, M, T> {
     membership: M,
     execution: LeanMoveExecution<T>,
     journal: AuthenticatedMoveJournal,
+    validated_records: Vec<ValidatedRecoveryRecord>,
 }
 
 impl<V, C, R, A, M, T> AuthenticatedRuntime<V, C, R, A, M, T>
@@ -496,6 +638,7 @@ where
             membership,
             execution,
             journal,
+            validated_records: Vec::new(),
         })
     }
 
@@ -525,10 +668,27 @@ where
         if execution.base_binding() != scope.execution_binding {
             return Err(RuntimeRecoveryError::ExecutionBindingMismatch);
         }
+        let mut validated_records = Vec::with_capacity(journal.records().len());
         for record in journal.records() {
             let sequence = record.sequence;
+            // Stored canonicality is a persistence property, not semantic
+            // admission evidence. Re-establish the opaque Lean acceptance
+            // before consulting any deployment provider or mutating recovery
+            // execution state.
+            let stored_certificate =
+                check_runtime_auth_v4_admission_trace(record.admission().certificate_bytes())
+                    .map_err(|reason| RuntimeRecoveryError::Certificate { sequence, reason })?;
+            let projection_bound = record.admission().canonical_request().len();
+            let exact_projection_bound = u64::try_from(projection_bound)
+                .map_err(|_| RuntimeRecoveryError::Projection { sequence })?;
+            if record.admission().trace().projection_bound() != exact_projection_bound {
+                return Err(RuntimeRecoveryError::RecordMismatch { sequence });
+            }
+            if projection_bound > maximum_bytes {
+                return Err(RuntimeRecoveryError::Projection { sequence });
+            }
             let projection = match project_runtime_auth_v4_admission(
-                maximum_bytes,
+                projection_bound,
                 record.admission().canonical_request(),
             ) {
                 RuntimeAuthV4AdmissionOutcome::Accepted(value) => value,
@@ -562,7 +722,20 @@ where
             if record.admission() != &validated.checked {
                 return Err(RuntimeRecoveryError::RecordMismatch { sequence });
             }
+            if validated.certificate != stored_certificate {
+                return Err(RuntimeRecoveryError::RecordMismatch { sequence });
+            }
             execution.commit(validated.operation);
+            validated_records.push(ValidatedRecoveryRecord {
+                sequence,
+                commitment: record.commitment,
+                certificate: stored_certificate,
+                operation: validated.operation,
+                kernel_observation: validated.kernel_observation,
+                verification: validated.verification_acceptance,
+                authority: validated.authority_acceptance,
+                membership: validated.membership_acceptance,
+            });
         }
         Ok(Self {
             scope,
@@ -573,6 +746,7 @@ where
             membership,
             execution,
             journal,
+            validated_records,
         })
     }
 
@@ -609,12 +783,33 @@ where
         {
             StorePreview::Fresh => {}
             StorePreview::Retry { existing_sequence } => {
-                let observation = usize::try_from(existing_sequence)
-                    .ok()
-                    .and_then(|index| self.journal.records().get(index))
-                    .map(|record| record.admission().observation().admission);
-                let Some(observation) = observation else {
+                let Some(index) = usize::try_from(existing_sequence).ok() else {
                     return AdmissionOutcome::Refused(AdmissionRefusal::StoreContractViolation);
+                };
+                let Some(record) = self.journal.records().get(index) else {
+                    return AdmissionOutcome::Refused(AdmissionRefusal::StoreContractViolation);
+                };
+                let Some(validated_record) = self.validated_records.get(index) else {
+                    return AdmissionOutcome::Refused(AdmissionRefusal::StoreContractViolation);
+                };
+                if record.sequence != existing_sequence
+                    || validated_record.sequence != existing_sequence
+                    || validated_record.commitment != record.commitment
+                    || validated_record.certificate.certificate_bytes()
+                        != record.admission().certificate_bytes()
+                    || nonce_key != *record.admission().nonce_key()
+                    || operation_key != *record.admission().operation_key()
+                    || projection.signing_bytes != record.admission().observation().signing_bytes
+                {
+                    return AdmissionOutcome::Refused(AdmissionRefusal::StoreContractViolation);
+                }
+                let observation = record.admission().observation().admission;
+                let retry_certificate = AdmissionCertificate::VerifiedRetry {
+                    prior_sequence: existing_sequence,
+                    prior_commitment: record.commitment,
+                    prior_certificate: validated_record.certificate.clone(),
+                    current_projection: projection,
+                    current_verification: acceptance,
                 };
                 return match self.journal.resync_verified_retry(existing_sequence) {
                     Ok(StoreDecision::Retry {
@@ -625,6 +820,7 @@ where
                         disposition: AdmissionDisposition::Retry,
                         kernel_observation: observation,
                         head_commitment,
+                        certificate: retry_certificate,
                     }),
                     Ok(_) => AdmissionOutcome::Refused(AdmissionRefusal::StoreContractViolation),
                     Err(error) => storage_outcome(error),
@@ -651,34 +847,54 @@ where
             &self.scope,
             self.journal.head_commitment(),
             projection,
+            acceptance,
         ) {
             Ok(value) => value,
             Err(StageFailure::Refused(reason)) => return AdmissionOutcome::Refused(reason),
             Err(StageFailure::Unavailable(reason)) => return AdmissionOutcome::Unavailable(reason),
         };
         let sequence = self.journal.next_sequence();
-        match self.journal.append_checked_at(sequence, validated.checked) {
+        let ValidatedAdmission {
+            checked,
+            certificate,
+            operation,
+            kernel_observation,
+            verification_acceptance,
+            authority_acceptance,
+            membership_acceptance,
+        } = validated;
+        match self.journal.append_checked_at(sequence, checked) {
             Ok(StoreDecision::Fresh {
                 receipt,
                 head_commitment,
             }) if receipt.status == AppendStatus::Appended => {
-                self.execution.commit(validated.operation);
+                self.execution.commit(operation);
+                self.validated_records.push(ValidatedRecoveryRecord {
+                    sequence: receipt.sequence,
+                    commitment: head_commitment,
+                    certificate: certificate.clone(),
+                    operation,
+                    kernel_observation,
+                    verification: verification_acceptance.clone(),
+                    authority: authority_acceptance.clone(),
+                    membership: membership_acceptance.clone(),
+                });
                 AdmissionOutcome::Accepted(AdmissionReceipt {
                     sequence: receipt.sequence,
                     disposition: AdmissionDisposition::Appended,
-                    kernel_observation: validated.kernel_observation,
+                    kernel_observation,
                     head_commitment,
+                    certificate: AdmissionCertificate::Fresh {
+                        trace: certificate,
+                        verification: verification_acceptance,
+                        authority: authority_acceptance,
+                        membership: membership_acceptance,
+                    },
                 })
             }
-            Ok(StoreDecision::Retry {
-                existing_sequence,
-                head_commitment,
-            }) => AdmissionOutcome::Accepted(AdmissionReceipt {
-                sequence: existing_sequence,
-                disposition: AdmissionDisposition::Retry,
-                kernel_observation: validated.kernel_observation,
-                head_commitment,
-            }),
+            Ok(StoreDecision::Retry { .. }) => {
+                AdmissionOutcome::Refused(AdmissionRefusal::StoreContractViolation)
+            }
             Ok(StoreDecision::NonceCollision { existing_sequence }) => {
                 AdmissionOutcome::Refused(AdmissionRefusal::NonceCollision { existing_sequence })
             }
@@ -704,6 +920,14 @@ where
 
     pub fn execution(&self) -> &LeanMoveExecution<T> {
         &self.execution
+    }
+
+    /// Complete in-sequence list of journal records whose exact certificates
+    /// have been accepted by Lean in this runtime and whose execution effects
+    /// are present in `execution`. Fresh appends extend the same list, keeping
+    /// the retry path tied to an opaque accepted token.
+    pub fn validated_records(&self) -> &[ValidatedRecoveryRecord] {
+        &self.validated_records
     }
 
     pub fn into_parts(
@@ -733,8 +957,12 @@ where
 
 struct ValidatedAdmission {
     checked: CheckedAdmission,
+    certificate: LeanValidatedAdmissionTrace,
     operation: MoveOp,
     kernel_observation: KernelAdmissionObservation,
+    verification_acceptance: VerificationAcceptance,
+    authority_acceptance: AuthorityAcceptance,
+    membership_acceptance: MembershipAcceptance,
 }
 
 enum StageFailure {
@@ -813,6 +1041,7 @@ where
         scope,
         previous,
         projection.clone(),
+        acceptance,
     )
 }
 
@@ -825,6 +1054,7 @@ fn validate_after_verification<C, R, A, M, T>(
     scope: &RuntimeScope,
     previous: Option<[u8; 32]>,
     projection: RuntimeAuthV4AdmissionProjection,
+    verification_acceptance: VerificationAcceptance,
 ) -> Result<ValidatedAdmission, StageFailure>
 where
     C: AdmissionContextProvider,
@@ -914,6 +1144,12 @@ where
             AdmissionRefusal::AuthorityReceiptMismatch,
         ));
     }
+    let membership_input = MembershipInput {
+        context_commitment: &context.commitment,
+        membership_policy: context.membership_policy,
+        issuer: projection.issuer,
+        operation: &operation,
+    };
     membership
         .allows_move(&context, projection.issuer, &operation)
         .map_err(|reason| match reason {
@@ -922,17 +1158,11 @@ where
                 StageFailure::Unavailable(AdmissionUnavailable::Membership)
             }
         })?;
-    let (kernel_observation, execution_refusal) = match execution.preflight(operation) {
-        OpOutcome::Applied => (Some(KernelAdmissionObservation::Applied), None),
-        OpOutcome::SkippedCycle => (Some(KernelAdmissionObservation::SkippedCycle), None),
-        OpOutcome::SkippedUnauthorised => (None, Some(ExecutionRefusal::SkippedUnauthorised)),
-        OpOutcome::SkippedInvalid => (None, Some(ExecutionRefusal::SkippedInvalid)),
-        OpOutcome::OmittedUnknownNode => (None, Some(ExecutionRefusal::OmittedUnknownNode)),
-    };
-    if let Some(reason) = execution_refusal {
-        return Err(StageFailure::Refused(AdmissionRefusal::Execution(reason)));
-    }
-    let kernel_observation = kernel_observation.expect("accepted outcomes carry observation");
+    let membership_acceptance = MembershipAcceptance::from_membership_acceptance(membership_input);
+    let preflight = execution
+        .preflight(operation)
+        .map_err(|reason| StageFailure::Refused(AdmissionRefusal::Execution(reason)))?;
+    let kernel_observation = preflight.admission;
     let nonce = nonce_key(&projection);
     let operation_identity = operation_key(&projection);
     let destination_stable = projection
@@ -943,7 +1173,21 @@ where
         .destination
         .as_ref()
         .map(|node| node.kernel_index);
-    let checked = CheckedAdmission::new(
+    let projection_bound = u64::try_from(projection.canonical_request.len()).map_err(|_| {
+        StageFailure::Refused(AdmissionRefusal::CheckedBoundary(
+            "projection bound exceeds certificate word space",
+        ))
+    })?;
+    let trace = AdmissionTrace::new(
+        projection_bound,
+        projection.projection_response,
+        preflight.canonical_request,
+        preflight.raw_response,
+        preflight.selected_request_slot,
+        preflight.operation_was_new,
+        AdmissionStageReceipts::all_accepted(),
+    );
+    let candidate = UncheckedAdmissionCertificate::new(
         projection.canonical_request,
         nonce,
         operation_identity,
@@ -967,14 +1211,24 @@ where
             replica: projection.exec_replica,
             cite: projection.exec_cite,
             resolved_move: operation,
+            execution_nodes: preflight.execution_nodes,
             admission: kernel_observation,
         },
+        trace,
     )
     .map_err(|reason| StageFailure::Refused(AdmissionRefusal::CheckedBoundary(reason)))?;
+    let certificate = check_runtime_auth_v4_admission_trace(candidate.certificate_bytes())
+        .map_err(|reason| StageFailure::Refused(AdmissionRefusal::TraceCertificate(reason)))?;
+    let checked = CheckedAdmission::from_lean_validated(&certificate)
+        .map_err(|reason| StageFailure::Refused(AdmissionRefusal::CheckedBoundary(reason)))?;
     Ok(ValidatedAdmission {
         checked,
+        certificate,
         operation,
         kernel_observation,
+        verification_acceptance,
+        authority_acceptance,
+        membership_acceptance,
     })
 }
 
