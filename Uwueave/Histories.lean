@@ -216,6 +216,8 @@ namespace Uwueave.Histories
 
 open Uwueave Uwueave.Ancestral Uwueave.Necessity
 
+universe uV uS uOp
+
 /-! ## §0. Two missing lemmas about local runs
 
 `Necessity.run` folds a word of operations; `Ancestral.Reachable` is the
@@ -224,7 +226,7 @@ existential over words. Composing two runs needs the fold to split, which
 
 /-- A successful run splits: reaching `m` by `l₁` and continuing with `l₂` is the
 run of the concatenation. -/
-theorem run_append {S Op : Type} (impl : Impl S Op) (base m : S) (l₁ l₂ : List Op)
+theorem run_append {S : Type uS} {Op : Type uOp} (impl : Impl S Op) (base m : S) (l₁ l₂ : List Op)
     (h : run impl base l₁ = some m) :
     run impl base (l₁ ++ l₂) = run impl m l₂ := by
   induction l₁ generalizing base with
@@ -244,7 +246,7 @@ theorem run_append {S Op : Type} (impl : Impl S Op) (base m : S) (l₁ l₂ : Li
       exact ih s' h
 
 /-- **Reachability is transitive** — the composite word is the concatenation. -/
-theorem Reachable.trans {S Op : Type} {impl : Impl S Op} {a b c : S}
+theorem Reachable.trans {S : Type uS} {Op : Type uOp} {impl : Impl S Op} {a b c : S}
     (h₁ : Reachable impl a b) (h₂ : Reachable impl b c) : Reachable impl a c := by
   obtain ⟨o₁, r₁⟩ := h₁
   obtain ⟨o₂, r₂⟩ := h₂
@@ -260,7 +262,7 @@ about the DAG, not a check performed on it. -/
 
 /-- **A version DAG.** `parent p c` is a direct edge; `rank` strictly increases
 along every edge, which is the entire content of "this graph is acyclic". -/
-structure VersionDag (V : Type) where
+structure VersionDag (V : Type uV) where
   /-- Direct-parent edges. -/
   parent : V → V → Bool
   /-- A measure that strictly increases along every edge. -/
@@ -269,51 +271,51 @@ structure VersionDag (V : Type) where
   rank_lt : ∀ p c, parent p c = true → rank p < rank c
 
 /-- **Strict ancestry**: a nonempty path of direct-parent edges. -/
-inductive Ancestry {V : Type} (D : VersionDag V) : V → V → Prop where
+inductive Ancestry {V : Type uV} (D : VersionDag V) : V → V → Prop where
   /-- One edge. -/
   | direct {p c : V} : D.parent p c = true → Ancestry D p c
   /-- One more edge on the end of a path. -/
   | extend {a p c : V} : Ancestry D a p → D.parent p c = true → Ancestry D a c
 
 /-- Rank strictly increases along every ancestry path. -/
-theorem Ancestry.rank_lt {V : Type} {D : VersionDag V} {a b : V}
+theorem Ancestry.rank_lt {V : Type uV} {D : VersionDag V} {a b : V}
     (h : Ancestry D a b) : D.rank a < D.rank b := by
   induction h with
   | direct e => exact D.rank_lt _ _ e
   | extend _ e ih => exact Nat.lt_trans ih (D.rank_lt _ _ e)
 
 /-- Ancestry paths compose. -/
-theorem Ancestry.trans {V : Type} {D : VersionDag V} {a b c : V}
+theorem Ancestry.trans {V : Type uV} {D : VersionDag V} {a b c : V}
     (h₁ : Ancestry D a b) (h₂ : Ancestry D b c) : Ancestry D a c := by
   induction h₂ with
   | direct e => exact .extend h₁ e
   | extend _ e ih => exact .extend ih e
 
 /-- **No version is its own strict ancestor.** -/
-theorem Ancestry.irrefl {V : Type} {D : VersionDag V} (a : V) :
+theorem Ancestry.irrefl {V : Type uV} {D : VersionDag V} (a : V) :
     ¬ Ancestry D a a := fun h => Nat.lt_irrefl _ h.rank_lt
 
 /-- **The DAG is acyclic**: two opposed ancestry paths are impossible. -/
-theorem Ancestry.acyclic {V : Type} {D : VersionDag V} {a b : V}
+theorem Ancestry.acyclic {V : Type uV} {D : VersionDag V} {a b : V}
     (h₁ : Ancestry D a b) (h₂ : Ancestry D b a) : False :=
   Nat.lt_irrefl _ (Nat.lt_trans h₁.rank_lt h₂.rank_lt)
 
 /-- **Reflexive reachability**: identity, or a strict ancestry path. -/
-def Reaches {V : Type} (D : VersionDag V) (a b : V) : Prop := a = b ∨ Ancestry D a b
+def Reaches {V : Type uV} (D : VersionDag V) (a b : V) : Prop := a = b ∨ Ancestry D a b
 
 /-- Every version reaches itself. -/
-theorem Reaches.refl {V : Type} (D : VersionDag V) (a : V) : Reaches D a a := Or.inl rfl
+theorem Reaches.refl {V : Type uV} (D : VersionDag V) (a : V) : Reaches D a a := Or.inl rfl
 
 /-- A reachability step is either identity or a strict rank increase — the
 working form of every negative fact about a concrete DAG below. -/
-theorem Reaches.eq_or_rank_lt {V : Type} {D : VersionDag V} {a b : V}
+theorem Reaches.eq_or_rank_lt {V : Type uV} {D : VersionDag V} {a b : V}
     (h : Reaches D a b) : a = b ∨ D.rank a < D.rank b := by
   rcases h with rfl | ha
   · exact Or.inl rfl
   · exact Or.inr ha.rank_lt
 
 /-- Reachability never decreases rank. -/
-theorem Reaches.rank_le {V : Type} {D : VersionDag V} {a b : V}
+theorem Reaches.rank_le {V : Type uV} {D : VersionDag V} {a b : V}
     (h : Reaches D a b) : D.rank a ≤ D.rank b := by
   rcases h.eq_or_rank_lt with rfl | hr
   · exact Nat.le_refl _
@@ -323,7 +325,7 @@ theorem Reaches.rank_le {V : Type} {D : VersionDag V} {a b : V}
 stable elimination form for negative reachability facts: concrete DAG proofs
 need only discharge disequality and the rank comparison, rather than repeatedly
 split `Reaches.eq_or_rank_lt`. -/
-theorem not_reaches_of_ne_of_rank_ge {V : Type} {D : VersionDag V} {a b : V}
+theorem not_reaches_of_ne_of_rank_ge {V : Type uV} {D : VersionDag V} {a b : V}
     (hne : a ≠ b) (hrank : D.rank b ≤ D.rank a) : ¬ Reaches D a b := by
   intro h
   rcases h.eq_or_rank_lt with he | hlt
@@ -334,7 +336,7 @@ theorem not_reaches_of_ne_of_rank_ge {V : Type} {D : VersionDag V} {a b : V}
 the semantic induction principle clients of `VersionDag` need: the rank remains
 an implementation detail of the well-foundedness proof, while the induction
 hypothesis is stated directly over lower-ranked versions. -/
-theorem VersionDag.rank_induction {V : Type} (D : VersionDag V) {P : V → Prop}
+theorem VersionDag.rank_induction {V : Type uV} (D : VersionDag V) {P : V → Prop}
     (step : ∀ v, (∀ w, D.rank w < D.rank v → P w) → P v) : ∀ v, P v := by
   have key : ∀ n, ∀ v, D.rank v = n → P v := by
     intro n
@@ -346,7 +348,7 @@ theorem VersionDag.rank_induction {V : Type} (D : VersionDag V) {P : V → Prop}
   exact key (D.rank v) v rfl
 
 /-- Reachability composes. -/
-theorem Reaches.trans {V : Type} {D : VersionDag V} {a b c : V}
+theorem Reaches.trans {V : Type uV} {D : VersionDag V} {a b c : V}
     (h₁ : Reaches D a b) (h₂ : Reaches D b c) : Reaches D a c := by
   rcases h₁ with rfl | ha
   · exact h₂
@@ -356,7 +358,7 @@ theorem Reaches.trans {V : Type} {D : VersionDag V} {a b c : V}
 
 /-- **Reachability is antisymmetric** — minidregg's `Reaches.antisymm`, bought
 from the same monotone measure. -/
-theorem Reaches.antisymm {V : Type} {D : VersionDag V} {a b : V}
+theorem Reaches.antisymm {V : Type uV} {D : VersionDag V} {a b : V}
     (h₁ : Reaches D a b) (h₂ : Reaches D b a) : a = b := by
   rcases h₁.eq_or_rank_lt with heq | hlt
   · exact heq
@@ -365,11 +367,11 @@ theorem Reaches.antisymm {V : Type} {D : VersionDag V} {a b : V}
     · exact absurd (Nat.lt_trans hlt hlt') (Nat.lt_irrefl _)
 
 /-- **A common ancestor** of two versions: one version reaching both. -/
-def CommonAncestor {V : Type} (D : VersionDag V) (x y b : V) : Prop :=
+def CommonAncestor {V : Type uV} (D : VersionDag V) (x y b : V) : Prop :=
   Reaches D b x ∧ Reaches D b y
 
 /-- Common ancestry does not care which replica is which. -/
-theorem CommonAncestor.symm {V : Type} {D : VersionDag V} {x y b : V}
+theorem CommonAncestor.symm {V : Type uV} {D : VersionDag V} {x y b : V}
     (h : CommonAncestor D x y b) : CommonAncestor D y x b := ⟨h.2, h.1⟩
 
 /-! ## §2. Base selection, honestly three-valued
@@ -381,23 +383,23 @@ existence of a lowest one. -/
 /-- **A lowest common base**: a common ancestor that every common ancestor
 reaches. Strictly stronger than "some maximal candidate", and therefore need not
 exist in a general DAG — §3's criss-cross is the witness. -/
-def LowestCommonBase {V : Type} (D : VersionDag V) (x y b : V) : Prop :=
+def LowestCommonBase {V : Type uV} (D : VersionDag V) (x y b : V) : Prop :=
   CommonAncestor D x y b ∧ ∀ c, CommonAncestor D x y c → Reaches D c b
 
 /-- **A maximal common base**: no common ancestor lies strictly beyond it.
 Several incomparable ones may exist. -/
-def MaximalCommonBase {V : Type} (D : VersionDag V) (x y b : V) : Prop :=
+def MaximalCommonBase {V : Type uV} (D : VersionDag V) (x y b : V) : Prop :=
   CommonAncestor D x y b ∧ ∀ c, CommonAncestor D x y c → Reaches D b c → c = b
 
 /-- **Uniqueness when it exists** — minidregg's `LowestCommonBase.selected_unique`,
 by antisymmetry of reachability. Two merge-base procedures that both certify a
 lowest base agree on the node. -/
-theorem lowestCommonBase_unique {V : Type} {D : VersionDag V} {x y b₁ b₂ : V}
+theorem lowestCommonBase_unique {V : Type uV} {D : VersionDag V} {x y b₁ b₂ : V}
     (h₁ : LowestCommonBase D x y b₁) (h₂ : LowestCommonBase D x y b₂) : b₁ = b₂ :=
   Reaches.antisymm (h₂.2 b₁ h₁.1) (h₁.2 b₂ h₂.1)
 
 /-- A lowest common base is in particular maximal. -/
-theorem LowestCommonBase.maximal {V : Type} {D : VersionDag V} {x y b : V}
+theorem LowestCommonBase.maximal {V : Type uV} {D : VersionDag V} {x y b : V}
     (h : LowestCommonBase D x y b) : MaximalCommonBase D x y b :=
   ⟨h.1, fun c hc hbc => Reaches.antisymm (h.2 c hc) hbc⟩
 
@@ -405,7 +407,7 @@ theorem LowestCommonBase.maximal {V : Type} {D : VersionDag V} {x y b : V}
 theorem that makes the three-valued answer honest: `ambiguous` is not "we did not
 look hard enough", it is a *proof* that no `selected` answer exists. minidregg's
 `AmbiguousCommonBases.excludes_lowest`, restated over our DAG. -/
-theorem ambiguous_excludes_lowest {V : Type} {D : VersionDag V} {x y b₁ b₂ : V}
+theorem ambiguous_excludes_lowest {V : Type uV} {D : VersionDag V} {x y b₁ b₂ : V}
     (h₁ : MaximalCommonBase D x y b₁) (h₂ : MaximalCommonBase D x y b₂)
     (hne : b₁ ≠ b₂) : ¬ ∃ b, LowestCommonBase D x y b := by
   rintro ⟨b, hb⟩
@@ -417,7 +419,7 @@ theorem ambiguous_excludes_lowest {V : Type} {D : VersionDag V} {x y b₁ b₂ :
 maximal bases is a different answer from none, and §6 shows the difference is
 observable in the invariant verdict. Every constructor carries its evidence —
 `unavailable` carries a **refutation**, not a flag. -/
-inductive BaseSelection {V : Type} (D : VersionDag V) (x y : V) where
+inductive BaseSelection {V : Type uV} (D : VersionDag V) (x y : V) where
   /-- A certified lowest common base. -/
   | selected (b : V) (h : LowestCommonBase D x y b)
   /-- Two distinct maximal common bases; by `ambiguous_excludes_lowest` no lowest
@@ -430,7 +432,7 @@ inductive BaseSelection {V : Type} (D : VersionDag V) (x y : V) where
 /-- The three answers are mutually exclusive, and the exclusion is a theorem
 rather than a convention: a selection cannot be both `selected` and `ambiguous`
 (that is `ambiguous_excludes_lowest`), and `unavailable` refutes both. -/
-theorem BaseSelection.exclusive {V : Type} {D : VersionDag V} {x y : V} :
+theorem BaseSelection.exclusive {V : Type uV} {D : VersionDag V} {x y : V} :
     (∀ b₁ b₂, MaximalCommonBase D x y b₁ → MaximalCommonBase D x y b₂ → b₁ ≠ b₂ →
         ¬ ∃ b, LowestCommonBase D x y b)
       ∧ (∀ (_ : ∀ b, ¬ CommonAncestor D x y b) b, ¬ LowestCommonBase D x y b) :=
@@ -628,7 +630,7 @@ sees a base and two replicas and stops; here a merge result is a node with
 children, which is the whole subject. -/
 
 /-- **What a version is.** -/
-inductive Origin (V : Type) where
+inductive Origin (V : Type uV) where
   /-- The history's root. -/
   | root
   /-- Produced by a local run from one parent. -/
@@ -637,7 +639,7 @@ inductive Origin (V : Type) where
   | merged (base left right : V)
 
 /-- **A labelled version history.** -/
-structure History (V S Op : Type) where
+structure History (V : Type uV) (S : Type uS) (Op : Type uOp) where
   /-- The version graph. -/
   dag : VersionDag V
   /-- What each version holds. -/
@@ -654,7 +656,7 @@ literally the three-way merge of the three states.
 
 The root carries no obligation here — `History.Coherent.root_unique` is what
 pins it. -/
-def OriginOK {V S Op : Type} (H : History V S Op) (M : AncestralMerge S)
+def OriginOK {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) (M : AncestralMerge S)
     (impl : Impl S Op) (v : V) : Prop :=
   match H.origin v with
   | .root => True
@@ -676,7 +678,7 @@ Two omissions are deliberate:
     it, and a hypothesis a theorem does not use makes the theorem weaker for
     nothing. What `sound` needs is the *converse* — that nothing else claims to
     be a root — which is `root_unique`. -/
-structure History.Coherent {V S Op : Type} (H : History V S Op) (M : AncestralMerge S)
+structure History.Coherent {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) (M : AncestralMerge S)
     (impl : Impl S Op) : Prop where
   /-- Nothing but the root claims to be one. -/
   root_unique : ∀ v, H.origin v = Origin.root → v = H.root
@@ -688,7 +690,7 @@ receive the exact evidence stored by `OriginOK`; run and merge cases additionall
 receive induction hypotheses for every version they depend on. This packages
 the rank/common-ancestor plumbing once without hiding any model assumption or
 changing the public history representation. -/
-theorem History.Coherent.induction {V S Op : Type} {H : History V S Op}
+theorem History.Coherent.induction {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     {M : AncestralMerge S} {impl : Impl S Op} (hco : H.Coherent M impl)
     {P : V → Prop}
     (root : ∀ v, H.origin v = .root → P v)
@@ -726,11 +728,11 @@ A version DAG gives `Reaches` between **versions**. The bridge is
 
 /-- **The history's edges are realized by local runs**: a direct parent's state
 op-reaches its child's. -/
-def RunRealized {V S Op : Type} (H : History V S Op) (impl : Impl S Op) : Prop :=
+def RunRealized {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) (impl : Impl S Op) : Prop :=
   ∀ p c, H.dag.parent p c = true → Reachable impl (H.state p) (H.state c)
 
 /-- Under `RunRealized`, DAG ancestry transports to state reachability. -/
-theorem ancestry_reachable {V S Op : Type} {H : History V S Op} {impl : Impl S Op}
+theorem ancestry_reachable {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {impl : Impl S Op}
     (hrr : RunRealized H impl) {p c : V} (h : Ancestry H.dag p c) :
     Reachable impl (H.state p) (H.state c) := by
   induction h with
@@ -738,7 +740,7 @@ theorem ancestry_reachable {V S Op : Type} {H : History V S Op} {impl : Impl S O
   | extend _ e ih => exact Reachable.trans ih (hrr _ _ e)
 
 /-- …and so does reflexive reachability. -/
-theorem reaches_reachable {V S Op : Type} {H : History V S Op} {impl : Impl S Op}
+theorem reaches_reachable {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {impl : Impl S Op}
     (hrr : RunRealized H impl) {p c : V} (h : Reaches H.dag p c) :
     Reachable impl (H.state p) (H.state c) := by
   rcases h with rfl | ha
@@ -750,14 +752,14 @@ run-realized history. This is the connection that makes §1–§3 more than a gr
 exercise: a merge-base procedure's answer becomes the *context* of
 `MergeModel`'s decision model, with its validity obligation discharged from
 ancestry rather than asserted. -/
-theorem selected_valid {V S Op : Type} {H : History V S Op} {impl : Impl S Op}
+theorem selected_valid {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {impl : Impl S Op}
     (hrr : RunRealized H impl) {x y b : V} (h : CommonAncestor H.dag x y b) :
     (MergeModel.BaseDecision.selected (H.state b)).Valid impl (H.state x) (H.state y) :=
   ⟨reaches_reachable hrr h.1, reaches_reachable hrr h.2⟩
 
 /-- **Two distinct maximal bases license `BaseDecision.ambiguous`** — provided
 their *states* differ, which is a genuinely extra hypothesis (§4.2). -/
-theorem ambiguous_valid {V S Op : Type} {H : History V S Op} {impl : Impl S Op}
+theorem ambiguous_valid {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {impl : Impl S Op}
     (hrr : RunRealized H impl) {x y b₁ b₂ : V}
     (h₁ : MaximalCommonBase H.dag x y b₁) (h₂ : MaximalCommonBase H.dag x y b₂)
     (hne : H.state b₁ ≠ H.state b₂) :
@@ -775,7 +777,7 @@ that situation and §6 is the one where the states differ and the ambiguity
 becomes load-bearing — the two cases are worth telling apart deliberately. -/
 
 /-- The edgeless DAG, labelled: two unrelated versions holding the same state. -/
-def twoHistory {S Op : Type} (s : S) : History Two S Op where
+def twoHistory {S : Type uS} {Op : Type uOp} (s : S) : History Two S Op where
   dag := twoDag
   state := fun _ => s
   origin := fun _ => .root
@@ -791,7 +793,7 @@ So the three-valued decision cannot be computed from the DAG alone, in either
 direction: §4.1 transports `selected` and `ambiguous` *into*
 `MergeModel.BaseDecision` under `RunRealized`, and nothing transports
 `unavailable`. -/
-theorem dag_absence_does_not_license_unavailable {S Op : Type} (impl : Impl S Op) (s : S) :
+theorem dag_absence_does_not_license_unavailable {S : Type uS} {Op : Type uOp} (impl : Impl S Op) (s : S) :
     (∀ b, ¬ CommonAncestor (twoHistory (S := S) (Op := Op) s).dag .x .y b) ∧
       ¬ (MergeModel.BaseDecision.unavailable (S := S)).Valid impl
         ((twoHistory (S := S) (Op := Op) s).state .x)
@@ -1161,7 +1163,7 @@ rank. The condition is satisfiable (`lock_mergeClosed`) and refutable
 (`counter_not_mergeClosed`), and the refutation lands exactly on §5's history. -/
 
 /-- **The root's reachable set is closed under merging.** -/
-def MergeClosedFrom {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) (ρ : S) : Prop :=
+def MergeClosedFrom {S : Type uS} {Op : Type uOp} (M : AncestralMerge S) (impl : Impl S Op) (ρ : S) : Prop :=
   ∀ l x y : S, Reachable impl ρ l → Reachable impl ρ x → Reachable impl ρ y →
     Reachable impl ρ (M.merge3 l x y)
 
@@ -1169,7 +1171,7 @@ def MergeClosedFrom {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op) (ρ 
 `Ancestral.AncestralConfluent`, which asks for reachability *from the base*: this
 version asks for reachability from the root, which is the hypothesis a history's
 induction can actually supply. -/
-def AncestralConfluentFrom {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op)
+def AncestralConfluentFrom {S : Type uS} {Op : Type uOp} (M : AncestralMerge S) (impl : Impl S Op)
     (I : Invariant S) (ρ : S) : Prop :=
   ∀ l x y : S, Reachable impl ρ l → Reachable impl ρ x → Reachable impl ρ y →
     I l → I x → I y → I (M.merge3 l x y)
@@ -1182,7 +1184,7 @@ because it reaches one of them and reachability never decreases rank.
 The two conclusions are proved together because each feeds the other: legality of
 a merge needs the three inputs reachable (for `AncestralConfluentFrom`), and
 reachability of a merge needs `MergeClosedFrom`. -/
-theorem History.Coherent.sound {V S Op : Type} {H : History V S Op}
+theorem History.Coherent.sound {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     {M : AncestralMerge S} {impl : Impl S Op} {I : Invariant S}
     (hco : H.Coherent M impl)
     (hloc : LocallySafe impl I)
@@ -1512,7 +1514,7 @@ an additional sufficient premise.
 /-- **Safety of one admissible history extension.** The origin determines the
 premises available at that step. Coherence supplies the corresponding parent
 edges, common-ancestor evidence and literal merge equation. -/
-def ExtensionSafe {V S Op : Type} (H : History V S Op)
+def ExtensionSafe {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op)
     (I : Invariant S) (v : V) : Prop :=
   match H.origin v with
   | .root => I (H.state v)
@@ -1524,19 +1526,19 @@ def ExtensionSafe {V S Op : Type} (H : History V S Op)
 every coherent version history carrying root state `rho` preserves `I`. Unlike
 `MergeClosedFrom`, this quantifies only over merge contexts a history can
 actually record and asks only for legality, not local-run reachability. -/
-def HistorySafeFrom {S Op : Type} (M : AncestralMerge S)
+def HistorySafeFrom {S : Type uS} {Op : Type uOp} (M : AncestralMerge S)
     (impl : Impl S Op) (I : Invariant S) (rho : S) : Prop :=
-  ∀ (V : Type) (H : History V S Op), H.state H.root = rho →
+  ∀ (V : Type uV) (H : History V S Op), H.state H.root = rho →
     H.Coherent M impl → ∀ v, ExtensionSafe H I v
 
 /-- **HistorySafe iff every admissible history is safe.** This is the exact
 necessity-and-sufficiency result: local safety at every recorded extension is
 equivalent to global legality at every node of every coherent history from the
 root. No reachability closure premise appears in either direction. -/
-theorem historySafeFrom_iff {S Op : Type} {M : AncestralMerge S}
+theorem historySafeFrom_iff {S : Type uS} {Op : Type uOp} {M : AncestralMerge S}
     {impl : Impl S Op} {I : Invariant S} {rho : S} :
-    HistorySafeFrom M impl I rho ↔
-      ∀ (V : Type) (H : History V S Op), H.state H.root = rho →
+    HistorySafeFrom.{uV, uS, uOp} M impl I rho ↔
+      ∀ (V : Type uV) (H : History V S Op), H.state H.root = rho →
         H.Coherent M impl → ∀ v, I (H.state v) := by
   constructor
   · intro hs V H hroot hco
@@ -1562,12 +1564,12 @@ theorem historySafeFrom_iff {S Op : Type} {M : AncestralMerge S}
 /-- The old root-reachability closure package implies the exact condition.
 This places `Coherent.sound` as a reusable sufficient route into the iff, not
 as its necessity direction. -/
-theorem mergeClosed_implies_historySafeFrom {S Op : Type}
+theorem mergeClosed_implies_historySafeFrom {S : Type uS} {Op : Type uOp}
     {M : AncestralMerge S} {impl : Impl S Op} {I : Invariant S} {rho : S}
     (hloc : LocallySafe impl I)
     (hAC : AncestralConfluentFrom M impl I rho)
     (hMC : MergeClosedFrom M impl rho) (hroot : I rho) :
-    HistorySafeFrom M impl I rho := by
+    HistorySafeFrom.{uV, uS, uOp} M impl I rho := by
   rw [historySafeFrom_iff]
   intro V H hr hco v
   have hacH : AncestralConfluentFrom M impl I (H.state H.root) := by
@@ -1581,7 +1583,7 @@ theorem mergeClosed_implies_historySafeFrom {S Op : Type}
 history is rooted at `0`, yet the admissible `joinLeft` extension holds `5`
 under the ceiling `n ≤ 4`. -/
 theorem counter_not_historySafeFrom :
-    ¬ HistorySafeFrom counterAM (spendOps 2).impl (fun n => n ≤ 4) 0 := by
+    ¬ HistorySafeFrom.{0, 0, 0} counterAM (spendOps 2).impl (fun n => n ≤ 4) 0 := by
   intro hs
   have hall :=
     historySafeFrom_iff.mp hs Ver ccHistory rfl ccHistory_coherent
@@ -1601,7 +1603,7 @@ history safety across arbitrary coherent repeated/criss-cross histories. Local
 runs preserve mutual exclusion and `lockMerge` preserves it for every legal
 pair of parents, independently of the recorded base. -/
 theorem lock_historySafeFrom (rho : Lock) (hrho : AtMostOne rho) :
-    HistorySafeFrom lockAM lockImpl AtMostOne rho := by
+    HistorySafeFrom.{0, 0, 0} lockAM lockImpl AtMostOne rho := by
   intro V H hroot hco v
   have hnode := hco.nodes v
   cases hor : H.origin v with
@@ -1628,7 +1630,7 @@ admissible history extension, while root operation-reachability is still not
 merge-closed (`0,1,2` merge to unreachable `3`). This is a direct refutation of
 the previously open necessity direction, not a failure to find its proof. -/
 theorem counter_historySafe_true_and_not_mergeClosed :
-    HistorySafeFrom counterAM (spendOps 2).impl (fun _ => True) 0 ∧
+    HistorySafeFrom.{0, 0, 0} counterAM (spendOps 2).impl (fun _ => True) 0 ∧
       ¬ MergeClosedFrom counterAM (spendOps 2).impl 0 := by
   refine ⟨?_, counter_not_mergeClosed⟩
   intro V H hroot hco v

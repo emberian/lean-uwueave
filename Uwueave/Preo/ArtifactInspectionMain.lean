@@ -1,5 +1,6 @@
 /- Explicit binary-input CLI for bounded Lean-owned artifact inspection. -/
 import Uwueave.Preo.ArtifactInspectionV1
+import Uwueave.TrustFloor
 
 open Lean
 open Uwueave.Preo.ArtifactInspectionV1
@@ -68,3 +69,7 @@ private def run (args : List String) : IO Unit := do
   | .error error => throw <| IO.userError (describeError error)
 
 def main (args : List String) : IO Unit := run args
+
+#assert_current_owns main
+
+#audit_floor_current

@@ -162,6 +162,8 @@ namespace Uwueave.HistoryPolicy
 
 open Uwueave Uwueave.Ancestral Uwueave.Necessity Uwueave.Histories Uwueave.HistoryBase
 
+universe uV uS uOp uR
+
 /-! ## §0. Two symmetries the base layer never needed
 
 `Histories.CommonAncestor.symm` exists; the two derived notions did not, and
@@ -170,18 +172,18 @@ every pair-symmetric statement below needs them. -/
 /-- A maximal common base does not care which replica is which. (Named without a
 dot, because `MaximalCommonBase` unfolds to `And` and dot notation would find
 `And.symm`.) -/
-theorem maximalCommonBase_symm {V : Type} {D : VersionDag V} {x y b : V}
+theorem maximalCommonBase_symm {V : Type uV} {D : VersionDag V} {x y b : V}
     (h : MaximalCommonBase D x y b) : MaximalCommonBase D y x b :=
   ⟨h.1.symm, fun c hc hbc => h.2 c hc.symm hbc⟩
 
 /-- …and neither does a lowest one. -/
-theorem lowestCommonBase_symm {V : Type} {D : VersionDag V} {x y b : V}
+theorem lowestCommonBase_symm {V : Type uV} {D : VersionDag V} {x y b : V}
     (h : LowestCommonBase D x y b) : LowestCommonBase D y x b :=
   ⟨h.1.symm, fun c hc => h.2 c hc.symm⟩
 
 /-- Equal outputs are contextually equivalent — the shape every base-insensitivity
 witness below lands in. -/
-theorem ctxEquiv_of_eq {S R : Type} [MergeState S] {f : S → R} {u v : S} (h : u = v) :
+theorem ctxEquiv_of_eq {S : Type uS} {R : Type uR} [MergeState S] {f : S → R} {u v : S} (h : u = v) :
     CtxEquiv f u v := h ▸ ctxEquiv_refl f u
 
 /-! ## §1. The declared merge model
@@ -196,21 +198,21 @@ point of the structure is unchanged and is the whole reason it exists —
 states. `HistoryBase.stateDecision` is the instance at `H.state`
 (`stateDecisionOf_state`); §7 needs the general form, where the labelling is the
 *derived* view rather than the recorded one. -/
-def stateDecisionOf {V S : Type} (f : V → S) :
+def stateDecisionOf {V : Type uV} {S : Type uS} (f : V → S) :
     MergeModel.BaseDecision V → MergeModel.BaseDecision S
   | .selected b => .selected (f b)
   | .ambiguous b₁ b₂ => .ambiguous (f b₁) (f b₂)
   | .unavailable => .unavailable
 
 /-- `HistoryBase.stateDecision` is `stateDecisionOf` at the recorded labelling. -/
-theorem stateDecisionOf_state {V S Op : Type} (H : History V S Op)
+theorem stateDecisionOf_state {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op)
     (d : MergeModel.BaseDecision V) : stateDecisionOf H.state d = stateDecision H d := by
   cases d <;> rfl
 
 /-- Two labellings that agree on the versions a decision **names** give the same
 state-level decision. The hypothesis is over `MergeModel.BaseDecision.bases`,
 which is `MergeModel`'s own account of what a decision exposes. -/
-theorem stateDecisionOf_congr {V S : Type} {f g : V → S}
+theorem stateDecisionOf_congr {V : Type uV} {S : Type uS} {f g : V → S}
     (d : MergeModel.BaseDecision V) (h : ∀ b, b ∈ d.bases → f b = g b) :
     stateDecisionOf f d = stateDecisionOf g d := by
   cases d with
@@ -241,7 +243,7 @@ Why `MergeModel.BaseDecision V` and not `Histories.BaseSelection`: the latter
 fuses the answer with its proof, which would make `selectSound` vacuous and
 `select` uninhabitable on a DAG with no honest answer. `ofBaseSelection` (below)
 shows the two shapes carry the same content. -/
-structure HistoryMerge (V S Op : Type) where
+structure HistoryMerge (V : Type uV) (S : Type uS) (Op : Type uOp) where
   /-- The three-way merge kernel. -/
   kernel : AncestralMerge S
   /-- The merge-base procedure — a declared field, not an implicit argument. -/
@@ -259,28 +261,28 @@ structure HistoryMerge (V S Op : Type) where
   reconcileSelected : ∀ l u v, (reconcile (.selected l) u v).state = kernel.merge3 l u v
 
 /-- The state-level decision the policy works under at a pair. -/
-def HistoryMerge.decisionAt {V S Op : Type} (P : HistoryMerge V S Op)
+def HistoryMerge.decisionAt {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) (x y : V) : MergeModel.BaseDecision S :=
   stateDecision H (P.select H x y)
 
 /-- The policy's answer at a pair, with its decision attached. -/
-def HistoryMerge.apply {V S Op : Type} (P : HistoryMerge V S Op)
+def HistoryMerge.apply {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) (x y : V) : MergeModel.Decided S :=
   P.reconcile (P.decisionAt H x y) (H.state x) (H.state y)
 
 /-- The state the policy produces at a pair. -/
-def HistoryMerge.result {V S Op : Type} (P : HistoryMerge V S Op)
+def HistoryMerge.result {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) (x y : V) : S := (P.apply H x y).state
 
 /-- **Every policy's result records its decision** — `records`, at `apply`. This
 is the half of "ambiguity is explicit" that the structure gives away for free;
 §5 judges the half it does not. -/
-theorem apply_under {V S Op : Type} (P : HistoryMerge V S Op) (H : History V S Op)
+theorem apply_under {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) (H : History V S Op)
     (x y : V) : (P.apply H x y).under = P.decisionAt H x y := (P.records _ _ _).1
 
 /-- `Histories.BaseSelection`'s proof-carrying answer, split into the raw answer
 `select` returns… -/
-def ofBaseSelection {V S Op : Type} (H : History V S Op) {x y : V} :
+def ofBaseSelection {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) {x y : V} :
     BaseSelection H.dag x y → MergeModel.BaseDecision V
   | .selected b _ => .selected b
   | .ambiguous b₁ b₂ _ _ _ => .ambiguous b₁ b₂
@@ -289,7 +291,7 @@ def ofBaseSelection {V S Op : Type} (H : History V S Op) {x y : V} :
 /-- …and the obligation `selectSound` states. So the two shapes carry the same
 content, and the structure's split is a split of one object rather than a
 weakening. -/
-theorem ofBaseSelection_valid {V S Op : Type} (H : History V S Op) {x y : V}
+theorem ofBaseSelection_valid {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) {x y : V}
     (s : BaseSelection H.dag x y) : ValidInHistory H x y (ofBaseSelection H s) := by
   cases s with
   | selected b h => exact h
@@ -306,7 +308,7 @@ and nothing else. -/
 
 /-- The ambiguity-explicit policy over a kernel and a declared conflict value.
 `MergeModel.decidedMerge` does the work; what is added is the selector. -/
-def explicit {V S Op : Type} (M : AncestralMerge S) (conflict : S → S → S)
+def explicit {V : Type uV} {S : Type uS} {Op : Type uOp} (M : AncestralMerge S) (conflict : S → S → S)
     (sel : History V S Op → V → V → MergeModel.BaseDecision V)
     (sc : History V S Op → V → V → Prop)
     (hs : ∀ H x y, sc H x y → ValidInHistory H x y (sel H x y)) : HistoryMerge V S Op where
@@ -322,14 +324,14 @@ def explicit {V S Op : Type} (M : AncestralMerge S) (conflict : S → S → S)
 except on `ambiguous`, where it merges against the **first** base named instead of
 calling the conflict policy. This is the procedure `Histories` §6 describes in
 prose — "a replica that must nonetheless merge picks one" — written down. -/
-def pickMerge {S : Type} (M : AncestralMerge S) (conflict : S → S → S) :
+def pickMerge {S : Type uS} (M : AncestralMerge S) (conflict : S → S → S) :
     MergeModel.BaseDecision S → S → S → MergeModel.Decided S
   | .selected l, u, v => ⟨M.merge3 l u v, .selected l, u, v⟩
   | .ambiguous b₁ b₂, u, v => ⟨M.merge3 b₁ u v, .ambiguous b₁ b₂, u, v⟩
   | .unavailable, u, v => ⟨conflict u v, .unavailable, u, v⟩
 
 /-- The base-picking policy. -/
-def picking {V S Op : Type} (M : AncestralMerge S) (conflict : S → S → S)
+def picking {V : Type uV} {S : Type uS} {Op : Type uOp} (M : AncestralMerge S) (conflict : S → S → S)
     (sel : History V S Op → V → V → MergeModel.BaseDecision V)
     (sc : History V S Op → V → V → Prop)
     (hs : ∀ H x y, sc H x y → ValidInHistory H x y (sel H x y)) : HistoryMerge V S Op where
@@ -347,7 +349,7 @@ discharged by `False.elim`. So `selectSound` on its own certifies nothing. Every
 judgement below quantifies over `scope`, and every witness policy proves its scope
 **contains the pair the judgement is asked at** (`ccScope_answers`,
 `lvScope_answers`). -/
-theorem any_selector_has_a_sound_policy {V S Op : Type} (M : AncestralMerge S)
+theorem any_selector_has_a_sound_policy {V : Type uV} {S : Type uS} {Op : Type uOp} (M : AncestralMerge S)
     (conflict : S → S → S) (sel : History V S Op → V → V → MergeModel.BaseDecision V) :
     ∃ P : HistoryMerge V S Op, P.select = sel ∧ ∀ H x y, ¬ P.scope H x y :=
   ⟨explicit M conflict sel (fun _ _ _ => False) (fun _ _ _ h => h.elim), rfl,
@@ -363,7 +365,7 @@ one the procedure returned). -/
 /-- **Every base a licensed decision names is a maximal common base.** `selected`
 names a lowest one (`Histories.LowestCommonBase.maximal`), `ambiguous` names two
 maximal ones by definition, and `unavailable` names none. -/
-theorem validInHistory_bases_are_maximal {V S Op : Type} {H : History V S Op}
+theorem validInHistory_bases_are_maximal {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     {x y : V} {d : MergeModel.BaseDecision V} (h : ValidInHistory H x y d) :
     ∀ b, b ∈ d.bases → MaximalCommonBase H.dag x y b := by
   cases d with
@@ -386,7 +388,7 @@ theorem validInHistory_bases_are_maximal {V S Op : Type} {H : History V S Op}
 `unavailable`** — `HistoryBase.coherent_never_unavailable`, read as a fact about
 procedures: the third case is not "I looked and found nothing", so a policy that
 returns it inside its scope is unsound by construction. -/
-theorem scope_never_unavailable {V S Op : Type} {P : HistoryMerge V S Op}
+theorem scope_never_unavailable {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op}
     {H : History V S Op} {M : AncestralMerge S} {impl : Impl S Op}
     (hco : H.Coherent M impl) {x y : V} (hsc : P.scope H x y) :
     P.select H x y ≠ .unavailable := by
@@ -403,7 +405,7 @@ future gossip can tell apart for the query `f`. -/
 /-- **Base robustness at a pair.** Every maximal common base of `x` and `y` gives
 a legal output, and any two of them give contextually equivalent ones. Note what
 is absent: `P.select`. This judgement is about the kernel and the DAG. -/
-def BaseRobustAt {V S Op R : Type} [MergeState S] (P : HistoryMerge V S Op)
+def BaseRobustAt {V : Type uV} {S : Type uS} {Op : Type uOp} {R : Type uR} [MergeState S] (P : HistoryMerge V S Op)
     (H : History V S Op) (I : Invariant S) (f : S → R) (x y : V) : Prop :=
   ∀ b₁ b₂ : V, MaximalCommonBase H.dag x y b₁ → MaximalCommonBase H.dag x y b₂ →
     I (H.state x) → I (H.state y) →
@@ -412,7 +414,7 @@ def BaseRobustAt {V S Op R : Type} [MergeState S] (P : HistoryMerge V S Op)
             (P.kernel.merge3 (H.state b₂) (H.state x) (H.state y))
 
 /-- Base robustness over the pairs the policy claims. -/
-def BaseRobust {V S Op R : Type} [MergeState S] (P : HistoryMerge V S Op)
+def BaseRobust {V : Type uV} {S : Type uS} {Op : Type uOp} {R : Type uR} [MergeState S] (P : HistoryMerge V S Op)
     (H : History V S Op) (I : Invariant S) (f : S → R) : Prop :=
   ∀ x y, P.scope H x y → BaseRobustAt P H I f x y
 
@@ -421,7 +423,7 @@ common base exists it is the *only* maximal one
 (`Histories.lowestCommonBase_unique` in the form the maximality condition gives),
 so robustness reduces to a single legality obligation and the contextual
 equivalence is reflexivity. -/
-theorem baseRobustAt_of_lowest {V S Op R : Type} [MergeState S]
+theorem baseRobustAt_of_lowest {V : Type uV} {S : Type uS} {Op : Type uOp} {R : Type uR} [MergeState S]
     (P : HistoryMerge V S Op) (H : History V S Op) (I : Invariant S) (f : S → R)
     {x y b₀ : V} (hlow : LowestCommonBase H.dag x y b₀)
     (hleg : I (H.state x) → I (H.state y) →
@@ -597,7 +599,7 @@ exclusion holds for either choice.
 Stated over an arbitrary `P` with `P.kernel = lockAM` because §6 needs it for
 three policies that differ only in what they do with the ambiguity — which is
 exactly the point it makes. -/
-theorem lock_baseRobustAt {R : Type} {P : HistoryMerge LVer Lock LockOp}
+theorem lock_baseRobustAt {R : Type uR} {P : HistoryMerge LVer Lock LockOp}
     (hk : P.kernel = lockAM) (f : Lock → R) {x y : LVer}
     (hsc : lvScope lockHistory x y) : BaseRobustAt P lockHistory AtMostOne f x y := by
   obtain ⟨_, hxy | hxy⟩ := hsc <;> obtain ⟨rfl, rfl⟩ := hxy
@@ -618,7 +620,7 @@ theorem lock_baseRobustAt {R : Type} {P : HistoryMerge LVer Lock LockOp}
     · rfl
 
 /-- The ambiguity-explicit lock policy is base-robust. -/
-theorem lock_baseRobust {R : Type} (f : Lock → R) :
+theorem lock_baseRobust {R : Type uR} (f : Lock → R) :
     BaseRobust lvExplicit lockHistory AtMostOne f :=
   fun _ _ hsc => lock_baseRobustAt rfl f hsc
 
@@ -634,7 +636,7 @@ refutation *is* `Histories.base_accident_decides_the_invariant`: `left` and
 `right` are both maximal common bases, the results are `5` and `4`, and the
 ceiling is `4`. Both halves of the judgement fail: the legality half here, the
 contextual-equivalence half in `counter_bases_not_ctxEquiv`. -/
-theorem counter_not_baseRobust {R : Type} (f : Nat → R) :
+theorem counter_not_baseRobust {R : Type uR} (f : Nat → R) :
     ¬ BaseRobust ccExplicit ccHistory (fun n => n ≤ 4) f := by
   intro h
   obtain ⟨hml, hmr, _, _, h5, _, hno, _⟩ := base_accident_decides_the_invariant
@@ -649,7 +651,7 @@ the lowest common base of the two branches (`Histories.cc_root_lowest`), so
 `counterMerge 0 1 2 = 3` is under the ceiling. Set beside
 `counter_not_baseRobust`: the same history, the same kernel, and the judgement
 turns over exactly when the base decision becomes ambiguous. -/
-theorem cc_first_round_baseRobust {R : Type} (f : Nat → R) :
+theorem cc_first_round_baseRobust {R : Type uR} (f : Nat → R) :
     BaseRobustAt ccExplicit ccHistory (fun n => n ≤ 4) f .left .right :=
   baseRobustAt_of_lowest ccExplicit ccHistory (fun n => n ≤ 4) f cc_root_lowest
     (fun _ _ => by decide)
@@ -659,7 +661,7 @@ theorem cc_first_round_baseRobust {R : Type} (f : Nat → R) :
 /-- **Selector safety**: the policy's own answer, on the pairs it claims, is
 legal. The difference from `BaseRobust` is exactly one quantifier — over *the
 base the procedure returned* rather than over every base the DAG licenses. -/
-def SelectorSafe {V S Op : Type} (P : HistoryMerge V S Op) (H : History V S Op)
+def SelectorSafe {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) (H : History V S Op)
     (I : Invariant S) : Prop :=
   ∀ x y, P.scope H x y → I (H.state x) → I (H.state y) → I (P.result H x y)
 
@@ -729,13 +731,13 @@ extensionally. -/
 /-- **Ambiguity is explicit**: on an ambiguous decision the reconciled state is a
 declared conflict value — a function of the two replicas — so no base is
 exercised. -/
-def AmbiguityExplicit {V S Op : Type} (P : HistoryMerge V S Op) : Prop :=
+def AmbiguityExplicit {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) : Prop :=
   ∃ conflict : S → S → S,
     ∀ b₁ b₂ u v : S, (P.reconcile (.ambiguous b₁ b₂) u v).state = conflict u v
 
 /-- **The declared-conflict policies satisfy it**, with the conflict value they
 were built from. -/
-theorem explicit_ambiguityExplicit {V S Op : Type} (M : AncestralMerge S)
+theorem explicit_ambiguityExplicit {V : Type uV} {S : Type uS} {Op : Type uOp} (M : AncestralMerge S)
     (conflict : S → S → S) (sel : History V S Op → V → V → MergeModel.BaseDecision V)
     (sc : History V S Op → V → V → Prop)
     (hs : ∀ H x y, sc H x y → ValidInHistory H x y (sel H x y)) :
@@ -745,7 +747,7 @@ theorem explicit_ambiguityExplicit {V S Op : Type} (M : AncestralMerge S)
 /-- **…and the result stores the ambiguity it was decided under**, so a reader
 can tell a conflict from a reconciliation. This is `records` at `apply`; it is
 free, and it is the half `MergeModel.Decided` was already shaped for. -/
-theorem explicit_records_the_conflict {V S Op : Type} (P : HistoryMerge V S Op)
+theorem explicit_records_the_conflict {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) (x y : V) {b₁ b₂ : V}
     (h : P.select H x y = .ambiguous b₁ b₂) :
     (P.apply H x y).under = .ambiguous (H.state b₁) (H.state b₂) := by
@@ -783,7 +785,7 @@ Each answer is a theorem or a witness; none is prose. -/
 against one of the bases the decision *names*. The `unavailable` case demands a
 base that does not exist, which is why the condition is stated with
 `scope_never_unavailable` beside it. -/
-def BaseUsing {V S Op : Type} (P : HistoryMerge V S Op) : Prop :=
+def BaseUsing {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) : Prop :=
   ∀ (d : MergeModel.BaseDecision S) (u v : S), d ≠ .unavailable →
     ∃ b, b ∈ d.bases ∧ (P.reconcile d u v).state = P.kernel.merge3 b u v
 
@@ -791,7 +793,7 @@ def BaseUsing {V S Op : Type} (P : HistoryMerge V S Op) : Prop :=
 `BaseUsing` would be satisfied by nothing at all and the implication below would
 be vacuous. What licenses dropping the case is `scope_never_unavailable` —
 inside a coherent history a licensed selector never answers it. -/
-theorem picking_baseUsing {V S Op : Type} (M : AncestralMerge S)
+theorem picking_baseUsing {V : Type uV} {S : Type uS} {Op : Type uOp} (M : AncestralMerge S)
     (conflict : S → S → S) (sel : History V S Op → V → V → MergeModel.BaseDecision V)
     (sc : History V S Op → V → V → Prop)
     (hs : ∀ H x y, sc H x y → ValidInHistory H x y (sel H x y)) :
@@ -807,7 +809,7 @@ The bases a licensed decision names are maximal common bases (§2), base
 robustness covers every one of them, and a base-using policy's answer is the
 kernel at one of them. The coherence hypothesis is used once, to retire the
 `unavailable` case through `scope_never_unavailable`. -/
-theorem baseRobust_implies_selectorSafe {V S Op R : Type} [MergeState S]
+theorem baseRobust_implies_selectorSafe {V : Type uV} {S : Type uS} {Op : Type uOp} {R : Type uR} [MergeState S]
     {P : HistoryMerge V S Op} {H : History V S Op} {I : Invariant S} {f : S → R}
     {M : AncestralMerge S} {impl : Impl S Op} (hco : H.Coherent M impl)
     (hbu : BaseUsing P) (hbr : BaseRobust P H I f) : SelectorSafe P H I := by
@@ -860,7 +862,7 @@ theorem lvPick_selectorSafe : SelectorSafe lvPick lockHistory AtMostOne :=
 lock is base-robust at its ambiguous pair and its *conflict policy* is
 unconstrained by that fact: `lvBadConflict` hands the lock to both replicas.
 Base robustness quantifies over bases; the ambiguous branch uses none. -/
-theorem baseRobust_does_not_imply_selectorSafe {R : Type} (f : Lock → R) :
+theorem baseRobust_does_not_imply_selectorSafe {R : Type uR} (f : Lock → R) :
     BaseRobust lvBadConflict lockHistory AtMostOne f
       ∧ ¬ SelectorSafe lvBadConflict lockHistory AtMostOne := by
   refine ⟨fun _ _ hsc => lock_baseRobustAt rfl f hsc, ?_⟩
@@ -919,7 +921,7 @@ that the thing being derived is a *merge* over a version DAG, and that the
 hypothesis making it work is a condition on the **base procedure**. -/
 
 /-- Whether an origin is a merge — the versions a derivation recomputes. -/
-def isMergedOrigin {V : Type} : Origin V → Bool
+def isMergedOrigin {V : Type uV} : Origin V → Bool
   | .merged _ _ _ => true
   | _ => false
 
@@ -927,7 +929,7 @@ def isMergedOrigin {V : Type} : Origin V → Bool
 forgotten.** Two replicas that merged the same pair may have selected different
 bases and recorded different results; what they share is *that* the pair was
 merged. -/
-def SameShape {V : Type} : Origin V → Origin V → Prop
+def SameShape {V : Type uV} : Origin V → Origin V → Prop
   | .root, .root => True
   | .ran p, .ran q => p = q
   | .merged _ x y, .merged _ x' y' => x = x' ∧ y = y'
@@ -935,7 +937,7 @@ def SameShape {V : Type} : Origin V → Origin V → Prop
 
 /-- Eliminate origin-shape agreement without repeating the nine-way constructor
 cross-product. Bases remain intentionally unrelated in the merge case. -/
-theorem SameShape.classify {V : Type} {o₁ o₂ : Origin V} (h : SameShape o₁ o₂) :
+theorem SameShape.classify {V : Type uV} {o₁ o₂ : Origin V} (h : SameShape o₁ o₂) :
     (o₁ = .root ∧ o₂ = .root) ∨
       (∃ p, o₁ = .ran p ∧ o₂ = .ran p) ∨
       (∃ l₁ l₂ x y, o₁ = .merged l₁ x y ∧ o₂ = .merged l₂ x y) := by
@@ -965,7 +967,7 @@ origin shape at every version, the same state wherever nobody merged, and the
 same genesis. The two records may disagree at **every** merge node they contain —
 in the base each replica selected and in the state it recorded — which is exactly
 `Histories.base_accident_decides_the_invariant`'s situation. -/
-structure SameRecord {V S Op : Type} (H₁ H₂ : History V S Op) : Prop where
+structure SameRecord {V : Type uV} {S : Type uS} {Op : Type uOp} (H₁ H₂ : History V S Op) : Prop where
   /-- The same version graph. -/
   dag : H₁.dag = H₂.dag
   /-- The same root version. -/
@@ -980,7 +982,7 @@ structure SameRecord {V S Op : Type} (H₁ H₂ : History V S Op) : Prop where
 /-- The genesis clause is **free** whenever the root records `Origin.root`, which
 `History.Coherent.root_unique` is the other half of. It is a field because a
 history is not obliged to record it. -/
-theorem sameRecord_genesis_of_root {V S Op : Type} {H₁ H₂ : History V S Op}
+theorem sameRecord_genesis_of_root {V : Type uV} {S : Type uS} {Op : Type uOp} {H₁ H₂ : History V S Op}
     (hdag : H₁.root = H₂.root)
     (hst : ∀ v, isMergedOrigin (H₁.origin v) = false → H₁.state v = H₂.state v)
     (hr : H₁.origin H₁.root = Origin.root) :
@@ -996,7 +998,7 @@ recorded are ignored. A `ran` node's state is part of the record and is read —
 this file has no operation replay, and says so in its non-claims. -/
 
 /-- **The derived view at fuel `n`.** -/
-def derive {V S Op : Type} (P : HistoryMerge V S Op) (H : History V S Op) :
+def derive {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) (H : History V S Op) :
     Nat → V → S
   | 0 => fun _ => H.state H.root
   | n + 1 => fun v =>
@@ -1008,24 +1010,24 @@ def derive {V S Op : Type} (P : HistoryMerge V S Op) (H : History V S Op) :
           (derive P H n x) (derive P H n y)).state
 
 /-- Out of fuel, the derivation reports the genesis. -/
-theorem derive_zero {V S Op : Type} (P : HistoryMerge V S Op) (H : History V S Op)
+theorem derive_zero {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) (H : History V S Op)
     (v : V) : derive P H 0 v = H.state H.root := rfl
 
 /-- A root node is read from the record. -/
-theorem derive_root_case {V S Op : Type} (P : HistoryMerge V S Op)
+theorem derive_root_case {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) (n : Nat) {v : V} (h : H.origin v = .root) :
     derive P H (n + 1) v = H.state v := by
   simp only [derive, h]
 
 /-- A run node is read from the record — operations are not replayed. -/
-theorem derive_ran_case {V S Op : Type} (P : HistoryMerge V S Op)
+theorem derive_ran_case {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) (n : Nat) {v p : V} (h : H.origin v = .ran p) :
     derive P H (n + 1) v = H.state v := by
   simp only [derive, h]
 
 /-- A merge node is **recomputed** — under the policy's decision, not the
 recorded base. -/
-theorem derive_merged_case {V S Op : Type} (P : HistoryMerge V S Op)
+theorem derive_merged_case {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) (n : Nat) {v l x y : V} (h : H.origin v = .merged l x y) :
     derive P H (n + 1) v =
       (P.reconcile (stateDecisionOf (derive P H n) (P.select H x y))
@@ -1033,7 +1035,7 @@ theorem derive_merged_case {V S Op : Type} (P : HistoryMerge V S Op)
   simp only [derive, h]
 
 /-- **The derived view**: fuel is the version's rank, which the DAG supplies. -/
-def viewOf {V S Op : Type} (P : HistoryMerge V S Op) (H : History V S Op) (v : V) : S :=
+def viewOf {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) (H : History V S Op) (v : V) : S :=
   derive P H (H.dag.rank v) v
 
 /-! ### §7.2 The derivation is complete, not a truncation
@@ -1046,13 +1048,13 @@ exceeds its parents'. -/
 /-- **The selector names ancestors.** Inside a policy's scope this is
 `selectSound` plus §2; as a hypothesis of the fuel lemma it is what bounds the
 recursion. -/
-def SelectsAncestors {V S Op : Type} (P : HistoryMerge V S Op)
+def SelectsAncestors {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) : Prop :=
   ∀ x y b, b ∈ (P.select H x y).bases → CommonAncestor H.dag x y b
 
 /-- **One more unit of fuel changes nothing** once the fuel covers the version's
 rank. -/
-theorem derive_succ {V S Op : Type} {P : HistoryMerge V S Op} {H : History V S Op}
+theorem derive_succ {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op} {H : History V S Op}
     {M : AncestralMerge S} {impl : Impl S Op} (hco : H.Coherent M impl)
     (hanc : SelectsAncestors P H) :
     ∀ n v, H.dag.rank v ≤ n → derive P H n v = derive P H (n + 1) v := by
@@ -1093,7 +1095,7 @@ theorem derive_succ {V S Op : Type} {P : HistoryMerge V S Op} {H : History V S O
             stateDecisionOf_congr _ hbases, ih x hx, ih y hy]
 
 /-- **The fuel above the rank is idle**: any sufficient fuel gives the view. -/
-theorem derive_eq_viewOf {V S Op : Type} {P : HistoryMerge V S Op}
+theorem derive_eq_viewOf {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op}
     {H : History V S Op} {M : AncestralMerge S} {impl : Impl S Op}
     (hco : H.Coherent M impl) (hanc : SelectsAncestors P H) (n : Nat) (v : V)
     (hv : H.dag.rank v ≤ n) : derive P H n v = viewOf P H v := by
@@ -1111,7 +1113,7 @@ theorem derive_eq_viewOf {V S Op : Type} {P : HistoryMerge V S Op}
 
 /-- **A history the policy itself generated**: every merge node records exactly
 the state the policy computes for it. -/
-def PolicyGenerated {V S Op : Type} (P : HistoryMerge V S Op)
+def PolicyGenerated {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op)
     (H : History V S Op) : Prop :=
   ∀ v l x y, H.origin v = .merged l x y → H.state v = (P.apply H x y).state
 
@@ -1119,7 +1121,7 @@ def PolicyGenerated {V S Op : Type} (P : HistoryMerge V S Op)
 whose selector names ancestors, the derived view **reproduces the record** at
 every version. So `viewOf` is not a truncation, and §7.3's convergence is about
 the real object. -/
-theorem viewOf_eq_state {V S Op : Type} {P : HistoryMerge V S Op}
+theorem viewOf_eq_state {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op}
     {H : History V S Op} {M : AncestralMerge S} {impl : Impl S Op}
     (hco : H.Coherent M impl) (hanc : SelectsAncestors P H)
     (hgen : PolicyGenerated P H) : ∀ v, viewOf P H v = H.state v := by
@@ -1162,16 +1164,16 @@ and `nosy_diverges` is what that costs. -/
 
 /-- **The selector reads the record.** Two histories with the same append-only
 record get the same answer. -/
-def RecordDetermined {V S Op : Type} (P : HistoryMerge V S Op) : Prop :=
+def RecordDetermined {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) : Prop :=
   ∀ H₁ H₂ : History V S Op, SameRecord H₁ H₂ → ∀ x y, P.select H₁ x y = P.select H₂ x y
 
 /-- **History convergence**: two derivations over the same record agree at every
 version. -/
-def HistoryConvergent {V S Op : Type} (P : HistoryMerge V S Op) : Prop :=
+def HistoryConvergent {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) : Prop :=
   ∀ H₁ H₂ : History V S Op, SameRecord H₁ H₂ → ∀ v, viewOf P H₁ v = viewOf P H₂ v
 
 /-- The derivation at every fuel is a function of the record alone. -/
-theorem derive_sameRecord {V S Op : Type} {P : HistoryMerge V S Op}
+theorem derive_sameRecord {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op}
     (hrd : RecordDetermined P) {H₁ H₂ : History V S Op} (hs : SameRecord H₁ H₂) :
     ∀ n v, derive P H₁ n v = derive P H₂ n v := by
   intro n
@@ -1203,7 +1205,7 @@ This is the first convergence result in the history layer.
 `Histories.lean`'s own non-claims say convergence is proved nowhere in it, and
 both of its counterexamples survive: §6 row 2 keeps
 `Histories.swap_never_converges`, and §8 characterizes the class it lives in. -/
-theorem recordDetermined_converges {V S Op : Type} {P : HistoryMerge V S Op}
+theorem recordDetermined_converges {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op}
     (hrd : RecordDetermined P) : HistoryConvergent P := by
   intro H₁ H₂ hs v
   rw [viewOf, viewOf, hs.dag]
@@ -1211,7 +1213,7 @@ theorem recordDetermined_converges {V S Op : Type} {P : HistoryMerge V S Op}
 
 /-- A selector that ignores the history is record-determined — the trivial
 sufficient condition, and the one every witness here meets. -/
-theorem recordDetermined_of_constant {V S Op : Type} {P : HistoryMerge V S Op}
+theorem recordDetermined_of_constant {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op}
     (h : ∀ H₁ H₂ : History V S Op, ∀ x y, P.select H₁ x y = P.select H₂ x y) :
     RecordDetermined P := fun H₁ H₂ _ x y => h H₁ H₂ x y
 
@@ -1442,18 +1444,18 @@ opposite orders and the selector answers differently.
 stated it for the base procedure. -/
 
 /-- **The selector does not depend on which replica is asking.** -/
-def SelectorSymmetric {V S Op : Type} (P : HistoryMerge V S Op) : Prop :=
+def SelectorSymmetric {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) : Prop :=
   ∀ H x y, P.select H x y = P.select H y x
 
 /-- **The reconciler does not either.** For a declared-conflict policy this
 follows from `AncestralMerge.comm` on the selected branch and from commutativity
 of the conflict value on the other two. -/
-def ReconcileSymmetric {V S Op : Type} (P : HistoryMerge V S Op) : Prop :=
+def ReconcileSymmetric {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op) : Prop :=
   ∀ d u v, (P.reconcile d u v).state = (P.reconcile d v u).state
 
 /-- A declared-conflict policy with a commutative conflict value is
 reconcile-symmetric. -/
-theorem explicit_reconcileSymmetric {V S Op : Type} (M : AncestralMerge S)
+theorem explicit_reconcileSymmetric {V : Type uV} {S : Type uS} {Op : Type uOp} (M : AncestralMerge S)
     (conflict : S → S → S) (hc : ∀ u v, conflict u v = conflict v u)
     (sel : History V S Op → V → V → MergeModel.BaseDecision V)
     (sc : History V S Op → V → V → Prop)
@@ -1468,7 +1470,7 @@ theorem explicit_reconcileSymmetric {V S Op : Type} (M : AncestralMerge S)
 /-- ⚑ **Replicas agree on the order they present the pair in** — the one-step
 statement `swapRound` refutes. Both hypotheses are needed and both are about
 symmetry: of the selector, and of the reconciler. -/
-theorem replicas_agree_on_order {V S Op : Type} {P : HistoryMerge V S Op}
+theorem replicas_agree_on_order {V : Type uV} {S : Type uS} {Op : Type uOp} {P : HistoryMerge V S Op}
     (hsym : SelectorSymmetric P) (hrec : ReconcileSymmetric P)
     (H : History V S Op) (x y : V) : (P.apply H x y).state = (P.apply H y x).state := by
   rw [HistoryMerge.apply, HistoryMerge.apply, HistoryMerge.decisionAt,
@@ -1569,7 +1571,7 @@ theorem the_obstruction :
     (∀ (n : Nat) (x y : Lock), x ≠ y →
         (iter swapRound n (x, y)).1 ≠ (iter swapRound n (x, y)).2)
       ∧ (¬ RecordDetermined ccNosy ∧ ¬ HistoryConvergent ccNosy)
-      ∧ (∀ {V S Op : Type} (P : HistoryMerge V S Op), RecordDetermined P →
+      ∧ (∀ {V : Type uV} {S : Type uS} {Op : Type uOp} (P : HistoryMerge V S Op), RecordDetermined P →
           HistoryConvergent P) :=
   ⟨swap_never_converges, ⟨nosy_diverges.2.2.2, nosy_diverges.2.2.1⟩,
    fun _ h => recordDetermined_converges h⟩

@@ -1,5 +1,6 @@
 /- Explicit CLI for `Uwueave.Preo.ArtifactEmit`; importing never writes. -/
 import Uwueave.Preo.ArtifactEmit
+import Uwueave.TrustFloor
 
 open Uwueave.Preo.ArtifactEmit
 
@@ -32,3 +33,7 @@ private def run : List String → IO Unit
   | _ => throw <| IO.userError usage
 
 def main (args : List String) : IO Unit := run args
+
+#assert_current_owns main
+
+#audit_floor_current

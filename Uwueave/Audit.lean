@@ -204,6 +204,8 @@ import Uwueave.Preo.Quickstart
 import Uwueave.StatusSemanticsAcceptance
 import Uwueave.RepairSynthesis
 import Uwueave.FiniteRepairMenu
+import Uwueave.FiniteCertificateClassifier
+import Uwueave.BoundedEraAnnouncement
 import Uwueave.RuntimeAuthV4
 import Uwueave.RuntimeAuthV4Kernel
 import Uwueave.Preo.RuntimeAuthV4Data
@@ -216,6 +218,42 @@ import Uwueave.Preo.RuntimeAuthV4Fixtures
 import Uwueave.RuntimeInit
 import Uwueave.Tactics.Verdict
 import Uwueave.Tactics
+
+open Lean Elab Command in
+/-- Fail if any library module on disk is absent from this aggregate's imported
+environment.  The only exceptions are the two executable entry modules which
+both declare root `main` and therefore cannot coexist.  Their exact direct
+Uwueave dependencies must still be loaded here.  Each executable invokes its
+own EOF-enforced current-module audit; subprocess canaries additionally audit
+the serialized modules through Lean's declaration-ownership table. -/
+elab "#gate_covers_disk" : command => do
+  let env ← getEnv
+  let disk ← liftIO <| Uwueave.TrustFloor.leanModulesUnder "Uwueave"
+  let loaded := env.mainModule :: env.header.moduleNames.toList
+  let exceptions : List (Name × System.FilePath) :=
+    [(`Uwueave.Preo.ArtifactEmitMain, "Uwueave/Preo/ArtifactEmitMain.lean"),
+     (`Uwueave.Preo.ArtifactInspectionMain,
+       "Uwueave/Preo/ArtifactInspectionMain.lean")]
+  let exceptionNames := exceptions.map Prod.fst
+  if let some failure :=
+      Uwueave.TrustFloor.moduleCoverageFailure? disk loaded exceptionNames then
+    throwError failure
+  for (moduleName, path) in exceptions do
+    let pathModule ← liftIO <| Uwueave.TrustFloor.moduleNameOfLeanPath path
+    unless pathModule == moduleName do
+      throwError "disk-coverage exception path `{path}` maps to `{pathModule}`, not allowlisted module `{moduleName}`"
+    let imports ← liftIO <| Uwueave.TrustFloor.directImports path
+    let missingDependencies := imports.toList.filterMap fun dependency =>
+      if (`Uwueave).isPrefixOf dependency.module &&
+          !(loaded.contains dependency.module) then
+        some dependency.module
+      else
+        none
+    unless missingDependencies.isEmpty do
+      throwError "disk-coverage exception `{moduleName}` imports local module(s) {missingDependencies} which the aggregate audit does not load"
+  if disk.length < 20 then
+    throwError "disk-coverage tripwire: found only {disk.length} Lean modules under `Uwueave/`"
+  logInfo m!"#gate_covers_disk: {disk.length} nested disk modules under `Uwueave/`; {disk.length - exceptionNames.length} loaded by the aggregate and {exceptionNames.length} separately self-audited executable exceptions; root aggregate `Uwueave.lean` is outside this nested census and self-audits at EOF"
 
 open Lean Elab Command in
 /-- Fail the build if any module the ROOT (`Uwueave.lean`) imports is absent
@@ -244,6 +282,12 @@ elab "#gate_covers_root" : command => do
     throwError "gate-coverage tripwire: Lean parsed only {wanted.length} Uwueave root imports"
   logInfo m!"#gate_covers_root: {wanted.length} root modules, all reached by the gate"
 
+#gate_covers_disk
+
 #gate_covers_root
 
+#audit_floor_modules Uwueave
+
 #audit_floor
+
+#audit_floor_current

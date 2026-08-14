@@ -162,7 +162,7 @@ import Uwueave.WorldFuture
 
 namespace Uwueave.HistoryBase
 
-universe u v
+universe u v uV uS uOp uA
 
 open Uwueave Uwueave.Ancestral Uwueave.Necessity Uwueave.Histories
 
@@ -175,14 +175,14 @@ the original `HistoryBase` API for downstream clients. -/
 
 /-- **An ancestry path starts with an edge.** The working form of "this version
 is a leaf": if nothing leaves `a`, nothing is downstream of it. -/
-theorem ancestry_has_first_edge {V : Type} {D : VersionDag V} {a b : V}
+theorem ancestry_has_first_edge {V : Type uV} {D : VersionDag V} {a b : V}
     (h : Ancestry D a b) : ∃ c, D.parent a c = true := by
   induction h with
   | direct e => exact ⟨_, e⟩
   | extend _ _ ih => exact ih
 
 /-- **A leaf reaches only itself.** -/
-theorem reaches_of_leaf {V : Type} {D : VersionDag V} {a b : V}
+theorem reaches_of_leaf {V : Type uV} {D : VersionDag V} {a b : V}
     (hleaf : ∀ c, D.parent a c = false) (h : Reaches D a b) : a = b := by
   rcases h with rfl | ha
   · rfl
@@ -268,7 +268,7 @@ The same three-valued shape, re-obligated over versions. Three differences from
 /-- **A base decision certified by the history.** The decision ranges over
 *versions*: `MergeModel.BaseDecision V`, the same type at a different index, so
 nothing in `MergeModel.lean` moves. -/
-def ValidInHistory {V S Op : Type} (H : History V S Op) (x y : V) :
+def ValidInHistory {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) (x y : V) :
     MergeModel.BaseDecision V → Prop
   | .selected b => LowestCommonBase H.dag x y b
   | .ambiguous b₁ b₂ =>
@@ -278,7 +278,7 @@ def ValidInHistory {V S Op : Type} (H : History V S Op) (x y : V) :
 /-- **At most one version is selectable for a pair.** The state-level condition
 has no such theorem — `Histories.lock_two_valid_bases` exhibits two states that
 are both `Valid` as `selected` for one pair *and whose merges disagree*. -/
-theorem selected_unique {V S Op : Type} {H : History V S Op} {x y b₁ b₂ : V}
+theorem selected_unique {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {x y b₁ b₂ : V}
     (h₁ : ValidInHistory H x y (.selected b₁))
     (h₂ : ValidInHistory H x y (.selected b₂)) : b₁ = b₂ :=
   lowestCommonBase_unique h₁ h₂
@@ -287,7 +287,7 @@ theorem selected_unique {V S Op : Type} {H : History V S Op} {x y b₁ b₂ : V}
 exclusivity `MergeModel.BaseDecision` names as its design and can only obtain at
 the version level, since `Histories.ambiguous_excludes_lowest` is a theorem about
 a DAG. -/
-theorem validInHistory_exclusive {V S Op : Type} {H : History V S Op} {x y : V} :
+theorem validInHistory_exclusive {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {x y : V} :
     (∀ b₁ b₂ b, ValidInHistory H x y (.ambiguous b₁ b₂) →
         ¬ ValidInHistory H x y (.selected b))
       ∧ (∀ b, ValidInHistory H x y .unavailable →
@@ -311,7 +311,7 @@ theorem validInHistory_all_three_inhabited :
 
 /-- The image of a history-level decision at the state level: read each version's
 state off the history. -/
-def stateDecision {V S Op : Type} (H : History V S Op) :
+def stateDecision {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) :
     MergeModel.BaseDecision V → MergeModel.BaseDecision S
   | .selected b => .selected (H.state b)
   | .ambiguous b₁ b₂ => .ambiguous (H.state b₁) (H.state b₂)
@@ -328,7 +328,7 @@ of the defect. -/
 `Histories.selected_valid` does the work; what is new is that the *premise* is
 now a lowest common base rather than an arbitrary common ancestor, so the answer
 being transported is unique. -/
-theorem selected_transports {V S Op : Type} {H : History V S Op} {impl : Impl S Op}
+theorem selected_transports {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {impl : Impl S Op}
     (hrr : RunRealized H impl) {x y b : V}
     (h : ValidInHistory H x y (.selected b)) :
     (stateDecision H (.selected b)).Valid impl (H.state x) (H.state y) :=
@@ -337,7 +337,7 @@ theorem selected_transports {V S Op : Type} {H : History V S Op} {impl : Impl S 
 /-- **A history-ambiguous pair is state-valid** — in a run-realized history, and
 *only if the two bases carry distinct states*. That hypothesis is not
 bookkeeping: the next theorem shows the image is invalid without it. -/
-theorem ambiguous_transports {V S Op : Type} {H : History V S Op} {impl : Impl S Op}
+theorem ambiguous_transports {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op} {impl : Impl S Op}
     (hrr : RunRealized H impl) {x y b₁ b₂ : V}
     (h : ValidInHistory H x y (.ambiguous b₁ b₂)) (hne : H.state b₁ ≠ H.state b₂) :
     (stateDecision H (.ambiguous b₁ b₂)).Valid impl (H.state x) (H.state y) :=
@@ -347,7 +347,7 @@ theorem ambiguous_transports {V S Op : Type} {H : History V S Op} {impl : Impl S
 version-level ambiguity whose bases happen to carry one state is not merely hard
 to see at the state level — its image is **invalid** there, so a state-indexed
 procedure reporting it would be reporting an illegitimate decision. -/
-theorem ambiguous_does_not_transport {V S Op : Type} {H : History V S Op}
+theorem ambiguous_does_not_transport {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     (impl : Impl S Op) {x y b₁ b₂ : V} (hst : H.state b₁ = H.state b₂) :
     ¬ (stateDecision H (.ambiguous b₁ b₂)).Valid impl (H.state x) (H.state y) :=
   fun h => h.2.2 hst
@@ -357,7 +357,7 @@ and by `state_unavailable_refuted_by_a_run`, not when any run relates them
 either. This is `Histories.dag_absence_does_not_license_unavailable` stated as a
 property of the transport rather than of one witness: the third case is provably
 *not* the image of anything. -/
-theorem unavailable_does_not_transport {V S Op : Type} {H : History V S Op}
+theorem unavailable_does_not_transport {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     (impl : Impl S Op) {x y : V} (hst : H.state x = H.state y) :
     ¬ (stateDecision H (MergeModel.BaseDecision.unavailable (S := V))).Valid impl
       (H.state x) (H.state y) := by
@@ -465,7 +465,7 @@ common ancestor of the two versions (so `ValidInHistory` is satisfied by a
 genuine refutation), and the state-level obligation is refuted for the pair of
 states they carry — by `state_unavailable_never_at_equal_states`, since a state
 op-reaches itself. -/
-theorem history_unavailable_where_the_state_level_must_refuse {S Op : Type}
+theorem history_unavailable_where_the_state_level_must_refuse {S : Type uS} {Op : Type uOp}
     (impl : Impl S Op) (s : S) :
     ValidInHistory (twoHistory (S := S) (Op := Op) s) .x .y .unavailable
       ∧ ¬ (stateDecision (twoHistory (S := S) (Op := Op) s)
@@ -520,7 +520,7 @@ theorem the_two_cycle_needs_two_bases_the_history_licenses_one :
         ⟨true, false⟩ ⟨false, true⟩
       ∧ (∀ (n : Nat) (x y : Lock), x ≠ y →
           (iter swapRound n (x, y)).1 ≠ (iter swapRound n (x, y)).2)
-      ∧ (∀ {V S Op : Type} (H : History V S Op) (x y b₁ b₂ : V),
+      ∧ (∀ {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) (x y b₁ b₂ : V),
           ValidInHistory H x y (.selected b₁) → ValidInHistory H x y (.selected b₂) →
             b₁ = b₂) :=
   ⟨lock_two_valid_bases.1, lock_two_valid_bases.2.1, swap_never_converges,
@@ -539,7 +539,7 @@ The graph half of `History.Coherent.sound`, with `LocallySafe`,
 `AncestralConfluentFrom`, `MergeClosedFrom` and the root's legality all dropped:
 `root_unique` says nothing but the root claims to be one, and every other origin
 exhibits a parent of strictly smaller rank. -/
-theorem coherent_reaches_from_root {V S Op : Type} {H : History V S Op}
+theorem coherent_reaches_from_root {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     {M : AncestralMerge S} {impl : Impl S Op} (hco : H.Coherent M impl) :
     ∀ v, Reaches H.dag H.root v := by
   have step : ∀ v : V,
@@ -576,7 +576,7 @@ So `MergeModel.BaseDecision.unavailable` is not the answer to "I looked and foun
 nothing"; within a history there is always something to find. It is the answer to
 "these two versions are not from the same history", and the state level cannot
 say that at all (`state_unavailable_never_at_equal_states`). -/
-theorem coherent_never_unavailable {V S Op : Type} {H : History V S Op}
+theorem coherent_never_unavailable {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     {M : AncestralMerge S} {impl : Impl S Op} (hco : H.Coherent M impl) (x y : V) :
     ¬ ValidInHistory H x y .unavailable :=
   fun h => h H.root ⟨coherent_reaches_from_root hco x, coherent_reaches_from_root hco y⟩
@@ -585,7 +585,7 @@ theorem coherent_never_unavailable {V S Op : Type} {H : History V S Op}
 `twoHistory` has two versions both claiming to be roots, which `root_unique`
 forbids. The third case's only inhabitant here is a graph that is not a coherent
 history — which is what "cross-history" means. -/
-theorem twoHistory_not_coherent {S Op : Type} (M : AncestralMerge S) (impl : Impl S Op)
+theorem twoHistory_not_coherent {S : Type uS} {Op : Type uOp} (M : AncestralMerge S) (impl : Impl S Op)
     (s : S) : ¬ (twoHistory (S := S) (Op := Op) s).Coherent M impl := by
   intro h
   have hy : (Two.y : Two) = (twoHistory (S := S) (Op := Op) s).root := h.root_unique .y rfl
@@ -622,7 +622,7 @@ The two conditions are **independent**, and both directions are witnessed. -/
 /-- **Run-realized coherence gives root-reachability of every state**, with no
 merge hypothesis: `coherent_reaches_from_root` in the graph, then
 `Histories.reaches_reachable` to states. -/
-theorem coherent_root_reachable_of_runRealized {V S Op : Type} {H : History V S Op}
+theorem coherent_root_reachable_of_runRealized {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     {M : AncestralMerge S} {impl : Impl S Op}
     (hco : H.Coherent M impl) (hrr : RunRealized H impl) (v : V) :
     Reachable impl (H.state H.root) (H.state v) :=
@@ -637,7 +637,7 @@ the invariant. `LocallySafe` and a legal root are all that is left.
 Read as the diagnosis it is: the two merge conditions are needed **exactly**
 because a merge edge is not a run — which is `Histories.
 dag_ancestry_is_not_run_reachable`, priced. -/
-theorem coherent_sound_of_runRealized {V S Op : Type} {H : History V S Op}
+theorem coherent_sound_of_runRealized {V : Type uV} {S : Type uS} {Op : Type uOp} {H : History V S Op}
     {M : AncestralMerge S} {impl : Impl S Op} {I : Invariant S}
     (hco : H.Coherent M impl) (hrr : RunRealized H impl)
     (hloc : LocallySafe impl I) (hroot : I (H.state H.root)) (v : V) :
@@ -892,7 +892,7 @@ section places worlds at the versions of a DAG and collects what that buys. -/
 carries no `AncestralMerge` and no operation alphabet, so there is no `Origin`
 obligation to discharge. What it carries is what `WorldFuture` needed and did not
 have — a graph of versions to select a base from. -/
-structure BasedWorld (α V : Type) where
+structure BasedWorld (α : Type uA) (V : Type uV) where
   /-- The version graph the replica knows. -/
   dag : VersionDag V
   /-- The world each version stands in. -/
@@ -901,17 +901,18 @@ structure BasedWorld (α V : Type) where
 /-- **The component `WorldFuture.World` dropped, restored.** `Histories.
 BaseSelection` over the placed DAG: a certified lowest base, two certified
 maximal ones, or a refutation. -/
-abbrev MergeBases {α V : Type} (B : BasedWorld α V) (x y : V) : Type :=
+abbrev MergeBases {α : Type uA} {V : Type uV}
+    (B : BasedWorld α V) (x y : V) : Type uV :=
   BaseSelection B.dag x y
 
 /-- **The delivery future, indexed by history position.** -/
-def DeliveryAt {α V : Type} (B : BasedWorld α V) (u v : V) : Prop :=
+def DeliveryAt {α : Type uA} {V : Type uV} (B : BasedWorld α V) (u v : V) : Prop :=
   WorldFuture.DeliveryFuture (B.world u) (B.world v)
 
 /-- **The DAG edges are extension futures** — the world-carrier analogue of
 `Histories.RunRealized`, and what makes a placement more than an arbitrary
 labelling. -/
-def ExtensionRealized {α V : Type} (B : BasedWorld α V) : Prop :=
+def ExtensionRealized {α : Type uA} {V : Type uV} (B : BasedWorld α V) : Prop :=
   ∀ p c, B.dag.parent p c = true →
     WorldFuture.ExtensionFuture (B.world p) (B.world c)
 
@@ -1064,34 +1065,34 @@ def VersionCert (V : Type u) : Type u := V → Prop
 
 /-- **Sound, unscoped**: at every version it accepts, the rendered answer really
 is delivery-stable. -/
-def VersionCertSound {α V : Type} (B : BasedWorld α V) (C : VersionCert V) : Prop :=
+def VersionCertSound {α : Type uA} {V : Type uV} (B : BasedWorld α V) (C : VersionCert V) : Prop :=
   ∀ v, C v →
     Evidence.FreeTermination WorldFuture.DeliveryFuture WorldFuture.renderW (B.world v)
 
 /-- **Sound against a named base**: the licence is claimed only for versions the
 base reaches. This is what "the certificate names the base it was computed
 against" buys, and the premise `Reaches B.dag b v` is checkable from the graph. -/
-def BasedCertSound {α V : Type} (B : BasedWorld α V) (b : V) (C : VersionCert V) : Prop :=
+def BasedCertSound {α : Type uA} {V : Type uV} (B : BasedWorld α V) (b : V) (C : VersionCert V) : Prop :=
   ∀ v, C v → Reaches B.dag b v →
     Evidence.FreeTermination WorldFuture.DeliveryFuture WorldFuture.renderW (B.world v)
 
 /-- A world-indexed certificate names a version's world; the version index is a
 name for it, no more. ⟨UNDONE⟩ There is no theorem here that the version index
 separates worlds a `WorldFuture.WorldCert` cannot — it does not. -/
-theorem versionCertSound_of_worldCertSound {α V : Type} (B : BasedWorld α V)
+theorem versionCertSound_of_worldCertSound {α : Type uA} {V : Type uV} (B : BasedWorld α V)
     {C : WorldFuture.WorldCert α} (h : WorldFuture.WorldCertSound C) :
     VersionCertSound B (fun v => C (B.world v)) :=
   fun v hv => h (B.world v) hv
 
 /-- An unscoped licence is in particular a licence scoped to any base. -/
-theorem basedCertSound_of_versionCertSound {α V : Type} {B : BasedWorld α V}
+theorem basedCertSound_of_versionCertSound {α : Type uA} {V : Type uV} {B : BasedWorld α V}
     {C : VersionCert V} (h : VersionCertSound B C) (b : V) : BasedCertSound B b C :=
   fun v hv _ => h v hv
 
 /-- **Quiescence is a sound version-indexed certificate** — `WorldFuture.
 quiescence_is_a_sound_certificate` placed, and unscoped: it needs no base,
 because it reads the world. -/
-theorem quiescence_is_a_sound_version_certificate {α V : Type} (B : BasedWorld α V) :
+theorem quiescence_is_a_sound_version_certificate {α : Type uA} {V : Type uV} (B : BasedWorld α V) :
     VersionCertSound B (fun v => WorldFuture.Quiesced (B.world v)) :=
   versionCertSound_of_worldCertSound B WorldFuture.quiescence_is_a_sound_certificate
 
@@ -1307,7 +1308,7 @@ theorem ambiguity_is_visible_where_it_is_free :
     decides the invariant — and the decision model is I-confluent-in for the
     merge whose history breaks. -/
 theorem the_contact_zone :
-    (∀ {V S Op : Type} (H : History V S Op) (x y b₁ b₂ : V),
+    (∀ {V : Type uV} {S : Type uS} {Op : Type uOp} (H : History V S Op) (x y b₁ b₂ : V),
         ValidInHistory H x y (.selected b₁) → ValidInHistory H x y (.selected b₂) →
           b₁ = b₂)
       ∧ (∀ b : Ver, ¬ ValidInHistory ccHistory .mergeL .mergeR (.selected b))

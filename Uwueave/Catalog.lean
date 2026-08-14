@@ -19,12 +19,14 @@ namespace Uwueave.Catalog
 
 open Uwueave
 
+universe u
+
 /-! ## §1. G-Set — the grow-only set. The substrate of everything append-only. -/
 
 /-- A grow-only set with decidable membership. -/
-abbrev GSet (α : Type) := α → Bool
+abbrev GSet (α : Type u) := α → Bool
 
-instance instMergeStateGSet (α : Type) : MergeState (GSet α) where
+instance instMergeStateGSet (α : Type u) : MergeState (GSet α) where
   merge x y := fun a => x a || y a
   merge_comm x y := funext fun a => Bool.or_comm (x a) (y a)
   merge_assoc x y z := funext fun a => Bool.or_assoc (x a) (y a) (z a)
@@ -32,13 +34,13 @@ instance instMergeStateGSet (α : Type) : MergeState (GSet α) where
 
 /-- Membership after merge is membership in either replica — the merge really is
 set union, not an accident of the encoding. -/
-theorem gset_mem_merge {α : Type} (x y : GSet α) (a : α) :
+theorem gset_mem_merge {α : Type u} (x y : GSet α) (a : α) :
     (x ⊔ y) a = (x a || y a) := rfl
 
 /-- **"Contains `a`" is I-confluent.** Anything a replica has observed survives
 every merge. This is the tier-1 workhorse: node presence, tombstones, bookmarks,
 acks — all instances of this one theorem. -/
-theorem gset_mem_iconfluent {α : Type} (a : α) :
+theorem gset_mem_iconfluent {α : Type u} (a : α) :
     IConfluent (S := GSet α) (fun s => s a = true) := by
   intro x y hx _
   show (x a || y a) = true
@@ -48,7 +50,7 @@ theorem gset_mem_iconfluent {α : Type} (a : α) :
 lacking `a` lacks `a`. Together with the previous theorem this is why 2P-set
 presence (`added ∧ ¬removed`) is confluent: removal is itself monotone
 information. The 2P price is paid elsewhere (no re-add), not at merge. -/
-theorem gset_notmem_iconfluent {α : Type} (a : α) :
+theorem gset_notmem_iconfluent {α : Type u} (a : α) :
     IConfluent (S := GSet α) (fun s => s a = false) := by
   intro x y hx hy
   show (x a || y a) = false
@@ -57,7 +59,7 @@ theorem gset_notmem_iconfluent {α : Type} (a : α) :
 /-- **Monotone-closed invariants are I-confluent** — the general positive form:
 any invariant upward-closed under inclusion survives union. Grow-only lower
 bounds, "at least these members", reachability of an existing node. -/
-theorem gset_monotone_iconfluent {α : Type} {I : Invariant (GSet α)}
+theorem gset_monotone_iconfluent {α : Type u} {I : Invariant (GSet α)}
     (hmono : ∀ s t : GSet α, (∀ a, s a = true → t a = true) → I s → I t) :
     IConfluent I := by
   intro x y hx _

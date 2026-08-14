@@ -21,3 +21,7 @@ theorem quotientSound {α : Sort _} {relation : α → α → Prop} {left right 
 end Canary.Allowed
 
 #audit_floor_prefix Canary.Allowed
+
+#audit_floor_current
+
+-- Effective EOF permits trailing comments.

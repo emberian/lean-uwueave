@@ -331,6 +331,8 @@ namespace Uwueave.Holes
 
 open Uwueave Uwueave.Catalog
 
+universe u v w
+
 /-! ## §0. Three G-Set lemmas this file leans on.
 
 `Catalog.lean` states `gset_mem_merge` as an equation on `Bool`. Everything
@@ -350,7 +352,7 @@ theorem truth_eq_true {p : Prop} : truth p = true ↔ p :=
    @decide_eq_true p (Classical.propDecidable p)⟩
 
 /-- Two grow-only sets with the same members are the same set. -/
-theorem gset_ext {α : Type} {P Q : GSet α} (h : ∀ a, P a = true ↔ Q a = true) :
+theorem gset_ext {α : Type u} {P Q : GSet α} (h : ∀ a, P a = true ↔ Q a = true) :
     P = Q := by
   funext a
   cases hP : P a with
@@ -365,7 +367,7 @@ theorem gset_ext {α : Type} {P Q : GSet α} (h : ∀ a, P a = true ↔ Q a = tr
 
 /-- Membership in a merge is membership in either side — `gset_mem_merge` as a
 proposition. -/
-theorem gset_mem_or {α : Type} (x y : GSet α) (a : α) :
+theorem gset_mem_or {α : Type u} (x y : GSet α) (a : α) :
     (x ⊔ y) a = true ↔ x a = true ∨ y a = true := by
   rw [gset_mem_merge]
   cases x a <;> cases y a <;> simp
@@ -373,7 +375,7 @@ theorem gset_mem_or {α : Type} (x y : GSet α) (a : α) :
 /-- The induced order on grow-only sets **is** inclusion. `Leq` is defined by
 the merge (`Confluence.lean`), and for a G-Set that unfolds to "every member of
 `x` is a member of `y`" — which is what every ⊑ below should be read as. -/
-theorem gset_leq_iff_subset {α : Type} (x y : GSet α) :
+theorem gset_leq_iff_subset {α : Type u} (x y : GSet α) :
     x ⊑ y ↔ ∀ a, x a = true → y a = true := by
   constructor
   · intro h a ha
@@ -446,16 +448,16 @@ lattice rather than three constructors:
 /-- A partial result: the set of candidate values. Literally `GSet α` — same
 carrier, same merge, same laws, so a derived value is a replicated value with
 no new machinery (§7). -/
-abbrev Partial (α : Type) := GSet α
+abbrev Partial (α : Type u) := GSet α
 
 /-- **The hole**: no candidates. The lattice bottom, and the memo's ⟨hole⟩ —
 demoted from a constructor to a point, because a hole is just the least
 informative answer (`hole_least`). -/
-def hole {α : Type} : Partial α := fun _ => false
+def hole {α : Type u} : Partial α := fun _ => false
 
 /-- The hole is below every answer: it is the bottom of the same lattice, not
 a separate layer. -/
-theorem hole_least {α : Type} (P : Partial α) : hole ⊑ P := by
+theorem hole_least {α : Type u} (P : Partial α) : hole ⊑ P := by
   funext a
   show (false || P a) = P a
   rfl
@@ -468,18 +470,18 @@ knowing which world you are in.
 Noncomputable by necessity at this carrier (the existential ranges over an
 unbounded world type); §7 gives the computable equal for a candidate set held
 as a list, which is what a replica actually holds. -/
-noncomputable def evalSet {α : Type} (f : World → α) (W : GSet World) :
+noncomputable def evalSet {α : Type u} (f : World → α) (W : GSet World) :
     Partial α :=
   fun a => truth (∃ w, W w = true ∧ f w = a)
 
 /-- Membership in the image, unfolded once so nothing below has to. -/
-theorem mem_evalSet {α : Type} (f : World → α) (W : GSet World) (a : α) :
+theorem mem_evalSet {α : Type u} (f : World → α) (W : GSet World) (a : α) :
     evalSet f W a = true ↔ ∃ w, W w = true ∧ f w = a := truth_eq_true
 
 /-- **A computation over nothing is a hole.** The empty candidate set images
 to the empty candidate set — the bottom is preserved, so "I have heard
 nothing" evaluates to "I know nothing", not to a wrong answer. -/
-theorem evalSet_hole {α : Type} (f : World → α) : evalSet f hole = hole := by
+theorem evalSet_hole {α : Type u} (f : World → α) : evalSet f hole = hole := by
   refine gset_ext (fun a => ?_)
   constructor
   · intro h
@@ -519,7 +521,7 @@ its value is the statement, and the corollaries that are one line each. -/
 /-- Membership in the image of a merge — the whole mathematical content of the
 headline, isolated: a candidate answer after merging the worlds is a candidate
 answer on one side or the other. -/
-theorem mem_evalSet_merge {α : Type} (f : World → α) (W₁ W₂ : GSet World)
+theorem mem_evalSet_merge {α : Type u} (f : World → α) (W₁ W₂ : GSet World)
     (a : α) :
     evalSet f (W₁ ⊔ W₂) a = true ↔
       evalSet f W₁ a = true ∨ evalSet f W₂ a = true := by
@@ -548,7 +550,7 @@ deterministic *within* a world, which is correction 2's whole point.
 
 Everything else in this file is a corollary of this equation or a refutation
 saying what it does *not* buy (§5). -/
-theorem evalSet_hom {α : Type} (f : World → α) (W₁ W₂ : GSet World) :
+theorem evalSet_hom {α : Type u} (f : World → α) (W₁ W₂ : GSet World) :
     evalSet f (W₁ ⊔ W₂) = evalSet f W₁ ⊔ evalSet f W₂ :=
   gset_ext fun a =>
     (mem_evalSet_merge f W₁ W₂ a).trans
@@ -556,14 +558,14 @@ theorem evalSet_hom {α : Type} (f : World → α) (W₁ W₂ : GSet World) :
 
 /-- The derived value's merge is the substrate's own — inherited, not
 rebuilt. -/
-example {α : Type} : MergeState (Partial α) := inferInstance
+example {α : Type u} : MergeState (Partial α) := inferInstance
 
 /-- **A derived value is itself a CRDT.** Not by analogy: `Partial α` *is*
 `GSet α`, so the three CvRDT laws on a computed answer are the three laws the
 inputs were replicated with, at the inherited instance — and `evalSet_hom`
 says the derivation commutes with that merge. Nothing about the computation
 enters; there is no second convergence argument to get wrong. -/
-theorem derived_is_a_CRDT {α : Type} (P Q R : Partial α) :
+theorem derived_is_a_CRDT {α : Type u} (P Q R : Partial α) :
     P ⊔ Q = Q ⊔ P ∧ (P ⊔ Q) ⊔ R = P ⊔ (Q ⊔ R) ∧ P ⊔ P = P :=
   ⟨merge_comm P Q, merge_assoc P Q R, merge_idem P⟩
 
@@ -571,7 +573,7 @@ theorem derived_is_a_CRDT {α : Type} (P Q R : Partial α) :
 it only adds candidates. (`⊑` on a G-Set is inclusion — `gset_leq_iff_subset`.)
 Immediate from the headline, and the reason gossip is safe to repeat on the
 *result* side as well as the input side. -/
-theorem evalSet_mono {α : Type} (f : World → α) {W₁ W₂ : GSet World}
+theorem evalSet_mono {α : Type u} (f : World → α) {W₁ W₂ : GSet World}
     (h : W₁ ⊑ W₂) : evalSet f W₁ ⊑ evalSet f W₂ := by
   show evalSet f W₁ ⊔ evalSet f W₂ = evalSet f W₂
   rw [← evalSet_hom, h]
@@ -581,7 +583,7 @@ replica's state and compute once; or compute on each and fold the answers —
 same value. This is `evalSet_hom` at the length of an actual gossip history,
 and it is the sense in which derived-value replicas converge by the substrate's
 own laws rather than by a new argument. -/
-theorem evalSet_fold {α : Type} (f : World → α) :
+theorem evalSet_fold {α : Type u} (f : World → α) :
     ∀ (Ws : List (GSet World)) (init : GSet World),
       evalSet f (Ws.foldl (· ⊔ ·) init)
         = (Ws.map (evalSet f)).foldl (· ⊔ ·) (evalSet f init)
@@ -609,7 +611,7 @@ essentially the same combination, shipping, three years earlier — static
 verification of invariants against a dataflow, with the coordination generated
 for exactly the interactions that need it. What survives is narrower and is
 stated in the header's fourth retraction and in `docs/BIBLIOGRAPHY.md`. -/
-theorem result_invariant_transfers {α : Type} (f : World → α)
+theorem result_invariant_transfers {α : Type u} (f : World → α)
     {J : Invariant (Partial α)} (hJ : IConfluent J) :
     IConfluent (S := GSet World) (fun W => J (evalSet f W)) := by
   intro W₁ W₂ h₁ h₂
@@ -625,7 +627,7 @@ real computation, discharged by the pullback in one line.
 This is the positive half of the pair whose negative half is §5 — same
 machinery, opposite answer, and the difference is entirely in what the
 application asked for. -/
-theorem answer_includes_iconfluent {α : Type} (f : World → α) (v : α) :
+theorem answer_includes_iconfluent {α : Type u} (f : World → α) (v : α) :
     IConfluent (S := GSet World) (fun W => evalSet f W v = true) :=
   result_invariant_transfers f (gset_mem_iconfluent v)
 
@@ -656,12 +658,12 @@ honestly:
 
 /-- Set-monad bind. Together with `Delta.addDelta` as `pure` this is the
 powerset monad; `bindSet_addDelta` below is its left identity law. -/
-noncomputable def bindSet {α β : Type} (S : Partial α) (k : α → Partial β) :
+noncomputable def bindSet {α : Type u} {β : Type v} (S : Partial α) (k : α → Partial β) :
     Partial β :=
   fun b => truth (∃ a, S a = true ∧ k a b = true)
 
 /-- Membership in a bind, unfolded once. -/
-theorem mem_bindSet {α β : Type} (S : Partial α) (k : α → Partial β) (b : β) :
+theorem mem_bindSet {α : Type u} {β : Type v} (S : Partial α) (k : α → Partial β) (b : β) :
     bindSet S k b = true ↔ ∃ a, S a = true ∧ k a b = true := truth_eq_true
 
 /-- The set monad's **left identity**: binding a singleton is application.
@@ -841,7 +843,7 @@ reads); we refuse to block; §6 is the price we pay instead. -/
 /-- **Determinacy**: this computation has at most one candidate. The invariant
 an application asserts when it wants "the" answer rather than "the answers" —
 and, verbatim, the hypothesis of `Ceiling.atMostOne_entails_uniqueOn`. -/
-def Determinate {α : Type} (P : Partial α) : Prop :=
+def Determinate {α : Type u} (P : Partial α) : Prop :=
   ∀ a b : α, P a = true → P b = true → a = b
 
 /-- ⚠ **Determinacy is not I-confluent.** Two replicas each holding one
@@ -930,11 +932,11 @@ unbuilt, and until it is built the instance is a design intention rather than
 a theorem. -/
 
 /-- **A seal**: the claim that `a` is *the* answer — every candidate is `a`. -/
-def SealsTo {α : Type} (P : Partial α) (a : α) : Prop := ∀ b, P b = true → b = a
+def SealsTo {α : Type u} (P : Partial α) (a : α) : Prop := ∀ b, P b = true → b = a
 
 /-- A seal is a determinacy claim, so §5 prices it: sealing is exactly the
 operation that is not I-confluent. -/
-theorem sealsTo_determinate {α : Type} {P : Partial α} {a : α}
+theorem sealsTo_determinate {α : Type u} {P : Partial α} {a : α}
     (h : SealsTo P a) : Determinate P :=
   fun x y hx hy => (h x hx).trans (h y hy).symm
 
@@ -942,14 +944,14 @@ theorem sealsTo_determinate {α : Type} {P : Partial α} {a : α}
 may still arrive moves it. Abstract in `Arriving` on purpose: what may still
 arrive is a fact about the deployment (an arbiter's cut, a causal cut, a closed
 membership), never about the lattice. -/
-def Stable {α : Type} (Arriving : Partial α → Prop) (P : Partial α) : Prop :=
+def Stable {α : Type u} (Arriving : Partial α → Prop) (P : Partial α) : Prop :=
   ∀ Q, Arriving Q → P ⊔ Q = P
 
 /-- **Stability licenses the collapse.** A seal on a stable result survives
 everything that can still arrive — which is the whole content of "freeze after
 writing", with the blocking removed: the licence is a precondition on the
 collapse, not a wait on the read. -/
-theorem seal_survives_stable {α : Type} {Arriving : Partial α → Prop}
+theorem seal_survives_stable {α : Type u} {Arriving : Partial α → Prop}
     {P : Partial α} {a : α} (hst : Stable Arriving P) (hs : SealsTo P a) :
     ∀ Q, Arriving Q → SealsTo (P ⊔ Q) a := by
   intro Q hQ
@@ -986,7 +988,7 @@ buys the restriction, so a collapse licensed by one is not worth what a
 collapse licensed by another is. This theorem is agnostic between them by
 design, which is the point: the licence lives on the inputs, and whatever
 supplies it, the result does not have to re-earn it. -/
-theorem stable_inputs_seal_the_result {α : Type} (f : World → α)
+theorem stable_inputs_seal_the_result {α : Type u} (f : World → α)
     (W : GSet World) (A : GSet World → Prop) (h : ∀ V, A V → W ⊔ V = W) :
     Stable (fun Q => ∃ V, A V ∧ Q = evalSet f V) (evalSet f W) := by
   intro Q hQ
@@ -1002,7 +1004,7 @@ statement about arrivals that have **not** happened yet — an arbiter's epoch
 cut (`Era.final_view_immune`), a causal cut (`CausalReach`), a closed
 membership — and the transport from any of those into this hypothesis is named
 as unbuilt in the boundary. -/
-theorem stable_of_subsumed {α : Type} (f : World → α) (W : GSet World) :
+theorem stable_of_subsumed {α : Type u} (f : World → α) (W : GSet World) :
     Stable (fun Q => ∃ V, V ⊑ W ∧ Q = evalSet f V) (evalSet f W) :=
   stable_inputs_seal_the_result f W (fun V => V ⊑ W)
     (fun V hV => by rw [merge_comm]; exact hV)
@@ -1030,7 +1032,7 @@ here makes the carried provenance causally meaningful. See the boundary. -/
 /-- One candidate value, the source that justified its world, and one static
 position read by the computation.  The types of sources and positions are left
 to the language adapter; no causal interpretation is manufactured here. -/
-structure Positioned (α Source Position : Type) where
+structure Positioned (α : Type u) (Source : Type v) (Position : Type w) where
   value : α
   source : Source
   position : Position
@@ -1039,7 +1041,7 @@ structure Positioned (α Source Position : Type) where
 /-- Attribute every result candidate to its world's source and to every static
 position in the supplied syntax-level read list.  Repeated positions remain
 observationally idempotent because the carrier is a grow-only set. -/
-noncomputable def evalPositions {α Source Position : Type}
+noncomputable def evalPositions {α : Type u} {Source : Type v} {Position : Type w}
     (f : World → α) (source : World → Source) (positions : List Position)
     (worlds : GSet World) : GSet (Positioned α Source Position) :=
   fun candidate => truth (∃ world, worlds world = true
@@ -1048,7 +1050,7 @@ noncomputable def evalPositions {α Source Position : Type}
     ∧ candidate.position ∈ positions)
 
 /-- Exact membership in the positioned image. -/
-theorem mem_evalPositions {α Source Position : Type}
+theorem mem_evalPositions {α : Type u} {Source : Type v} {Position : Type w}
     (f : World → α) (source : World → Source) (positions : List Position)
     (worlds : GSet World) (candidate : Positioned α Source Position) :
     evalPositions f source positions worlds candidate = true ↔
@@ -1059,7 +1061,7 @@ theorem mem_evalPositions {α Source Position : Type}
   truth_eq_true
 
 /-- Positioned provenance commutes with candidate-world union. -/
-theorem evalPositions_hom {α Source Position : Type}
+theorem evalPositions_hom {α : Type u} {Source : Type v} {Position : Type w}
     (f : World → α) (source : World → Source) (positions : List Position)
     (left right : GSet World) :
     evalPositions f source positions (left ⊔ right) =
@@ -1086,7 +1088,7 @@ theorem evalPositions_hom {α Source Position : Type}
 
 /-- With no declared positions there is no positional attribution, even when
 candidate worlds exist. -/
-theorem evalPositions_nil {α Source Position : Type}
+theorem evalPositions_nil {α : Type u} {Source : Type v} {Position : Type w}
     (f : World → α) (source : World → Source) (worlds : GSet World) :
     evalPositions f source ([] : List Position) worlds = fun _ => false := by
   funext candidate
@@ -1134,7 +1136,7 @@ thing an implementation would actually run. -/
 def ofList (ws : List World) : GSet World := fun w => decide (w ∈ ws)
 
 /-- The computable image: map the computation over the candidate worlds. -/
-def evalList {α : Type} [DecidableEq α] (f : World → α) (ws : List World) :
+def evalList {α : Type u} [DecidableEq α] (f : World → α) (ws : List World) :
     Partial α :=
   fun a => decide (a ∈ ws.map f)
 
@@ -1143,7 +1145,7 @@ a list, `evalSet` — the `Classical.choice`-flavoured definition everything
 above is stated over — equals a `List.map` followed by a membership test. The
 noncomputability is a fact about the *general* carrier, not a hole under any
 implementation. -/
-theorem evalSet_ofList {α : Type} [DecidableEq α] (f : World → α)
+theorem evalSet_ofList {α : Type u} [DecidableEq α] (f : World → α)
     (ws : List World) : evalSet f (ofList ws) = evalList f ws := by
   refine gset_ext (fun a => ?_)
   rw [mem_evalSet]

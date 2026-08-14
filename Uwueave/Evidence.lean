@@ -202,6 +202,8 @@ namespace Uwueave.Evidence
 
 open Uwueave Uwueave.Catalog
 
+universe u v
+
 /-! ## §1. The evidence — three grow-only components, one inherited merge.
 
 A **source** names something that may still speak: a peer, an epoch, a
@@ -222,46 +224,46 @@ abbrev Source := Nat
 
 /-- **The evidence behind one result position.** Candidates attributed to
 sources; the sources still owed; the sources certified closed. -/
-abbrev ResultEvidence (α : Type) : Type :=
+abbrev ResultEvidence (α : Type u) : Type u :=
   GSet (α × Source) × GSet Source × GSet Source
 
 /-- Observed candidate values, each attributed to the source that justified it. -/
-abbrev candidates {α : Type} (e : ResultEvidence α) : GSet (α × Source) := e.1
+abbrev candidates {α : Type u} (e : ResultEvidence α) : GSet (α × Source) := e.1
 
 /-- The sources whose future contributions are still admissible. -/
-abbrev obligations {α : Type} (e : ResultEvidence α) : GSet Source := e.2.1
+abbrev obligations {α : Type u} (e : ResultEvidence α) : GSet Source := e.2.1
 
 /-- The sources declared closed. -/
-abbrev certificates {α : Type} (e : ResultEvidence α) : GSet Source := e.2.2
+abbrev certificates {α : Type u} (e : ResultEvidence α) : GSet Source := e.2.2
 
 /-- The merge is the product/G-Set lift: **componentwise, and inherited**. All
 three components are grow-only, so the three CvRDT laws on evidence are the
 three laws the components were replicated with — nothing new is proved. -/
-example {α : Type} : MergeState (ResultEvidence α) := inferInstance
+example {α : Type u} : MergeState (ResultEvidence α) := inferInstance
 
 /-- The induced order is componentwise on the candidates. -/
-theorem candidates_mono {α : Type} {s t : ResultEvidence α} (h : s ⊑ t) :
+theorem candidates_mono {α : Type u} {s t : ResultEvidence α} (h : s ⊑ t) :
     candidates s ⊑ candidates t := congrArg Prod.fst h
 
 /-- The induced order is componentwise on the obligations. -/
-theorem obligations_mono {α : Type} {s t : ResultEvidence α} (h : s ⊑ t) :
+theorem obligations_mono {α : Type u} {s t : ResultEvidence α} (h : s ⊑ t) :
     obligations s ⊑ obligations t := congrArg Prod.fst (congrArg Prod.snd h)
 
 /-- The induced order is componentwise on the certificates. -/
-theorem certificates_mono {α : Type} {s t : ResultEvidence α} (h : s ⊑ t) :
+theorem certificates_mono {α : Type u} {s t : ResultEvidence α} (h : s ⊑ t) :
     certificates s ⊑ certificates t := congrArg Prod.snd (congrArg Prod.snd h)
 
-theorem candidates_grow {α : Type} {s t : ResultEvidence α} (h : s ⊑ t)
+theorem candidates_grow {α : Type u} {s t : ResultEvidence α} (h : s ⊑ t)
     {p : α × Source} (hp : candidates s p = true) : candidates t p = true :=
   (Holes.gset_leq_iff_subset _ _).mp (candidates_mono h) p hp
 
-theorem certificates_grow {α : Type} {s t : ResultEvidence α} (h : s ⊑ t)
+theorem certificates_grow {α : Type u} {s t : ResultEvidence α} (h : s ⊑ t)
     {o : Source} (ho : certificates s o = true) : certificates t o = true :=
   (Holes.gset_leq_iff_subset _ _).mp (certificates_mono h) o ho
 
 /-- …and the order is *built* componentwise too: three component inclusions
 make an evidence step. -/
-theorem leq_of_components {α : Type} {s t : ResultEvidence α}
+theorem leq_of_components {α : Type u} {s t : ResultEvidence α}
     (h1 : candidates s ⊑ candidates t) (h2 : obligations s ⊑ obligations t)
     (h3 : certificates s ⊑ certificates t) : s ⊑ t := by
   show (candidates s ⊔ candidates t,
@@ -278,26 +280,26 @@ homomorphism transports with no reproof (`fromWorlds_candidates_hom`). -/
 
 /-- The values behind an attributed candidate set. Classical for the same
 reason `Holes.evalSet` is: the existential ranges over an unbounded type. -/
-noncomputable def valuesOf {α : Type} (c : GSet (α × Source)) : Holes.Partial α :=
+noncomputable def valuesOf {α : Type u} (c : GSet (α × Source)) : Holes.Partial α :=
   fun a => Holes.truth (∃ o, c (a, o) = true)
 
 /-- The candidate **values** of a piece of evidence: attribution forgotten. -/
-noncomputable def values {α : Type} (e : ResultEvidence α) : Holes.Partial α :=
+noncomputable def values {α : Type u} (e : ResultEvidence α) : Holes.Partial α :=
   valuesOf (candidates e)
 
-theorem mem_values {α : Type} (e : ResultEvidence α) (a : α) :
+theorem mem_values {α : Type u} (e : ResultEvidence α) (a : α) :
     values e a = true ↔ ∃ o, candidates e (a, o) = true := Holes.truth_eq_true
 
 /-- Equal candidate sets have equal values — the value axis is a function of
 the candidates alone. -/
-theorem values_congr {α : Type} {s t : ResultEvidence α}
+theorem values_congr {α : Type u} {s t : ResultEvidence α}
     (h : candidates t = candidates s) : values t = values s := congrArg valuesOf h
 
 /-- Evidence built from `Holes.lean`'s candidate worlds: the image of a
 deterministic computation `f`, each answer attributed by `src` to the source
 that justified the world it came from. This is `Holes.evalProv`'s shape with a
 source name where the clock was. -/
-noncomputable def fromWorlds {α : Type} (f : Holes.World → α)
+noncomputable def fromWorlds {α : Type u} (f : Holes.World → α)
     (src : Holes.World → Source) (W : GSet Holes.World)
     (obl cert : GSet Source) : ResultEvidence α :=
   (Holes.evalSet (fun w => (f w, src w)) W, obl, cert)
@@ -306,7 +308,7 @@ noncomputable def fromWorlds {α : Type} (f : Holes.World → α)
 candidate component of evidence built from candidate worlds is a
 join-homomorphism in the worlds: compute-then-merge = merge-then-compute, on
 the new carrier, by the old theorem. -/
-theorem fromWorlds_candidates_hom {α : Type} (f : Holes.World → α)
+theorem fromWorlds_candidates_hom {α : Type u} (f : Holes.World → α)
     (src : Holes.World → Source) (W₁ W₂ : GSet Holes.World)
     (obl cert : GSet Source) :
     candidates (fromWorlds f src (W₁ ⊔ W₂) obl cert)
@@ -319,7 +321,7 @@ candidate worlds, forgetting the attribution recovers `Holes.evalSet f W` on
 the nose. So `ResultEvidence` adds two dimensions to the old carrier without
 disturbing the one it had, and every theorem of `Holes.lean` about the answer
 applies to `values` verbatim. -/
-theorem values_fromWorlds {α : Type} (f : Holes.World → α)
+theorem values_fromWorlds {α : Type u} (f : Holes.World → α)
     (src : Holes.World → Source) (W : GSet Holes.World) (obl cert : GSet Source) :
     values (fromWorlds f src W obl cert) = Holes.evalSet f W := by
   refine Holes.gset_ext (fun a => ?_)
@@ -336,19 +338,19 @@ theorem values_fromWorlds {α : Type} (f : Holes.World → α)
 /-- The positioned candidates of one expression evaluation.  This is a
 separate grow-only component rather than a change to `ResultEvidence`, whose
 three-axis representation and renderer remain stable. -/
-abbrev PositionCandidate (α Position : Type) :=
+abbrev PositionCandidate (α : Type u) (Position : Type v) :=
   Holes.Positioned α Source Position
 
 /-- Attribute candidate values simultaneously to their source and to every
 static position the language adapter reports. -/
-noncomputable def positionCandidates {α Position : Type}
+noncomputable def positionCandidates {α : Type u} {Position : Type v}
     (f : Holes.World → α) (src : Holes.World → Source)
     (positions : List Position) (worlds : GSet Holes.World) :
     GSet (PositionCandidate α Position) :=
   Holes.evalPositions f src positions worlds
 
 /-- Exact value/source/position membership. -/
-theorem mem_positionCandidates {α Position : Type}
+theorem mem_positionCandidates {α : Type u} {Position : Type v}
     (f : Holes.World → α) (src : Holes.World → Source)
     (positions : List Position) (worlds : GSet Holes.World)
     (candidate : PositionCandidate α Position) :
@@ -360,7 +362,7 @@ theorem mem_positionCandidates {α Position : Type}
   Holes.mem_evalPositions f src positions worlds candidate
 
 /-- Positioned evidence is independently mergeable by world-set union. -/
-theorem positionCandidates_hom {α Position : Type}
+theorem positionCandidates_hom {α : Type u} {Position : Type v}
     (f : Holes.World → α) (src : Holes.World → Source)
     (positions : List Position) (left right : GSet Holes.World) :
     positionCandidates f src positions (left ⊔ right) =
@@ -380,7 +382,7 @@ between two grow-only sets), while `Holes.determinacy_not_iconfluent` says
 "one candidate" does not. Two dimensions, two verdicts. -/
 
 /-- **The future is closed**: every source still owed carries a certificate. -/
-def Closed {α : Type} (e : ResultEvidence α) : Prop :=
+def Closed {α : Type u} (e : ResultEvidence α) : Prop :=
   ∀ o, obligations e o = true → certificates e o = true
 
 /-- **Closure is I-confluent** — two replicas that have each closed their own
@@ -390,7 +392,7 @@ merge came from one side, that side certified it, and certificates only grow.
 Contrast `Holes.determinacy_not_iconfluent`, which refutes the same question
 for the *value* axis: "at most one candidate" clashes on merge. The two
 components of correction 1 are separated by a theorem, not by taste. -/
-theorem closed_iconfluent {α : Type} :
+theorem closed_iconfluent {α : Type u} :
     IConfluent (S := ResultEvidence α) Closed := by
   intro x y hx hy o ho
   have hor : obligations x o = true ∨ obligations y o = true :=
@@ -415,7 +417,7 @@ file does not split it, because no theorem below needs the distinction.)
 constructor carries the reading in its name instead. -/
 
 /-- The rendered result: correction 1's four states, plus the empty one. -/
-inductive View (α : Type) : Type where
+inductive View (α : Type u) : Type u where
   /-- One candidate, and the future is closed: `47`. -/
   | exact (a : α)
   /-- One candidate, but evidence may still arrive: `47 + ⟨pending⟩`. -/
@@ -429,7 +431,7 @@ inductive View (α : Type) : Type where
 
 /-- Which of the five points a view is, as a numeral. Only ever used to tell
 two constructors apart (`view_ne_of_tag`); it carries no meaning of its own. -/
-def viewTag {α : Type} : View α → Nat
+def viewTag {α : Type u} : View α → Nat
   | .exact _ => 0
   | .provisional _ => 1
   | .forkedClosed => 2
@@ -437,7 +439,7 @@ def viewTag {α : Type} : View α → Nat
   | .vacuous => 4
 
 /-- Views with different tags are different views. -/
-theorem view_ne_of_tag {α : Type} {a b : View α} (h : viewTag a ≠ viewTag b) :
+theorem view_ne_of_tag {α : Type u} {a b : View α} (h : viewTag a ≠ viewTag b) :
     a ≠ b := fun heq => h (congrArg viewTag heq)
 
 open Classical in
@@ -445,7 +447,7 @@ open Classical in
 `exact`/`provisional`; several split into `forkedClosed`/`forkedOpen`; none is
 `vacuous`. Noncomputable at this carrier for `Holes.evalSet`'s reason: both
 decisions quantify over an unbounded type. -/
-noncomputable def render {α : Type} (e : ResultEvidence α) : View α :=
+noncomputable def render {α : Type u} (e : ResultEvidence α) : View α :=
   if hu : ∃ a, values e a = true ∧ ∀ b, values e b = true → b = a then
     if Closed e then View.exact (Classical.choose hu)
     else View.provisional (Classical.choose hu)
@@ -459,14 +461,14 @@ the particular obligation set, and the particular certificates may differ.
 
 This is the congruence needed to transport a value-stability result into a
 view-stability result once closure is also known to survive. -/
-theorem render_congr {α : Type} {s t : ResultEvidence α}
+theorem render_congr {α : Type u} {s t : ResultEvidence α}
     (hv : values s = values t) (hc : Closed s ↔ Closed t) :
     render s = render t := by
   classical
   simp only [render, hv, hc]
 
 /-- `render` answers `exact a` on a sealed, inhabited, closed evidence. -/
-theorem render_exact {α : Type} {e : ResultEvidence α} {a : α}
+theorem render_exact {α : Type u} {e : ResultEvidence α} {a : α}
     (hm : values e a = true) (hs : Holes.SealsTo (values e) a) (hc : Closed e) :
     render e = View.exact a := by
   have hu : ∃ x, values e x = true ∧ ∀ b, values e b = true → b = x := ⟨a, hm, hs⟩
@@ -476,7 +478,7 @@ theorem render_exact {α : Type} {e : ResultEvidence α} {a : α}
 
 /-- `render` answers `provisional a` on a sealed, inhabited, **open** evidence:
 the same value, and the admission that it may not be the last word. -/
-theorem render_provisional {α : Type} {e : ResultEvidence α} {a : α}
+theorem render_provisional {α : Type u} {e : ResultEvidence α} {a : α}
     (hm : values e a = true) (hs : Holes.SealsTo (values e) a) (hc : ¬ Closed e) :
     render e = View.provisional a := by
   have hu : ∃ x, values e x = true ∧ ∀ b, values e b = true → b = x := ⟨a, hm, hs⟩
@@ -484,7 +486,7 @@ theorem render_provisional {α : Type} {e : ResultEvidence α} {a : α}
   have heq : Classical.choose hu = a := hs _ hch.1
   simp only [render, dif_pos hu, if_neg hc, heq]
 
-theorem not_unique_of_two {α : Type} {e : ResultEvidence α} {a b : α}
+theorem not_unique_of_two {α : Type u} {e : ResultEvidence α} {a b : α}
     (ha : values e a = true) (hb : values e b = true) (hab : a ≠ b) :
     ¬ ∃ x, values e x = true ∧ ∀ y, values e y = true → y = x := by
   rintro ⟨x, _, hx⟩
@@ -492,7 +494,7 @@ theorem not_unique_of_two {α : Type} {e : ResultEvidence α} {a b : α}
 
 /-- `render` answers `forkedClosed` on two distinct candidates and a closed
 future — the state the old carrier could not say: **waiting will not fix it.** -/
-theorem render_forkedClosed {α : Type} {e : ResultEvidence α} {a b : α}
+theorem render_forkedClosed {α : Type u} {e : ResultEvidence α} {a b : α}
     (ha : values e a = true) (hb : values e b = true) (hab : a ≠ b)
     (hc : Closed e) : render e = View.forkedClosed := by
   simp only [render, dif_neg (not_unique_of_two ha hb hab),
@@ -500,14 +502,14 @@ theorem render_forkedClosed {α : Type} {e : ResultEvidence α} {a b : α}
 
 /-- `render` answers `forkedOpen` on two distinct candidates and an open
 future. -/
-theorem render_forkedOpen {α : Type} {e : ResultEvidence α} {a b : α}
+theorem render_forkedOpen {α : Type u} {e : ResultEvidence α} {a b : α}
     (ha : values e a = true) (hb : values e b = true) (hab : a ≠ b)
     (hc : ¬ Closed e) : render e = View.forkedOpen := by
   simp only [render, dif_neg (not_unique_of_two ha hb hab),
     if_pos (show ∃ x, values e x = true from ⟨a, ha⟩), if_neg hc]
 
 /-- `render` answers `vacuous` exactly on the hole — no candidate values. -/
-theorem render_vacuous {α : Type} {e : ResultEvidence α}
+theorem render_vacuous {α : Type u} {e : ResultEvidence α}
     (h : ∀ a, values e a = false) : render e = View.vacuous := by
   have hne : ¬ ∃ a, values e a = true := by
     rintro ⟨a, ha⟩
@@ -521,7 +523,7 @@ theorem render_vacuous {α : Type} {e : ResultEvidence α}
 /-- **Inversion**: an `exact` report is backed by exactly the evidence that
 licenses it — the value is a candidate, it seals the candidate set, and the
 future is closed. This is what §8's soundness reads. -/
-theorem values_of_render_exact {α : Type} {e : ResultEvidence α} {v : α}
+theorem values_of_render_exact {α : Type u} {e : ResultEvidence α} {v : α}
     (h : render e = View.exact v) :
     values e v = true ∧ Holes.SealsTo (values e) v ∧ Closed e := by
   by_cases hu : ∃ x, values e x = true ∧ ∀ y, values e y = true → y = x
@@ -544,7 +546,7 @@ theorem values_of_render_exact {α : Type} {e : ResultEvidence α} {v : α}
 /-- An `exact` report entails `Holes.Determinate` — so §5 of `Holes.lean`
 prices it: reporting one answer is the uniqueness ceiling, and what buys it is
 the closure certificate the inversion above extracts. -/
-theorem exact_is_determinate {α : Type} {e : ResultEvidence α} {v : α}
+theorem exact_is_determinate {α : Type u} {e : ResultEvidence α} {v : α}
     (h : render e = View.exact v) : Holes.Determinate (values e) :=
   Holes.sealsTo_determinate (values_of_render_exact h).2.1
 
@@ -661,16 +663,16 @@ and the rendered view changes because the second dimension did. -/
 
 /-- **Arbitration**: certify one source closed. Grow-only, and the candidate
 set is untouched. -/
-def certify {α : Type} (e : ResultEvidence α) (o : Source) : ResultEvidence α :=
+def certify {α : Type u} (e : ResultEvidence α) (o : Source) : ResultEvidence α :=
   (candidates e, obligations e, fun o' => certificates e o' || decide (o' = o))
 
 /-- Certifying deletes no evidence: the candidate set is unchanged. -/
-theorem certify_keeps_candidates {α : Type} (e : ResultEvidence α) (o : Source) :
+theorem certify_keeps_candidates {α : Type u} (e : ResultEvidence α) (o : Source) :
     candidates (certify e o) = candidates e := rfl
 
 /-- Certifying moves *up* the lattice — it is monotone information, like every
 other move in this library. -/
-theorem certify_grows {α : Type} (e : ResultEvidence α) (o : Source) :
+theorem certify_grows {α : Type u} (e : ResultEvidence α) (o : Source) :
     e ⊑ certify e o := by
   refine leq_of_components (leq_refl _) (leq_refl _) ?_
   refine (Holes.gset_leq_iff_subset _ _).mpr (fun o' h => ?_)
@@ -742,58 +744,58 @@ non-implication runs in **one** direction only, because the delivery future is
 a *sub*-relation of the extension future. -/
 
 /-- A future relation on states. -/
-abbrev Future (S : Type) := S → S → Prop
+abbrev Future (S : Type u) := S → S → Prop
 
 /-- **Free termination** (Power–Koutris–Hellerstein, Def. 3) at an arbitrary
 carrier: `s` is a free-termination state for `q` under `F` when every reachable
 future agrees with `s` on `q`. State-relative by construction — which is
 correction 2's whole point. -/
-def FreeTermination {S β : Type} (F : Future S) (q : S → β) (s : S) : Prop :=
+def FreeTermination {S : Type u} {β : Type v} (F : Future S) (q : S → β) (s : S) : Prop :=
   ∀ t, F s t → q t = q s
 
 /-- **What a step may add.** A candidate that was not there may arrive only
 from a source that is still owed (`obligations`) and has not been certified
 closed (`certificates`). Timely's frontier guarantee, in one clause. -/
-def Admits {α : Type} (s t : ResultEvidence α) : Prop :=
+def Admits {α : Type u} (s t : ResultEvidence α) : Prop :=
   ∀ p, candidates s p = false → candidates t p = true →
     obligations s p.2 = true ∧ certificates s p.2 = false
 
 /-- **The extension future**: any monotone step that respects the certificates
 already held. New application events are permitted. -/
-def ExtensionFuture {α : Type} (s t : ResultEvidence α) : Prop :=
+def ExtensionFuture {α : Type u} (s t : ResultEvidence α) : Prop :=
   s ⊑ t ∧ Admits s t
 
 /-- **The delivery future**: the pool of issued evidence is fixed, and a future
 is any state between here and it. Only delivery, no new application events. -/
-def DeliveryFuture {α : Type} (pool s t : ResultEvidence α) : Prop :=
+def DeliveryFuture {α : Type u} (pool s t : ResultEvidence α) : Prop :=
   s ⊑ t ∧ t ⊑ pool ∧ Admits s t
 
 /-- **The sealed future**: an extension future over a *closed source set* — no
 source may appear that was not already an obligation. §8 shows this is exactly
 what `render` needs, and `render_retracts_when_a_new_source_appears` shows why
 nothing weaker will do. -/
-def SealedFuture {α : Type} (s t : ResultEvidence α) : Prop :=
+def SealedFuture {α : Type u} (s t : ResultEvidence α) : Prop :=
   ExtensionFuture s t ∧ ∀ o, obligations t o = true → obligations s o = true
 
-theorem admits_refl {α : Type} (s : ResultEvidence α) : Admits s s :=
+theorem admits_refl {α : Type u} (s : ResultEvidence α) : Admits s s :=
   fun _ h1 h2 => Bool.noConfusion (h1.symm.trans h2)
 
-theorem extensionFuture_refl {α : Type} (s : ResultEvidence α) :
+theorem extensionFuture_refl {α : Type u} (s : ResultEvidence α) :
     ExtensionFuture s s := ⟨leq_refl s, admits_refl s⟩
 
-theorem sealedFuture_refl {α : Type} (s : ResultEvidence α) :
+theorem sealedFuture_refl {α : Type u} (s : ResultEvidence α) :
     SealedFuture s s := ⟨extensionFuture_refl s, fun _ h => h⟩
 
 /-- Every delivery future is an extension future: the pool bound is an extra
 constraint, not a different kind of step. -/
-theorem delivery_is_extension {α : Type} {pool s t : ResultEvidence α}
+theorem delivery_is_extension {α : Type u} {pool s t : ResultEvidence α}
     (h : DeliveryFuture pool s t) : ExtensionFuture s t := ⟨h.1, h.2.2⟩
 
 /-- **Stability under extension implies stability under delivery** — and this
 is an *implication*, not a non-implication, because the delivery relation is
 contained in the extension relation. Half of the non-interchangeability answer
 is therefore positive, and saying which half is the point. -/
-theorem extension_stable_implies_delivery_stable {α β : Type}
+theorem extension_stable_implies_delivery_stable {α : Type u} {β : Type v}
     {q : ResultEvidence α → β} {pool s : ResultEvidence α}
     (h : FreeTermination ExtensionFuture q s) :
     FreeTermination (DeliveryFuture pool) q s :=
@@ -804,7 +806,7 @@ replica that has delivered the whole pool has exactly one delivery future —
 itself — by antisymmetry of the induced order. This is the Free Termination
 paper's observation that CRDTs offer quiescence and quiescence is not the
 guarantee anyone wanted. -/
-theorem quiesced_delivery_stable {α β : Type} (q : ResultEvidence α → β)
+theorem quiesced_delivery_stable {α : Type u} {β : Type v} (q : ResultEvidence α → β)
     (s : ResultEvidence α) : FreeTermination (DeliveryFuture s) q s := by
   intro t ht
   rw [leq_antisymm ht.1 ht.2.1]
@@ -877,7 +879,7 @@ that is owed and uncertified, and `Closed` says there is none.
 
 This is what `Holes.lean` §6 assumed under the name `Stable` — here it is
 derived from the evidence a replica actually holds. -/
-theorem closed_freezes {α : Type} {s t : ResultEvidence α} (hc : Closed s)
+theorem closed_freezes {α : Type u} {s t : ResultEvidence α} (hc : Closed s)
     (hle : s ⊑ t) (hadm : Admits s t) : candidates t = candidates s := by
   refine Holes.gset_ext (fun p => ?_)
   constructor
@@ -894,7 +896,7 @@ theorem closed_freezes {α : Type} {s t : ResultEvidence α} (hc : Closed s)
 
 /-- A sealed future of a closed evidence changes neither the values nor the
 closure — so it changes nothing `render` reads. -/
-theorem sealed_future_of_closed {α : Type} {s t : ResultEvidence α}
+theorem sealed_future_of_closed {α : Type u} {s t : ResultEvidence α}
     (hc : Closed s) (hf : SealedFuture s t) : values t = values s ∧ Closed t := by
   obtain ⟨⟨hle, hadm⟩, hmem⟩ := hf
   refine ⟨values_congr (closed_freezes hc hle hadm), fun o ho => ?_⟩
@@ -940,7 +942,7 @@ that is the *conclusion* of §9, not a premise. -/
 (`correct`), and is never retracted along a permitted future (`irrevocable`).
 A report that can be withdrawn is not an answer; a report that is false where
 it is made is not an answer either. -/
-structure SoundEvaluator {S β : Type} (F : Future S) (answer : S → GSet β)
+structure SoundEvaluator {S : Type u} {β : Type v} (F : Future S) (answer : S → GSet β)
     (peval : S → View β) : Prop where
   /-- An exact report is backed by the answer at the state where it is made. -/
   correct : ∀ s v, peval s = View.exact v →
@@ -950,7 +952,7 @@ structure SoundEvaluator {S β : Type} (F : Future S) (answer : S → GSet β)
 
 /-- Two answer sets that each contain `v` and are each sealed by `v` are the
 same set — namely `{v}`. The arithmetic behind §9. -/
-theorem seal_mem_unique {β : Type} {P Q : GSet β} {v : β}
+theorem seal_mem_unique {β : Type u} {P Q : GSet β} {v : β}
     (hp : P v = true) (hps : Holes.SealsTo P v)
     (hq : Q v = true) (hqs : Holes.SealsTo Q v) : P = Q := by
   refine Holes.gset_ext (fun b => ?_)
@@ -962,7 +964,7 @@ theorem seal_mem_unique {β : Type} {P Q : GSet β} {v : β}
 inversion of §4; `irrevocable` is `closed_freezes` plus the fact that closure
 survives a sealed step. Non-trivially sound: it *does* report `exact`
 (§5's `exactW`), unlike `blindEval` in §10. -/
-theorem render_sound {α : Type} :
+theorem render_sound {α : Type u} :
     SoundEvaluator (SealedFuture (α := α)) values render where
   correct := fun _ v h =>
     ⟨(values_of_render_exact h).1, (values_of_render_exact h).2.1⟩
@@ -991,7 +993,7 @@ theorem in either paper; this is one instance over one carrier. -/
 /-- **THE FUTURE-EXCLUSION THEOREM.** If two admissible reachable futures give
 different answers at a result position, then **no** sound evaluator reports
 that position exact. -/
-theorem divergent_futures_force_nonexact {S β : Type} {F : Future S}
+theorem divergent_futures_force_nonexact {S : Type u} {β : Type v} {F : Future S}
     {answer : S → GSet β} {peval : S → View β}
     (hsound : SoundEvaluator F answer peval) {s x y : S}
     (hx : F s x) (hy : F s y) (hne : answer x ≠ answer y) :
@@ -1006,7 +1008,7 @@ at every reachable state the answer is still exactly `v`. This is what makes
 `exact` worth reporting, and together with the theorem above it is the slogan:
 no exact value without stability evidence; no hidden fork after reachable
 divergence. -/
-theorem exact_sound {S β : Type} {F : Future S} {answer : S → GSet β}
+theorem exact_sound {S : Type u} {β : Type v} {F : Future S} {answer : S → GSet β}
     {peval : S → View β} (hsound : SoundEvaluator F answer peval) {s : S} {v : β}
     (hv : peval s = View.exact v) {t : S} (hf : F s t) :
     answer t v = true ∧ Holes.SealsTo (answer t) v :=
@@ -1035,11 +1037,11 @@ sound-but-silent evaluator that makes the premise necessary rather than
 decorative. The premise is then discharged for `render`. -/
 
 /-- The evaluator that always answers `vacuous`. -/
-def blindEval {S β : Type} (_ : S) : View β := View.vacuous
+def blindEval {S : Type u} {β : Type v} (_ : S) : View β := View.vacuous
 
 /-- **A canonical evaluator**: sound, and complete — it reports `exact v`
 whenever every permitted future agrees the answer is exactly `v`. -/
-structure CanonicalEvaluator {S β : Type} (F : Future S) (answer : S → GSet β)
+structure CanonicalEvaluator {S : Type u} {β : Type v} (F : Future S) (answer : S → GSet β)
     (peval : S → View β) : Prop where
   /-- Exact reports are true and irrevocable. -/
   sound : SoundEvaluator F answer peval
@@ -1053,7 +1055,7 @@ evaluator, reporting exact is *equivalent* to every permitted future agreeing
 on a single answer. The forward half is `exact_sound` and holds for every sound
 evaluator; the backward half is completeness and holds for none of them
 automatically. -/
-theorem canonical_exact_iff {S β : Type} {F : Future S} {answer : S → GSet β}
+theorem canonical_exact_iff {S : Type u} {β : Type v} {F : Future S} {answer : S → GSet β}
     {peval : S → View β} (hcan : CanonicalEvaluator F answer peval) (s : S) :
     (∃ v, peval s = View.exact v)
       ↔ (∃ v, ∀ t, F s t → answer t v = true ∧ Holes.SealsTo (answer t) v) := by

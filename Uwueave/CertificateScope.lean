@@ -170,7 +170,7 @@ import Uwueave.MinimalSummary
 
 namespace Uwueave.CertificateScope
 
-universe u v w x
+universe u v w x uW uR uA uV
 
 open Uwueave Uwueave.Catalog Uwueave.Histories
 
@@ -232,7 +232,7 @@ theorem residualEq_iff_eq {W : Type u} {R : Type v} (e : W → R)
 reachable is the answer already given. This is `Evidence.FreeTermination`
 unfolded through `Residual`, and it is what lets a *key* on residuals decide a
 *stability* question. -/
-theorem freeTermination_iff_residual {W R : Type} (F : Evidence.Future W)
+theorem freeTermination_iff_residual {W : Type uW} {R : Type uR} (F : Evidence.Future W)
     (e : W → R) (w : W) :
     Evidence.FreeTermination F e w ↔ ∀ r, Residual e F w r → r = e w := by
   constructor
@@ -243,7 +243,7 @@ theorem freeTermination_iff_residual {W R : Type} (F : Evidence.Future W)
 
 /-- The residual as a `Holes.Partial` — classical, for `Holes.truth`'s reason,
 and used only for the bridge below. -/
-noncomputable def residualSet {W : Type u} {R : Type} (e : W → R) (F : W → W → Prop)
+noncomputable def residualSet {W : Type u} {R : Type uR} (e : W → R) (F : W → W → Prop)
     (w : W) : Holes.Partial R :=
   fun r => Holes.truth (Residual e F w r)
 
@@ -251,7 +251,7 @@ noncomputable def residualSet {W : Type u} {R : Type} (e : W → R) (F : W → W
 free-terminating for `e` precisely when its residual set *seals to* the answer
 it already holds — the same predicate `Holes.lean` §6 uses for "this is *the*
 answer", now applied to the set of answers the future may still produce. -/
-theorem freeTermination_iff_sealsTo_residualSet {W R : Type} (F : Evidence.Future W)
+theorem freeTermination_iff_sealsTo_residualSet {W : Type uW} {R : Type uR} (F : Evidence.Future W)
     (e : W → R) (w : W) :
     Evidence.FreeTermination F e w ↔ Holes.SealsTo (residualSet e F w) (e w) := by
   rw [freeTermination_iff_residual]
@@ -266,7 +266,7 @@ future of itself, free termination is "the residual has at most one element" —
 a property of the residual **alone**. That is the whole reason a key on
 residuals can license a certificate: the certificate never has to carry the
 answer it was verified against. -/
-theorem freeTermination_iff_residual_subsingleton {W R : Type}
+theorem freeTermination_iff_residual_subsingleton {W : Type uW} {R : Type uR}
     {F : Evidence.Future W} {e : W → R} {w : W} (hrefl : F w w) :
     Evidence.FreeTermination F e w
       ↔ ∀ r r', Residual e F w r → Residual e F w r' → r = r' := by
@@ -329,12 +329,14 @@ worlds at all. So sufficiency is always a claim about a particular evaluator —
 with two evaluators at one key. -/
 theorem sufficient_for_every_evaluator_iff_injective {W : Type u} {K : Type v}
     (κ : W → K) :
-    (∀ (R : Type) (e : W → R) (F : W → W → Prop), SufficientKey κ e F)
+    (∀ (R : Type uR) (e : W → R) (F : W → W → Prop), SufficientKey κ e F)
       ↔ ∀ w v, κ w = κ v → w = v := by
   constructor
   · intro h w v hk
-    have hres := h Prop (fun x => x = w) (fun x y => x = y) w v hk
-    obtain ⟨t, ht, hprop⟩ := (hres (w = w)).mp ⟨w, rfl, rfl⟩
+    let e : W → ULift.{uR} Prop := fun x => ULift.up (x = w)
+    have hres := h (ULift.{uR} Prop) e (fun x y => x = y) w v hk
+    obtain ⟨t, ht, heq⟩ := (hres (e w)).mp ⟨w, rfl, rfl⟩
+    have hprop : (t = w) = (w = w) := congrArg ULift.down heq
     rw [← ht] at hprop
     exact (cast hprop.symm (rfl : w = w)).symm
   · intro hinj R e F
@@ -429,12 +431,12 @@ prohibited, and the prohibition rides `WorldFuture.lean`'s refutation. -/
 /-- **Sound**, for a key-indexed certificate: at every world whose key it
 accepts, the evaluator really is free-terminating. The quantifier over worlds is
 the reuse. -/
-def KeyCertSound {W R : Type} {K : Type u} (κ : W → K) (e : W → R) (F : W → W → Prop)
+def KeyCertSound {W : Type uW} {R : Type uR} {K : Type u} (κ : W → K) (e : W → R) (F : W → W → Prop)
     (C : K → Prop) : Prop :=
   ∀ w, C (κ w) → Evidence.FreeTermination F e w
 
 /-- The same, scoped to a domain — the shape a base scope takes (§6). -/
-def KeyCertSoundOn {W R : Type} {K : Type u} (D : W → Prop) (κ : W → K) (e : W → R)
+def KeyCertSoundOn {W : Type uW} {R : Type uR} {K : Type u} (D : W → Prop) (κ : W → K) (e : W → R)
     (F : W → W → Prop) (C : K → Prop) : Prop :=
   ∀ w, D w → C (κ w) → Evidence.FreeTermination F e w
 
@@ -442,7 +444,7 @@ def KeyCertSoundOn {W R : Type} {K : Type u} (D : W → Prop) (κ : W → K) (e 
 free-terminating and `v` carries the same key, `v` is free-terminating too. The
 side condition `F v v` is load-bearing — see
 `the_reflexivity_side_condition_is_load_bearing`. -/
-theorem key_licenses_reuse {W R : Type} {K : Type u} {κ : W → K} {e : W → R}
+theorem key_licenses_reuse {W : Type uW} {R : Type uR} {K : Type u} {κ : W → K} {e : W → R}
     {F : W → W → Prop} (hsuf : SufficientKey κ e F) {w v : W}
     (hkey : κ w = κ v) (hv : F v v) (hw : Evidence.FreeTermination F e w) :
     Evidence.FreeTermination F e v := by
@@ -456,7 +458,7 @@ theorem key_licenses_reuse {W R : Type} {K : Type u} {κ : W → K} {e : W → R
   exact heu.symm.trans (hw u hu)
 
 /-- The licence, scoped. -/
-theorem key_licenses_reuse_on {W R : Type} {K : Type u}
+theorem key_licenses_reuse_on {W : Type uW} {R : Type uR} {K : Type u}
     {D : W → Prop} {κ : W → K} {e : W → R} {F : W → W → Prop}
     (hsuf : SufficientKeyOn D κ e F) {w v : W}
     (hw : D w) (hv : D v) (hkey : κ w = κ v) (hrefl : F v v)
@@ -473,7 +475,7 @@ theorem key_licenses_reuse_on {W R : Type} {K : Type u}
 /-- **The certificate a replica actually files**: "I checked it here", filed
 under its key. This is the object `WorldFuture.certificate_reuse_is_unsound` is
 about, with the index left open. -/
-def verifiedAt {W R : Type} {K : Type u} (D : W → Prop) (κ : W → K) (e : W → R)
+def verifiedAt {W : Type uW} {R : Type uR} {K : Type u} (D : W → Prop) (κ : W → K) (e : W → R)
     (F : W → W → Prop) : K → Prop :=
   fun k => ∃ w, D w ∧ κ w = k ∧ Evidence.FreeTermination F e w
 
@@ -481,7 +483,7 @@ def verifiedAt {W R : Type} {K : Type u} (D : W → Prop) (κ : W → K) (e : W 
 "I checked it here" certificate is sound — anyone whose key matches may use it,
 and no further check is needed. This is the positive half of codex's "only then
 may an exactness certificate be reused by key equality". -/
-theorem verifiedAt_sound_of_sufficientKeyOn {W R : Type} {K : Type u} {D : W → Prop}
+theorem verifiedAt_sound_of_sufficientKeyOn {W : Type uW} {R : Type uR} {K : Type u} {D : W → Prop}
     {κ : W → K} {e : W → R} {F : W → W → Prop}
     (hsuf : SufficientKeyOn D κ e F) (hrefl : ∀ w, D w → F w w) :
     KeyCertSoundOn D κ e F (verifiedAt D κ e F) := by
@@ -494,7 +496,7 @@ sound certificate indexed by that key must refuse the key — including the one 
 replica verified correctly. Not "is weaker": is prohibited from ever saying yes.
 This is `WorldFuture.no_sound_state_cert_accepts_openW` with the index left
 open, and the next theorem recovers that statement from this one. -/
-theorem no_sound_key_cert_accepts {W R : Type} {K : Type u} (κ : W → K) (e : W → R)
+theorem no_sound_key_cert_accepts {W : Type uW} {R : Type uR} {K : Type u} (κ : W → K) (e : W → R)
     (F : W → W → Prop) {w v : W} (hkey : κ w = κ v)
     (hbad : ¬ Evidence.FreeTermination F e v) (C : K → Prop)
     (hC : KeyCertSound κ e F C) : ¬ C (κ w) := by
@@ -505,7 +507,7 @@ theorem no_sound_key_cert_accepts {W R : Type} {K : Type u} (κ : W → K) (e : 
 /-- **`WorldFuture.StateCertSound` IS `KeyCertSound` at the observation key** —
 definitionally, so the general machinery is about the same object and not a
 lookalike. -/
-theorem stateCertSound_is_keyCertSound {α : Type} (C : WorldFuture.StateCert α) :
+theorem stateCertSound_is_keyCertSound {α : Type uA} (C : WorldFuture.StateCert α) :
     WorldFuture.StateCertSound C
       ↔ KeyCertSound WorldFuture.observe (WorldFuture.renderW (α := α))
           WorldFuture.DeliveryFuture C :=
@@ -514,7 +516,7 @@ theorem stateCertSound_is_keyCertSound {α : Type} (C : WorldFuture.StateCert α
 /-- **…and `WorldFuture.WorldCertSound` is `KeyCertSound` at the identity key.**
 The world index is the finest key there is, which is why it is sound and why it
 is not reusable at any coarser name. -/
-theorem worldCertSound_is_keyCertSound {α : Type} (C : WorldFuture.WorldCert α) :
+theorem worldCertSound_is_keyCertSound {α : Type uA} (C : WorldFuture.WorldCert α) :
     WorldFuture.WorldCertSound C
       ↔ KeyCertSound (fun w : WorldFuture.World α => w)
           (WorldFuture.renderW (α := α)) WorldFuture.DeliveryFuture C :=
@@ -615,7 +617,7 @@ open WorldFuture in
 /-- **A quiesced world's residual is a singleton** — the view it already
 renders. `WorldFuture.quiesced_render_stable` one way, `delivery_refl` the
 other. -/
-theorem residual_at_quiesced {α : Type} {w : World α} (hq : Quiesced w)
+theorem residual_at_quiesced {α : Type uA} {w : World α} (hq : Quiesced w)
     (r : Evidence.View α) :
     Residual renderW DeliveryFuture w r ↔ r = renderW w := by
   constructor
@@ -713,7 +715,7 @@ theorem not_sufficient_of_glues_quiesced_delivered {K : Type u}
 /-- Codex's second remedy, as a key: the frontier, the certificates in hand, the
 roster and the sealed epoch. Everything about the context **except** what has
 been issued. -/
-def frontierEpochKey {α : Type} (w : WorldFuture.World α) :
+def frontierEpochKey {α : Type uA} (w : WorldFuture.World α) :
     GSet Evidence.Source × GSet Evidence.Source × GSet Evidence.Source × Nat :=
   (WorldFuture.frontier w, WorldFuture.held w, w.roster, w.epoch)
 
@@ -759,7 +761,7 @@ delivered. The epoch is provably droppable. -/
 
 /-- **The delivery key**: what the replica has materialized, and the pool it
 sits in. -/
-def deliveryKey {α : Type} (w : WorldFuture.World α) :
+def deliveryKey {α : Type uA} (w : WorldFuture.World α) :
     Evidence.ResultEvidence α × Evidence.ResultEvidence α :=
   (WorldFuture.observe w, WorldFuture.pool w)
 
@@ -767,7 +769,7 @@ def deliveryKey {α : Type} (w : WorldFuture.World α) :
 other world's context. The pool and the epoch of the rebuilt world are the
 target's, and its observation is the source future's — which is all the
 evaluator reads. -/
-theorem deliveryKey_residual_sub {α : Type} {R : Type u}
+theorem deliveryKey_residual_sub {α : Type uA} {R : Type u}
     (q : Evidence.ResultEvidence α → R)
     {w v : WorldFuture.World α} (hobs : WorldFuture.observe w = WorldFuture.observe v)
     (hpool : WorldFuture.pool w = WorldFuture.pool v) (r : R) :
@@ -782,7 +784,7 @@ theorem deliveryKey_residual_sub {α : Type} {R : Type u}
 **every** evaluator that reads only the materialized state, which includes
 `WorldFuture.renderW`. Two worlds agreeing on both may still differ (in their
 epoch), and no such difference is visible to any answer delivery can produce. -/
-theorem deliveryKey_sufficient {α : Type} {R : Type u}
+theorem deliveryKey_sufficient {α : Type uA} {R : Type u}
     (q : Evidence.ResultEvidence α → R) :
     SufficientKey (deliveryKey (α := α)) (fun w => q (WorldFuture.observe w))
       WorldFuture.DeliveryFuture := by
@@ -793,7 +795,7 @@ theorem deliveryKey_sufficient {α : Type} {R : Type u}
     deliveryKey_residual_sub q hobs.symm hpool.symm r⟩
 
 /-- The delivery key is sufficient for the rendered view. -/
-theorem deliveryKey_sufficient_render {α : Type} :
+theorem deliveryKey_sufficient_render {α : Type uA} :
     SufficientKey (deliveryKey (α := α)) (WorldFuture.renderW (α := α))
       WorldFuture.DeliveryFuture :=
   deliveryKey_sufficient Evidence.render
@@ -832,7 +834,7 @@ key.
 delivery futures at all, so its residual is empty while a wellformed world's is
 a singleton. This is `WorldFuture.renderW_not_canonical`'s carrier junk showing
 up again, in the key vocabulary. -/
-theorem epoch_sufficient_on_wellformed {α : Type} :
+theorem epoch_sufficient_on_wellformed {α : Type uA} :
     SufficientKeyOn (WorldFuture.Wf (α := α)) (fun w => w.epoch) (fun w => w.epoch)
       WorldFuture.DeliveryFuture := by
   intro w v hw hv hk r
@@ -858,7 +860,7 @@ insufficiency of the *same* key on two different domains. Both are re-derived
 here from §4's machinery. -/
 
 /-- The worlds a base reaches, through a placement. -/
-def reachedWorlds {α V : Type} (B : HistoryBase.BasedWorld α V) (b : V) :
+def reachedWorlds {α : Type uA} {V : Type uV} (B : HistoryBase.BasedWorld α V) (b : V) :
     WorldFuture.World α → Prop :=
   fun w => ∃ v, Reaches B.dag b v ∧ B.world v = w
 
@@ -866,7 +868,7 @@ def reachedWorlds {α V : Type} (B : HistoryBase.BasedWorld α V) (b : V) :
 scope.** The general theorem: pin the certificate to the key of one honestly
 verified world, and every version in scope that carries that key inherits the
 licence. `HistoryBase.stateKeyed_sound_at_its_base` is the instance below. -/
-theorem basedCertSound_of_sufficientKeyOn {α V : Type} {K : Type u}
+theorem basedCertSound_of_sufficientKeyOn {α : Type uA} {V : Type uV} {K : Type u}
     (B : HistoryBase.BasedWorld α V) (b : V) (κ : WorldFuture.World α → K)
     (hsuf : SufficientKeyOn (reachedWorlds B b) κ (WorldFuture.renderW (α := α))
       WorldFuture.DeliveryFuture)
@@ -1174,10 +1176,10 @@ certificate verdicts, and §8.3 proves the two columns are independent. -/
 /-! ### §8.1 Keys -/
 
 /-- Quiescence, read as a key. -/
-def quiescedKey {α : Type} (w : WorldFuture.World α) : Prop := WorldFuture.Quiesced w
+def quiescedKey {α : Type uA} (w : WorldFuture.World α) : Prop := WorldFuture.Quiesced w
 
 /-- Closure of the observation, read as a key. -/
-def closedKey {α : Type} (w : WorldFuture.World α) : Prop :=
+def closedKey {α : Type uA} (w : WorldFuture.World α) : Prop :=
   Evidence.Closed (WorldFuture.observe w)
 
 /-- Both quiesced worlds carry the same quiescence key. -/
@@ -1235,7 +1237,7 @@ theorem the_key_table :
 /-- **`Evidence.Closed` licenses the VALUE evaluator under delivery.**
 `Evidence.closed_freezes` is the whole proof: a closed evidence's candidate set
 cannot move, so the values cannot. -/
-theorem closed_licenses_the_values {α : Type} {w : WorldFuture.World α}
+theorem closed_licenses_the_values {α : Type uA} {w : WorldFuture.World α}
     (h : Evidence.Closed (WorldFuture.observe w)) :
     Evidence.FreeTermination WorldFuture.DeliveryFuture
       (fun u => Evidence.values (WorldFuture.observe u)) w := by
@@ -1278,7 +1280,7 @@ roster is the present roster, so the delivery projects to an
 
 The conjunction is sharp at the named boundary: closure alone is refuted by
 `closed_is_not_a_sound_delivery_certificate`. -/
-theorem closed_and_rosterKnown_licenses_render {α : Type}
+theorem closed_and_rosterKnown_licenses_render {α : Type uA}
     {w : WorldFuture.World α}
     (hc : Evidence.Closed (WorldFuture.observe w))
     (hr : WorldFuture.RosterKnown w) :
@@ -1299,14 +1301,14 @@ theorem closed_and_rosterKnown_licenses_render {α : Type}
 
 /-- Values are monotone in the evidence order — the missing half of the `Stable`
 bridge below. -/
-theorem values_mono {α : Type} {s t : Evidence.ResultEvidence α} (h : s ⊑ t) :
+theorem values_mono {α : Type uA} {s t : Evidence.ResultEvidence α} (h : s ⊑ t) :
     Evidence.values s ⊑ Evidence.values t := by
   refine (Holes.gset_leq_iff_subset _ _).mpr (fun a ha => ?_)
   obtain ⟨o, ho⟩ := (Evidence.mem_values s a).mp ha
   exact (Evidence.mem_values t a).mpr ⟨o, Evidence.candidates_grow h ho⟩
 
 /-- What may still arrive at a world, as a `Holes.Arriving` predicate. -/
-noncomputable def arriving {α : Type} (w : WorldFuture.World α) :
+noncomputable def arriving {α : Type uA} (w : WorldFuture.World α) :
     Holes.Partial α → Prop :=
   fun Q => ∃ v, WorldFuture.DeliveryFuture w v ∧ Q = Evidence.values (WorldFuture.observe v)
 
@@ -1316,7 +1318,7 @@ from a real closure as unbuilt; this discharges it for *one* concrete
 `Arriving` — the deliveries of a world — by an iff rather than an implication.
 ⟨UNDONE⟩ It says nothing about an Era cut, which is the instance `Holes.lean`
 was reaching for. -/
-theorem stable_iff_freeTermination_values {α : Type} (w : WorldFuture.World α) :
+theorem stable_iff_freeTermination_values {α : Type uA} (w : WorldFuture.World α) :
     Holes.Stable (arriving w) (Evidence.values (WorldFuture.observe w))
       ↔ Evidence.FreeTermination WorldFuture.DeliveryFuture
           (fun u => Evidence.values (WorldFuture.observe u)) w := by
@@ -1381,7 +1383,7 @@ this library actually has *is* reusable, filed under the sufficient key of §5.2
 and under nothing coarser. Together with `no_sound_state_cert_accepts_openW_via_
 keys`: keyed by `(observe, pool)` the verification travels; keyed by `observe`
 alone it is prohibited from ever being made. -/
-theorem quiesced_factors_through_the_delivery_key {α : Type}
+theorem quiesced_factors_through_the_delivery_key {α : Type uA}
     (w v : WorldFuture.World α) (h : deliveryKey w = deliveryKey v) :
     WorldFuture.Quiesced w ↔ WorldFuture.Quiesced v := by
   have hobs : WorldFuture.observe w = WorldFuture.observe v := congrArg Prod.fst h

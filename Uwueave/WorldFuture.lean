@@ -228,6 +228,8 @@ namespace Uwueave.WorldFuture
 
 open Uwueave Uwueave.Catalog
 
+universe u v
+
 /-! ## §1. The world — the materialized state, and the context it sits in.
 
 A `World` is what a replica **is**, as opposed to what it **holds**. It holds
@@ -253,7 +255,7 @@ below what exists to be materialized. -/
 /-- **A world.** The materialized state, plus the context that state was
 materialized in. ⚠ Not `Holes.World`, which is a candidate valuation — see the
 header. -/
-structure World (α : Type) where
+structure World (α : Type u) where
   /-- What the replica has materialized: delivered candidates, frontier, held
   certificates. This is exactly `Evidence.lean`'s carrier. -/
   state : Evidence.ResultEvidence α
@@ -269,44 +271,44 @@ structure World (α : Type) where
 /-- **The projection.** What a replica can read off itself: its materialized
 state, and nothing about the world it is in. Every state-level notion in
 `Evidence.lean` is a notion about this value. -/
-def observe {α : Type} (w : World α) : Evidence.ResultEvidence α := w.state
+def observe {α : Type u} (w : World α) : Evidence.ResultEvidence α := w.state
 
 /-- **The pool**: the three issuance bounds, collected into the same shape as
 the state so that "below what exists" is one `⊑`. -/
-def pool {α : Type} (w : World α) : Evidence.ResultEvidence α :=
+def pool {α : Type u} (w : World α) : Evidence.ResultEvidence α :=
   (w.issued, w.roster, w.sealed)
 
 /-- The events this replica has delivered — `Evidence.candidates` of the
 materialized state, renamed to say what it is at this carrier. -/
-abbrev delivered {α : Type} (w : World α) : GSet (α × Evidence.Source) :=
+abbrev delivered {α : Type u} (w : World α) : GSet (α × Evidence.Source) :=
   Evidence.candidates (observe w)
 
 /-- The frontier: sources this replica is still owed. `Evidence.obligations`. -/
-abbrev frontier {α : Type} (w : World α) : GSet Evidence.Source :=
+abbrev frontier {α : Type u} (w : World α) : GSet Evidence.Source :=
   Evidence.obligations (observe w)
 
 /-- The certificates in hand. `Evidence.certificates`. -/
-abbrev held {α : Type} (w : World α) : GSet Evidence.Source :=
+abbrev held {α : Type u} (w : World α) : GSet Evidence.Source :=
   Evidence.certificates (observe w)
 
 /-- **Wellformed**: what has been materialized is below what exists to be
 materialized — delivered ⊆ issued, frontier ⊆ roster, held ⊆ sealed, in one
 componentwise `⊑`. Carried as a hypothesis, not an invariant (see boundary). -/
-def Wf {α : Type} (w : World α) : Prop := observe w ⊑ pool w
+def Wf {α : Type u} (w : World α) : Prop := observe w ⊑ pool w
 
 /-- **Quiesced**: the state *is* the pool. Everything issued has been
 delivered, the whole roster is known, every seal is in hand. This is the
 hypothesis `Evidence.lean` writes as "taken as its own pool", here a fact about
 the world — and §3 exhibits a world with the same state where it is false. -/
-def Quiesced {α : Type} (w : World α) : Prop := observe w = pool w
+def Quiesced {α : Type u} (w : World α) : Prop := observe w = pool w
 
 /-- **The replica has heard the whole roster.** The converse inclusion to
 `Wf`'s middle component: every accepted source is already an obligation, so no
 member can appear as *news*. This is what `Evidence.SealedFuture`'s membership
 clause needs, and at the world level it is a fact about the **roster**. -/
-def RosterKnown {α : Type} (w : World α) : Prop := w.roster ⊑ frontier w
+def RosterKnown {α : Type u} (w : World α) : Prop := w.roster ⊑ frontier w
 
-theorem wf_of_quiesced {α : Type} {w : World α} (h : Quiesced w) : Wf w := by
+theorem wf_of_quiesced {α : Type u} {w : World α} (h : Quiesced w) : Wf w := by
   rw [Wf, h]
   exact leq_refl _
 
@@ -330,7 +332,7 @@ appears`: that retraction is a **roster growth**. -/
 
 /-- **The delivery future.** Only already-issued evidence arrives; the context
 is frozen. The pool is `pool w` — read off the world, not handed in. -/
-def DeliveryFuture {α : Type} (w v : World α) : Prop :=
+def DeliveryFuture {α : Type u} (w v : World α) : Prop :=
   Evidence.DeliveryFuture (pool w) (observe w) (observe v)
     ∧ pool v = pool w
     ∧ v.epoch = w.epoch
@@ -338,7 +340,7 @@ def DeliveryFuture {α : Type} (w v : World α) : Prop :=
 /-- **The extension future.** New application events, new roster members and
 new seals are all permitted — the pool may grow — and the future world is
 itself wellformed. A seal that is genuinely new costs an epoch advance. -/
-def ExtensionFuture {α : Type} (w v : World α) : Prop :=
+def ExtensionFuture {α : Type u} (w v : World α) : Prop :=
   Evidence.ExtensionFuture (observe w) (observe v)
     ∧ pool w ⊑ pool v
     ∧ observe v ⊑ pool v
@@ -349,13 +351,13 @@ def ExtensionFuture {α : Type} (w v : World α) : Prop :=
 a replica that has already heard the whole roster. Both clauses are roster
 facts, and together they are exactly what `Evidence.SealedFuture` asks for
 (`sealed_projects`). -/
-def SealedFuture {α : Type} (w v : World α) : Prop :=
+def SealedFuture {α : Type u} (w v : World α) : Prop :=
   ExtensionFuture w v ∧ v.roster ⊑ w.roster ∧ RosterKnown w
 
 /-- Every delivery future is an extension future — the containment survives the
 move to worlds, because "the context did not move" implies "the context only
 grew". The seal clause is vacuous: a frozen pool seals nothing new. -/
-theorem delivery_is_extension {α : Type} {w v : World α} (h : DeliveryFuture w v) :
+theorem delivery_is_extension {α : Type u} {w v : World α} (h : DeliveryFuture w v) :
     ExtensionFuture w v := by
   obtain ⟨hd, hp, he⟩ := h
   refine ⟨⟨hd.1, hd.2.2⟩, ?_, ?_, Nat.le_of_eq he.symm, ?_⟩
@@ -370,7 +372,7 @@ theorem delivery_is_extension {α : Type} {w v : World α} (h : DeliveryFuture w
 arrived" is a delivery. This is what keeps every `FreeTermination` statement
 below from being an empty quantifier: the relation it ranges over is inhabited
 wherever wellformedness holds. -/
-theorem delivery_refl {α : Type} {w : World α} (h : Wf w) : DeliveryFuture w w :=
+theorem delivery_refl {α : Type u} {w : World α} (h : Wf w) : DeliveryFuture w w :=
   ⟨⟨leq_refl _, h, Evidence.admits_refl _⟩, rfl, rfl⟩
 
 /-- **A closure costs an epoch.** An extension future that does not advance the
@@ -378,7 +380,7 @@ producer's epoch holds no certificate for a source that was not already sealed
 — so `Evidence.Closed` is never earned by delivery, and never by application
 writes; it is bought from the arbiter, and the epoch counter is the receipt.
 This is `Era.lean`'s discipline at this carrier: only the arbiter finalises. -/
-theorem no_closure_within_an_epoch {α : Type} {w v : World α}
+theorem no_closure_within_an_epoch {α : Type u} {w v : World α}
     (h : ExtensionFuture w v) (hep : v.epoch = w.epoch) {o : Evidence.Source}
     (h0 : w.sealed o = false) : held v o = false := by
   cases hv : v.sealed o with
@@ -396,11 +398,11 @@ theorem no_closure_within_an_epoch {α : Type} {w v : World α}
 
 /-- The delivery future projects to `Evidence.DeliveryFuture` **at the pool the
 world names** — definitionally, since that is how it was built. -/
-theorem delivery_projects {α : Type} {w v : World α} (h : DeliveryFuture w v) :
+theorem delivery_projects {α : Type u} {w v : World α} (h : DeliveryFuture w v) :
     Evidence.DeliveryFuture (pool w) (observe w) (observe v) := h.1
 
 /-- The extension future projects to `Evidence.ExtensionFuture`. -/
-theorem extension_projects {α : Type} {w v : World α} (h : ExtensionFuture w v) :
+theorem extension_projects {α : Type u} {w v : World α} (h : ExtensionFuture w v) :
     Evidence.ExtensionFuture (observe w) (observe v) := h.1
 
 /-- **The sealed future projects too** — and this is the one that needs a proof
@@ -409,7 +411,7 @@ appears that was not already there; at the world level that is the chain
 *frontier of `v`* ⊆ *roster of `v`* ⊆ *roster of `w`* ⊆ *frontier of `w`*,
 whose three links are wellformedness of the future world, the closed roster,
 and `RosterKnown`. Membership closure is a roster fact. -/
-theorem sealed_projects {α : Type} {w v : World α} (h : SealedFuture w v) :
+theorem sealed_projects {α : Type u} {w v : World α} (h : SealedFuture w v) :
     Evidence.SealedFuture (observe w) (observe v) := by
   refine ⟨h.1.1, fun o ho => ?_⟩
   have h1 : frontier v ⊑ w.roster :=
@@ -419,7 +421,7 @@ theorem sealed_projects {α : Type} {w v : World α} (h : SealedFuture w v) :
 /-- **Stability under extension implies stability under delivery**, at the
 world level — `Evidence.extension_stable_implies_delivery_stable` transported,
 by the same one-line argument over the new containment. -/
-theorem extension_stable_implies_delivery_stable {α β : Type} {q : World α → β}
+theorem extension_stable_implies_delivery_stable {α : Type u} {β : Type v} {q : World α → β}
     {w : World α} (h : Evidence.FreeTermination ExtensionFuture q w) :
     Evidence.FreeTermination DeliveryFuture q w :=
   fun v hv => h v (delivery_is_extension hv)
@@ -432,7 +434,7 @@ observation is the one in hand.
 ⚠ Read the quantifier: `q` factors through `observe`. A query that reads the
 *world* — "has bob issued anything?" — is not covered and is not stable, which
 is the point of §3. -/
-theorem quiesced_freeTermination {α β : Type}
+theorem quiesced_freeTermination {α : Type u} {β : Type v}
     (q : Evidence.ResultEvidence α → β) {w : World α} (hq : Quiesced w) :
     Evidence.FreeTermination DeliveryFuture (fun v => q (observe v)) w := by
   intro v hv
@@ -443,10 +445,10 @@ theorem quiesced_freeTermination {α β : Type}
 
 /-- The rendered view of a world: `Evidence.render` of what it has
 materialized. Noncomputable for `render`'s reason. -/
-noncomputable def renderW {α : Type} (w : World α) : Evidence.View α :=
+noncomputable def renderW {α : Type u} (w : World α) : Evidence.View α :=
   Evidence.render (observe w)
 
-theorem quiesced_render_stable {α : Type} {w : World α} (hq : Quiesced w) :
+theorem quiesced_render_stable {α : Type u} {w : World α} (hq : Quiesced w) :
     Evidence.FreeTermination DeliveryFuture (renderW (α := α)) w := by
   intro v hv
   exact quiesced_freeTermination Evidence.render hq v hv
@@ -635,7 +637,7 @@ below rather than asserted. -/
 /-- **The state-level delivery relation is the image of the world-level one**,
 at each fixed pool. Forward: the pool becomes the world's context. Backward:
 projection. -/
-theorem delivery_image {α : Type} (p s t : Evidence.ResultEvidence α) :
+theorem delivery_image {α : Type u} (p s t : Evidence.ResultEvidence α) :
     Evidence.DeliveryFuture p s t
       ↔ ∃ w v : World α,
           pool w = p ∧ observe w = s ∧ observe v = t ∧ DeliveryFuture w v := by
@@ -653,7 +655,7 @@ level cannot see a pool: in its whole image, the pool is the state.
 
 (The epochs are `0` and `1` because the construction must be free to seal, and
 sealing costs an advance — `no_closure_within_an_epoch`.) -/
-theorem extension_image {α : Type} (s t : Evidence.ResultEvidence α) :
+theorem extension_image {α : Type u} (s t : Evidence.ResultEvidence α) :
     Evidence.ExtensionFuture s t
       ↔ ∃ w v : World α, observe w = s ∧ observe v = t
           ∧ Quiesced w ∧ Quiesced v ∧ ExtensionFuture w v := by
@@ -670,7 +672,7 @@ theorem extension_image {α : Type} (s t : Evidence.ResultEvidence α) :
 sealed future of worlds projects to a sealed future of states
 (`sealed_projects`). This is `Evidence.SoundEvaluator` — a general definition
 over any `Future S` — instantiated at `S := World α`. -/
-theorem renderW_sound {α : Type} :
+theorem renderW_sound {α : Type u} :
     Evidence.SoundEvaluator (SealedFuture (α := α))
       (fun w => Evidence.values (observe w)) (renderW (α := α)) where
   correct := fun w v h => Evidence.render_sound.correct (observe w) v h
@@ -711,7 +713,7 @@ theorem no_exact_at_wPending : ¬ ∃ v, renderW wPending = Evidence.View.exact 
 
 /-- **`Evidence.exact_sound` at the world carrier**, likewise free: an exact
 report survives every sealed future of the world it was made in. -/
-theorem exact_survives_sealed_futures {α : Type} {w u : World α} {v : α}
+theorem exact_survives_sealed_futures {α : Type u} {w u : World α} {v : α}
     (hv : renderW w = Evidence.View.exact v) (hf : SealedFuture w u) :
     Evidence.values (observe u) v = true
       ∧ Holes.SealsTo (Evidence.values (observe u)) v :=
@@ -732,7 +734,7 @@ sealed future of the *state*, a wellformed world with a known roster has a
 sealed future observing it. So the world-level relation is not artificially
 small: nothing about completeness leaks away in the move to worlds, and what
 is left is only the ill-formed carrier junk below. -/
-theorem sealed_future_realized {α : Type} {w : World α}
+theorem sealed_future_realized {α : Type u} {w : World α}
     (hwf : Wf w) (hrk : RosterKnown w) {t : Evidence.ResultEvidence α}
     (h : Evidence.SealedFuture (observe w) t) :
     ∃ u : World α, observe u = t ∧ SealedFuture w u := by
@@ -838,27 +840,27 @@ The pair below is the payoff:
     that produced it was correct where it was made**. -/
 
 /-- A certificate indexed by the materialized state. -/
-def StateCert (α : Type) : Type := Evidence.ResultEvidence α → Prop
+def StateCert (α : Type u) : Type u := Evidence.ResultEvidence α → Prop
 
 /-- A certificate indexed by the world. -/
-def WorldCert (α : Type) : Type := World α → Prop
+def WorldCert (α : Type u) : Type u := World α → Prop
 
 /-- **Sound**, for a state-indexed certificate: every world whose observation
 it accepts really has a delivery-stable rendered answer. The quantifier over
 worlds is the reuse. -/
-def StateCertSound {α : Type} (C : StateCert α) : Prop :=
+def StateCertSound {α : Type u} (C : StateCert α) : Prop :=
   ∀ w : World α, C (observe w) →
     Evidence.FreeTermination DeliveryFuture (renderW (α := α)) w
 
 /-- **Sound**, for a world-indexed certificate. Same conclusion, and the
 premise may read the world. -/
-def WorldCertSound {α : Type} (C : WorldCert α) : Prop :=
+def WorldCertSound {α : Type u} (C : WorldCert α) : Prop :=
   ∀ w : World α, C w →
     Evidence.FreeTermination DeliveryFuture (renderW (α := α)) w
 
 /-- **Quiescence is a sound certificate** — a real one, discharged for a real
 world (`quiesced_wQuiesced`), not an empty class. -/
-theorem quiescence_is_a_sound_certificate {α : Type} :
+theorem quiescence_is_a_sound_certificate {α : Type u} :
     WorldCertSound (fun w : World α => Quiesced w) :=
   fun _ h => quiesced_render_stable h
 
