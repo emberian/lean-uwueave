@@ -106,6 +106,7 @@ import Uwueave.WorldFuture
 import Uwueave.Temporal
 import Uwueave.MinimalSummary
 import Uwueave.ContextCompiler
+import Uwueave.FiniteSummaryCodec
 import Uwueave.Repair
 import Uwueave.MergeModel
 import Uwueave.ResultStatus
@@ -117,6 +118,7 @@ import Uwueave.Histories
 import Uwueave.FiniteHistory
 import Uwueave.HistoryEngine
 import Uwueave.HistoryRuntime
+import Uwueave.FiniteHistoryGrowth
 import Uwueave.TextSummary
 import Uwueave.LiveBudget
 import Uwueave.EraCertificate
@@ -153,6 +155,7 @@ import Uwueave.Durable
 import Uwueave.PersistentRuntime
 import Uwueave.PersistentHistoryRuntime
 import Uwueave.FiniteHistoryDelivery
+import Uwueave.FiniteHistoryProtocol
 import Uwueave.EvidenceGraph
 import Uwueave.Preo.Future
 import Uwueave.Preo.ArtifactData
@@ -204,6 +207,8 @@ import Uwueave.Preo.Quickstart
 import Uwueave.StatusSemanticsAcceptance
 import Uwueave.RepairSynthesis
 import Uwueave.FiniteRepairMenu
+import Uwueave.FiniteProductSearch
+import Uwueave.FiniteProductClosure
 import Uwueave.FiniteCertificateClassifier
 import Uwueave.BoundedEraAnnouncement
 import Uwueave.RuntimeAuthV4
