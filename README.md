@@ -271,7 +271,7 @@ is a bigger, real schema that deliberately contains one.
   replays in prefix order. Storage itself still performs none of those checks;
   unpinned reopen is inspection-only, the policy traits and verifier are trusted
   host code, and neither the external pin nor filesystem durability is proved.
-  The focused authenticated runtime/projection suite passes **10/10** end-to-end
+  The focused authenticated runtime/projection suite passes **11/11** end-to-end
   tests. The final serialized `CARGO_BUILD_JOBS=1 cargo test --all-targets --
   --test-threads=1` gate passes **177/177** tests in
   **125.72s real** (**10.49s** compilation, **35.60s user**, **37.86s sys**,

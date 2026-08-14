@@ -1671,7 +1671,7 @@ index agreement, independent authority and membership, concrete Lean replay,
 durable append, and only then in-memory commit. Definite storage refusal is
 distinct from indeterminate I/O. Externally pinned recovery repeats projection,
 verification, every policy stage and complete-record comparison in prefix
-order. The focused end-to-end suite passes **10/10**. These stages have
+order. The focused end-to-end suite passes **11/11**. These stages have
 correctness/refusal tests, but no admission-latency,
 throughput, isolated-memory, crash, or recovery-scaling benchmark is claimed.
 

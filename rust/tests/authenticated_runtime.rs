@@ -23,9 +23,9 @@ use uwueave::auth_runtime::{
     RuntimeConstructionError, RuntimeRecoveryError, RuntimeScope, StableIdResolver,
 };
 use uwueave::auth_verifier::{
-    compute_keyed_blake3_mac, InMemoryKeyRegistry, KeyedBlake3Key, KeyedBlake3Verifier,
-    RequestVerifier, VerificationAcceptance, VerificationInput, VerificationRefusal,
-    KEYED_BLAKE3_ALGORITHM,
+    compute_keyed_blake3_mac, InMemoryKeyRegistry, KeyedBlake3Binding, KeyedBlake3Key,
+    KeyedBlake3Verifier, RequestVerifier, VerificationAcceptance, VerificationInput,
+    VerificationRefusal, KEYED_BLAKE3_ALGORITHM,
 };
 use uwueave::persistence::{
     AuthenticatedMoveJournal, JournalOptions, RecoveryExpectation, SyncPolicy, TornTailPolicy,
@@ -33,6 +33,7 @@ use uwueave::persistence::{
 use uwueave::{CausalWeave, Grant, MoveLog, MoveOp, NodeId};
 
 const CONTEXT: &[u8] = &[30, 31];
+const REVOKED_CONTEXT: &[u8] = &[32, 33];
 const DOCUMENT: &[u8] = &[1, 2];
 const GENESIS: &[u8] = &[3, 4];
 const ISSUER: u64 = 17;
@@ -73,7 +74,48 @@ fn key() -> KeyedBlake3Key {
 
 fn verifier() -> KeyedBlake3Verifier<InMemoryKeyRegistry> {
     let mut registry = InMemoryKeyRegistry::new();
-    registry.insert_key(CONTEXT, DOCUMENT, GENESIS, ISSUER, EPOCH, key());
+    registry
+        .insert_snapshot(
+            CONTEXT,
+            DOCUMENT,
+            GENESIS,
+            [KeyedBlake3Binding::active(ISSUER, EPOCH, key())],
+        )
+        .unwrap();
+    KeyedBlake3Verifier::new(registry)
+}
+
+fn verifier_with_revoked_successor() -> KeyedBlake3Verifier<InMemoryKeyRegistry> {
+    let mut registry = InMemoryKeyRegistry::new();
+    registry
+        .insert_snapshot(
+            CONTEXT,
+            DOCUMENT,
+            GENESIS,
+            [KeyedBlake3Binding::active(ISSUER, EPOCH, key())],
+        )
+        .unwrap();
+    registry
+        .insert_snapshot(
+            REVOKED_CONTEXT,
+            DOCUMENT,
+            GENESIS,
+            [KeyedBlake3Binding::revoked(ISSUER, EPOCH)],
+        )
+        .unwrap();
+    KeyedBlake3Verifier::new(registry)
+}
+
+fn verifier_with_only_revoked_successor() -> KeyedBlake3Verifier<InMemoryKeyRegistry> {
+    let mut registry = InMemoryKeyRegistry::new();
+    registry
+        .insert_snapshot(
+            REVOKED_CONTEXT,
+            DOCUMENT,
+            GENESIS,
+            [KeyedBlake3Binding::revoked(ISSUER, EPOCH)],
+        )
+        .unwrap();
     KeyedBlake3Verifier::new(registry)
 }
 
@@ -628,6 +670,123 @@ fn runtime_appends_exact_bytes_before_ack_then_retry_skips_all_later_stages() {
     )
     .expect("pinned recovery revalidates exact historical record");
     assert_eq!(recovered.execution().log().len(), 1);
+}
+
+#[test]
+fn revoked_successor_context_does_not_invalidate_historical_recovery() {
+    let fixture = keyed_fixture("base");
+    let (mut runtime, harness) = ordinary_runtime("historical-key-recovery");
+    admitted(runtime.admit(fixture.canonical_request.len(), &fixture.canonical_request));
+    let expectation = runtime.journal().recovery_expectation();
+    drop(runtime);
+
+    let reopened =
+        AuthenticatedMoveJournal::open_pinned(&harness.temp.0, options(1 << 20), expectation)
+            .unwrap();
+    let (execution, substrate) = execution_and_substrate();
+    let historical_scope = RuntimeScope {
+        document: DOCUMENT.to_vec(),
+        genesis: GENESIS.to_vec(),
+        context_commitment: CONTEXT.to_vec(),
+        execution_binding: execution.base_binding(),
+    };
+    let recovered = AuthenticatedRuntime::recover(
+        fixture.canonical_request.len(),
+        historical_scope,
+        verifier_with_revoked_successor(),
+        TestContextProvider {
+            mode: Ok(()),
+            substrate,
+        },
+        TestResolver {
+            index_delta: 0,
+            mode: Ok(()),
+        },
+        TestAuthority {
+            mode: PolicyMode::Permit,
+            calls: Rc::new(Cell::new(0)),
+        },
+        TestMembership {
+            mode: PolicyMode::Permit,
+            calls: Rc::new(Cell::new(0)),
+        },
+        execution,
+        reopened,
+    )
+    .expect("the active historical snapshot remains available after successor revocation");
+    assert_eq!(recovered.execution().log().len(), 1);
+    drop(recovered);
+
+    let reopened_without_history =
+        AuthenticatedMoveJournal::open_pinned(&harness.temp.0, options(1 << 20), expectation)
+            .unwrap();
+    let (execution_without_history, substrate_without_history) = execution_and_substrate();
+    let historical_scope_without_history = RuntimeScope {
+        document: DOCUMENT.to_vec(),
+        genesis: GENESIS.to_vec(),
+        context_commitment: CONTEXT.to_vec(),
+        execution_binding: execution_without_history.base_binding(),
+    };
+    assert!(matches!(
+        AuthenticatedRuntime::recover(
+            fixture.canonical_request.len(),
+            historical_scope_without_history,
+            verifier_with_only_revoked_successor(),
+            TestContextProvider {
+                mode: Ok(()),
+                substrate: substrate_without_history,
+            },
+            TestResolver {
+                index_delta: 0,
+                mode: Ok(()),
+            },
+            TestAuthority {
+                mode: PolicyMode::Permit,
+                calls: Rc::new(Cell::new(0)),
+            },
+            TestMembership {
+                mode: PolicyMode::Permit,
+                calls: Rc::new(Cell::new(0)),
+            },
+            execution_without_history,
+            reopened_without_history,
+        ),
+        Err(RuntimeRecoveryError::Refused {
+            sequence: 0,
+            reason: AdmissionRefusal::Verification(VerificationRefusal::UnknownContext),
+        })
+    ));
+
+    let revoked_request = keyed_fixture("other_context");
+    let (runtime, _revoked_harness) = ordinary_runtime("revoked-successor");
+    let (mut scope, _, contexts, resolver, authority, membership, execution, journal) =
+        runtime.into_parts();
+    scope.context_commitment = REVOKED_CONTEXT.to_vec();
+    let mut revoked_runtime = AuthenticatedRuntime::new(
+        scope,
+        verifier_with_revoked_successor(),
+        contexts,
+        resolver,
+        authority,
+        membership,
+        execution,
+        journal,
+    )
+    .unwrap();
+    assert!(matches!(
+        revoked_runtime.admit(
+            revoked_request.canonical_request.len(),
+            &revoked_request.canonical_request,
+        ),
+        AdmissionOutcome::Refused(AdmissionRefusal::Verification(
+            VerificationRefusal::RevokedKey {
+                issuer: ISSUER,
+                key_epoch: EPOCH,
+            }
+        ))
+    ));
+    assert!(revoked_runtime.journal().records().is_empty());
+    assert!(revoked_runtime.execution().log().is_empty());
 }
 
 #[test]

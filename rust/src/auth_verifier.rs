@@ -231,8 +231,53 @@ impl<R: KeyRegistry + ?Sized> KeyRegistry for &R {
     }
 }
 
+/// One keyed-BLAKE3 binding in an immutable context snapshot.
+pub struct KeyedBlake3Binding {
+    pub issuer: u64,
+    pub key_epoch: u64,
+    pub state: KeyedBlake3KeyState,
+}
+
+impl KeyedBlake3Binding {
+    pub fn active(issuer: u64, key_epoch: u64, key: KeyedBlake3Key) -> Self {
+        Self {
+            issuer,
+            key_epoch,
+            state: KeyedBlake3KeyState::Active(key),
+        }
+    }
+
+    pub fn revoked(issuer: u64, key_epoch: u64) -> Self {
+        Self {
+            issuer,
+            key_epoch,
+            state: KeyedBlake3KeyState::Revoked,
+        }
+    }
+}
+
+/// Key state as observed in exactly one immutable context snapshot.
+pub enum KeyedBlake3KeyState {
+    Active(KeyedBlake3Key),
+    Revoked,
+}
+
+/// Refusal to install an immutable key snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeySnapshotInsertRefusal {
+    EmptyContext,
+    DuplicateContext,
+    DuplicateBinding { issuer: u64, key_epoch: u64 },
+}
+
 /// A deterministic process-local registry suitable for embedded deployments
-/// and tests. Durable key lifecycle remains a deployment responsibility.
+/// and tests.
+///
+/// Each context commitment is installed atomically and at most once. Rotation
+/// or revocation therefore creates a distinct context snapshot; it never
+/// mutates the historical key state used to reverify an older admission.
+/// Authenticating and durably retaining the snapshots remains a deployment
+/// responsibility.
 #[derive(Default)]
 pub struct InMemoryKeyRegistry {
     contexts: BTreeMap<
@@ -251,50 +296,45 @@ impl InMemoryKeyRegistry {
         Self::default()
     }
 
-    /// Insert or replace one epoch with an active key.
-    pub fn insert_key(
+    /// Atomically install every keyed-BLAKE3 binding for one new context.
+    ///
+    /// A context commitment is a global snapshot identity here: reusing it,
+    /// even with another document or genesis, is refused. Duplicate
+    /// `(issuer, key_epoch)` bindings refuse the entire insertion.
+    pub fn insert_snapshot(
         &mut self,
         context_commitment: &[u8],
         document: &[u8],
         genesis: &[u8],
-        issuer: u64,
-        key_epoch: u64,
-        key: KeyedBlake3Key,
-    ) {
-        self.contexts
-            .entry(context_commitment.to_vec())
-            .or_default()
-            .entry(document.to_vec())
-            .or_default()
-            .entry(genesis.to_vec())
-            .or_default()
-            .entry(issuer)
-            .or_default()
-            .insert(key_epoch, StoredKey::Active(key));
-    }
+        bindings: impl IntoIterator<Item = KeyedBlake3Binding>,
+    ) -> Result<(), KeySnapshotInsertRefusal> {
+        if context_commitment.is_empty() {
+            return Err(KeySnapshotInsertRefusal::EmptyContext);
+        }
+        if self.contexts.contains_key(context_commitment) {
+            return Err(KeySnapshotInsertRefusal::DuplicateContext);
+        }
 
-    /// Revoke an existing epoch. Returns `false` when that exact epoch is not
-    /// present; it does not create a synthetic issuer or epoch.
-    pub fn revoke_key(
-        &mut self,
-        context_commitment: &[u8],
-        document: &[u8],
-        genesis: &[u8],
-        issuer: u64,
-        key_epoch: u64,
-    ) -> bool {
-        let Some(key) = self
-            .contexts
-            .get_mut(context_commitment)
-            .and_then(|documents| documents.get_mut(document))
-            .and_then(|geneses| geneses.get_mut(genesis))
-            .and_then(|issuers| issuers.get_mut(&issuer))
-            .and_then(|epochs| epochs.get_mut(&key_epoch))
-        else {
-            return false;
-        };
-        *key = StoredKey::Revoked;
-        true
+        let mut issuers = BTreeMap::<u64, BTreeMap<u64, StoredKey>>::new();
+        for binding in bindings {
+            let epochs = issuers.entry(binding.issuer).or_default();
+            if epochs.contains_key(&binding.key_epoch) {
+                return Err(KeySnapshotInsertRefusal::DuplicateBinding {
+                    issuer: binding.issuer,
+                    key_epoch: binding.key_epoch,
+                });
+            }
+            let stored = match binding.state {
+                KeyedBlake3KeyState::Active(key) => StoredKey::Active(key),
+                KeyedBlake3KeyState::Revoked => StoredKey::Revoked,
+            };
+            epochs.insert(binding.key_epoch, stored);
+        }
+
+        let geneses = BTreeMap::from([(genesis.to_vec(), issuers)]);
+        let documents = BTreeMap::from([(document.to_vec(), geneses)]);
+        self.contexts.insert(context_commitment.to_vec(), documents);
+        Ok(())
     }
 }
 
@@ -426,6 +466,7 @@ mod tests {
     const EPOCH: u64 = 2;
     const KEY: KeyedBlake3Key = KeyedBlake3Key::from_bytes([7; blake3::KEY_LEN]);
     const CONTEXT: &[u8] = b"immutable-admission-context";
+    const REVOKED_CONTEXT: &[u8] = b"revoked-admission-context";
     const DOCUMENT: &[u8] = b"document-a";
     const GENESIS: &[u8] = b"genesis-a";
     // The verifier treats the message as opaque; callers own domain
@@ -493,7 +534,14 @@ mod tests {
 
     fn active_registry() -> InMemoryKeyRegistry {
         let mut registry = InMemoryKeyRegistry::new();
-        registry.insert_key(CONTEXT, DOCUMENT, GENESIS, ISSUER, EPOCH, KEY.clone());
+        registry
+            .insert_snapshot(
+                CONTEXT,
+                DOCUMENT,
+                GENESIS,
+                [KeyedBlake3Binding::active(ISSUER, EPOCH, KEY.clone())],
+            )
+            .unwrap();
         registry
     }
 
@@ -546,7 +594,14 @@ mod tests {
     fn unknown_issuer_and_epoch_are_distinct() {
         let signature = compute_keyed_blake3_mac(&KEY, SIGNING_BYTES);
         let mut registry = InMemoryKeyRegistry::new();
-        registry.insert_key(CONTEXT, DOCUMENT, GENESIS, ISSUER + 1, EPOCH, KEY.clone());
+        registry
+            .insert_snapshot(
+                CONTEXT,
+                DOCUMENT,
+                GENESIS,
+                [KeyedBlake3Binding::active(ISSUER + 1, EPOCH, KEY.clone())],
+            )
+            .unwrap();
         let verifier = KeyedBlake3Verifier::new(registry);
         assert_eq!(
             verifier.verify(input(&signature)),
@@ -554,7 +609,14 @@ mod tests {
         );
 
         let mut registry = InMemoryKeyRegistry::new();
-        registry.insert_key(CONTEXT, DOCUMENT, GENESIS, ISSUER, EPOCH + 1, KEY.clone());
+        registry
+            .insert_snapshot(
+                CONTEXT,
+                DOCUMENT,
+                GENESIS,
+                [KeyedBlake3Binding::active(ISSUER, EPOCH + 1, KEY.clone())],
+            )
+            .unwrap();
         assert_eq!(
             KeyedBlake3Verifier::new(registry).verify(input(&signature)),
             Err(VerificationRefusal::UnknownKeyEpoch {
@@ -593,17 +655,104 @@ mod tests {
     }
 
     #[test]
-    fn revoked_key_and_unavailable_registry_fail_closed() {
+    fn revocation_uses_a_new_context_and_preserves_historical_acceptance() {
         let signature = compute_keyed_blake3_mac(&KEY, SIGNING_BYTES);
         let mut registry = active_registry();
-        assert!(registry.revoke_key(CONTEXT, DOCUMENT, GENESIS, ISSUER, EPOCH));
+        registry
+            .insert_snapshot(
+                REVOKED_CONTEXT,
+                DOCUMENT,
+                GENESIS,
+                [KeyedBlake3Binding::revoked(ISSUER, EPOCH)],
+            )
+            .unwrap();
+        let verifier = KeyedBlake3Verifier::new(registry);
+
+        verifier
+            .verify(input(&signature))
+            .expect("old context retains its active historical key");
         assert_eq!(
-            KeyedBlake3Verifier::new(registry).verify(input(&signature)),
+            verifier.verify(VerificationInput {
+                context_commitment: REVOKED_CONTEXT,
+                ..input(&signature)
+            }),
             Err(VerificationRefusal::RevokedKey {
                 issuer: ISSUER,
                 key_epoch: EPOCH,
             })
         );
+    }
+
+    #[test]
+    fn snapshots_are_insert_once_and_duplicate_bindings_are_atomic() {
+        let mut registry = active_registry();
+        assert_eq!(
+            registry.insert_snapshot(
+                CONTEXT,
+                b"another-document",
+                GENESIS,
+                [KeyedBlake3Binding::revoked(ISSUER, EPOCH)],
+            ),
+            Err(KeySnapshotInsertRefusal::DuplicateContext)
+        );
+        assert_eq!(
+            registry.insert_snapshot(
+                CONTEXT,
+                DOCUMENT,
+                b"another-genesis",
+                [KeyedBlake3Binding::revoked(ISSUER, EPOCH)],
+            ),
+            Err(KeySnapshotInsertRefusal::DuplicateContext)
+        );
+        assert_eq!(
+            registry.insert_snapshot(
+                CONTEXT,
+                DOCUMENT,
+                GENESIS,
+                [KeyedBlake3Binding::revoked(ISSUER, EPOCH)],
+            ),
+            Err(KeySnapshotInsertRefusal::DuplicateContext)
+        );
+
+        let duplicate_context = b"duplicate-binding-context";
+        assert_eq!(
+            registry.insert_snapshot(
+                duplicate_context,
+                DOCUMENT,
+                GENESIS,
+                [
+                    KeyedBlake3Binding::active(ISSUER, EPOCH, KEY.clone()),
+                    KeyedBlake3Binding::revoked(ISSUER, EPOCH),
+                ],
+            ),
+            Err(KeySnapshotInsertRefusal::DuplicateBinding {
+                issuer: ISSUER,
+                key_epoch: EPOCH,
+            })
+        );
+        assert!(matches!(
+            registry.lookup_keyed_blake3(duplicate_context, DOCUMENT, GENESIS, ISSUER, EPOCH,),
+            Err(KeyLookupRefusal::UnknownContext)
+        ));
+        assert_eq!(
+            registry.insert_snapshot(
+                &[],
+                DOCUMENT,
+                GENESIS,
+                [KeyedBlake3Binding::revoked(ISSUER, EPOCH)],
+            ),
+            Err(KeySnapshotInsertRefusal::EmptyContext)
+        );
+
+        let signature = compute_keyed_blake3_mac(&KEY, SIGNING_BYTES);
+        KeyedBlake3Verifier::new(registry)
+            .verify(input(&signature))
+            .expect("refused snapshot insertions cannot replace the original active binding");
+    }
+
+    #[test]
+    fn unavailable_registry_fails_closed() {
+        let signature = compute_keyed_blake3_mac(&KEY, SIGNING_BYTES);
 
         struct Unavailable;
         impl KeyRegistry for Unavailable {

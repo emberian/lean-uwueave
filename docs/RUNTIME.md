@@ -637,7 +637,7 @@ committing that move to the isolated recovery execution state. Any refusal,
 unavailable dependency, projection error, or field mismatch prevents a ready
 runtime.
 
-This is an executable host composition boundary, exercised by **10/10 focused
+This is an executable host composition boundary, exercised by **11/11 focused
 end-to-end tests**, not a formal end-to-end authentication theorem.
 The final serialized all-target checkpoint passed **177/177** in **125.72s
 real** after **10.49s** compilation; the runtime target accounted for
@@ -912,7 +912,7 @@ and `AuthenticatedRuntime` now form the exact raw-only order documented in
 §5.2. One `RuntimeScope` fixes document, genesis, context and the concrete Lean
 execution base. Recovery requires an external pin and revalidates the complete
 historical prefix before it yields a ready runtime. The focused suite is
-**10/10 green**. The remaining work here is stronger
+**11/11 green**. The remaining work here is stronger
 evidence: exhaustive adversarial runtime tests, formal refinement of the host
 composition to the Lean layered model, production policy implementations and
 their historical-data/key lifecycles, a filesystem/crash model, and a
