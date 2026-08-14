@@ -1,17 +1,27 @@
 # Debt registry schema v1
 
-This directory is reserved for the stable-ID debt registry. The Lean source
-tree has not been migrated yet, so `active.jsonl` and `closed/` receipts are
-deliberately absent and the normal repository check is deliberately disabled.
-The current read-only report is:
+This directory contains the active stable-ID debt registry. Its immutable
+baseline is commit
+`6331af269f80c25c26775299b4678c29b45716cc`, the first commit containing the
+fully classified `active.jsonl`. The normal repository gate is:
 
 ```sh
-scripts/debt-gate.py audit
+scripts/debt-gate.py check \
+  --base 6331af269f80c25c26775299b4678c29b45716cc \
+  --milestone v0.2
 ```
 
-Do not enable `check` in CI until a separately reviewed mechanical migration
-has assigned every source marker an ID and the guarded bootstrap has produced a
-fully reviewed registry.
+That baseline SHA is source-controlled and is the same for pull requests,
+branch pushes, and tags; it is never selected from an event-provided base or
+parent revision. It must remain an exact ancestor. Do not squash, rebase,
+amend, or cherry-pick the baseline under a new identity after a descendant
+names it. CI uses a full-history checkout so the gate can inspect every
+post-baseline commit.
+
+A green registry check is not a release claim. The `v0.2` milestone forbids
+unclassified rows, but it does not forbid P0/P1 obligations, establish the
+semantic relevance of runnable closure evidence, discharge external trust
+premises, authenticate GitHub refs, or verify release signatures and artifacts.
 
 ## Source grammar
 
@@ -143,11 +153,12 @@ committed descendant on an ancestry path from the base to `HEAD`, checks each
 parent transition, carries the historical maximum forward, and rejects an ID
 or receipt that disappeared, changed, or was reused in an intermediate commit.
 
-## Guarded initial bootstrap
+## Guarded initial bootstrap (completed)
 
-Bootstrap never edits Lean, assigns IDs, or overwrites a registry. First land a
-reviewed marker-only migration. At that checked-out, non-shallow `HEAD`, with
-the worktree source tree unchanged from the commit, run:
+Bootstrap never edits Lean, assigns IDs, or overwrites a registry. The initial
+migration first landed reviewed marker IDs. At that checked-out, non-shallow
+`HEAD`, with the worktree source tree unchanged from the commit, the registry
+was created with:
 
 ```sh
 scripts/debt-gate.py bootstrap \
@@ -156,7 +167,7 @@ scripts/debt-gate.py bootstrap \
   --allow-bootstrap
 ```
 
-The resolved base must equal `HEAD` and be an ancestor of it. The command
+The resolved bootstrap base had to equal `HEAD` and be an ancestor of it. The command
 rejects shallow history, any registry or receipt in the base/worktree or any
 reachable prior commit, a zero-marker census, any legacy/malformed marker or
 mixed raw `UNDONE` word, any
@@ -164,8 +175,8 @@ symlink, and any difference in either the complete Lean source snapshot or the
 canonical `(id, label, source, marker_sha256)` set. It writes by temporary
 file, flush, `fsync`, and atomic rename; any failure leaves no registry.
 
-Bootstrap and triage form one uncommitted local transaction. Initial `UNDONE`
-rows are deliberately `unclassified`; review and classify all rows, including
-severity and acceptance for obligations, before committing `active.jsonl` or
-enabling the normal gate. The first committed registry is the immutable
-baseline—there is no post-baseline mutation loophole.
+Bootstrap and triage formed one uncommitted local transaction. Initial `UNDONE`
+rows were deliberately `unclassified`; every row, including severity and
+acceptance for obligations, was reviewed before `active.jsonl` was committed.
+The first committed registry is the immutable baseline named above—there is no
+post-baseline mutation loophole, and bootstrap cannot be rerun over it.

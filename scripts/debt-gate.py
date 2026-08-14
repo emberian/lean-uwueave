@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Validate Uwueave's stable-ID debt registry and immutable closure receipts.
 
-The production tree has not been migrated to this registry yet.  ``audit`` is
-therefore the only command intended for the current checkout.  ``check`` is
-the post-migration, base-aware gate, and ``bootstrap`` is deliberately guarded
-so it cannot silently bless an accidental partial migration.
+The production registry is active from immutable baseline commit
+6331af269f80c25c26775299b4678c29b45716cc.  ``check`` validates the current
+tree and every committed descendant on the ancestry path from that baseline;
+the baseline must therefore remain an exact ancestor and must never be
+squashed, rebased, amended, or cherry-picked under a different identity.
+``audit`` remains a diagnostic report, while ``bootstrap`` is deliberately
+guarded and cannot be rerun over existing registry history.
 """
 
 from __future__ import annotations

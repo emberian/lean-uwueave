@@ -29,11 +29,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Metadata, debt, census, and mocked hbox gates
+      - name: Install checksum-pinned elan and repository Lean toolchain
         env:
-          # Temporary exact hash of the four line-anchor shifts documented in
-          # RELEASE.md. Remove this after the marker-reconciliation commit.
-          UWUEAVE_V02_ALLOW_STALE_CENSUS_SHA256: 18e175d00d2ae3f1e32a20439da5b34981c434f0b278f4b56ae009513af8bed8
+          ELAN_HOME: ${{ runner.temp }}/uwueave-elan
+        run: scripts/install-pinned-elan.sh
+
+      - name: Metadata, debt, census, and mocked hbox gates
         run: scripts/v02-policy.sh
 
   lean-acceptance:
