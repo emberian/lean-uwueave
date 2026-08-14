@@ -4,8 +4,8 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 114
-- **Extracted blocks (marker-bearing source lines):** 112
+- **Marker occurrences:** 113
+- **Extracted blocks (marker-bearing source lines):** 111
 - **Lean files containing markers:** 36
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
@@ -349,20 +349,6 @@ rather than reworded.
     v3 and `Exec.Op` carry no issuer, key epoch or signature lane, so no theorem
     authenticates the request reaching the kernel; no concrete EUF-CMA proof is
     present. The gate bounds what a cited grant can DO, not who may cite it.
-````
-
-### [`Uwueave/Gated.lean:126`](../Uwueave/Gated.lean#L126)
-
-````text
-    audits it.** ⟨UNDONE U-0054 — and the sharpest remaining seam⟩ The gate decides
-    against the grants and revocations *the caller marshalled*. A caller that
-    omits a revocation it has seen gets a more permissive answer, and nothing
-    in Lean can tell: `replay`'s theorems quantify over the decoded arrays,
-    not over what the replica knows. The Rust side sends its whole grow-only
-    substrate (`rust/src/movelog.rs`), which is a claim about a Rust program,
-    i.e. test evidence. Closing this means the request committing to the
-    substrate it was built from — a digest the caller cannot vary per call —
-    and that is unbuilt.
 ````
 
 ### [`Uwueave/Gated.lean:158`](../Uwueave/Gated.lean#L158)

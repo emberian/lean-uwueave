@@ -122,16 +122,16 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     that ADDS an override. Any UI reading status `3` as "one fewer move
     happened" is wrong; what holds is that no unauthorised op is replayed,
     and that de-authorisation is forever (`Exec.gated_unauthorised_is_forever`).
-  * **The substrate travels in the request; the kernel neither fetches nor
-    audits it.** ⟨UNDONE U-0054 — and the sharpest remaining seam⟩ The gate decides
-    against the grants and revocations *the caller marshalled*. A caller that
-    omits a revocation it has seen gets a more permissive answer, and nothing
-    in Lean can tell: `replay`'s theorems quantify over the decoded arrays,
-    not over what the replica knows. The Rust side sends its whole grow-only
-    substrate (`rust/src/movelog.rs`), which is a claim about a Rust program,
-    i.e. test evidence. Closing this means the request committing to the
-    substrate it was built from — a digest the caller cannot vary per call —
-    and that is unbuilt.
+  * **The shipping boundary binds the caller-variable substrate.** FORMAT-v4
+    signs an opaque context commitment. `AuthenticatedRuntime` fixes that
+    commitment with the document, genesis and an execution binding, rechecks
+    the provider's pinned snapshot, and recomputes the live execution binding.
+    That domain-separated digest frames the ordered topology, grants and
+    revocations; pinned recovery repeats the checks and exact-compares the
+    reconstructed admission with the stored record. This is implementation
+    evidence, not proof of provider honesty: same-commitment immutability and
+    historical availability, digest collision resistance, and external-pin
+    custody remain deployment premises.
   * **Scope is a `Nat` ceiling on node ids — and in the kernel, on node
     INDICES.** ⟨SCOPE U-0055⟩ Enough to make covering decidable and the theorems
     honest, and now enough to make the kernel's coverage check one
