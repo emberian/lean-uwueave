@@ -30,6 +30,7 @@ const REQUIRED_KERNELS: [&str; 6] = [
     "Uwueave.RuntimeAuthV4AdmissionTraceKernel",
 ];
 const LEDGER2_MANIFEST: &str = "docs/trust/ledger2-v1.json";
+const ABI_DESCRIPTOR: &str = "rust/abi/uwueave-abi-v1.json";
 const LEDGER2_OBSERVATION_ENV: &str = "UWUEAVE_LEDGER2_OBSERVATION_OUT";
 const SUPPORTED_TARGETS: [&str; 2] = ["aarch64-apple-darwin", "x86_64-unknown-linux-gnu"];
 
@@ -289,6 +290,7 @@ fn emit_rerun_inputs(repo: &Path, manifest: &Path) {
         repo.join("lake-manifest.json"),
         repo.join("lean-toolchain"),
         repo.join(LEDGER2_MANIFEST),
+        repo.join(ABI_DESCRIPTOR),
         manifest.join("shim.c"),
         manifest.join("build.rs"),
         manifest.join("Cargo.toml"),
@@ -312,6 +314,7 @@ fn snapshot_inputs(repo: &Path) -> Result<SourceSnapshot, String> {
         repo.join("lake-manifest.json"),
         repo.join("lean-toolchain"),
         repo.join(LEDGER2_MANIFEST),
+        repo.join(ABI_DESCRIPTOR),
         repo.join("rust/shim.c"),
         repo.join("rust/build.rs"),
         repo.join("rust/Cargo.toml"),

@@ -1,5 +1,6 @@
 /.lake/
 /rust/target/
+__pycache__
 
 # `FORCODEX.md` and `CODEXHELP.md` used to be listed here. They are the codex
 # correspondence, and 29 references in 12 tracked files point into them —

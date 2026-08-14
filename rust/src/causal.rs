@@ -143,7 +143,10 @@ pub enum MergeError {
     IdCollision(NodeId),
     /// The other store contains a node whose parent it does not contain —
     /// it was not causally closed, i.e. not produced by this API.
-    NotCausallyClosed { node: NodeId, missing_parent: NodeId },
+    NotCausallyClosed {
+        node: NodeId,
+        missing_parent: NodeId,
+    },
 }
 
 impl fmt::Display for InsertError {
@@ -204,7 +207,11 @@ pub struct CausalWeave<T> {
 
 impl<T: AsRef<[u8]> + Clone + PartialEq> CausalWeave<T> {
     pub fn new() -> Self {
-        Self { nodes: BTreeMap::new(), children: BTreeMap::new(), roots: BTreeSet::new() }
+        Self {
+            nodes: BTreeMap::new(),
+            children: BTreeMap::new(),
+            roots: BTreeSet::new(),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -244,7 +251,12 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> CausalWeave<T> {
             // Same parents + same bytes ⇒ same node: idempotent re-insert.
             return Ok(id);
         }
-        self.index_node(CausalNode { id, parents, rank, contents });
+        self.index_node(CausalNode {
+            id,
+            parents,
+            rank,
+            contents,
+        });
         Ok(id)
     }
 
@@ -296,9 +308,12 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> CausalWeave<T> {
     /// API cannot construct a violation, which is the point).
     pub fn grounded(&self) -> bool {
         self.nodes.values().all(|n| {
-            n.parents
-                .iter()
-                .all(|p| self.nodes.get(p).map(|pn| pn.rank < n.rank).unwrap_or(false))
+            n.parents.iter().all(|p| {
+                self.nodes
+                    .get(p)
+                    .map(|pn| pn.rank < n.rank)
+                    .unwrap_or(false)
+            })
         })
     }
 }
@@ -356,7 +371,10 @@ mod tests {
     fn lean_witness_cycle_pair_unrepresentable() {
         let mut w: CausalWeave<Vec<u8>> = CausalWeave::new();
         let ghost = [7u8; 32];
-        assert_eq!(w.insert(vec![ghost], b"child of nothing".to_vec()), Err(InsertError::MissingParent(ghost)));
+        assert_eq!(
+            w.insert(vec![ghost], b"child of nothing".to_vec()),
+            Err(InsertError::MissingParent(ghost))
+        );
     }
 
     /// Merge is commutative, associative, idempotent on the id-keyset

@@ -135,6 +135,34 @@ jobs:
       - name: Frozen all-target native suite
         run: cargo test --manifest-path rust/Cargo.toml --frozen --all-targets
 
+      - name: UndefinedBehaviorSanitizer C-shim ownership integration
+        env:
+          UWUEAVE_LINKER_ENV: ${{ matrix.linker_env }}
+          UWUEAVE_SANITIZER_TARGET_DIR: ${{ runner.temp }}/uwueave-ubsan-${{ matrix.target }}
+        run: |
+          sanitizer_cc=$(command -v clang)
+          test -n "$sanitizer_cc"
+          export "$UWUEAVE_LINKER_ENV=$sanitizer_cc"
+          case "$RUNNER_OS" in
+            Linux)
+              sanitizer_link_flags="-C link-arg=-fsanitize=undefined,bounds"
+              ;;
+            macOS)
+              sanitizer_runtime=$($sanitizer_cc -print-file-name=libclang_rt.ubsan_osx_dynamic.dylib)
+              test -f "$sanitizer_runtime"
+              sanitizer_runtime_dir=$(dirname "$sanitizer_runtime")
+              sanitizer_link_flags="-C link-arg=-fsanitize=undefined,bounds -C link-arg=$sanitizer_runtime -C link-arg=-Wl,-rpath,$sanitizer_runtime_dir"
+              ;;
+            *) exit 2 ;;
+          esac
+          CC="$sanitizer_cc" \
+          CFLAGS="-fsanitize=undefined,bounds -fno-sanitize-recover=all -fno-omit-frame-pointer" \
+          RUSTFLAGS="$sanitizer_link_flags" \
+          CARGO_TARGET_DIR="$UWUEAVE_SANITIZER_TARGET_DIR" \
+          UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" \
+            cargo test --manifest-path rust/Cargo.toml --frozen --lib \
+              ffi::tests::shim_allocation_copy_and_refcount_paths -- --exact
+
       - name: Validate and retain native Ledger-2 observation
         env:
           UWUEAVE_NATIVE_TARGET: ${{ matrix.target }}
@@ -145,4 +173,6 @@ jobs:
           python3 scripts/ledger2-gate.py observation \
             --expect-target "$UWUEAVE_NATIVE_TARGET" \
             "$UWUEAVE_LEDGER2_OBSERVATION_PATH"
+          python3 scripts/abi-gate.py native \
+            --observation "$UWUEAVE_LEDGER2_OBSERVATION_PATH"
           python3 -m json.tool "$UWUEAVE_LEDGER2_OBSERVATION_PATH"

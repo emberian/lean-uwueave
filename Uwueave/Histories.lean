@@ -9,10 +9,14 @@ that we had been quoting `Ancestral.clash_dichotomy` past that scope: it is
 proved for *a supplied common ancestor, one operation per branch, one
 fork-and-join*, and it establishes nothing about repeated merging, merge-base
 selection, criss-cross histories, or convergence over a version DAG.
-`Ancestral.lean`'s own §"Honest scope" and `MergeModel.lean`'s last ⟨UNDONE U-0059⟩ say
-the same thing in the other direction ("Repeated/criss-cross merging needs Kaki
-et al.'s further conditions and gets no verdict here"). The flag was right. This
-file is the frontier it named.
+`Ancestral.lean`'s own §"Honest scope" and `MergeModel.lean`'s canonical U-0109
+say the same thing in the other direction
+("Repeated/criss-cross merging needs Kaki et al.'s further conditions and gets
+no verdict here"). ⟨DONE U-0059, historical duplicate retired⟩ This file keeps
+the repeated-history counterexamples, while downstream `FiniteHistoryProtocol`
+proves conditional convergence for finite settled delivery under a faithful
+record image and record-determined selector. Unrestricted repeated-history
+operational convergence remains exactly U-0109.
 
 ## The four verdicts, up front
 
@@ -143,7 +147,8 @@ replaced.
 
 ## Non-claims
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0060⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ marks a theorem of this model; the bullets below are explicit
+caveats, not open obligations by themselves.
 
   * ⟨TERMINAL⟩ **The negative is a counterexample, not an impossibility.** §5
     exhibits one merge (the counter MRDT) and one history where repeated merging

@@ -106,25 +106,49 @@ impl EraEvent {
     /// `join(actor)` — any user may join; the first joiner becomes Admin,
     /// later joiners Readers (Era §1, op 1).
     pub fn join(eid: u64, actor: u64) -> Self {
-        Self { eid, kind: 0, actor, target: actor, role: 0 }
+        Self {
+            eid,
+            kind: 0,
+            actor,
+            target: actor,
+            role: 0,
+        }
     }
 
     /// `write(actor)` — requires Writer or Admin; no effect on roles.
     pub fn write(eid: u64, actor: u64) -> Self {
-        Self { eid, kind: 1, actor, target: actor, role: 0 }
+        Self {
+            eid,
+            kind: 1,
+            actor,
+            target: actor,
+            role: 0,
+        }
     }
 
     /// `promote(actor, target, role)` — actor must be Admin and the move
     /// must strictly raise the target.
     pub fn promote(eid: u64, actor: u64, target: u64, role: EraRole) -> Self {
-        Self { eid, kind: 2, actor, target, role: role.code() }
+        Self {
+            eid,
+            kind: 2,
+            actor,
+            target,
+            role: role.code(),
+        }
     }
 
     /// `demote(actor, target, role)` — actor must be Admin and the move must
     /// strictly lower the target (self-demotion is valid; demotion to
     /// Outsider is expulsion).
     pub fn demote(eid: u64, actor: u64, target: u64, role: EraRole) -> Self {
-        Self { eid, kind: 3, actor, target, role: role.code() }
+        Self {
+            eid,
+            kind: 3,
+            actor,
+            target,
+            role: role.code(),
+        }
     }
 }
 
@@ -330,8 +354,10 @@ impl EraGroup {
             out.len() >= 24 && out.len() % 8 == 0,
             "kernel response is not ERA format v1 (short or ragged)"
         );
-        let resp: Vec<u64> =
-            out.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect();
+        let resp: Vec<u64> = out
+            .chunks_exact(8)
+            .map(|c| u64::from_le_bytes(c.try_into().unwrap()))
+            .collect();
         let started = match resp[0] {
             0 => false,
             1 => true,
@@ -363,7 +389,11 @@ impl EraGroup {
             };
             statuses.push((eid, status));
         }
-        EraResolution { started, roles, statuses }
+        EraResolution {
+            started,
+            roles,
+            statuses,
+        }
     }
 }
 
@@ -416,14 +446,21 @@ mod tests {
         ab.merge(&b).unwrap();
         let mut ba = b.clone();
         ba.merge(&a).unwrap();
-        assert_ne!(ab, ba, "transport orders differ — the agreement below is the theorem");
+        assert_ne!(
+            ab, ba,
+            "transport orders differ — the agreement below is the theorem"
+        );
         let rab = ab.resolve();
         let rba = ba.resolve();
         assert_eq!(rab, rba, "both merge directions resolve identically");
 
         assert!(rab.started);
         assert_eq!(rab.roles.get(&ALICE), Some(&EraRole::Admin), "one survivor");
-        assert_eq!(rab.roles.get(&BOB), Some(&EraRole::Reader), "the other demoted");
+        assert_eq!(
+            rab.roles.get(&BOB),
+            Some(&EraRole::Reader),
+            "the other demoted"
+        );
     }
 
     /// `Era.duel_finalised_verdict` and the epoch-3 example: the arbiter
@@ -445,7 +482,11 @@ mod tests {
         // e5 executes first, and the verdict flips.
         g.record_cut(2, 5);
         let flipped = g.resolve();
-        assert_eq!(flipped.roles.get(&ALICE), Some(&EraRole::Reader), "survivor flipped");
+        assert_eq!(
+            flipped.roles.get(&ALICE),
+            Some(&EraRole::Reader),
+            "survivor flipped"
+        );
         assert_eq!(flipped.roles.get(&BOB), Some(&EraRole::Admin));
 
         // The epoch-3 example: e4 finalised too, but later — epoch order
@@ -484,7 +525,11 @@ mod tests {
             ],
             "execution order with the two ✗ marks named"
         );
-        assert_eq!(r.roles.get(&CAROL), Some(&EraRole::Outsider), "named, never admitted");
+        assert_eq!(
+            r.roles.get(&CAROL),
+            Some(&EraRole::Outsider),
+            "named, never admitted"
+        );
     }
 
     /// Merge laws at the two honest levels: idempotence is structural
@@ -514,7 +559,11 @@ mod tests {
         ab.merge(&b).unwrap();
         let mut ba = b.clone();
         ba.merge(&a).unwrap();
-        assert_eq!(ab.resolve(), ba.resolve(), "merge commutes at the resolution");
+        assert_eq!(
+            ab.resolve(),
+            ba.resolve(),
+            "merge commutes at the resolution"
+        );
 
         let mut abb = ab.clone();
         abb.merge(&b).unwrap();

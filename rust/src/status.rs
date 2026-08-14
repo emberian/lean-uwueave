@@ -234,7 +234,11 @@ impl<T: Ord + Clone> Evidence<T> {
 
     /// Every source that attributed the given value.
     pub fn sources_for(&self, value: &T) -> Vec<Source> {
-        self.candidates.iter().filter(|(v, _)| v == value).map(|(_, o)| *o).collect()
+        self.candidates
+            .iter()
+            .filter(|(v, _)| v == value)
+            .map(|(_, o)| *o)
+            .collect()
     }
 
     /// The sources that have actually spoken: contributed a candidate, or
@@ -252,13 +256,19 @@ impl<T: Ord + Clone> Evidence<T> {
     /// `Evidence.closed_iconfluent` is why this half survives a merge while the
     /// value half does not.
     pub fn is_closed(&self) -> bool {
-        self.obligations.iter().all(|o| self.certificates.contains(o))
+        self.obligations
+            .iter()
+            .all(|o| self.certificates.contains(o))
     }
 
     /// The sources that are owed and not yet certified — what a `Pending` cell
     /// is waiting for.
     pub fn open_sources(&self) -> Vec<Source> {
-        self.obligations.iter().copied().filter(|o| !self.certificates.contains(o)).collect()
+        self.obligations
+            .iter()
+            .copied()
+            .filter(|o| !self.certificates.contains(o))
+            .collect()
     }
 
     /// **The give-up state**: certify every source still owed.
@@ -270,7 +280,8 @@ impl<T: Ord + Clone> Evidence<T> {
     /// recorded as silent.
     pub fn seal_all(&self) -> Self {
         let mut out = self.clone();
-        out.certificates.extend(out.obligations.iter().copied().collect::<Vec<_>>());
+        out.certificates
+            .extend(out.obligations.iter().copied().collect::<Vec<_>>());
         out
     }
 
@@ -286,9 +297,11 @@ impl<T: Ord + Clone> Evidence<T> {
     ///
     /// Lean: `Evidence.Admits`.
     pub fn admits(&self, other: &Self) -> bool {
-        other.candidates.iter().filter(|p| !self.candidates.contains(p)).all(|(_, o)| {
-            self.obligations.contains(o) && !self.certificates.contains(o)
-        })
+        other
+            .candidates
+            .iter()
+            .filter(|p| !self.candidates.contains(p))
+            .all(|(_, o)| self.obligations.contains(o) && !self.certificates.contains(o))
     }
 
     /// **The extension future**: a monotone step respecting the certificates
@@ -977,7 +990,10 @@ impl<T: Ord + Clone + 'static> Policy<T> {
         Policy {
             name,
             select: Box::new(move |e: &Evidence<T>| {
-                e.candidates().iter().find(|(_, o)| *o == source).map(|(v, _)| v.clone())
+                e.candidates()
+                    .iter()
+                    .find(|(_, o)| *o == source)
+                    .map(|(v, _)| v.clone())
             }),
         }
     }
@@ -1054,7 +1070,10 @@ pub fn count_from_evidence<T: Ord + Clone>(e: &Evidence<T>) -> usize {
 /// peer is still owed. So the closure structure is inherited from the mention
 /// evidence and the candidate appears only once [`Evidence::heard_from`] is
 /// non-empty.
-pub fn count_position<T: Ord + Clone>(mentions: &Evidence<T>, derived_by: Source) -> Evidence<usize> {
+pub fn count_position<T: Ord + Clone>(
+    mentions: &Evidence<T>,
+    derived_by: Source,
+) -> Evidence<usize> {
     let mut out = Evidence::from_parts(
         Vec::new(),
         mentions.obligations().iter().copied(),
@@ -1133,7 +1152,10 @@ mod tests {
             status_of(&forked_closed_w()),
             Status::ForkedClosed(vec![(47, ALICE), (49, BOB)])
         );
-        assert_eq!(status_of(&open_fork_w()), Status::ForkedOpen(vec![(47, ALICE), (49, BOB)]));
+        assert_eq!(
+            status_of(&open_fork_w()),
+            Status::ForkedOpen(vec![(47, ALICE), (49, BOB)])
+        );
         assert_eq!(status_of(&empty_closed_w()), Status::Absent);
         assert_eq!(status_of(&empty_open_w()), Status::Pending);
         // …and all six tags are distinct: ResultStatus.status_ne_of_tag.
@@ -1155,7 +1177,8 @@ mod tests {
     // fork, because `values` forgets the attribution. The fork is a
     // disagreement about the value, never about who spoke.
     fn agreement_between_two_sources_is_exact_not_forked() {
-        let e: Evidence<u64> = Evidence::from_parts([(47, ALICE), (47, BOB)], [ALICE, BOB], [ALICE, BOB]);
+        let e: Evidence<u64> =
+            Evidence::from_parts([(47, ALICE), (47, BOB)], [ALICE, BOB], [ALICE, BOB]);
         assert_eq!(status_of(&e), Status::Exact(47));
     }
 
@@ -1182,7 +1205,11 @@ mod tests {
     fn sixth_cell_is_distinguishable() {
         let closed = empty_closed_w();
         let open = empty_open_w();
-        assert_eq!(closed.values(), open.values(), "same candidate set — both empty");
+        assert_eq!(
+            closed.values(),
+            open.values(),
+            "same candidate set — both empty"
+        );
 
         // the fold cannot tell them apart
         assert_eq!(forget(status_of(&closed)), View::Vacuous);
@@ -1197,7 +1224,10 @@ mod tests {
         assert_eq!(status_of(&sealed), Status::Absent);
         // …and the open one does not survive even one.
         let spoke = bob_spoke_w();
-        assert!(open.seals_to(&spoke), "bob is owed and uncertified, so his arrival is sealed");
+        assert!(
+            open.seals_to(&spoke),
+            "bob is owed and uncertified, so his arrival is sealed"
+        );
         assert_eq!(status_of(&spoke), Status::Provisional(47));
         assert_ne!(status_of(&spoke), status_of(&open));
     }
@@ -1228,8 +1258,15 @@ mod tests {
     fn absence_survives_values_not_closure() {
         let closed = empty_closed_w();
         let widened = empty_open_w();
-        assert_eq!(closed.candidates(), widened.candidates(), "identical candidate sets");
-        assert!(closed.extends_to(&widened), "a roster growth is an extension future");
+        assert_eq!(
+            closed.candidates(),
+            widened.candidates(),
+            "identical candidate sets"
+        );
+        assert!(
+            closed.extends_to(&widened),
+            "a roster growth is an extension future"
+        );
         assert!(!closed.seals_to(&widened), "…and is NOT a sealed one");
         assert_eq!(status_of(&closed), Status::Absent);
         assert_eq!(status_of(&widened), Status::Pending);
@@ -1245,7 +1282,11 @@ mod tests {
         let widened = open_w();
         assert!(exact.extends_to(&widened));
         assert_eq!(status_of(&exact), Status::Exact(47));
-        assert_eq!(status_of(&widened), Status::Provisional(47), "the exact report was retracted");
+        assert_eq!(
+            status_of(&widened),
+            Status::Provisional(47),
+            "the exact report was retracted"
+        );
 
         // absent, under every SEALED future: unmoved
         let absent = empty_closed_w();
@@ -1269,8 +1310,14 @@ mod tests {
         let mut wider = e.clone();
         wider.owe(CAROL);
         wider.observe(50, CAROL);
-        assert!(e.extends_to(&wider) || e.leq(&wider), "growth is monotone either way");
-        assert!(wider.any_candidate(is49), "grow-only sets never lose a witness they already have");
+        assert!(
+            e.extends_to(&wider) || e.leq(&wider),
+            "growth is monotone either way"
+        );
+        assert!(
+            wider.any_candidate(is49),
+            "grow-only sets never lose a witness they already have"
+        );
     }
 
     #[test]
@@ -1284,7 +1331,10 @@ mod tests {
         assert!(e.obligations().contains(&BOB) && !e.certificates().contains(&BOB));
         let mut t = e.clone();
         t.observe(49, BOB);
-        assert!(e.seals_to(&t), "an arrival from an owed, uncertified source is sealed");
+        assert!(
+            e.seals_to(&t),
+            "an arrival from an owed, uncertified source is sealed"
+        );
         assert!(t.any_candidate(is49), "the answer flipped");
     }
 
@@ -1298,7 +1348,10 @@ mod tests {
         // Every sealed future of a closed evidence admits no new candidate.
         let mut attempt = e.clone();
         attempt.observe(51, BOB);
-        assert!(!e.admits(&attempt), "BOB is certified, so nothing more may arrive from him");
+        assert!(
+            !e.admits(&attempt),
+            "BOB is certified, so nothing more may arrive from him"
+        );
         assert!(!e.seals_to(&attempt));
         // and the sealed futures that DO exist leave the values alone
         let sealed = e.seal_all();
@@ -1317,7 +1370,10 @@ mod tests {
         assert_eq!(a.obligations(), b.obligations());
         assert_eq!(a.certificates(), b.certificates());
         let is49 = |v: &u64| *v == 49;
-        assert!(!a.any_candidate(is49), "openW does not hold 49 — retractable");
+        assert!(
+            !a.any_candidate(is49),
+            "openW does not hold 49 — retractable"
+        );
         assert!(b.any_candidate(is49), "openForkW holds 49 — immovable");
         // …so there is no closure fact separating them, because there is none.
     }
@@ -1330,11 +1386,18 @@ mod tests {
     fn finality_is_not_a_function_of_the_closure_structure() {
         let a = open_w();
         let b = open_fork_w();
-        let closure_key =
-            |e: &Evidence<u64>| (e.obligations().clone(), e.certificates().clone());
-        assert_eq!(closure_key(&a), closure_key(&b), "the entire closure structure agrees");
+        let closure_key = |e: &Evidence<u64>| (e.obligations().clone(), e.certificates().clone());
+        assert_eq!(
+            closure_key(&a),
+            closure_key(&b),
+            "the entire closure structure agrees"
+        );
         let is49 = |v: &u64| *v == 49;
-        assert_ne!(a.any_candidate(is49), b.any_candidate(is49), "and the truth does not");
+        assert_ne!(
+            a.any_candidate(is49),
+            b.any_candidate(is49),
+            "and the truth does not"
+        );
     }
 
     #[test]
@@ -1346,7 +1409,10 @@ mod tests {
         let is49 = |v: &u64| *v == 49;
         let all_final = reach.iter().all(|e| e.any_candidate(is49));
         let none_final = reach.iter().all(|e| !e.any_candidate(is49));
-        assert!(!all_final && !none_final, "no constant finality verdict describes this reach set");
+        assert!(
+            !all_final && !none_final,
+            "no constant finality verdict describes this reach set"
+        );
     }
 
     // -- §2. the declaration is relative to the reach -----------------------
@@ -1359,7 +1425,11 @@ mod tests {
     fn declaration_is_relative_to_the_reach() {
         // `mayPend`: one value, possibly still pending, never a fork — what
         // `derive verdict : Claim` means when nobody writes a modality.
-        let may_pend = Capability { may_be_empty: false, may_open: true, may_fork: false };
+        let may_pend = Capability {
+            may_be_empty: false,
+            may_open: true,
+            may_fork: false,
+        };
         let settled = [exact_w(), open_w()];
         let with_fork = [exact_w(), open_w(), open_fork_w()];
         assert!(declares(may_pend, &settled, status_of).is_ok());
@@ -1376,7 +1446,12 @@ mod tests {
     // giveUpRender_folds_to_render — THE FOLD CANNOT SEE THE LIE, because the
     // lie lives exactly where the fold is.
     fn the_fold_cannot_see_either_lie() {
-        for e in [empty_closed_w(), empty_open_w(), exact_w(), forked_closed_w()] {
+        for e in [
+            empty_closed_w(),
+            empty_open_w(),
+            exact_w(),
+            forked_closed_w(),
+        ] {
             assert_eq!(forget(spinner_render(&e)), forget(status_of(&e)));
             assert_eq!(forget(give_up_render(&e)), forget(status_of(&e)));
         }
@@ -1413,7 +1488,11 @@ mod tests {
         assert_eq!(give_up_render(&e), Status::Absent);
         let t = bob_spoke_w();
         assert!(e.seals_to(&t));
-        assert_eq!(give_up_render(&t), Status::Provisional(47), "the absence was retracted");
+        assert_eq!(
+            give_up_render(&t),
+            Status::Provisional(47),
+            "the absence was retracted"
+        );
     }
 
     #[test]
@@ -1442,9 +1521,16 @@ mod tests {
     fn seal_all_gives_up_without_deleting_anything() {
         let e = empty_open_w();
         let after = e.seal_all();
-        assert_eq!(after.candidates(), e.candidates(), "nothing was delivered or deleted");
+        assert_eq!(
+            after.candidates(),
+            e.candidates(),
+            "nothing was delivered or deleted"
+        );
         assert!(after.is_closed());
-        assert!(e.seals_to(&after), "the give-up move is inside the permitted future");
+        assert!(
+            e.seals_to(&after),
+            "the give-up move is inside the permitted future"
+        );
     }
 
     #[test]
@@ -1466,8 +1552,14 @@ mod tests {
     // mirrors RenderProgress.statusOf_pendingSound — the sanctioned renderer's
     // `pending` inversion is exactly the two clauses.
     fn status_of_is_pending_sound() {
-        let states =
-            [exact_w(), open_w(), forked_closed_w(), open_fork_w(), empty_closed_w(), empty_open_w()];
+        let states = [
+            exact_w(),
+            open_w(),
+            forked_closed_w(),
+            open_fork_w(),
+            empty_closed_w(),
+            empty_open_w(),
+        ];
         assert!(pending_sound(status_of, &states).is_ok());
     }
 
@@ -1552,8 +1644,14 @@ mod tests {
     // spinner_widget_is_not_sound — the second at ONE state, with no reasoning
     // about futures.
     fn sanctioned_widget_is_sound_and_the_spinner_is_not() {
-        let states =
-            [exact_w(), open_w(), forked_closed_w(), open_fork_w(), empty_closed_w(), empty_open_w()];
+        let states = [
+            exact_w(),
+            open_w(),
+            forked_closed_w(),
+            open_fork_w(),
+            empty_closed_w(),
+            empty_open_w(),
+        ];
         assert!(widget_sound(|e| widget_of(status_of(e)), &states).is_ok());
 
         let one = [empty_closed_w()];
@@ -1636,7 +1734,11 @@ mod tests {
         let policy = Policy::by_source("bySource(alice)", ALICE);
         match policy.resolve(&e) {
             Some(r) => {
-                assert_eq!(r.alternatives, vec![(47, ALICE), (49, BOB)], "nothing suppressed");
+                assert_eq!(
+                    r.alternatives,
+                    vec![(47, ALICE), (49, BOB)],
+                    "nothing suppressed"
+                );
                 assert_eq!(
                     status_of(&e),
                     Status::ForkedClosed(vec![(47, ALICE), (49, BOB)]),
@@ -1678,7 +1780,10 @@ mod tests {
         let b: Evidence<u64> = Evidence::from_parts([(2, BOB)], [BOB], [BOB]);
         assert_eq!(status_of(&a), Status::Exact(1));
         assert_eq!(status_of(&b), Status::Exact(2));
-        assert_eq!(status_of(&a.merged(&b)), Status::ForkedClosed(vec![(1, ALICE), (2, BOB)]));
+        assert_eq!(
+            status_of(&a.merged(&b)),
+            Status::ForkedClosed(vec![(1, ALICE), (2, BOB)])
+        );
     }
 
     #[test]
@@ -1714,7 +1819,11 @@ mod tests {
         let mine: Evidence<u64> = Evidence::from_parts([], [ALICE], [ALICE]);
         assert_eq!(status_of(&mine), Status::Absent);
         let peer: Evidence<u64> = Evidence::from_parts([(47, BOB)], [BOB], [BOB]);
-        assert_eq!(status_of(&mine.merged(&peer)), Status::Exact(47), "my absence did not survive");
+        assert_eq!(
+            status_of(&mine.merged(&peer)),
+            Status::Exact(47),
+            "my absence did not survive"
+        );
     }
 
     // -- JoinHom.lean. the count ---------------------------------------------
@@ -1755,14 +1864,23 @@ mod tests {
         const DERIVED: Source = 99;
         let mut mentions: Evidence<&str> = Evidence::new();
         mentions.owe(ALICE).owe(BOB);
-        assert_eq!(status_of(&count_position(&mentions, DERIVED)), Status::Pending);
+        assert_eq!(
+            status_of(&count_position(&mentions, DERIVED)),
+            Status::Pending
+        );
 
         mentions.observe("n1", ALICE);
-        assert_eq!(status_of(&count_position(&mentions, DERIVED)), Status::Provisional(1));
+        assert_eq!(
+            status_of(&count_position(&mentions, DERIVED)),
+            Status::Provisional(1)
+        );
 
         mentions.observe("n2", BOB);
         mentions.certify(ALICE).certify(BOB);
-        assert_eq!(status_of(&count_position(&mentions, DERIVED)), Status::Exact(2));
+        assert_eq!(
+            status_of(&count_position(&mentions, DERIVED)),
+            Status::Exact(2)
+        );
     }
 
     #[test]
@@ -1771,7 +1889,8 @@ mod tests {
     // the summary one is confidently, terminally wrong.
     fn replicating_the_summary_lands_on_a_wrong_exact() {
         // Both replicas counted 1, and they counted DIFFERENT notes.
-        let mentions_a: Evidence<&str> = Evidence::from_parts([("n1", ALICE)], [ALICE, BOB], [ALICE]);
+        let mentions_a: Evidence<&str> =
+            Evidence::from_parts([("n1", ALICE)], [ALICE, BOB], [ALICE]);
         let mentions_b: Evidence<&str> = Evidence::from_parts([("n2", BOB)], [ALICE, BOB], [BOB]);
 
         // WRONG: replicate the numbers. Both say 1, so `values` folds them to

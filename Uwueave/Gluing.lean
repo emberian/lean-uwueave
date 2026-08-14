@@ -891,18 +891,18 @@ theorem oneshot_orthogonal_to_gluing :
   (`oneShotOwner_eq_some_of_mem`), but deployment code should carry the owner explicitly or use a
   finite searchable representation rather than extract this noncomputable definition.
 
-**⟨UNDONE U-0058⟩ — real work, not done here.**
-
-* *Hole identity.* A hole here is a position in the lattice, not a named slot: two holes in one
-  document are two `GuardedHole` values with no shared index. The keyed family `K → GuardedHole S`
-  with per-key verdicts — the hole-level analogue of `Confluence.pi_iconfluent` and
-  `Spec.Verdict.keyedClash` — is straightforward and absent.
-* *Byzantine / dual-H¹.* The study links non-gluing to a sheaf obstruction. Nothing here computes
-  cohomology. `Divergent` plus `clash_divergent` is 1-cocycle-shaped data and no more; calling it an
-  H¹ result would be a renaming of the kind §5 exists to rule out.
-* *Fill provenance.* `Glues` says the glue is admissible; it says nothing about *whose* fill is
-  observed in it. That is the question `MVRegister`/`ORMap` answer for values, and it is untouched for
-  fills.
+**⟨DONE downstream in `GluingExtensions`, as three independently reviewable
+finite/model-scoped results⟩.** `KeyedFamily` and `KeyedVerdicts` retain a
+`HoleVerdict` at every named key, with an anchor/exclusion family exhibiting
+opposite per-key answers. The Boolean triangle defines an actual finite F₂
+0-coboundary action on 1-cochains; `cohomologous_iff_dualH1_eq` computes its
+two H¹ classes by cycle holonomy, with trivial and obstructed representatives.
+`ProvenancedFill` separately records an author and patch;
+`glueProvenanced_observes_left`, `_right`, and `_state` prove that both authors
+survive while the state projection remains the original glue, and the fixture
+separates the two contributors from a stranger. These constructions are
+deliberately finite or proof-level: they do not claim deployment authentication
+or cohomology for an arbitrary cover.
 -/
 
 end Uwueave.Gluing

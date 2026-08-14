@@ -103,24 +103,21 @@ iff-shaped form of the dichotomy the two files together now have.
 
 ## Honest boundary — what is claimed and what is not
 
-  * ⟨UNDONE U-0117, narrowed to endpoint-only reconstruction/generic merge synthesis⟩
-    **This file's converse is proved at one-operation resolution**
-    (`StepConfluent`), which is the resolution `Ancestral.Serializing` and
-    `serialization_clash_defeats_every_merge` are stated in. §5 lifts it with
-    `StepGenerated`, "every reachable branch is the ancestor or one admitted
-    step from it". The lock satisfies that local bridge; the counter does not.
-    The sibling `Uwueave.CompositeDelta` now closes the explicit-patch route for
-    arbitrary finite runs: `Patch.admitted_of_runsTo` exposes successful runs,
-    `LegalUnderComposition` is proved equivalent to full
-    `AncestralConfluent`, and `Algebra` carries residual admission, commutation,
-    merge execution, and legality. Its `stepConfluent_counter_fails_composite_law`
-    preserves this file's length-two counter as a failure of that named law,
-    while `cheapLockAlgebra` supplies a one-step positive instance. What remains
-    genuinely open is a generic **state-only** constructor that reconstructs or
-    residualizes an arbitrary run delta from endpoints and synthesizes the merge
-    without a carried patch. Cyclic operations show why no such reconstruction
-    follows from `DeltaRecoveryOn`; no theorem here or in `CompositeDelta`
-    claims otherwise.
+  * ⟨DONE downstream in `EndpointResidual` under exact finite-program
+    hypotheses⟩ `FiniteRunDecoder` asks an endpoint-only function to select a
+    finite patch reaching the endpoint and to agree with every admitted run's
+    whole composite effect. `EndpointResidualSynthesis` additionally supplies
+    an admitted, faithful, legal finite residual after the canonical tie-break
+    ordering. `ancestralMerge` consumes only `(l,x,y)`, and
+    `ancestralConfluent`, `mergeEndpoints_eq_reconstructed_serialization`, and
+    `residual_reachable` prove the synthesized merge legal and effect-faithful
+    for arbitrary finite reachable branches, without `StepGenerated` or a
+    carried patch. The increment fixture exercises branches of lengths two and
+    three. The hypotheses are essential: `cyclicDeltaRecoveryOn` has perfectly
+    valid one-step `DeltaRecoveryOn`, but its one- and two-step runs share the
+    endpoint `0` while inducing different effects, so
+    `deltaRecoveryOn_insufficient_for_finite_runs` refutes every
+    `FiniteRunDecoder` for it.
   * **Recoverability is guard-relative.** `DeltaRecoverableOn` is the exact
     hypothesis used by the construction: only deltas an implementation can
     actually commit need be recoverable. `DeltaRecoveryOn` is its equivalent

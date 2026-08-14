@@ -2050,15 +2050,17 @@ def replayKernel (input : ByteArray) : ByteArray :=
       them is terminal.</strong> That correction came from an outside reviewer and it stands:
       <code>docs/TRUST.md</code> Ledger&nbsp;2 breaks &ldquo;the C backend&rdquo; into Lean&rsquo;s
       C code generator, the C compiler and linker, the Lean runtime, <code>shim.c</code>, the
-      ABI/FFI boundary, Rust&rsquo;s 21 source <code>unsafe</code> blocks (18 in
-      <code>ffi.rs</code>, 3 in the kernel benchmark), Lean-owned request encoding,
+      ABI/FFI boundary, Rust&rsquo;s 18 source <code>unsafe</code> blocks (all in
+      <code>ffi.rs</code>, with none in examples or benchmarks), Lean-owned request encoding,
       storage glue, filesystem/crash behavior, distribution scope, host durability, and
       native build closure. The <a href="trust/ledger2-v1.json">Ledger 2 machine manifest</a>
-      gates the exact mapping and inventory while leaving premises and obligations open.
-      RuntimeInit now closes exact
-      object/initializer selection and the Lean encoder closes the duplicate FORMAT-v3 byte
-      decision; neither closure proves code generation, compiler/linker, runtime, shim, ABI,
-      unsafe ownership, storage, or durability. Compiling the exact emitted closure with
+      gates the exact mapping and inventory. The shim&rsquo;s reviewed bytes and ownership AST,
+      the canonical Rust&ndash;C&ndash;Lean ABI descriptor, both native symbol/prototype observations,
+      sanitizer integration, and the package-wide exact unsafe inventory close those three
+      adapter controls. RuntimeInit closes exact object/initializer selection and the Lean
+      encoder closes the duplicate FORMAT-v3 byte decision; none of those controls proves
+      code generation, compiler/linker or runtime semantics, storage, or durability.
+      Compiling the exact emitted closure with
       <strong>CompCert</strong> remains one bounded experiment.</p>
     </div>
   </section>

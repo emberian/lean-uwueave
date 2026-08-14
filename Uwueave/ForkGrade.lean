@@ -97,9 +97,16 @@ fork-aware quantity, where `Bounds` §4 proved the per-stream one cannot.
     `0` and a global seam at exactly `1`. The earlier §9 pin scenario remains a
     useful weaker witness: its constant seam fails globally, but another global
     seam happens to pay zero.
-  * ⟨UNDONE U-0047⟩ **Minimum colourings.** `SeamColoring`'s greedy colourer synthesises
-    *a* proper colouring, never the minimum one; nothing here computes an optimal
-    live strategy, only bounds the optimum.
+  * ⟨DONE U-0047 — bounded exact synthesis below⟩ **Minimum live-cost
+    strategies on an explicit finite scenario.** `synthesizeMinimumLiveStrategy`
+    enumerates a caller-supplied complete finite carrier and palette, retains
+    exactly the live strategies, and minimizes `liveCost` itself (not colouring
+    width).  Its result carries attainment and global minimality within that
+    declared search space, or an exhaustive semantic refusal.  The capped entry
+    point checks state and colouring bounds before constructing the exponential
+    enumeration.  This is deliberately deployment-relative: the caller still
+    owns the premise that its carrier, palette, transition, and scenario are the
+    deployment it intends to certify.
 
 ## Relation to the sibling judgements
 
@@ -1204,5 +1211,311 @@ example : ¬ (Necessity.LocallySafe Necessity.bitAtMostOneImpl Necessity.AtMostO
   exact Necessity.atMostOneBit_impl_not_cfcs
     ((cfcs_iff_locallySafe_and_no_reachableClash
       Necessity.bitAtMostOneImpl Necessity.AtMostOneBit).mpr h)
+
+/-! ## §12. Exact minimum live-cost synthesis on a finite scenario
+
+`SeamColoring.synthesizeMinimumSeam` minimizes colouring width.  Width and
+edge cost are different objectives: the latter depends on the scenario's
+branch traces.  This section performs a separate exhaustive argument-minimum
+whose objective is definitionally `liveCost`.
+
+The boundary is explicit and proof carrying.  `states` must cover the complete
+state type, `palette` is the complete set of colours in scope, and `sc` and
+`step` are accepted as deployment premises rather than inferred.  Consequently
+the minimum and refusal theorems say exactly what was searched, without claiming
+that a finite model is faithful to an unmentioned deployment. -/
+
+/-- The live-valid members of the explicit finite function space. -/
+def validLiveSeams {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (palette : List Seg)
+    (fallback : Seg) : List (S → Seg) :=
+  (allColorings palette fallback states).filter fun seam =>
+    decide (FiniteValid (sc.worlds step) seam I)
+
+theorem mem_validLiveSeams_iff {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (palette : List Seg)
+    (fallback : Seg) (seam : S → Seg) :
+    seam ∈ validLiveSeams I step sc states palette fallback ↔
+      seam ∈ allColorings palette fallback states ∧
+        FiniteValid (sc.worlds step) seam I := by
+  simp [validLiveSeams]
+
+/-- Raw executable search, minimizing scenario crossings rather than colours. -/
+def minimumLiveSeam? {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (palette : List Seg)
+    (fallback : Seg) : Option (S → Seg) :=
+  argMin? (fun seam => liveCost seam step sc)
+    (validLiveSeams I step sc states palette fallback)
+
+/-- The raw winner is live-valid and no searched live-valid seam is cheaper. -/
+theorem minimumLiveSeam_spec {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (palette : List Seg)
+    (fallback : Seg) {seam : S → Seg}
+    (hseam : minimumLiveSeam? I step sc states palette fallback = some seam) :
+    seam ∈ allColorings palette fallback states
+      ∧ FiniteValid (sc.worlds step) seam I
+      ∧ ∀ other, other ∈ allColorings palette fallback states →
+          FiniteValid (sc.worlds step) other I →
+          liveCost seam step sc ≤ liveCost other step sc := by
+  have hmem : seam ∈ validLiveSeams I step sc states palette fallback :=
+    argMin_mem _ hseam
+  have hparts := (mem_validLiveSeams_iff
+    I step sc states palette fallback seam).mp hmem
+  refine ⟨hparts.1, hparts.2, fun other hother hvalid => ?_⟩
+  exact argMin_le_of_mem _ hseam
+    ((mem_validLiveSeams_iff I step sc states palette fallback other).mpr
+      ⟨hother, hvalid⟩)
+
+/-- A successful result: an attained minimum of `liveCost` among every live
+strategy whose values lie in the declared palette on the complete carrier. -/
+structure MinimumLiveStrategy {S : Type u} {Op : Type w} {Seg : Type v}
+    [MergeState S] [DecidableEq Seg] (I : Invariant S)
+    (step : S → Op → S) (sc : Scenario S Op)
+    (states : List S) (palette : List Seg) where
+  strategy : LiveStrategy I step sc Seg
+  usesOnly : UsesOnly states palette strategy.seam
+  minimum : ∀ other : LiveStrategy I step sc Seg,
+    UsesOnly states palette other.seam →
+      liveCost strategy.seam step sc ≤ liveCost other.seam step sc
+
+/-- Promote a raw finite winner to the semantic live-strategy result.  Complete
+carrier coverage is spent exactly when arbitrary palette-valued strategies are
+placed back in the enumerated function space. -/
+def certifyMinimumLiveStrategy {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (complete : ∀ s : S, s ∈ states)
+    (palette : List Seg) (fallback : Seg) {seam : S → Seg}
+    (hseam : minimumLiveSeam? I step sc states palette fallback = some seam) :
+    MinimumLiveStrategy I step sc states palette where
+  strategy := LiveStrategy.ofSegmentedOn
+    (segmentedOn_iff_properColoring.mpr
+      (minimumLiveSeam_spec I step sc states palette fallback hseam).2.1)
+  usesOnly := allColorings_usesOnly palette fallback states
+    (minimumLiveSeam_spec I step sc states palette fallback hseam).1
+  minimum := by
+    intro other huses
+    have hall := allColorings_complete palette fallback complete
+      other.seam huses
+    have hvalid : FiniteValid (sc.worlds step) other.seam I :=
+      segmentedOn_iff_properColoring.mp other.segmentedOn
+    exact (minimumLiveSeam_spec I step sc states palette fallback hseam).2.2
+      other.seam hall hvalid
+
+/-- A raw `none` is an exhaustive semantic refusal: no live strategy over the
+scenario can use only the supplied palette on the complete carrier. -/
+theorem minimumLiveSeam_none_exhaustive
+    {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (complete : ∀ s : S, s ∈ states)
+    (palette : List Seg) (fallback : Seg)
+    (hraw : minimumLiveSeam? I step sc states palette fallback = none) :
+    ∀ strategy : LiveStrategy I step sc Seg,
+      ¬ UsesOnly states palette strategy.seam := by
+  intro strategy huses
+  have hempty : validLiveSeams I step sc states palette fallback = [] :=
+    (argMin_eq_none_iff (fun seam => liveCost seam step sc) _).mp hraw
+  have hall := allColorings_complete palette fallback complete
+    strategy.seam huses
+  have hvalid : FiniteValid (sc.worlds step) strategy.seam I :=
+    segmentedOn_iff_properColoring.mp strategy.segmentedOn
+  have hmem : strategy.seam ∈ validLiveSeams I step sc states palette fallback :=
+    (mem_validLiveSeams_iff I step sc states palette fallback strategy.seam).mpr
+      ⟨hall, hvalid⟩
+  rw [hempty] at hmem
+  exact List.not_mem_nil hmem
+
+/-- Both exact outcomes retain their semantic certificates. -/
+inductive MinimumLiveSynthesis
+    {S : Type u} {Op : Type w} {Seg : Type v}
+    [MergeState S] [DecidableEq Seg] (I : Invariant S)
+    (step : S → Op → S) (sc : Scenario S Op)
+    (states : List S) (palette : List Seg) : Type (max u v w) where
+  | found (minimum : MinimumLiveStrategy I step sc states palette)
+  | refused (exhaustive : ∀ strategy : LiveStrategy I step sc Seg,
+      ¬ UsesOnly states palette strategy.seam)
+
+/-- Exact finite synthesis with `liveCost` as the objective. -/
+def synthesizeMinimumLiveStrategy
+    {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (complete : ∀ s : S, s ∈ states)
+    (palette : List Seg) (fallback : Seg) :
+    MinimumLiveSynthesis I step sc states palette :=
+  match h : minimumLiveSeam? I step sc states palette fallback with
+  | none => .refused
+      (minimumLiveSeam_none_exhaustive I step sc states complete palette fallback h)
+  | some seam => .found
+      (certifyMinimumLiveStrategy I step sc states complete palette fallback
+        (seam := seam) h)
+
+namespace MinimumLiveSynthesis
+
+def isFound {S : Type u} {Op : Type w} {Seg : Type v}
+    [MergeState S] [DecidableEq Seg] {I : Invariant S}
+    {step : S → Op → S} {sc : Scenario S Op}
+    {states : List S} {palette : List Seg} :
+    MinimumLiveSynthesis I step sc states palette → Bool
+  | .found _ => true
+  | .refused _ => false
+
+end MinimumLiveSynthesis
+
+/-- Independent caps for the linear carrier and exponential colouring space. -/
+structure LiveSearchLimits where
+  maxStates : Nat
+  maxColorings : Nat
+  deriving DecidableEq, Repr
+
+inductive LiveSearchLimitAxis where
+  | states
+  | colorings
+  deriving DecidableEq, Repr
+
+/-- Resource refusal is distinct from exhaustive semantic refusal. -/
+inductive CappedLiveSearch (Result : Type u) where
+  | ready (result : Result)
+  | tooLarge (axis : LiveSearchLimitAxis) (required maximum : Nat)
+
+namespace CappedLiveSearch
+
+def isReady {Result : Type u} : CappedLiveSearch Result → Bool
+  | .ready _ => true
+  | .tooLarge .. => false
+
+def refusalAxis? {Result : Type u} :
+    CappedLiveSearch Result → Option LiveSearchLimitAxis
+  | .ready _ => none
+  | .tooLarge axis .. => some axis
+
+end CappedLiveSearch
+
+/-- The exact size of `allColorings palette fallback states`. -/
+def liveSearchColoringCount {S : Type u} {Seg : Type v}
+    (states : List S) (palette : List Seg) : Nat :=
+  palette.length ^ states.length
+
+/-- Resource-first synthesis.  Both inequalities are decided before the call
+to `synthesizeMinimumLiveStrategy`, so a refusal never materializes the
+exponential list. -/
+def synthesizeMinimumLiveStrategyCapped
+    {S : Type u} {Op : Type w} {Seg : Type v}
+    [DecidableEq S] [MergeState S] [DecidableEq Seg]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S)
+    (sc : Scenario S Op) (states : List S) (complete : ∀ s : S, s ∈ states)
+    (palette : List Seg) (fallback : Seg) (limits : LiveSearchLimits) :
+    CappedLiveSearch (MinimumLiveSynthesis I step sc states palette) :=
+  if states.length ≤ limits.maxStates then
+    if liveSearchColoringCount states palette ≤ limits.maxColorings then
+      .ready (synthesizeMinimumLiveStrategy I step sc states complete palette fallback)
+    else
+      .tooLarge .colorings (liveSearchColoringCount states palette)
+        limits.maxColorings
+  else
+    .tooLarge .states states.length limits.maxStates
+
+/-! ### Exact positive, semantic-negative, and resource-negative fixtures -/
+
+def pinForkMinimumLiveSearch :
+    MinimumLiveSynthesis pinInv pinStep pinForkScenario pinStates [false, true] :=
+  synthesizeMinimumLiveStrategy pinInv pinStep pinForkScenario
+    pinStates pinStates_complete [false, true] false
+
+theorem pinLiveTrue_uses_bool_palette :
+    UsesOnly pinStates [false, true] pinLiveTrue.seam := by
+  intro state _
+  change state true ∈ [false, true]
+  cases state true <;> simp
+
+/-- The finite optimizer returns an attained strategy at the exact fork cost,
+one.  The lower bound is semantic and the upper bound is the returned
+minimum's comparison with the known one-crossing strategy. -/
+theorem pinForkMinimumLiveSearch_exact :
+    match pinForkMinimumLiveSearch with
+    | .found minimum =>
+        liveCost minimum.strategy.seam pinStep pinForkScenario = 1
+    | .refused _ => False := by
+  cases hsearch : pinForkMinimumLiveSearch with
+  | found minimum =>
+      have hlo := pinFork_cost_positive minimum.strategy
+      have hhi := minimum.minimum pinLiveTrue pinLiveTrue_uses_bool_palette
+      rw [pinLiveTrue_cost] at hhi
+      omega
+  | refused exhaustive =>
+      exact exhaustive pinLiveTrue pinLiveTrue_uses_bool_palette
+
+theorem pinForkMinimumLiveSearch_isFound :
+    pinForkMinimumLiveSearch.isFound = true := by
+  cases hsearch : pinForkMinimumLiveSearch with
+  | found _ => rfl
+  | refused exhaustive =>
+      exact False.elim (exhaustive pinLiveTrue pinLiveTrue_uses_bool_palette)
+
+/-- The singleton palette has a candidate, but its constant colouring cannot
+separate the fork's live clash. -/
+theorem pinFork_no_one_color_live_strategy :
+    ∀ strategy : LiveStrategy pinInv pinStep pinForkScenario Bool,
+      ¬ UsesOnly pinStates [false] strategy.seam := by
+  intro strategy huses
+  rcases pinFork_liveClash with ⟨left, hleft, right, hright, hclash⟩
+  have hleftColor : strategy.seam left = false := by
+    simpa using huses left (pinStates_complete left)
+  have hrightColor : strategy.seam right = false := by
+    simpa using huses right (pinStates_complete right)
+  exact strategy.proper left hleft right hright hclash
+    (hleftColor.trans hrightColor.symm)
+
+/-- A real one-candidate space is searched completely and refused
+semantically. -/
+def pinForkOneColorSearch :
+    MinimumLiveSynthesis pinInv pinStep pinForkScenario pinStates [false] :=
+  synthesizeMinimumLiveStrategy pinInv pinStep pinForkScenario
+    pinStates pinStates_complete [false] false
+
+theorem pinForkOneColorSearch_isFound :
+    pinForkOneColorSearch.isFound = false := by
+  cases hsearch : pinForkOneColorSearch with
+  | refused _ => rfl
+  | found minimum =>
+      exact False.elim
+        (pinFork_no_one_color_live_strategy minimum.strategy minimum.usesOnly)
+
+theorem pinForkOneColorSearch_exhaustive :
+    ∀ strategy : LiveStrategy pinInv pinStep pinForkScenario Bool,
+      ¬ UsesOnly pinStates [false] strategy.seam := by
+  cases hsearch : pinForkOneColorSearch with
+  | refused exhaustive => exact exhaustive
+  | found minimum =>
+      exact False.elim
+        (pinFork_no_one_color_live_strategy minimum.strategy minimum.usesOnly)
+
+def pinForkTightLiveLimits : LiveSearchLimits where
+  maxStates := 4
+  maxColorings := 15
+
+/-- The 16-colouring search is rejected at its resource boundary; the semantic
+search is not evaluated in this branch. -/
+theorem pinForkLiveSearch_cap_exact :
+    synthesizeMinimumLiveStrategyCapped pinInv pinStep pinForkScenario
+      pinStates pinStates_complete [false, true] false
+      pinForkTightLiveLimits =
+        CappedLiveSearch.tooLarge .colorings 16 15 := by
+  rfl
+
+theorem pinForkLiveSearch_cap_before_enumeration :
+    (synthesizeMinimumLiveStrategyCapped pinInv pinStep pinForkScenario
+      pinStates pinStates_complete [false, true] false
+      pinForkTightLiveLimits).refusalAxis? = some .colorings := by
+  decide
 
 end Uwueave.ForkGrade

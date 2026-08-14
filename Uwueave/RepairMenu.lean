@@ -485,6 +485,12 @@ def forkRepair (P : Promise) : Repair P (forkedPromise P) where
   discharge := .free (fun _ _ _ _ => trivial)
   entails := fun h => absurd h (by decide)
   admitsAll := fun _ _ _ => trivial
+  observation := fun _ =>
+    { toDemand := id
+      fromDemand := id
+      leftInverse := fun _ => rfl
+      rightInverse := fun _ => rfl
+      admits_iff := fun _ _ => Iff.rfl }
   singular := fun h => absurd h (by decide)
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h
@@ -504,6 +510,7 @@ def fullCoordinationRepair (P : Promise) (n : Nat) : Repair P P where
   discharge := .seam P.State (fun s => s) (Exits.identity_seam_segmented P.inv)
   entails := fun _ _ h => h
   admitsAll := fun _ _ h => h
+  observation := fun _ => Uwueave.Repair.DemandEquiv.refl P
   singular := fun _ h => h
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h
@@ -627,6 +634,7 @@ def seamRepair (P : Promise) (Seg : Type) (σ : P.State → Seg)
   discharge := .seam Seg σ hσ
   entails := fun _ _ h => h
   admitsAll := fun _ _ h => h
+  observation := fun _ => Uwueave.Repair.DemandEquiv.refl P
   singular := fun _ h => h
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h
@@ -808,13 +816,15 @@ naming that as `escalates` is what stops the row implying a verdict it did not
 prove. -/
 def pinArbitrate : Repair ceilingPromise arbitratedCeilingPromise where
   transform := Exits.pinKeepTrue
-  relation := PromiseRelation.weakened.comp PromiseRelation.changedTrust
+  relation := (PromiseRelation.weakened.comp PromiseRelation.changedTrust).comp
+    PromiseRelation.changedDemand
   price := { Price.free with
              arbiterCuts := 1, rollbackWindow := 1,
              assumptions := [Premise.trustedAnnouncer] }
   discharge := .escalates
   entails := fun h => absurd h (by decide)
   admitsAll := fun _ s _ => pinKeepTrue_legal s
+  observation := fun h => nomatch h
   singular := fun _ _ => arbitratedCeiling_singular
   shrinking := fun _ h => h
   trustKept := fun h => absurd h (by decide)
@@ -1018,6 +1028,12 @@ def balanceEscrow : Repair balancePromise escrowedBalancePromise where
   discharge := .free (Catalog.escrow_local_bound_iconfluent (fun _ => 5))
   entails := fun _ f h => escrowed_entails_balance f h
   admitsAll := fun h => absurd h (by decide)
+  observation := fun _ =>
+    { toDemand := id
+      fromDemand := id
+      leftInverse := fun _ => rfl
+      rightInverse := fun _ => rfl
+      admits_iff := fun _ _ => Iff.rfl }
   singular := fun _ hP f hQ d d' hd hd' =>
     hP f (escrowed_entails_balance f hQ) d d' hd hd'
   shrinking := fun _ h => h
@@ -1220,13 +1236,15 @@ observation — and is not a claim that the grant feed shrinks under growth. It
 does not: grants only accumulate. -/
 def duelArbitrate : Repair duelPromise arbitratedDuelPromise where
   transform := Exits.arbKeep 1
-  relation := PromiseRelation.weakened.comp PromiseRelation.changedTrust
+  relation := (PromiseRelation.weakened.comp PromiseRelation.changedTrust).comp
+    PromiseRelation.changedDemand
   price := { Price.free with
              arbiterCuts := 1, rollbackWindow := 1,
              assumptions := [Premise.trustedAnnouncer] }
   discharge := .escalates
   entails := fun h => absurd h (by decide)
   admitsAll := fun _ s _ => arbKeep_sole 1 s
+  observation := fun h => nomatch h
   singular := fun _ _ => arbitratedDuel_singular
   shrinking := fun _ h => h
   trustKept := fun h => absurd h (by decide)

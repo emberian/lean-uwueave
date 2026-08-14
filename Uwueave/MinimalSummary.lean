@@ -109,13 +109,15 @@ context is observable, so a set-valued carrier does not degrade to a counter.
     enumeration; `representative_sound`, `representative_complete`, and
     `encode_decode_exact` state its exact scope.
   * **`∀ z` still ranges over the whole carrier, including unreachable
-    states.** ⟨UNDONE U-0112 beyond a supplied finite context universe⟩
-    `ContextCompiler` can instead compile exactly the contexts a caller lists;
-    `signature_eq_iff` proves exactness for that relative relation, and
-    `restricted_contexts_can_coarsen` exhibits `{0}` and `{1}` collapsing when
-    the separating context is unavailable. What remains is deriving a complete
-    reachable-context enumeration from an actual shipping API, rather than
-    trusting the caller's list.
+    states.** ⟨DONE downstream in `ShippingContextCompiler` for an explicit
+    finite shipping surface⟩ `API.contexts` derives contexts from the public
+    packet list rather than accepting a separate context list.
+    `contexts_sound` and `reachable_mem_contexts` prove that the enumeration is
+    exactly the states reachable by arbitrary reorderings and redeliveries of
+    those advertised packets, and `signature_eq_iff_reachable` instantiates
+    `ContextCompiler.signature_eq_iff` with that coverage theorem. This is a
+    finite-API result: it does not enumerate an unbounded packet generator or
+    operations outside the declared shipping surface.
   * **Finite homogeneous query families have their common refinement.**
     ⟨TERMINAL at the supplied finite universe⟩ `ContextCompiler.signature`
     is the contextual answer matrix for a finite `List (S → R)`;
@@ -125,15 +127,25 @@ context is observable, so a set-valued carrier does not degrade to a counter.
     complete, and `sufficient_refines_signature` proves the partition-order
     universal property. Heterogeneous or infinite query families are outside
     that compiler's claim.
-  * **No syntax, so no classifier.** ⟨UNDONE U-0113⟩ `f` is an arbitrary Lean
-    function; the quotient is computed per query by hand. Exactly the unbuilt
-    part named in `Holes.lean` and `JoinHom.lean`, unchanged.
-  * **The counted quotients are for the exhibited carriers only.** ⟨TERMINAL
-    for the refutations, ⟨UNDONE U-0114⟩ for a formula⟩ Two- and three-element
-    universes: a counterexample only needs to be a counterexample, and the
-    positive results (§1–§3) carry no carrier assumption. But "five classes"
-    is a fact about `|U| = 3, k = 2`; no general formula for the threshold
-    quotient's size is proved.
+  * **Typed query compilation is finite and checked.** ⟨DONE downstream in
+    `Preo.ContextQueryCompiler` on an admitted complete finite universe⟩ An
+    `AdmittedQuery` contains an `Expr.Program`, which exists only after checked
+    type inference, a typed projection from application state, and proof that
+    its state list is complete. `spec` compiles it to `ContextCompiler.Spec`;
+    `signature_eq_iff_eval`, `state_class_present`, and `class_key_sound` prove
+    sound and complete computed classes for its evaluator. Arbitrary Lean
+    functions and carriers without a complete finite admission remain outside
+    this syntax-directed compiler.
+  * **Threshold quotient counts have a finite-universe formula.** ⟨DONE
+    downstream in `FiniteThresholdSummary` for an explicit complete
+    duplicate-free finite universe⟩ For threshold `k`, the query has one class
+    when `k = 0` or `|U| < k`; otherwise it has one top class plus one class for
+    every subset of `U` of size below `k`. `ctxEquiv_iff_classKey_eq`,
+    `classKeys_nodup`, `mem_classKeys_iff`, and
+    `classKeys_length_explicit` prove the semantic classification and count for
+    every such `U` and `k`; `two_class_corollary` and
+    `five_class_corollary` recover the existing computations exactly. No
+    cardinality is claimed for an unenumerated or infinite carrier.
   * **Single-context is not a weakness of the definition** — ⟨TERMINAL⟩ by
     `ctxEquiv_history`, which shows an arbitrary future history collapses to
     one context. It is a genuine consequence of associativity, not an

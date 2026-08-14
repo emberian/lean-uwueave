@@ -23,6 +23,8 @@ a second minimisation calculus.
 -/
 import Uwueave.RepairMenu
 import Uwueave.Budget
+import Uwueave.MergeModel
+import Uwueave.Preo.Classification
 
 namespace Uwueave.RepairSynthesis
 
@@ -324,5 +326,337 @@ theorem refusal_is_exhaustive_for_catalog :
   refusedResult.exhaustive_of_isFound_false finite_catalog_refuses
 
 end Examples
+
+/-! ## §4. Checked merge-policy integration
+
+`MergeModel` deliberately does not depend on the join-only classification and
+repair stack. This downstream adapter is the acyclic meeting point.
+
+The generic request is valid for every merge model. The policy layer is
+intentionally narrower: `Preo.Classification` and `Repair.Promise` both require
+a binary `MergeState`, so their exact common scope is `MergeModel.JoinKey`.
+Within that scope the adapter executes one merge, retains unresolved capability
+obligations, and searches only an explicitly supplied finite repair catalog.
+Catalog refusal is not global repair impossibility, the caller's valuation is
+not a canonical scalar price, and this one-step interface states no delivery,
+fairness, retry, or network-convergence theorem. -/
+
+namespace CheckedMergePolicy
+
+open Uwueave.Repair (Promise Price Repair)
+
+/-! ### Generic capability obligations -/
+
+/-- Every proof required to invoke one merge under invariant `I`.
+
+The fields are exactly the premises of `MergeModel.IConfluentIn`, so the
+checked-result theorem works for join, ancestral, replay, and future models
+without pretending that their raw merge signatures are identical. -/
+structure MergeRequest (K : Type u) [m : Uwueave.MergeModel K]
+    (I : m.Observation → Prop) where
+  context : m.MergeContext
+  left : m.State
+  right : m.State
+  validContext : m.validContext context left right
+  contextLegal : ∀ observation ∈ m.contextObs context, I observation
+  leftLegal : I (m.observeState context left)
+  rightLegal : I (m.observeState context right)
+
+namespace MergeRequest
+
+variable {K : Type u} [m : Uwueave.MergeModel K]
+  {I : m.Observation → Prop}
+
+/-- The exact result produced by the model, before observation. -/
+def result (request : MergeRequest K I) : m.MergeResult :=
+  m.merge request.context request.left request.right
+
+/-- The merge result in the invariant's observation domain. -/
+def observation (request : MergeRequest K I) : m.Observation :=
+  m.observeResult request.result
+
+/-- Model-level confluence consumes precisely the stored capability
+obligations and certifies the observed merge result. -/
+theorem result_legal (request : MergeRequest K I)
+    (safe : MergeModel.IConfluentIn K I) : I request.observation :=
+  safe request.context request.left request.right request.validContext
+    request.contextLegal request.leftLegal request.rightLegal
+
+/-- Build the generic request at the supported binary join scope. -/
+def ofJoin (P : Promise) (left right : P.State)
+    (leftLegal : P.inv left) (rightLegal : P.inv right) :
+    MergeRequest (MergeModel.JoinKey P.State) P.inv where
+  context := ()
+  left := left
+  right := right
+  validContext := trivial
+  contextLegal := by
+    intro observation h
+    cases h
+  leftLegal := leftLegal
+  rightLegal := rightLegal
+
+end MergeRequest
+
+/-! ### Finite typed join policy -/
+
+/-- A checked field policy at the exact common scope of accumulated preoscript
+classification and typed finite repair synthesis.
+
+`covered` prevents silent unresolved output: if no verdict route answered, at
+least one invariant-indexed `Preo.Obligation` must be returned. -/
+structure Policy (P : Promise) : Type 2 where
+  classification : Preo.Classification P.inv (fun _ => ())
+  choices : Catalog P
+  valuation : Catalog.Valuation
+  covered : classification.answer = none → classification.obligations ≠ []
+
+/-- The four semantically distinct routes through one checked policy call. -/
+inductive Route where
+  | accepted
+  | pricedExit
+  | refused
+  | pending
+  deriving DecidableEq, Repr
+
+/-- Result of applying a checked policy to one merge request.
+
+The source merge result is retained by the request index. A FREE classification
+carries result legality. A clashing classification either carries the selected
+catalog witness and actual typed repair, or exhaustive refusal over exactly the
+supplied catalog. An unresolved classification carries a nonempty indexed
+capability-obligation list. -/
+inductive Outcome {P : Promise} (policy : Policy P)
+    (request : MergeRequest (MergeModel.JoinKey P.State) P.inv) : Type 2 where
+  | accepted (legal : P.inv request.observation)
+  | pricedExit (refuted : ¬ IConfluent P.inv)
+      (choice : Catalog.Found policy.choices policy.valuation)
+  | refused (refuted : ¬ IConfluent P.inv)
+      (exhaustive : ∀ candidate : Candidate P,
+        candidate ∈ policy.choices.entries → ¬ candidate.applicable)
+  | pending (unresolved : policy.classification.answer = none)
+      (nonempty : policy.classification.obligations ≠ [])
+
+namespace Outcome
+
+variable {P : Promise} {policy : Policy P}
+  {request : MergeRequest (MergeModel.JoinKey P.State) P.inv}
+
+/-- The merge result is present on every route. Refused and pending routes make
+no unsupported legality claim about it. -/
+def mergeResult (_ : Outcome policy request) : P.State := request.observation
+
+/-- First-order route observer for executable fixtures and renderers. -/
+def route : Outcome policy request → Route
+  | .accepted _ => .accepted
+  | .pricedExit _ _ => .pricedExit
+  | .refused _ _ => .refused
+  | .pending _ _ => .pending
+
+/-- Stable identity of the selected repair choice, if one was found. -/
+def exitId? : Outcome policy request → Option CandidateId
+  | .pricedExit _ choice => some choice.candidate.id
+  | _ => none
+
+/-- The complete eight-axis price of the selected typed repair. -/
+def price? : Outcome policy request → Option Price
+  | .pricedExit _ choice => some choice.candidate.price
+  | _ => none
+
+/-- Capability obligations are exposed only on the unresolved route; they can
+never be read as a classification answer or as a price. -/
+def pendingObligations : Outcome policy request → List (Preo.Obligation P.inv)
+  | .pending _ _ => policy.classification.obligations
+  | _ => []
+
+/-- Every displayed exit price is the price of the actual typed repair retained
+by the successful catalog witness. No independent price field exists here. -/
+theorem price_is_backed (outcome : Outcome policy request) {price : Price}
+    (hprice : outcome.price? = some price) :
+    ∃ (Q : Promise) (repair : Repair P Q), repair.price = price := by
+  cases outcome with
+  | accepted _ => simp [price?] at hprice
+  | refused _ _ => simp [price?] at hprice
+  | pending _ _ => simp [price?] at hprice
+  | pricedExit _ choice =>
+      refine ⟨choice.candidate.target, choice.repair, ?_⟩
+      exact choice.repair_price.trans (Option.some.inj hprice)
+
+/-- A refusal is exhaustive over the policy's supplied finite catalog and says
+nothing about repairs not listed there. -/
+theorem refusal_is_exhaustive (outcome : Outcome policy request)
+    (hrefused : outcome.route = .refused) :
+    ∀ candidate : Candidate P,
+      candidate ∈ policy.choices.entries → ¬ candidate.applicable := by
+  cases outcome with
+  | accepted _ => simp [route] at hrefused
+  | pricedExit _ _ => simp [route] at hrefused
+  | refused _ exhaustive => exact exhaustive
+  | pending _ _ => simp [route] at hrefused
+
+/-- Pending really means a nonempty list of indexed classification
+obligations, never silent absence. -/
+theorem pending_is_nonempty (outcome : Outcome policy request)
+    (hpending : outcome.route = .pending) : outcome.pendingObligations ≠ [] := by
+  cases outcome with
+  | accepted _ => simp [route] at hpending
+  | pricedExit _ _ => simp [route] at hpending
+  | refused _ _ => simp [route] at hpending
+  | pending _ nonempty => exact nonempty
+
+end Outcome
+
+/-- Execute the checked policy. Classification controls the semantic route;
+only the explicit finite catalog is searched, and the result retains every
+proof used to select that route. -/
+def Policy.evaluate {P : Promise} (policy : Policy P)
+    (request : MergeRequest (MergeModel.JoinKey P.State) P.inv) :
+    Outcome policy request :=
+  match hanswer : policy.classification.answer with
+  | some true =>
+      .accepted (request.result_legal
+        ((MergeModel.iconfluentIn_join_iff P.State P.inv).mpr
+          (policy.classification.answer_true hanswer)))
+  | some false =>
+      match policy.choices.synthesize policy.valuation with
+      | .found choice =>
+          .pricedExit (policy.classification.answer_false hanswer) choice
+      | .refused exhaustive =>
+          .refused (policy.classification.answer_false hanswer) exhaustive
+  | none => .pending hanswer (policy.covered hanswer)
+
+/-! ### Positive, refusal, and unresolved fixtures -/
+
+/-- An empty finite catalog, useful only when the FREE or pending route makes
+repair search irrelevant. -/
+def emptyCatalog (P : Promise) : Catalog P where
+  entries := []
+  stableIds := by simp
+
+/-- A positive FREE classification over the promise that guarantees `True`. -/
+def freeClassification :
+    Preo.Classification Repair.anythingGoesPromise.inv (fun _ => ()) where
+  global := [.free (fun _ _ _ _ => trivial)]
+  seams := []
+  mergeability := []
+  obligations := []
+
+def freePolicy : Policy Repair.anythingGoesPromise where
+  classification := freeClassification
+  choices := emptyCatalog _
+  valuation := fun _ => 0
+  covered := by simp [freeClassification, Preo.Classification.answer,
+    Preo.Classification.answerOf]
+
+def freeRequest :
+    MergeRequest (MergeModel.JoinKey Repair.anythingGoesPromise.State)
+      Repair.anythingGoesPromise.inv :=
+  MergeRequest.ofJoin Repair.anythingGoesPromise
+    (fun n => n == 0) (fun n => n == 1) trivial trivial
+
+def freeOutcome : Outcome freePolicy freeRequest := freePolicy.evaluate freeRequest
+
+/-- Positive merge-result fixture: a proof-carrying FREE classification consumes
+the request's capability obligations and certifies the concrete merge result. -/
+theorem free_outcome_accepts_merge :
+    freeOutcome.route = .accepted
+      ∧ Repair.anythingGoesPromise.inv freeOutcome.mergeResult := by
+  exact ⟨rfl, trivial⟩
+
+/-- The ceiling's accumulated classification carries the same concrete clash
+as its generated repair menu. -/
+def ceilingClassification :
+    Preo.Classification RepairMenu.ceilingPromise.inv (fun _ => ()) where
+  global := [.clash Exits.pinT Exits.pinF Exits.pinT_legal Exits.pinF_legal
+    Exits.pin_clash]
+  seams := []
+  mergeability := []
+  obligations := []
+
+def pricedCeilingPolicy : Policy RepairMenu.ceilingPromise where
+  classification := ceilingClassification
+  choices := Examples.foundCatalog
+  valuation := Examples.deploymentValuation
+  covered := by simp [ceilingClassification, Preo.Classification.answer,
+    Preo.Classification.answerOf]
+
+def ceilingRequest :
+    MergeRequest (MergeModel.JoinKey RepairMenu.ceilingPromise.State)
+      RepairMenu.ceilingPromise.inv :=
+  MergeRequest.ofJoin RepairMenu.ceilingPromise Exits.pinT Exits.pinF
+    Exits.pinT_legal Exits.pinF_legal
+
+def pricedCeilingOutcome : Outcome pricedCeilingPolicy ceilingRequest :=
+  pricedCeilingPolicy.evaluate ceilingRequest
+
+/-- Positive priced-exit fixture: the accumulated clash selects the least
+applicable finite-catalog repair, retains its full price, and keeps the concrete
+bad source merge visible. -/
+theorem priced_exit_fixture :
+    pricedCeilingOutcome.route = .pricedExit
+      ∧ pricedCeilingOutcome.exitId? = some ⟨40⟩
+      ∧ pricedCeilingOutcome.price? = some
+          (RepairMenu.fullCoordinationRepair RepairMenu.ceilingPromise 2).price
+      ∧ ¬ RepairMenu.ceilingPromise.inv pricedCeilingOutcome.mergeResult := by
+  refine ⟨by decide, by decide, by decide, ?_⟩
+  exact Exits.pin_clash
+
+def refusingCeilingPolicy : Policy RepairMenu.ceilingPromise where
+  classification := ceilingClassification
+  choices := Examples.refusedCatalog
+  valuation := Examples.deploymentValuation
+  covered := by simp [ceilingClassification, Preo.Classification.answer,
+    Preo.Classification.answerOf]
+
+def refusingCeilingOutcome : Outcome refusingCeilingPolicy ceilingRequest :=
+  refusingCeilingPolicy.evaluate ceilingRequest
+
+/-- Refusal fixture: the same checked clash and merge result produce no price,
+and the retained proof refutes every row in exactly the supplied catalog. -/
+theorem finite_refusal_fixture :
+    refusingCeilingOutcome.route = .refused
+      ∧ refusingCeilingOutcome.price? = none
+      ∧ ∀ candidate : Candidate RepairMenu.ceilingPromise,
+          candidate ∈ refusingCeilingPolicy.choices.entries →
+            ¬ candidate.applicable := by
+  refine ⟨by decide, by decide, ?_⟩
+  exact refusingCeilingOutcome.refusal_is_exhaustive (by decide)
+
+/-- A real indexed capability obligation for the unresolved classification
+fixture. Its strings remain hints; the index is the ceiling invariant. -/
+def missingCeilingRoute : Preo.Obligation RepairMenu.ceilingPromise.inv where
+  invName := "one pin"
+  onField := "pins"
+  tried := ["finite classifier unavailable"]
+  discharge := "supply a checked verdict route"
+
+def pendingCeilingClassification :
+    Preo.Classification RepairMenu.ceilingPromise.inv (fun _ => ()) where
+  global := []
+  seams := []
+  mergeability := []
+  obligations := [missingCeilingRoute]
+
+def pendingCeilingPolicy : Policy RepairMenu.ceilingPromise where
+  classification := pendingCeilingClassification
+  choices := emptyCatalog _
+  valuation := fun _ => 0
+  covered := by
+    intro _
+    simp [pendingCeilingClassification]
+
+def pendingCeilingOutcome : Outcome pendingCeilingPolicy ceilingRequest :=
+  pendingCeilingPolicy.evaluate ceilingRequest
+
+/-- Unresolved canary: no verdict and no price are fabricated; the specific
+nonempty capability obligation survives into the merge outcome. -/
+theorem pending_obligation_fixture :
+    pendingCeilingOutcome.route = .pending
+      ∧ pendingCeilingOutcome.price? = none
+      ∧ pendingCeilingOutcome.pendingObligations = [missingCeilingRoute]
+      ∧ pendingCeilingOutcome.pendingObligations ≠ [] := by
+  exact ⟨rfl, rfl, rfl, pendingCeilingOutcome.pending_is_nonempty rfl⟩
+
+end CheckedMergePolicy
 
 end Uwueave.RepairSynthesis

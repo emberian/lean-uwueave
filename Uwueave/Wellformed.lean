@@ -110,13 +110,13 @@ theorem is about the join of two states. `WovenEdit.lean` now supplies the
 smaller local operational layer over this exact predicate; the remaining
 differences below are not erased by that layer.
 
-  * ⟨UNDONE U-0147, narrowed to bidirectional term typing⟩ **Typed edits are not a
-    typed term language.** `WovenEdit.Edit` is a state-indexed command type:
-    its constructors carry freshness, target-existence, and clock/horizon
-    evidence. That pays operation admissibility, but there is still no term
-    AST, synthesis/checking judgement, or hole-aware bidirectional typing;
-    `WellFormed` remains referential integrity plus per-structure
-    well-formedness, not a term-typing judgement.
+  * ⟨DONE downstream in `Uwueave.WovenOperational`⟩ **Hole-aware terms are
+    checked bidirectionally.** `Term` supplies node, branch, relocation,
+    cross-tree-reference, and provenance-carrying hole constructors;
+    `Synth`/`Checks` expose executable synthesis and checking judgements.
+    `typed_evaluation_preserves_wellFormed` and
+    `every_accepted_edit_preserves_wellFormed` cover typed evaluation and every
+    accepted sidecar edit, with positive and rejected relocation fixtures.
   * ⟨UNDONE U-0148, narrowed to the CmRDT delivery quantifier⟩ **There is no edit-log
     CmRDT, so this is still not Grove's quantifier.** `WovenEdit.apply_preserves`
     proves every typed local create/reference/update/tombstone step preserves
@@ -127,13 +127,15 @@ differences below are not erased by that layer.
     histories, delivery/redelivery semantics, and a CmRDT theorem quantifying
     over their interleavings. This file still quantifies over pairs and folds
     of states, not delivered edit logs.
-  * ⟨UNDONE U-0149⟩ **No cross-tree references and no holes.** Our conflict
-    representation is *retention* — both pins present, both writes in view —
-    not a hole term carrying provenance. Retention is a different
-    representation, not a weaker one, but nothing here defines how a renderer
-    should present it, and there is no relocation to represent in the first
-    place (`Move.lean` prices node moves as an op-log with a derived view and
-    refuses them as replicated state).
+  * ⟨DONE downstream in `Uwueave.WovenOperational`⟩ **Relocation conflicts
+    retain explicit provenance.** Checked relocation and cross-tree-reference
+    operations reject dangling targets; conflicting destinations produce a
+    typed hole containing both stable edit identities.
+    `conflict_render_retains_provenance`,
+    `rendering_preserves_wellFormed`, and `resolution_preserves_wellFormed`
+    cover presentation and checked resolution while retaining this file's
+    structural floor. They do not claim that a chosen resolution is an
+    application-policy winner.
   * ⟨TERMINAL⟩ **`WellFormed` is deliberately not application-legal.** A
     two-pin document satisfies it. That is the entire design; a predicate
     that rejected two pins would be `weaveDocInv`, and `weaveDocInv` is not
@@ -358,8 +360,8 @@ replicas, in any order, and the result is a well-formed document. (Order is
 immaterial by the merge laws; this statement does not need that, since it
 holds for *every* list.) `WovenEdit.lean` separately proves local typed-edit
 and checked-list preservation. What neither theorem is yet: the CmRDT claim
-over concurrent delivery interleavings named in the header's narrowed
-⟨UNDONE U-0150⟩ item. -/
+over concurrent delivery interleavings named by canonical
+⟨DEBT-REF U-0148⟩. -/
 theorem mergeAll_wellformed (n root : Nat) :
     ∀ (ds : List WovenDoc) (base : WovenDoc), WellFormed n root base →
       (∀ d ∈ ds, WellFormed n root d) → WellFormed n root (mergeAll base ds) := by

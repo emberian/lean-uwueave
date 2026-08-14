@@ -128,11 +128,15 @@ named at the substantive caveat it belongs to.
     enforceable is that the five handlers be *supplied* and that each be
     *observable*; whether the pixels differ is outside every type system, not
     outside this one.
-  * **`report` is public, so a lie is constructible.** ⟨TERMINAL for this file's
-    question, ⟨UNDONE U-0082⟩ as deployment⟩ Honesty is a predicate on renderers, not a
-    property of the carrier. A deployment that wants the *type* to refuse must
-    export `renderReport` and not `report`; nothing here enforces that, and no
-    theorem below assumes it.
+  * **`report` remains public on the lower-level semantic carrier.** ⟨TERMINAL
+    for this file's refutability question; DONE downstream in
+    `Uwueave.Preo.ResultProgram.SupportedSurface`⟩ Honesty is a predicate on
+    arbitrary renderers here. The supported Preoscript surface instead exports
+    an opaque `SupportedSurface.Report`, `renderReport`, and total elimination;
+    raw carrier output is available only by explicitly choosing the lower-level
+    `RenderSix.Carrier6` API. Its compile/refusal canaries are
+    `tests/checked-render/RawReportRejected.lean` and
+    `tests/DebtClosures/U_0082.lean`.
   * **The eliminator is five-way, and the sixth cell is a sibling's.**
     ⟨DONE downstream in `Uwueave.RenderSix`⟩
     `ResultStatus.sixth_cell_is_distinguishable` proves that
@@ -145,11 +149,12 @@ named at the substantive caveat it belongs to.
     that five-way carrier. `RenderSix.Carrier6`, `statusOf_sound6`, and
     `the_named_limit_is_retired` implement and prove the six-way successor while
     preserving the exact fold back to this carrier.
-  * **The eliminator is `Type 0`-valued.** ⟨UNDONE U-0083⟩ `Carrier.elim` eliminates
-    into `Type`; a `Prop`-valued consumer goes through `Says`, and
-    `Classical.choice` can turn `says_total` into a projection. So the barrier
-    against extraction is `no_honest_projection` — a statement about what such a
-    function can *mean* — and never the absence of one.
+  * **The eliminator is result-universe polymorphic.** ⟨DONE here⟩
+    `Carrier.elim` and `elim_spec` eliminate directly into `Sort u`; the checked
+    `elim_prop_fixture` and `elim_type1_fixture` instantiate proof-valued and
+    higher-universe consumers without `Classical.choice`. This changes no
+    extraction claim: `no_honest_projection` remains the semantic barrier to a
+    singular answer at a fork.
   * **The future index is phantom in the data.** ⟨SCOPE U-0084⟩ `Result F α` mentions
     `F` in its type and in every honesty statement, and
     `ResultStatus.exact_does_not_strengthen` prices dropping it. Nothing
@@ -192,6 +197,8 @@ namespace Uwueave.HonestRender
 
 open Uwueave Uwueave.Catalog
 
+universe u
+
 /-! ## §1. The carrier — a five-handler dispatch, and one law that pins it.
 
 `dispatch` is the specification: the five-way case analysis on
@@ -216,7 +223,7 @@ that forgets it is false. -/
 for `Evidence.View`: one handler per constructor, and no default case to write.
 ⚠ Five, not six — `ResultStatus.Status` splits `vacuous`, and the boundary says
 what that costs a surface built on this carrier. -/
-def dispatch {α β : Type} (onExact onProvisional : α → β)
+def dispatch {α : Type} {β : Sort u} (onExact onProvisional : α → β)
     (onForkedClosed onForkedOpen onVacuous : β) : Evidence.View α → β
   | .exact a => onExact a
   | .provisional a => onProvisional a
@@ -232,7 +239,7 @@ and a total five-handler eliminator pinned to `dispatch` by `elim_spec`.
 that escapes its world is a true statement filed under the wrong key, so the
 situation a report was made at travels *with* the report. `Says` is `Prop`-
 valued and is the specification, not an extraction route. -/
-structure Carrier {S : Type} (F : Evidence.Future S) (α : Type) : Type 1 where
+structure Carrier {S : Type} (F : Evidence.Future S) (α : Type) : Type (u + 1) where
   /-- The type of results. A consumer sees this and the fields below; it does
   not see a constructor, because the interface does not have one. -/
   R : Type
@@ -244,7 +251,7 @@ structure Carrier {S : Type} (F : Evidence.Future S) (α : Type) : Type 1 where
   /-- The specification: which view this result carries. -/
   Says : R → Evidence.View α → Prop
   /-- **The total eliminator.** Five handlers, one per status. -/
-  elim : {β : Type} → R → (α → β) → (α → β) → β → β → β → β
+  elim : {β : Sort u} → R → (α → β) → (α → β) → β → β → β → β
   /-- A report is made at the site it was given. -/
   site_report : ∀ s v, site (report s v) = s
   /-- A report says the view it was made with. -/
@@ -255,7 +262,7 @@ structure Carrier {S : Type} (F : Evidence.Future S) (α : Type) : Type 1 where
   says_total : ∀ r, ∃ v, Says r v
   /-- **The eliminator IS the dispatch.** No default branch is expressible,
   because there is no behaviour left for one to have. -/
-  elim_spec : ∀ {β : Type} (r : R) (v : Evidence.View α) (onExact onProvisional : α → β)
+  elim_spec : ∀ {β : Sort u} (r : R) (v : Evidence.View α) (onExact onProvisional : α → β)
     (onForkedClosed onForkedOpen onVacuous : β), Says r v →
     elim r onExact onProvisional onForkedClosed onForkedOpen onVacuous
       = dispatch onExact onProvisional onForkedClosed onForkedOpen onVacuous v
@@ -273,7 +280,7 @@ structure Result {S : Type} (F : Evidence.Future S) (α : Type) : Type where
 /-- **The interface is inhabited.** `Result` with the obvious operations
 satisfies every law, so nothing stated over `Carrier` is a fact about an empty
 class. -/
-def stdCarrier {S : Type} (F : Evidence.Future S) (α : Type) : Carrier F α where
+def stdCarrier {S : Type} (F : Evidence.Future S) (α : Type) : Carrier.{u} F α where
   R := Result F α
   report := fun s v => Result.ofParts s v
   site := Result.site
@@ -311,45 +318,69 @@ Three facts, in the order they are needed:
 variable {S α : Type} {F : Evidence.Future S}
 
 /-- `elim` on a fresh report is the dispatch on the view it was made with. -/
-theorem elim_report {β : Type} (C : Carrier F α) (s : S) (v : Evidence.View α)
+theorem elim_report {β : Sort u} (C : Carrier.{u} F α) (s : S) (v : Evidence.View α)
     (onE onP : α → β) (onFC onFO onV : β) :
     C.elim (C.report s v) onE onP onFC onFO onV = dispatch onE onP onFC onFO onV v :=
   C.elim_spec _ v onE onP onFC onFO onV (C.says_report s v)
 
 /-- The `exact` computation rule. -/
-theorem elim_exact {β : Type} (C : Carrier F α) (s : S) (a : α)
+theorem elim_exact {β : Sort u} (C : Carrier.{u} F α) (s : S) (a : α)
     (onE onP : α → β) (onFC onFO onV : β) :
     C.elim (C.report s (Evidence.View.exact a)) onE onP onFC onFO onV = onE a :=
   elim_report C s _ onE onP onFC onFO onV
 
 /-- The `provisional` computation rule. -/
-theorem elim_provisional {β : Type} (C : Carrier F α) (s : S) (a : α)
+theorem elim_provisional {β : Sort u} (C : Carrier.{u} F α) (s : S) (a : α)
     (onE onP : α → β) (onFC onFO onV : β) :
     C.elim (C.report s (Evidence.View.provisional a)) onE onP onFC onFO onV = onP a :=
   elim_report C s _ onE onP onFC onFO onV
 
 /-- The `forkedClosed` computation rule. -/
-theorem elim_forkedClosed {β : Type} (C : Carrier F α) (s : S)
+theorem elim_forkedClosed {β : Sort u} (C : Carrier.{u} F α) (s : S)
     (onE onP : α → β) (onFC onFO onV : β) :
     C.elim (C.report s Evidence.View.forkedClosed) onE onP onFC onFO onV = onFC :=
   elim_report C s _ onE onP onFC onFO onV
 
 /-- The `forkedOpen` computation rule. -/
-theorem elim_forkedOpen {β : Type} (C : Carrier F α) (s : S)
+theorem elim_forkedOpen {β : Sort u} (C : Carrier.{u} F α) (s : S)
     (onE onP : α → β) (onFC onFO onV : β) :
     C.elim (C.report s Evidence.View.forkedOpen) onE onP onFC onFO onV = onFO :=
   elim_report C s _ onE onP onFC onFO onV
 
 /-- The `vacuous` computation rule. -/
-theorem elim_vacuous {β : Type} (C : Carrier F α) (s : S)
+theorem elim_vacuous {β : Sort u} (C : Carrier.{u} F α) (s : S)
     (onE onP : α → β) (onFC onFO onV : β) :
     C.elim (C.report s Evidence.View.vacuous) onE onP onFC onFO onV = onV :=
   elim_report C s _ onE onP onFC onFO onV
 
+/-- A proof-valued consumer uses the eliminator directly. No proposition is
+recovered from `Says` and no `Classical.choice` extraction is involved. -/
+theorem elim_prop_fixture (p : Prop) :
+    (stdCarrier.{1} (fun _ _ : Unit => True) Nat).elim
+        (β := Prop)
+        ((stdCarrier.{1} (fun _ _ : Unit => True) Nat).report ()
+          (Evidence.View.exact 7))
+        (fun _ => p) (fun _ => False) False False False = p :=
+  elim_exact (stdCarrier.{1} (fun _ _ : Unit => True) Nat) () 7
+    (fun _ => p) (fun _ => False) False False False
+
+/-- A consumer returning a value in `Type 1` is likewise a direct elimination.
+The carrier is instantiated at `Sort 2`, the sort containing that result type. -/
+theorem elim_type1_fixture :
+    (stdCarrier.{2} (fun _ _ : Unit => True) Nat).elim
+        (β := ULift.{1} Nat)
+        ((stdCarrier.{2} (fun _ _ : Unit => True) Nat).report ()
+          (Evidence.View.exact 7))
+        (fun n => ULift.up n) (fun n => ULift.up n)
+        (ULift.up 0) (ULift.up 0) (ULift.up 0) = ULift.up 7 :=
+  elim_exact (stdCarrier.{2} (fun _ _ : Unit => True) Nat) () 7
+    (fun n => ULift.up n) (fun n => ULift.up n)
+    (ULift.up 0) (ULift.up 0) (ULift.up 0)
+
 /-- **The eliminator is total.** Every result says a view, and on it `elim` is
 exactly the five-handler dispatch: it is defined at every result, and it never
 returns a value none of the five handlers supplied. -/
-theorem elim_total {β : Type} (C : Carrier F α) (r : C.R)
+theorem elim_total {β : Sort u} (C : Carrier.{u} F α) (r : C.R)
     (onE onP : α → β) (onFC onFO onV : β) :
     ∃ v, C.Says r v ∧ C.elim r onE onP onFC onFO onV = dispatch onE onP onFC onFO onV v := by
   obtain ⟨v, hv⟩ := C.says_total r
@@ -361,7 +392,7 @@ statuses. So a consumer cannot avoid handling a status by writing something
 other than `elim`: whatever it wrote *is* an `elim`, extensionally, and its
 `forkedOpen` behaviour is `f` applied to a forked report whether it meant to
 have one or not. -/
-theorem consumers_factor {β : Type} (C : Carrier F α) (f : C.R → β) (s : S)
+theorem consumers_factor {β : Sort u} (C : Carrier.{u} F α) (f : C.R → β) (s : S)
     (v : Evidence.View α) :
     f (C.report s v)
       = C.elim (C.report s v)
@@ -380,7 +411,7 @@ consumer at a reachable status.
 
 This is the checkable proxy codex proposed in place of the unenforceable
 salience requirement. §8 states precisely what it does not buy. -/
-theorem every_status_slot_is_load_bearing {β : Type} (C : Carrier F α) (s : S)
+theorem every_status_slot_is_load_bearing {β : Sort u} (C : Carrier.{u} F α) (s : S)
     (onE onP onE' onP' : α → β) (onFC onFO onV onFC' onFO' onV' : β) :
     (onE ≠ onE' → ∃ r : C.R,
         C.elim r onE onP onFC onFO onV ≠ C.elim r onE' onP onFC onFO onV)
@@ -570,7 +601,7 @@ into the property §8 asks for. -/
 
 /-- The carrier every concrete witness below lives at: results over
 `Evidence.ResultEvidence Holes.Val`, indexed by the sealed future. -/
-def valCarrier : Carrier (Evidence.SealedFuture (α := Holes.Val)) Holes.Val :=
+def valCarrier : Carrier.{1} (Evidence.SealedFuture (α := Holes.Val)) Holes.Val :=
   stdCarrier _ _
 
 /-- `47` is a candidate at `Evidence.forkedClosedW` — the fork *waiting will not
@@ -657,7 +688,7 @@ one. -/
 
 /-- The world-sited carrier: results whose site is a `WorldFuture.World`, indexed
 by the world-level sealed future. -/
-def worldCarrier : Carrier (WorldFuture.SealedFuture (α := Holes.Val)) Holes.Val :=
+def worldCarrier : Carrier.{1} (WorldFuture.SealedFuture (α := Holes.Val)) Holes.Val :=
   stdCarrier _ _
 
 /-- **The deployable renderer is world-sited.** `WorldFuture.renderW` is sound

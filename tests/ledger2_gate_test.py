@@ -40,6 +40,7 @@ class Fixture:
             "Uwueave.lean", "lakefile.toml",
             "lake-manifest.json", "lean-toolchain", "rust/build.rs",
             "rust/Cargo.toml", "rust/Cargo.lock", "rust/shim.c",
+            "rust/abi/uwueave-abi-v1.json",
             "docs/TRUST.md", "docs/RUNTIME.md", "docs/COHERENCE.md",
             "docs/MAP.md", "docs/PERFORMANCE.md", "docs/index.html",
             "docs/trust/ledger2-v1.json", "docs/debt/active.jsonl",
@@ -416,7 +417,7 @@ class Ledger2StaticGateTests(unittest.TestCase):
             self.check()
 
     def test_stale_live_unsafe_count_is_rejected(self) -> None:
-        text = self.fixture.text("docs/TRUST.md").replace("**21 unsafe blocks**", "**20 unsafe blocks**")
+        text = self.fixture.text("docs/TRUST.md").replace("**18 unsafe blocks**", "**17 unsafe blocks**")
         self.fixture.write_text("docs/TRUST.md", text)
         with self.assertRaisesRegex(gate.GateError, "stale total unsafe count"):
             self.check()

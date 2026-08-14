@@ -370,6 +370,77 @@ theorem refuses_wrong_resolution (claim : ResolutionIdentity)
 
 end CheckedReport
 
+/-! ## Supported checked rendering surface
+
+This namespace is the deployment-facing boundary. Its `Report` wrapper keeps
+the underlying `Carrier6.R` and `CheckedReport` projections private: callers can
+construct reports only with `renderReport` and consume them only through the
+total six-handler `eliminate`. Applications that deliberately need the
+refutable semantic model must name the explicitly lower-level
+`RenderSix.Carrier6` API, whose raw `report` operation remains public. -/
+
+namespace SupportedSurface
+
+variable {S β : Type} {F : Evidence.Future S}
+  {resolution : StatusEffects.Resolution S β}
+  {d : CheckedDeclaration S β F resolution}
+  {C : RenderSix.Carrier6 F β}
+
+/-- Opaque deployment report. The checked payload and raw carrier output are
+private, so the supported surface has no raw status constructor or projection. -/
+structure Report (d : CheckedDeclaration S β F resolution)
+    (C : RenderSix.Carrier6 F β) where
+  private ofChecked ::
+  private checked : CheckedReport d C
+
+/-- The only supported report constructor: evaluate the checked declaration at
+the supplied state and compute every report claim from that evaluation. -/
+def renderReport (d : CheckedDeclaration S β F resolution)
+    (C : RenderSix.Carrier6 F β) (state : S) : Report d C :=
+  .ofChecked (CheckedReport.renderAt d C state)
+
+/-- The checked state remains inspectable without exposing the raw report. -/
+def Report.state (report : Report d C) : S := report.checked.state
+
+/-- Semantic observation on the opaque report. This is a proposition, not a
+constructor or a projection of `Carrier6.R`. -/
+def Report.Says (report : Report d C) (status : Status β) : Prop :=
+  C.Says report.checked.output status
+
+/-- The complete supported consumer: one handler for every status and no raw
+carrier result in either its inputs or output. -/
+def Report.eliminate {γ : Type} (report : Report d C)
+    (onExact onProvisional : β → γ)
+    (onForkedClosed onForkedOpen onAbsent onPending : γ) : γ :=
+  C.elim report.checked.output onExact onProvisional
+    onForkedClosed onForkedOpen onAbsent onPending
+
+/-- The opaque report says exactly the status computed at its checked state. -/
+theorem Report.says_iff (report : Report d C) (status : Status β) :
+    report.Says status ↔ d.evaluate report.state = status :=
+  report.checked.says_iff status
+
+/-- Elimination is exactly the six-way dispatch on the computed status. -/
+theorem Report.eliminate_spec {γ : Type} (report : Report d C)
+    (onExact onProvisional : β → γ)
+    (onForkedClosed onForkedOpen onAbsent onPending : γ) :
+    report.eliminate onExact onProvisional
+        onForkedClosed onForkedOpen onAbsent onPending =
+      RenderSix.dispatch6 onExact onProvisional onForkedClosed onForkedOpen
+        onAbsent onPending (d.evaluate report.state) :=
+  C.elim_spec report.checked.output (d.evaluate report.checked.state)
+    onExact onProvisional onForkedClosed onForkedOpen onAbsent onPending
+    report.checked.says_computed
+
+/-- A caller cannot fabricate a status different from the declaration's
+evaluation and attach it to a supported report. -/
+theorem Report.refuses_fabricated_status (report : Report d C)
+    (status : Status β) (hne : d.evaluate report.state ≠ status) :
+    ¬ report.Says status :=
+  fun h => hne ((report.says_iff status).mp h)
+
+end SupportedSurface
+
 /-! ## Finite-reach and observation adapters -/
 
 /-- A checked report whose evaluated state belongs to the exact finite reach
@@ -512,6 +583,22 @@ def evidenceCarrier : RenderSix.Carrier6
 
 noncomputable def openReport : CheckedReport evidenceProgram evidenceCarrier :=
   CheckedReport.renderAt evidenceProgram evidenceCarrier Evidence.openW
+
+/-- The same evaluation through the supported surface: its raw carrier result
+is sealed inside the opaque wrapper. -/
+noncomputable def openSurfaceReport :
+    SupportedSurface.Report evidenceProgram evidenceCarrier :=
+  SupportedSurface.renderReport evidenceProgram evidenceCarrier Evidence.openW
+
+/-- Runtime/refusal canary: the open state computes `provisional 47`, so the
+supported report cannot be observed as a fabricated `exact 47`. -/
+theorem open_surface_report_refuses_exact :
+    ¬ openSurfaceReport.Says (Status.exact 47) := by
+  apply openSurfaceReport.refuses_fabricated_status
+  change ResultStatus.statusOf Evidence.openW ≠ Status.exact 47
+  rw [ResultStatus.statusOf_openW]
+  intro h
+  cases h
 
 theorem open_report_exact_projections :
     evidenceCarrier.site openReport.output = Evidence.openW

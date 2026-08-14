@@ -52,12 +52,30 @@ typedef struct {
   uint64_t scope;
 } shim_replay_grant;
 
-_Static_assert(sizeof(shim_replay_op) == 5 * sizeof(uint64_t),
+_Static_assert(sizeof(shim_replay_op) == 40,
                "shim_replay_op ABI drift");
-_Static_assert(offsetof(shim_replay_op, dest) == 3 * sizeof(uint64_t),
-               "shim_replay_op field-order drift");
-_Static_assert(sizeof(shim_replay_grant) == 3 * sizeof(uint64_t),
+_Static_assert(_Alignof(shim_replay_op) == 8,
+               "shim_replay_op alignment drift");
+_Static_assert(offsetof(shim_replay_op, lamport) == 0,
+               "shim_replay_op.lamport offset drift");
+_Static_assert(offsetof(shim_replay_op, replica) == 8,
+               "shim_replay_op.replica offset drift");
+_Static_assert(offsetof(shim_replay_op, child) == 16,
+               "shim_replay_op.child offset drift");
+_Static_assert(offsetof(shim_replay_op, dest) == 24,
+               "shim_replay_op.dest offset drift");
+_Static_assert(offsetof(shim_replay_op, cite) == 32,
+               "shim_replay_op.cite offset drift");
+_Static_assert(sizeof(shim_replay_grant) == 24,
                "shim_replay_grant ABI drift");
+_Static_assert(_Alignof(shim_replay_grant) == 8,
+               "shim_replay_grant alignment drift");
+_Static_assert(offsetof(shim_replay_grant, id) == 0,
+               "shim_replay_grant.id offset drift");
+_Static_assert(offsetof(shim_replay_grant, parent) == 8,
+               "shim_replay_grant.parent offset drift");
+_Static_assert(offsetof(shim_replay_grant, scope) == 16,
+               "shim_replay_grant.scope offset drift");
 
 /* SAFETY CONTRACT: the caller serializes this process-global initializer and
  * invokes it before every other shim function. Rust enforces that with Once.

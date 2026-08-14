@@ -22,7 +22,6 @@ extern "C" {
     ) -> *mut u8;
     fn shim_uweave_replay(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
     fn shim_uweave_free(p: *mut u8);
-    #[cfg(test)]
     fn shim_uweave_request_canonical(input: *const u8, len: usize) -> u8;
     fn shim_uweave_seq(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
     fn shim_uweave_era(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
@@ -64,6 +63,24 @@ pub(crate) struct ReplayGrantInput {
     pub(crate) parent: u64,
     pub(crate) scope: u64,
 }
+
+const _: () = {
+    use std::mem::{align_of, offset_of, size_of};
+
+    assert!(size_of::<ReplayOpInput>() == 40);
+    assert!(align_of::<ReplayOpInput>() == 8);
+    assert!(offset_of!(ReplayOpInput, lamport) == 0);
+    assert!(offset_of!(ReplayOpInput, replica) == 8);
+    assert!(offset_of!(ReplayOpInput, child) == 16);
+    assert!(offset_of!(ReplayOpInput, dest) == 24);
+    assert!(offset_of!(ReplayOpInput, cite) == 32);
+
+    assert!(size_of::<ReplayGrantInput>() == 24);
+    assert!(align_of::<ReplayGrantInput>() == 8);
+    assert!(offset_of!(ReplayGrantInput, id) == 0);
+    assert!(offset_of!(ReplayGrantInput, parent) == 8);
+    assert!(offset_of!(ReplayGrantInput, scope) == 16);
+};
 
 fn ensure_initialized() {
     INIT.call_once(|| {
@@ -146,8 +163,7 @@ pub fn replay_kernel(input: &[u8]) -> Vec<u8> {
 /// production replay path no longer needs this differential because Lean now
 /// produces its request bytes; this endpoint remains a compatibility audit
 /// and a focused test oracle.
-#[cfg(test)]
-pub fn request_canonical(input: &[u8]) -> bool {
+pub(crate) fn request_canonical(input: &[u8]) -> bool {
     ensure_initialized();
     // SAFETY: `input` is readable for `input.len()` bytes. The initialized
     // shim consumes no Rust memory and returns a scalar byte.
@@ -247,4 +263,43 @@ pub(crate) fn runtime_auth_v4_check_admission_trace(input: &[u8]) -> bool {
     // shim copies it into a fresh Lean ByteArray, retains no Rust pointer, and
     // returns 1 only for the checker's exact one-byte acceptance response.
     unsafe { shim_uweave_runtime_auth_v4_check_admission_trace(input.as_ptr(), input.len()) == 1 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// This deliberately crosses every C-shim ownership path. CI rebuilds the
+    /// shim with UndefinedBehaviorSanitizer for this exact test, so allocation,
+    /// copying, consumption, and Rust-side release are exercised by native
+    /// code rather than inferred from source alone.
+    #[test]
+    fn shim_allocation_copy_and_refcount_paths() {
+        let first_parent = [-1, 0];
+        let ops = [ReplayOpInput {
+            lamport: 1,
+            replica: 7,
+            child: 1,
+            dest: -1,
+            cite: 0,
+        }];
+        let grants = [ReplayGrantInput {
+            id: 1,
+            parent: 0,
+            scope: 1,
+        }];
+        let revocations = [1];
+
+        let request = encode_replay_request(&first_parent, &ops, &grants, &revocations);
+        assert!(!request.is_empty());
+        assert!(request_canonical(&request));
+        assert!(!replay_kernel(&request).is_empty());
+
+        assert!(!seq_kernel(&[]).is_empty());
+        assert!(!era_kernel(&[]).is_empty());
+        assert!(!preo_artifact_v2_validate_one(&[]));
+        assert!(!runtime_auth_v4_decode_canonical(0, &[]).is_empty());
+        assert!(!runtime_auth_v4_project_admission(0, &[]).is_empty());
+        assert!(!runtime_auth_v4_check_admission_trace(&[]));
+    }
 }

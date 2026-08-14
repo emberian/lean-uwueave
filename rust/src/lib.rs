@@ -117,11 +117,15 @@
 //! scenario-for-scenario through the real kernel, which makes them good
 //! tests and zero formal evidence.
 
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod auth;
 pub mod auth_runtime;
 pub mod auth_verifier;
 pub mod causal;
 pub mod era;
+#[allow(unsafe_code)]
 mod ffi;
 pub mod movelog;
 pub mod persistence;
@@ -139,3 +143,24 @@ pub use movelog::{
     ReplayRequestSlot, TracedReplay,
 };
 pub use seq::{SeqCrdt, SeqDeleteError, SeqInsertError, SeqMergeError, SeqMergeStats};
+
+/// Safe, deliberately hidden adapters used only by the repository's native
+/// measurement example. Keeping the example on this side of the FFI boundary
+/// ensures that every Rust `unsafe` operation remains in `ffi.rs`.
+#[doc(hidden)]
+pub mod native_bench {
+    /// Return the byte length produced by one Lean replay-kernel call.
+    pub fn replay_output_len(input: &[u8]) -> usize {
+        crate::ffi::replay_kernel(input).len()
+    }
+
+    /// Ask the Lean compatibility endpoint whether one request is canonical.
+    pub fn request_canonical(input: &[u8]) -> bool {
+        crate::ffi::request_canonical(input)
+    }
+
+    /// Return the byte length produced by one Lean sequence-kernel call.
+    pub fn seq_output_len(input: &[u8]) -> usize {
+        crate::ffi::seq_kernel(input).len()
+    }
+}

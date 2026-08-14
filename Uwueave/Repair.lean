@@ -42,14 +42,15 @@ file subsumes the other's job: a menu is what a report shows a schema author, a
     enumeration, so an assumption can be *charged* rather than mentioned.
   * **§2 `Price`** — eight fields, each tied to a semantic distinction, with a
     commutative monoid structure so chains accumulate.
-  * **§4 `PromiseRelation`** — five independent Bool axes, composing by `&&`. The
-    five names codex listed (equivalent · strengthened · weakened ·
+  * **§4 `PromiseRelation`** — six independent Bool axes, composing by `&&`. The
+    original five names (equivalent · strengthened · weakened ·
     changed-observation · changed-trust) are recovered as inhabitants — and two
     of the four repairs below need **several of them at once** (arbitration needs
     three, forking needs two), which is a finding, not an encoding accident
     (`arbitration_needs_three_names`, `fork_is_changed_observation_and_weakened`).
-    A fifth axis, `shrinkageKept`, is not on codex's list at all and is the one
-    arbitration is most often reported without.
+    `shrinkageKept` was the first missing axis; `demandEquivalenceKept` is the
+    second, and distinguishes equivalence of downstream demand/feed types from
+    the strictly weaker claim that both observations happen to be singular.
   * **§5 `Promise`** — an invariant, plus the observation context (`Demand` and
     `admits`) and trust context the axes need. Minimal: six fields, and every one
     is read by an axis or by a price field.
@@ -82,19 +83,20 @@ flat enum all four are peers in one list.
     `RepairSynthesis` and `FiniteRepairMenu` search an explicitly supplied finite
     catalog and return exhaustive refusal only inside it; they do not discover a
     non-trivial seam, an escrow partition, or a complete universe of repairs.
-  * ⟨UNDONE U-0122⟩ **`Price.add` is a declared accumulation, not a minimum.** Chaining
-    adds the fields. It is NOT claimed that the sum is the least price achievable
-    for the composite: `SeamAlgebra.linked_segmented` is a case where two seams
-    share one crossing, and codex's own structural verdict on our cost measure
-    (`min_σ (c₁ + c₂) ≠ min_σ c₁ + min_σ c₂`) says a scalar minimum is not
-    compositional at all. A cost *profile over the strategy space*, minimised only
-    when the session closes, is what a budgeting language needs; this is not it.
-  * ⟨UNDONE U-0123⟩ **`singularObservation` is the provable fragment of "the
-    observation changed".** A full account would compare `Demand` types up to
-    equivalence and say what downstream must rewrite. What is proved here is the
-    one component this tree can refute: singularity of the read
-    (`fork_loses_singularity`). A repair that changes the observation type while
-    keeping singularity is not distinguished by this axis.
+  * ✅ **Composite repair prices close over a shared-strategy profile.**
+    `RepairPriceProfile.comp_close_is_least_achievable` composes link prices
+    pointwise and returns a least score attained by one admitted strategy when
+    the session closes. `shared_strategy_price_strictness` retains the decisive
+    counterexample: independently minimizing the links reports `0 + 0`, while
+    every shared strategy pays `1`. The caller still supplies the valuation;
+    there is no canonical scalar order on the eight currencies.
+  * ✅ **Observation transport is explicit up to equivalence.** `DemandEquiv`
+    compares demand types and admitted feeds along the state transform, while
+    the existing entailment/admission axes continue to compare invariants.
+    Preservation composes; concrete refutations are named per repair.
+    `changed_demand_type_but_both_singular` is the counterexample the old Bool
+    missed: both endpoints are singular, yet their demand types are not
+    equivalent.
   * ⟨PREMISE U-0124⟩ **`rollbackWindow` is a declared bound, not a derived one.**
     `Era.final_view_immune` proves the exposure is confined to the *pending*
     suffix — that the window exists and is not everything. Nothing here computes
@@ -123,6 +125,7 @@ import Uwueave.GatedEra
 import Uwueave.MVRegister
 import Uwueave.JoinHom
 import Uwueave.Cost
+import Uwueave.CoordEffect
 
 namespace Uwueave.Repair
 
@@ -243,8 +246,8 @@ def free : Price :=
     restrictsReachability := false, assumptions := [] }
 
 /-- Chained repairs pay both bills: counts add, flags disjoin, premises
-accumulate. ⟨UNDONE U-0126⟩ this is a *declared* accumulation and is not claimed
-minimal — see the module header. -/
+accumulate. This remains pointwise bill accumulation, not minimization;
+`RepairPriceProfile` defers the caller-valued minimum until session close. -/
 def add (p q : Price) : Price :=
   { seamCrossings := p.seamCrossings + q.seamCrossings,
     arbiterCuts := p.arbiterCuts + q.arbiterCuts,
@@ -267,6 +270,168 @@ theorem add_assoc (p q r : Price) : add (add p q) r = add p (add q r) := by
   simp [add, Nat.add_assoc, Bool.or_assoc, List.append_assoc]
 
 end Price
+
+/-! ## §2.1 Repair-price profiles — compose first, minimize at session close
+
+`Price.add` is the bill for two fixed repair choices. A session chooses one
+shared strategy for all links, so its semantic price is a profile until the
+choice is made. The finite strategy space and the caller's valuation are both
+explicit; no theorem below invents an ordering on `Price`. -/
+
+/-- A complete repair price as a function of the strategy shared by a session. -/
+def RepairPriceProfile (Strategy : Type) : Type := Strategy → Price
+
+namespace RepairPriceProfile
+
+/-- Pointwise bill composition under one shared strategy. -/
+def comp {Strategy : Type} (left right : RepairPriceProfile Strategy) :
+    RepairPriceProfile Strategy :=
+  fun strategy => Price.add (left strategy) (right strategy)
+
+@[inherit_doc] scoped infixl:65 " ⊗ᵣ " => RepairPriceProfile.comp
+
+@[simp] theorem comp_apply {Strategy : Type}
+    (left right : RepairPriceProfile Strategy) (strategy : Strategy) :
+    (left ⊗ᵣ right) strategy = Price.add (left strategy) (right strategy) :=
+  rfl
+
+/-- A fixed link bill as a strategy-independent profile. -/
+def constant {Strategy : Type} (price : Price) : RepairPriceProfile Strategy :=
+  fun _ => price
+
+/-- This is the exact surviving role of `Price.add`: two fixed bills compose
+pointwise, without making any minimum claim. -/
+@[simp] theorem constant_comp {Strategy : Type} (left right : Price) :
+    constant (Strategy := Strategy) left ⊗ᵣ constant right =
+      constant (Price.add left right) :=
+  rfl
+
+/-- Read a multidimensional price profile through an explicit caller valuation. -/
+def valued {Strategy : Type} (valuation : Price → Nat)
+    (profile : RepairPriceProfile Strategy) : CoordEffect.Profile Strategy :=
+  fun strategy => valuation (profile strategy)
+
+/-- Close a finite session only after all link profiles have composed. -/
+def close {Strategy : Type} (space : CoordEffect.Admissible Strategy)
+    (valuation : Price → Nat) (profile : RepairPriceProfile Strategy) : Nat :=
+  CoordEffect.optimum space (valued valuation profile)
+
+/-- A closed-session score is no larger than any admitted strategy's score. -/
+theorem close_le_of_mem {Strategy : Type}
+    {space : CoordEffect.Admissible Strategy} {valuation : Price → Nat}
+    {profile : RepairPriceProfile Strategy} {strategy : Strategy}
+    (hstrategy : strategy ∈ space.toList) :
+    close space valuation profile ≤ valuation (profile strategy) :=
+  CoordEffect.optimum_le_of_mem hstrategy
+
+/-- The closed-session minimum is achievable: one admitted shared strategy
+attains it, and its complete `Price` is no worse under the caller's valuation
+than the price achieved by every other admitted strategy. -/
+theorem close_is_least_achievable {Strategy : Type}
+    (space : CoordEffect.Admissible Strategy) (valuation : Price → Nat)
+    (profile : RepairPriceProfile Strategy) :
+    ∃ strategy ∈ space.toList,
+      close space valuation profile = valuation (profile strategy)
+      ∧ ∀ other ∈ space.toList,
+          valuation (profile strategy) ≤ valuation (profile other) := by
+  obtain ⟨strategy, hstrategy, hclose⟩ :=
+    CoordEffect.optimum_achieved space (valued valuation profile)
+  have hclose' : close space valuation profile = valuation (profile strategy) := by
+    simpa [close, valued] using hclose
+  refine ⟨strategy, hstrategy, hclose', ?_⟩
+  intro other hother
+  rw [← hclose']
+  exact close_le_of_mem hother
+
+/-- **Compose, then minimize.** The least composite bill is achieved by one
+shared strategy. This is deliberately not the sum of two independently chosen
+minima; `shared_strategy_price_strictness` below refutes that equation. -/
+theorem comp_close_is_least_achievable {Strategy : Type}
+    (space : CoordEffect.Admissible Strategy) (valuation : Price → Nat)
+    (left right : RepairPriceProfile Strategy) :
+    ∃ strategy ∈ space.toList,
+      close space valuation (left ⊗ᵣ right) =
+        valuation (Price.add (left strategy) (right strategy))
+      ∧ ∀ other ∈ space.toList,
+          valuation (Price.add (left strategy) (right strategy)) ≤
+            valuation (Price.add (left other) (right other)) :=
+  close_is_least_achievable space valuation (left ⊗ᵣ right)
+
+/-- A valuation may be used compositionally only when it explicitly respects
+all eight `Price.add` coordinates. This hypothesis is not automatic: Boolean
+currencies are accumulated by disjunction and arbitrary caller policies need
+not value that operation additively. -/
+def AdditiveValuation (valuation : Price → Nat) : Prop :=
+  ∀ left right, valuation (Price.add left right) =
+    valuation left + valuation right
+
+/-- With an explicitly additive caller valuation, compose-then-close is at
+least the sum of independently closed scores. Equality still requires a common
+minimizer, and the pin fixture below makes the inequality strict. -/
+theorem close_comp_ge_independent {Strategy : Type}
+    (space : CoordEffect.Admissible Strategy) (valuation : Price → Nat)
+    (hvaluation : AdditiveValuation valuation)
+    (left right : RepairPriceProfile Strategy) :
+    close space valuation (left ⊗ᵣ right) ≥
+      close space valuation left + close space valuation right := by
+  have hprofiles :
+      valued valuation (left ⊗ᵣ right) =
+        CoordEffect.Profile.comp (valued valuation left) (valued valuation right) := by
+    funext strategy
+    exact hvaluation (left strategy) (right strategy)
+  rw [close, hprofiles]
+  exact CoordEffect.opt_compose_ge_sum_opt space
+    (valued valuation left) (valued valuation right)
+
+/-- Lift a scalar seam-crossing profile without collapsing any other price
+currency: the other seven fields remain exactly free. -/
+def ofSeamCrossings {Strategy : Type} (profile : CoordEffect.Profile Strategy) :
+    RepairPriceProfile Strategy :=
+  fun strategy => { Price.free with seamCrossings := profile strategy }
+
+/-- The explicit valuation used by the shared-strategy strictness fixture. -/
+def seamCrossingValuation (price : Price) : Nat := price.seamCrossings
+
+theorem seamCrossingValuation_additive :
+    AdditiveValuation seamCrossingValuation :=
+  fun _ _ => rfl
+
+/-- The two pin streams as full repair-price profiles. -/
+def pinTruePriceProfile :
+    RepairPriceProfile (CoordEffect.Strategy Cost.pinInv Bool) :=
+  ofSeamCrossings CoordEffect.pinTrueProfile
+
+def pinFalsePriceProfile :
+    RepairPriceProfile (CoordEffect.Strategy Cost.pinInv Bool) :=
+  ofSeamCrossings CoordEffect.pinFalseProfile
+
+/-- The strict fixture's exact values: the independent closes are both zero,
+while closing the composed shared-strategy profile costs exactly one. -/
+theorem shared_strategy_price_exact :
+    (close CoordEffect.pinSpace seamCrossingValuation pinTruePriceProfile = 0
+      ∧ close CoordEffect.pinSpace seamCrossingValuation pinFalsePriceProfile = 0)
+    ∧ close CoordEffect.pinSpace seamCrossingValuation
+        (pinTruePriceProfile ⊗ᵣ pinFalsePriceProfile) = 1 := by
+  simpa [close, valued, pinTruePriceProfile, pinFalsePriceProfile,
+    ofSeamCrossings, seamCrossingValuation, RepairPriceProfile.comp, Price.add,
+    Price.free] using
+      And.intro CoordEffect.pin_stream_optima_zero
+        CoordEffect.pin_session_costs_exactly_one
+
+/-- **Shared-strategy strictness.** Each link is independently free somewhere,
+but no one strategy makes both free. Thus adding independently minimized prices
+is not the minimum composite price; the profile must be composed first and
+closed once. -/
+theorem shared_strategy_price_strictness :
+    close CoordEffect.pinSpace seamCrossingValuation pinTruePriceProfile
+        + close CoordEffect.pinSpace seamCrossingValuation pinFalsePriceProfile
+      < close CoordEffect.pinSpace seamCrossingValuation
+          (pinTruePriceProfile ⊗ᵣ pinFalsePriceProfile) := by
+  simpa [close, valued, pinTruePriceProfile, pinFalsePriceProfile,
+    ofSeamCrossings, seamCrossingValuation, RepairPriceProfile.comp, Price.add,
+    Price.free] using CoordEffect.pin_opt_compose_strict
+
+end RepairPriceProfile
 
 /-! ## §3. The price currencies and their theorem witnesses
 
@@ -433,7 +598,7 @@ out to matter: **two of the four repairs need several names at once**
 five-constructor `inductive` could not have said that, and would have forced each
 repair into whichever single name its author found most flattering. -/
 
-/-- **What a repair did to the promise**, on five axes. Each field is certified
+/-- **What a repair did to the promise**, on six axes. Each field is certified
 by the correspondingly-named obligation in `Repair`; a `false` field claims
 nothing and proves nothing, which is why the guard in §9 is stated as a
 refutation and not as bookkeeping. -/
@@ -446,10 +611,16 @@ structure PromiseRelation where
   `P.inv s → Q.inv (transform s)`. Escrow and refinement spend this axis —
   states that were legal stop being reachable. -/
   admitsOriginal : Bool
+  /-- The downstream demand type and admitted feed are equivalent through the
+  repair's state transform. This is certified by `Repair.observation`; a false
+  value makes no converse claim because a later inverse transport may restore
+  equivalence. -/
+  demandEquivalenceKept : Bool
   /-- The read is still singular: at most one demand is admitted at a legal
-  state. Forking spends this axis, and the downstream contract changes with
-  it. ⟨UNDONE U-0129⟩ this is the provable fragment of "the observation changed"; see
-  the module header. -/
+  state. This remains a useful independent projection, but is no longer used as
+  a proxy for demand equivalence: fork loses singularity while preserving its
+  demand feed, and `changed_demand_type_but_both_singular` gives the converse
+  separation. -/
   singularObservation : Bool
   /-- Growth of the state never enlarges what is admitted —
   `Gated.gated_antitone`'s shape. Arbitration spends this axis, necessarily:
@@ -467,6 +638,8 @@ namespace PromiseRelation
 def comp (a b : PromiseRelation) : PromiseRelation :=
   { entailsOriginal := a.entailsOriginal && b.entailsOriginal,
     admitsOriginal := a.admitsOriginal && b.admitsOriginal,
+    demandEquivalenceKept :=
+      a.demandEquivalenceKept && b.demandEquivalenceKept,
     singularObservation := a.singularObservation && b.singularObservation,
     shrinkageKept := a.shrinkageKept && b.shrinkageKept,
     trustPreserved := a.trustPreserved && b.trustPreserved }
@@ -474,30 +647,35 @@ def comp (a b : PromiseRelation) : PromiseRelation :=
 /-- **Equivalent**: the promise is untouched on every axis. The two *deployment*
 repairs (seam, retain-evidence) sit here — they change the price and the
 discharge and nothing else. -/
-def equivalent : PromiseRelation := ⟨true, true, true, true, true⟩
+def equivalent : PromiseRelation := ⟨true, true, true, true, true, true⟩
 
 /-- **Strengthened**: the repaired promise still entails the original and
 promises more, so some previously-legal state is now refused. -/
-def strengthened : PromiseRelation := ⟨true, false, true, true, true⟩
+def strengthened : PromiseRelation := ⟨true, false, true, true, true, true⟩
 
 /-- **Weakened**: the repaired promise no longer entails the original. This is
 the relation §9 refuses to let anyone present as satisfying the original. -/
-def weakened : PromiseRelation := ⟨false, true, true, true, true⟩
+def weakened : PromiseRelation := ⟨false, true, true, true, true, true⟩
 
-/-- **Changed observation**: the read stops being singular; downstream must
-handle plurality. -/
-def changedObservation : PromiseRelation := ⟨true, true, false, true, true⟩
+/-- **Changed observation cardinality**: the read stops being singular;
+downstream must handle plurality. The demand/feed type may still be equivalent,
+as it is for `fork`. -/
+def changedObservation : PromiseRelation := ⟨true, true, true, false, true, true⟩
+
+/-- **Changed demand/feed**: the target observation is not certified equivalent
+to the source, even when both endpoints remain singular. -/
+def changedDemand : PromiseRelation := ⟨true, true, false, true, true, true⟩
 
 /-- **Changed trust**: the repaired promise leans on a premise the original did
 not. -/
-def changedTrust : PromiseRelation := ⟨true, true, true, true, false⟩
+def changedTrust : PromiseRelation := ⟨true, true, true, true, true, false⟩
 
 /-- **Changed monotonicity** — the axis codex's five names do not contain, and
 the one arbitration spends alongside trust. -/
-def changedMonotonicity : PromiseRelation := ⟨true, true, true, false, true⟩
+def changedMonotonicity : PromiseRelation := ⟨true, true, true, true, false, true⟩
 
 /-- Neither direction survives: the two promises are simply different. -/
-def incomparable : PromiseRelation := ⟨false, false, true, true, true⟩
+def incomparable : PromiseRelation := ⟨false, false, true, true, true, true⟩
 
 @[simp] theorem equivalent_comp (a : PromiseRelation) : comp equivalent a = a := by
   cases a; simp [comp, equivalent]
@@ -526,7 +704,7 @@ theorem comp_table :
     ∧ comp strengthened weakened = incomparable
     ∧ comp equivalent equivalent = equivalent
     ∧ comp changedObservation changedTrust
-        = ⟨true, true, false, true, false⟩ := by decide
+        = ⟨true, true, true, false, true, false⟩ := by decide
 
 end PromiseRelation
 
@@ -573,6 +751,55 @@ def Promise.Singular (P : Promise) : Prop :=
 the level of a promise: learning more never admits more. -/
 def Promise.Shrinking (P : Promise) : Prop :=
   ∀ x y : P.State, x ⊑ y → ∀ d, P.admits y d → P.admits x d
+
+/-! ### §5.1 Demand equivalence — the full downstream observation transport
+
+Singularity is a cardinality property of the admitted feed, not an equivalence
+between observation interfaces. `DemandEquiv` records the stronger statement:
+an invertible translation of demand types whose admitted answers agree through
+the repair's state transform. It deliberately does not compare invariants;
+those are already tracked by `entailsOriginal` and `admitsOriginal`. -/
+
+/-- An explicit equivalence between downstream demand/feed interfaces through
+a state transform. The maps and both inverse laws are data; same singularity at
+the endpoints is neither assumed nor sufficient. -/
+structure DemandEquiv (P Q : Promise) (transform : P.State → Q.State) where
+  toDemand : P.Demand → Q.Demand
+  fromDemand : Q.Demand → P.Demand
+  leftInverse : ∀ demand, fromDemand (toDemand demand) = demand
+  rightInverse : ∀ demand, toDemand (fromDemand demand) = demand
+  admits_iff : ∀ state demand,
+    Q.admits (transform state) (toDemand demand) ↔ P.admits state demand
+
+namespace DemandEquiv
+
+/-- Identity transport preserves the complete demand/feed interface. -/
+def refl (P : Promise) : DemandEquiv P P (fun state => state) where
+  toDemand := id
+  fromDemand := id
+  leftInverse := fun _ => rfl
+  rightInverse := fun _ => rfl
+  admits_iff := fun _ _ => Iff.rfl
+
+/-- Demand equivalence composes with state transforms, so a checked repair
+chain retains the downstream translation rather than only conjoining a flag. -/
+def trans {P Q R : Promise} {first : P.State → Q.State}
+    {second : Q.State → R.State}
+    (left : DemandEquiv P Q first) (right : DemandEquiv Q R second) :
+    DemandEquiv P R (fun state => second (first state)) where
+  toDemand := fun demand => right.toDemand (left.toDemand demand)
+  fromDemand := fun demand => left.fromDemand (right.fromDemand demand)
+  leftInverse := by
+    intro demand
+    rw [right.leftInverse, left.leftInverse]
+  rightInverse := by
+    intro demand
+    rw [left.rightInverse, right.rightInverse]
+  admits_iff := fun state demand =>
+    (right.admits_iff (first state) (left.toDemand demand)).trans
+      (left.admits_iff state demand)
+
+end DemandEquiv
 
 /-- **Shrinkage forbids repair** — `GatedEra.antitone_forbids_enabling` in
 promise vocabulary, and the reason `shrinkageKept` is an axis rather than a
@@ -626,7 +853,7 @@ and did not charge is not constructible either. -/
 structure Repair (P Q : Promise) : Type 1 where
   /-- How a state of the original promise becomes a state of the repaired one. -/
   transform : P.State → Q.State
-  /-- What the repair did to the promise, on five axes. -/
+  /-- What the repair did to the promise, on six axes. -/
   relation : PromiseRelation
   /-- What it costs, in eight currencies. -/
   price : Price
@@ -636,6 +863,10 @@ structure Repair (P Q : Promise) : Type 1 where
   entails : relation.entailsOriginal = true → ∀ s, Q.inv (transform s) → P.inv s
   /-- If you claim nothing legal was forbidden, prove it. -/
   admitsAll : relation.admitsOriginal = true → ∀ s, P.inv s → Q.inv (transform s)
+  /-- If you claim the downstream demand/feed interface survived, carry its
+  explicit invertible transport. This is independent of singularity. -/
+  observation : relation.demandEquivalenceKept = true →
+    DemandEquiv P Q transform
   /-- If you claim the read is still singular, prove it. -/
   singular : relation.singularObservation = true → P.Singular → Q.Singular
   /-- If you claim growth still only shrinks the feed, prove it. -/
@@ -663,6 +894,32 @@ This proposition is stronger than clearing `relation.admitsOriginal`: a clear
 flag makes no claim, while this carries the actual counterexample. -/
 def RestrictsReachability (r : Repair P Q) : Prop :=
   ∃ s, P.inv s ∧ ¬ Q.inv (r.transform s)
+
+/-- The checked observation transport carried by a repair as a proposition. -/
+def PreservesDemandEquiv (r : Repair P Q) : Prop :=
+  Nonempty (DemandEquiv P Q r.transform)
+
+/-- An explicit negative observation-transport result. A false relation flag
+alone does not prove this: a later inverse change could restore equivalence. -/
+def RefutesDemandEquiv (r : Repair P Q) : Prop :=
+  ¬ r.PreservesDemandEquiv
+
+/-- The new relation flag is sound because a true value exposes the complete
+transport certificate, not merely matching endpoint cardinalities. -/
+theorem demandEquiv_of_flag (r : Repair P Q)
+    (h : r.relation.demandEquivalenceKept = true) :
+    r.PreservesDemandEquiv :=
+  ⟨r.observation h⟩
+
+/-- The checked downstream rewrite: transporting a demand through a repair
+preserves exactly the admitted observation predicate whenever the equivalence
+axis is set. -/
+theorem observation_transport (r : Repair P Q)
+    (h : r.relation.demandEquivalenceKept = true)
+    (state : P.State) (demand : P.Demand) :
+    Q.admits (r.transform state) ((r.observation h).toDemand demand) ↔
+      P.admits state demand :=
+  (r.observation h).admits_iff state demand
 
 /-- The flag is sound: a repair claiming `entailsOriginal` delivers the
 original. -/
@@ -698,6 +955,7 @@ def id (P : Promise) : Repair P P where
   discharge := .escalates
   entails := fun _ _ h => h
   admitsAll := fun _ _ h => h
+  observation := fun _ => DemandEquiv.refl P
   singular := fun _ h => h
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h
@@ -720,6 +978,10 @@ def comp (r : Repair P Q) (t : Repair Q R) : Repair P R where
   admitsAll := fun h s hP =>
     t.admitsAll ((Bool.and_eq_true _ _).mp h).2 (r.transform s)
       (r.admitsAll ((Bool.and_eq_true _ _).mp h).1 s hP)
+  observation := fun h =>
+    DemandEquiv.trans
+      (r.observation ((Bool.and_eq_true _ _).mp h).1)
+      (t.observation ((Bool.and_eq_true _ _).mp h).2)
   singular := fun h hP =>
     t.singular ((Bool.and_eq_true _ _).mp h).2
       (r.singular ((Bool.and_eq_true _ _).mp h).1 hP)
@@ -749,6 +1011,15 @@ theorem comp_delivers (r : Repair P Q) (t : Repair Q R)
     (hr : r.DeliversOriginal) (ht : t.DeliversOriginal) :
     (r.comp t).DeliversOriginal :=
   fun s h => hr s (ht (r.transform s) h)
+
+/-- Observation-equivalent links compose at the property level as well as
+through the relation flag. -/
+theorem comp_preserves_demand_equiv (r : Repair P Q) (t : Repair Q R)
+    (hr : r.PreservesDemandEquiv) (ht : t.PreservesDemandEquiv) :
+    (r.comp t).PreservesDemandEquiv := by
+  obtain ⟨left⟩ := hr
+  obtain ⟨right⟩ := ht
+  exact ⟨@DemandEquiv.trans P Q R r.transform t.transform left right⟩
 
 /-- **The guard, forward half**: one weakening link clears the whole chain's
 flag. There is no bracketing, no reordering and no later strengthening that
@@ -811,6 +1082,7 @@ def seamRepair : Repair budgetPromise budgetPromise where
   discharge := .seam (Bool → Nat) Prod.fst (budget_segmented 10)
   entails := fun _ _ h => h
   admitsAll := fun _ _ h => h
+  observation := fun _ => DemandEquiv.refl budgetPromise
   singular := fun _ h => h
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h
@@ -898,6 +1170,12 @@ def arbitrate : Repair unpinnedEpochPromise arbitratedEpochPromise where
   discharge := .seam Nat Prod.fst (Seams.epoch_segmented Seams.demoArb)
   entails := fun _ s h m n hm hn => Seams.epochSole_at_most_one h m n hm hn
   admitsAll := fun h => absurd h (by decide)
+  observation := fun _ =>
+    { toDemand := id
+      fromDemand := id
+      leftInverse := fun _ => rfl
+      rightInverse := fun _ => rfl
+      admits_iff := fun _ _ => Iff.rfl }
   singular := fun _ _ s h d d' hd hd' => Seams.epochSole_at_most_one h d d' hd hd'
   shrinking := fun h => absurd h (by decide)
   trustKept := fun h => absurd h (by decide)
@@ -924,7 +1202,7 @@ theorem arbitration_needs_three_names :
 /-- Arbitration does still deliver the original promise — the flag is set and
 `Seams.epochSole_at_most_one` discharges it. What it spends is trust and
 shrinkage, not the guarantee. Saying that precisely is the whole point of having
-five axes instead of one word. -/
+six axes instead of one word. -/
 theorem arbitrate_delivers : arbitrate.DeliversOriginal :=
   arbitrate.delivers_of_flag rfl
 
@@ -1015,6 +1293,12 @@ def fork : Repair singularRegisterPromise forkedRegisterPromise where
   discharge := .free (fun _ _ _ _ => trivial)
   entails := fun h => absurd h (by decide)
   admitsAll := fun _ _ _ => trivial
+  observation := fun _ =>
+    { toDemand := id
+      fromDemand := id
+      leftInverse := fun _ => rfl
+      rightInverse := fun _ => rfl
+      admits_iff := fun _ _ => Iff.rfl }
   singular := fun h => absurd h (by decide)
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h
@@ -1028,10 +1312,100 @@ is the fact a caller most needs. -/
 theorem fork_is_changed_observation_and_weakened :
     fork.relation
       = PromiseRelation.changedObservation.comp PromiseRelation.weakened
+    ∧ fork.relation.demandEquivalenceKept = true
     ∧ fork.relation.singularObservation = false
     ∧ fork.relation.entailsOriginal = false
     ∧ fork.relation ≠ PromiseRelation.changedObservation
     ∧ fork.relation ≠ PromiseRelation.weakened := by decide
+
+/-- Forking changes the legal observation's cardinality without changing the
+demand type or admitted-feed predicate. This is why demand equivalence and
+singularity are separate checked axes. -/
+theorem fork_preserves_demand_equiv : fork.PreservesDemandEquiv :=
+  fork.demandEquiv_of_flag rfl
+
+/-- The two observation axes are genuinely independent on the production fork:
+the downstream demand/feed transport is equivalent, while the legal read is no
+longer singular. -/
+theorem fork_observation_axes_are_independent :
+    fork.PreservesDemandEquiv
+      ∧ fork.relation.demandEquivalenceKept = true
+      ∧ fork.relation.singularObservation = false
+      ∧ ¬ forkedRegisterPromise.Singular :=
+  ⟨fork_preserves_demand_equiv, rfl, rfl, fork_loses_singularity⟩
+
+/-! ### §8.3.1 A changed demand type can remain singular
+
+The converse separation matters just as much as the fork. Empty and unit demand
+types are not equivalent, but a promise over either can be singular. Therefore
+`singularObservation = true` cannot stand in for demand/feed equivalence. -/
+
+/-- A vacuously singular promise whose downstream demand type is empty. -/
+def emptyDemandPromise : Promise where
+  State := GSet Bool
+  mergeState := inferInstance
+  Demand := Empty
+  admits := fun _ _ => False
+  inv := fun _ => True
+  trust := []
+
+/-- A singular promise whose sole downstream demand is admitted. -/
+def unitDemandPromise : Promise where
+  State := GSet Bool
+  mergeState := inferInstance
+  Demand := Unit
+  admits := fun _ _ => True
+  inv := fun _ => True
+  trust := []
+
+theorem emptyDemandPromise_singular : emptyDemandPromise.Singular := by
+  intro _ _ demand
+  exact nomatch demand
+
+theorem unitDemandPromise_singular : unitDemandPromise.Singular := by
+  intro _ _ demand other _ _
+  cases demand
+  cases other
+  rfl
+
+/-- A proof-carrying repair whose state and legality stay fixed while the
+downstream demand type changes from `Empty` to `Unit`. Both endpoint reads are
+singular, so only the explicit demand-equivalence axis detects the change.
+
+⚠ `Price.free` is not a deployment-cost estimate here. This is a
+model-theoretic counterexample isolating two relation axes; the price record has
+no currency for downstream schema/client rewrites, and no theorem below claims
+that such a migration is operationally free. -/
+def changeDemandType : Repair emptyDemandPromise unitDemandPromise where
+  transform := fun state => state
+  relation := PromiseRelation.changedDemand
+  price := Price.free
+  discharge := .free (fun _ _ _ _ => trivial)
+  entails := fun _ _ _ => trivial
+  admitsAll := fun _ _ _ => trivial
+  observation := fun h => nomatch h
+  singular := fun _ _ => unitDemandPromise_singular
+  shrinking := fun _ _ _ _ _ _ admitted => admitted
+  trustKept := fun _ _ h => h
+  premisesCharged := fun _ hq _ => nomatch hq
+
+/-- There can be no demand equivalence: its inverse would manufacture an
+inhabitant of `Empty` from the target's sole `Unit` demand. -/
+theorem changeDemandType_refutes_demand_equiv :
+    changeDemandType.RefutesDemandEquiv := by
+  rintro ⟨equivalence⟩
+  exact Empty.elim (equivalence.fromDemand ())
+
+/-- **Changed type but still singular.** This is the counterexample that makes
+the old singularity-only proxy untenable. -/
+theorem changed_demand_type_but_both_singular :
+    emptyDemandPromise.Singular
+      ∧ unitDemandPromise.Singular
+      ∧ changeDemandType.relation.singularObservation = true
+      ∧ changeDemandType.relation.demandEquivalenceKept = false
+      ∧ changeDemandType.RefutesDemandEquiv :=
+  ⟨emptyDemandPromise_singular, unitDemandPromise_singular,
+    rfl, rfl, changeDemandType_refutes_demand_equiv⟩
 
 /-! ### §8.4 The retain-evidence repair — equivalent promise, priced in storage and replay
 
@@ -1060,7 +1434,7 @@ theorem summary_deployment_disagrees :
       ≠ Delta.joinAll (JoinHom.card JoinHom.sawA) ([JoinHom.sawB].map JoinHom.card) :=
   JoinHom.card_fold_disagrees
 
-/-- **The retain-evidence repair.** Identity on the promise on all five axes;
+/-- **The retain-evidence repair.** Identity on the promise on all six axes;
 the price is one Bool, and it is forced rather than chosen
 (`JoinHom.card_not_incrementallyMergeable`). The discharge is real freedom,
 because the evidence architecture is correct for **every** interpreter with no
@@ -1072,6 +1446,7 @@ def retainEvidence : Repair exactCountPromise exactCountPromise where
   discharge := .free (fun _ _ _ _ => trivial)
   entails := fun _ _ h => h
   admitsAll := fun _ _ h => h
+  observation := fun _ => DemandEquiv.refl exactCountPromise
   singular := fun _ h => h
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h
@@ -1126,6 +1501,12 @@ def weaken : Repair atMostOnePromise anythingGoesPromise where
   discharge := .free (fun _ _ _ _ => trivial)
   entails := fun h => absurd h (by decide)
   admitsAll := fun _ _ _ => trivial
+  observation := fun _ =>
+    { toDemand := id
+      fromDemand := id
+      leftInverse := fun _ => rfl
+      rightInverse := fun _ => rfl
+      admits_iff := fun _ _ => Iff.rfl }
   singular := fun h => absurd h (by decide)
   shrinking := fun _ h => h
   trustKept := fun _ _ h => h

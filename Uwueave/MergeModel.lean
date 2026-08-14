@@ -124,9 +124,18 @@ named at the substantive caveat it belongs to.
     `Type 0` / `Type 1` / `Type 2` combinations. These are compile-time
     polymorphism probes, not claims that every deployment should use a
     higher-universe carrier.
-  * ⟨UNDONE U-0107⟩ **No verdict routes, no exits.** The field-kind sketch has three
-    more slots (`classify` routes, exits with prices, obligation types). This
-    file settles only the merge slot, which is the one codex refused.
+  * ⟨DONE downstream, for the checked finite/typed policy surface in
+    `Uwueave.RepairSynthesis.CheckedMergePolicy`⟩ **Verdict routes,
+    obligations, and priced exits meet the merge result.** The downstream
+    adapter connects accumulated `Preo.Classification`, its unresolved indexed
+    obligations, a caller-supplied finite repair catalog, and full typed repair
+    prices to one checked merge outcome. Its generic `MergeRequest` states the
+    capability hypotheses for every merge model; the repair adapter is
+    explicitly join-only because `Preo.Classification` and `Repair.Promise`
+    currently require `MergeState`. Positive, priced, finite-refusal, and
+    pending-obligation fixtures are checked by
+    `tests/DebtClosures/U_0107.lean`. No delivery or network convergence is
+    claimed.
   * ⟨SCOPE U-0108⟩ **`contextObs` is a list, not a frontier.** A context that names
     two ambiguous bases exposes both; a context that names an antichain of
     frontiers (codex's Timely correction) would want more structure. The list

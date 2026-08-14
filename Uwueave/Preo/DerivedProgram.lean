@@ -50,6 +50,46 @@ instance instMergeStateEnv (Γ : Schema) : MergeState (Env Γ) where
   merge_assoc := Env.merge_assoc
   merge_idem := Env.merge_idem
 
+/-! ### Executable result-merge cost
+
+The metric below counts primitive typed merge nodes. It is value-sensitive for
+options (merging with `none` stops at the option node) and structural for pairs.
+`mergeStepBound` is the worst case determined solely by the result type. -/
+
+namespace CombinerCost
+
+def mergeSteps : (type : Ty) → type.denote → type.denote → Nat
+  | .bool, _, _ => 1
+  | .nat, _, _ => 1
+  | .pair left right, (left₁, right₁), (left₂, right₂) =>
+      1 + mergeSteps left left₁ left₂ + mergeSteps right right₁ right₂
+  | .option _, none, _ => 1
+  | .option _, some _, none => 1
+  | .option elem, some left, some right => 1 + mergeSteps elem left right
+
+def mergeStepBound : Ty → Nat
+  | .bool => 1
+  | .nat => 1
+  | .pair left right => 1 + mergeStepBound left + mergeStepBound right
+  | .option elem => 1 + mergeStepBound elem
+
+theorem mergeSteps_le_bound : ∀ (type : Ty) (left right : type.denote),
+    mergeSteps type left right ≤ mergeStepBound type
+  | .bool, _, _ => Nat.le_refl 1
+  | .nat, _, _ => Nat.le_refl 1
+  | .pair left right, (left₁, right₁), (left₂, right₂) => by
+      simp only [mergeSteps, mergeStepBound]
+      exact Nat.add_le_add
+        (Nat.add_le_add_left (mergeSteps_le_bound left left₁ left₂) 1)
+        (mergeSteps_le_bound right right₁ right₂)
+  | .option _, none, _ => by simp [mergeSteps, mergeStepBound]
+  | .option _, some _, none => by simp [mergeSteps, mergeStepBound]
+  | .option elem, some left, some right => by
+      simp only [mergeSteps, mergeStepBound]
+      exact Nat.add_le_add_left (mergeSteps_le_bound elem left right) 1
+
+end CombinerCost
+
 /-- The expression-specific equation and the repository's general `JoinHom`
 judgement are exactly the same proposition under the canonical instances. -/
 theorem preservesMerge_iff_joinHom (term : Term Γ t) :
@@ -109,6 +149,37 @@ results, with the result lattice's merge as combiner. -/
 theorem Program.incrementallyMergeable (program : Program Γ) :
     IncrementallyMergeable program.eval :=
   joinHom_incrementallyMergeable program.joinHom
+
+/-- The executable, proof-carrying combiner for the supported typed fragment.
+It performs the result type's merge exactly once and retains the correctness
+equation inherited from the expression's `MergeSafe` certificate. -/
+def Program.executableCombiner (program : Program Γ) :
+    ExecutableCombiner program.eval where
+  combine := program.type.merge
+  combineSteps := CombinerCost.mergeSteps program.type
+  maxSteps := CombinerCost.mergeStepBound program.type
+  correct := program.joinHom
+  steps_le := CombinerCost.mergeSteps_le_bound program.type
+
+/-- The executable combiner implements the semantic incremental-merge law. -/
+theorem Program.executableCombine_correct (program : Program Γ)
+    (left right : Env Γ) :
+    program.eval (left ⊔ right) = program.executableCombiner.combine
+      (program.eval left) (program.eval right) :=
+  program.executableCombiner.correct left right
+
+/-- Checked work bound for every pair of typed results. The metric counts one
+result-lattice merge, independently of the source environments' sizes. -/
+theorem Program.executableCombine_cost_le (program : Program Γ)
+    (left right : program.type.denote) :
+    program.executableCombiner.combineSteps left right ≤
+      program.executableCombiner.maxSteps :=
+  program.executableCombiner.steps_le left right
+
+/-- The advertised maximum is computed solely from the typed result shape. -/
+theorem Program.executableCombine_maxSteps (program : Program Γ) :
+    program.executableCombiner.maxSteps =
+      CombinerCost.mergeStepBound program.type := rfl
 
 /-! ## Outcome-valued specification quotation -/
 
@@ -453,6 +524,38 @@ theorem maxFields_reads : maxFields.reads = [0, 1] := rfl
 theorem maxFields_eval_fixture :
     maxFields.evalWorld (natWorldDecoder 2) [3, 8] = (8 : Nat) := by
   change Nat.max 3 8 = 8
+  decide
+
+/-- Positive executable/cost fixture: the admitted maximum program combines
+the shipped results `3` and `8` to `8` in exactly one checked merge step. -/
+theorem maxFields_executable_fixture :
+    maxFields.executableCombiner.combine
+        (show maxFields.type.denote from (3 : Nat))
+        (show maxFields.type.denote from (8 : Nat)) =
+          (show maxFields.type.denote from (8 : Nat)) ∧
+      maxFields.executableCombiner.combineSteps
+        (show maxFields.type.denote from (3 : Nat))
+        (show maxFields.type.denote from (8 : Nat)) = 1 ∧
+      maxFields.executableCombiner.maxSteps = 1 := by
+  decide
+
+/-- Nontrivial structural-cost fixture: a pair result visits the pair node and
+its Boolean and natural children, so both the actual and worst-case costs are
+three primitive merge nodes. -/
+def pairedFieldsProgram : Program [.bool, .nat] where
+  type := .pair .bool .nat
+  term := pairedFields
+  safe := .pair (.var .here) (.var (.there .here))
+
+theorem pairedFields_executable_cost_fixture :
+    pairedFieldsProgram.executableCombiner.combineSteps
+        (show pairedFieldsProgram.type.denote from ((false, 3) : Bool × Nat))
+        (show pairedFieldsProgram.type.denote from ((true, 8) : Bool × Nat)) = 3 ∧
+      pairedFieldsProgram.executableCombiner.maxSteps = 3 ∧
+      pairedFieldsProgram.executableCombiner.combine
+        (show pairedFieldsProgram.type.denote from ((false, 3) : Bool × Nat))
+        (show pairedFieldsProgram.type.denote from ((true, 8) : Bool × Nat)) =
+          (show pairedFieldsProgram.type.denote from ((true, 8) : Bool × Nat)) := by
   decide
 
 def oneWorld : GSet Holes.World := Delta.addDelta [3, 8]

@@ -26,8 +26,8 @@ HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 DEBT_ID = re.compile(r"U-[0-9]{4}\Z")
 PRIMARY = re.compile(r"⟨(UNDONE|PREMISE|SCOPE) (U-[0-9]{4})(?:⟩|[^⟩]*⟩)")
 REFERENCE = re.compile(r"⟨DEBT-REF (U-[0-9]{4})⟩")
-CI_WORKFLOW_SHA256 = "b9ed3ee07e818d58eaf974a7f8f3d7f4a9839d2ff935b745fc6e76bd98b4fa0f"
-POLICY_SCRIPT_SHA256 = "3a564d6299cd6aba6d9b0d2ec587db30aa09371537f8cfb8cc996f2456266f32"
+CI_WORKFLOW_SHA256 = "0363953c33660da6dde0e1f16e931a829ab979499aaf9b93b05b36421c137ccc"
+POLICY_SCRIPT_SHA256 = "380762d359178db678db71f7aa4558e208b8cbfb4b9a5b94e7fccf5a9514c3ec"
 PINNED_PRIOR_IDENTITIES = {
     "U-0027": ("2c9da39b5da6f64f19440f0926ec9e52934e049d4572ce595bd84ccc893a1c33",
                "60d1f4fc061543d58542c20d3aa16fdcd8ce3311998b31b815ae04b8b4c8d1f9"),
@@ -245,11 +245,12 @@ def load_manifest(root: Path) -> dict[str, Any]:
     inventory = expect_keys(manifest["unsafe_inventory"], {"files", "roots", "semantics",
                                                             "zero_elsewhere"},
                             "manifest.unsafe_inventory")
-    if inventory["roots"] != ["rust/src", "rust/examples", "rust/benches"] \
+    if inventory["roots"] != ["rust/build.rs", "rust/src", "rust/examples",
+                               "rust/benches", "rust/tests"] \
             or inventory["zero_elsewhere"] is not True \
             or inventory["semantics"] != (
-                "comment-and-literal-aware Rust source-token inventory; "
-                "not expanded HIR or a semantic proof"
+                "compiler-enforced boundary plus exact syn AST inventory "
+                "across every Rust target source"
             ):
         raise GateError("manifest.unsafe_inventory: scan roots/scope drift")
     return manifest
@@ -730,10 +731,11 @@ def validate_unsafe(root: Path, manifest: dict[str, Any]) -> None:
     expected = inventory["files"]
     seen: dict[str, dict[str, int]] = {}
     for relative_root in inventory["roots"]:
-        directory = root / relative_root
-        if not directory.exists():
+        source_root = root / relative_root
+        if not source_root.exists():
             continue
-        for path in sorted(directory.rglob("*.rs")):
+        paths = [source_root] if source_root.is_file() else sorted(source_root.rglob("*.rs"))
+        for path in paths:
             relative = path.relative_to(root).as_posix()
             try:
                 masked = strip_c_like(stable_file_bytes(path).decode("utf-8"), rust=True)
@@ -755,7 +757,7 @@ def validate_docs(root: Path, manifest: dict[str, Any]) -> None:
     inventory = manifest["unsafe_inventory"]["files"]
     total_unsafe = sum(value["blocks"] for value in inventory.values())
     ffi_unsafe = inventory["rust/src/ffi.rs"]["blocks"]
-    benchmark_unsafe = inventory["rust/examples/bench_kernels.rs"]["blocks"]
+    benchmark_unsafe = inventory.get("rust/examples/bench_kernels.rs", {}).get("blocks", 0)
     legacy_surface_phrases = [
         "five native-kernel modules",
         "Its five imports",
@@ -827,6 +829,11 @@ def validate_policy_integration(root: Path, manifest: dict[str, Any]) -> None:
         "printf 'CC=%s\\nAR=%s\\n' \"$compiler\" \"$archiver\"",
         "python3 scripts/ledger2-gate.py observation",
         "--expect-target \"$UWUEAVE_NATIVE_TARGET\"",
+        "python3 scripts/abi-gate.py native",
+        'CFLAGS="-fsanitize=undefined,bounds -fno-sanitize-recover=all -fno-omit-frame-pointer"',
+        'UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"',
+        "libclang_rt.ubsan_osx_dynamic.dylib",
+        "ffi::tests::shim_allocation_copy_and_refcount_paths -- --exact",
     ]
     for fragment in required_workflow_fragments:
         if fragment not in workflow:
@@ -846,12 +853,27 @@ def validate_policy_integration(root: Path, manifest: dict[str, Any]) -> None:
     ]
     required_workflow_lines = [
         "run: cargo test --manifest-path rust/Cargo.toml --frozen --all-targets",
+        'sanitizer_cc=$(command -v clang)',
+        'test -n "$sanitizer_cc"',
+        'export "$UWUEAVE_LINKER_ENV=$sanitizer_cc"',
+        'case "$RUNNER_OS" in',
+        'sanitizer_runtime=$($sanitizer_cc -print-file-name=libclang_rt.ubsan_osx_dynamic.dylib)',
+        'test -f "$sanitizer_runtime"',
+        'CC="$sanitizer_cc" \\',
+        'CFLAGS="-fsanitize=undefined,bounds -fno-sanitize-recover=all -fno-omit-frame-pointer" \\',
+        'RUSTFLAGS="$sanitizer_link_flags" \\',
+        'CARGO_TARGET_DIR="$UWUEAVE_SANITIZER_TARGET_DIR" \\',
+        'UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" \\',
+        "cargo test --manifest-path rust/Cargo.toml --frozen --lib \\",
+        "ffi::tests::shim_allocation_copy_and_refcount_paths -- --exact",
         'UWUEAVE_LEDGER2_OBSERVATION_OUT="$UWUEAVE_LEDGER2_OBSERVATION_PATH" \\',
         "cargo test --manifest-path rust/Cargo.toml --frozen \\",
         "--test runtime_build_closure",
         "python3 scripts/ledger2-gate.py observation \\",
         '--expect-target "$UWUEAVE_NATIVE_TARGET" \\',
         '"$UWUEAVE_LEDGER2_OBSERVATION_PATH"',
+        "python3 scripts/abi-gate.py native \\",
+        '--observation "$UWUEAVE_LEDGER2_OBSERVATION_PATH"',
     ]
     position = -1
     for line in required_workflow_lines:
@@ -873,8 +895,10 @@ def validate_policy_integration(root: Path, manifest: dict[str, Any]) -> None:
         "set -euo pipefail",
         "python3 tests/debt_gate_test.py",
         "python3 tests/ledger2_gate_test.py",
+        "python3 tests/abi_gate_test.py",
         'scripts/debt-gate.py check --base "$debt_registry_base" "${debt_policy_args[@]}"',
         "python3 scripts/ledger2-gate.py check",
+        "python3 scripts/abi-gate.py source",
         "LC_ALL=C scripts/undone-census.sh --check",
     ]
     position = -1
@@ -893,7 +917,7 @@ def source_snapshot(root: Path) -> tuple[list[dict[str, Any]], str]:
     paths = [root / name for name in [
         "Uwueave.lean", "lakefile.toml", "lake-manifest.json", "lean-toolchain",
         "rust/shim.c", "rust/build.rs", "rust/Cargo.toml", "rust/Cargo.lock",
-        MANIFEST.as_posix(),
+        MANIFEST.as_posix(), "rust/abi/uwueave-abi-v1.json",
     ]]
     paths.extend((root / "Uwueave").rglob("*.lean"))
     relative_paths = sorted(

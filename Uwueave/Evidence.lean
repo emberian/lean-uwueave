@@ -147,20 +147,22 @@ Two prices are paid in public, not deferred:
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0038⟩ = work wearing a caveat's
-clothes.
+⟨TERMINAL⟩ marks a theorem of the model; the bullets below are explicit
+caveats, not open obligations by themselves.
 
-  * **`obligations` here is a flat set of source names, not an antichain of
-    timestamps.** `Uwueave.Frontier` now supplies genuine timestamp antichains,
-    range retirement, the flat-model separation, and — under explicit world
-    well-formedness, completeness, and settlement hypotheses — stability of
-    `Evidence.values`. ⟨UNDONE U-0039 for this old carrier and deployment⟩
-    `ResultEvidence` still stores no timestamp. `AuthenticatedFrontier` now
-    authenticates an accepted-and-issued progress record and binds its decoded
-    sets to a lawful advance; `AuthenticatedWorldContext` binds that advance to
-    an exact typed consuming delivery. No theorem generates those messages or
-    proves a runtime honestly advances its frontier, and full `render`
-    stability is still not claimed.
+  * **`obligations` here remains a flat set of source names, while the
+    timestamped successor carries the antichain.** ⟨DONE U-0039 downstream in
+    `Uwueave.TimestampedEvidence`⟩ `TimestampedEvidence.State` stores
+    attributed candidate timestamps and a genuine source frontier.
+    `AcceptedRuntimeProgress` consumes an accepted-and-issued authenticated
+    progress record, binds its decoded sets to exact runtime snapshots, and
+    retains the lawful frontier advance. Under explicit wellformedness,
+    known-roster, closure, and issued-settlement conditions,
+    `accepted_progress_preserves_render` proves stability of the complete
+    five-way `render`, not only `Evidence.values`; the concrete authenticated
+    fixture reaches a stable closed fork. The legacy `ResultEvidence` is not
+    silently changed, and no theorem manufactures network messages or
+    discharges the deployed signature/issuer premise.
   * **A certificate is trusted, not verified.** ⟨PREMISE U-0040⟩ Nothing here says a
     certificate was *earned*: `certify` adds one unconditionally, exactly as
     `Era.advance` announces a cut unconditionally, and the price is the same

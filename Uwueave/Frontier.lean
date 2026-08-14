@@ -49,10 +49,14 @@ boundaries are stated in prose and are not open obligations of this module.
     sets to that event, and conjoins the lawful advance. No protocol here
     manufactures the message, instantiates deployed cryptography, or proves a
     runtime advances honestly.
-  * **Timestamps label candidate events externally.** ⟨TERMINAL for the
-    bridge, ⟨UNDONE U-0050⟩ for the old carrier⟩ `ResultEvidence` stores no timestamp,
-    so a bridge takes `stamp : (alpha x Source) -> T`.  Smuggling a timestamp
-    into `Source` would recreate the flat model rather than repair it.
+  * **The legacy bridge labels candidate events externally; the successor
+    stores them.** ⟨DONE U-0050 downstream with U-0039 in
+    `Uwueave.TimestampedEvidence`⟩ `ResultEvidence` remains unchanged, so the
+    compatibility theorems here still take `stamp : (alpha x Source) -> T`.
+    The successor instead stores `TimestampedCandidate` events and a
+    `SourceFrontier`, consumes authenticated lawful progress, and proves full
+    render stability under its explicit terminal conditions. It does not
+    smuggle timestamps into `Source` or claim unrestricted runtime progress.
   * **Candidate stability is not render stability.** ⟨TERMINAL⟩ The proved
     bridge freezes `Evidence.values`.  Obligations and certificates can still
     arrive, so no theorem silently upgrades it to stability of `render`.

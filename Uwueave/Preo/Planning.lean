@@ -438,6 +438,7 @@ theorem target_admits_iff_local_room {budget : Nat}
 observation/monotonicity axes are explicitly not claimed preserved. -/
 def partitionRelation : PromiseRelation :=
   { PromiseRelation.strengthened with
+    demandEquivalenceKept := false
     singularObservation := false
     shrinkageKept := false }
 
@@ -454,6 +455,7 @@ def partitionRepair {budget : Nat} (partition : BoolQuotaPartition budget) :
     intro _ spent hlocal
     exact partition.local_implies_shared spent hlocal
   admitsAll := by simp [partitionRelation, PromiseRelation.strengthened]
+  observation := fun h => nomatch h
   singular := by simp [partitionRelation]
   shrinking := by simp [partitionRelation]
   trustKept := by simp [sharedBudgetPromise, partitionedBudgetPromise]

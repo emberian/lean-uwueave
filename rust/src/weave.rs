@@ -170,7 +170,10 @@ impl Seam {
     /// The budget: the sum of the allocation. `BudgetInv B`'s `B`, kept as a
     /// derived quantity so it cannot drift from the allocation it constrains.
     pub fn budget(&self) -> u64 {
-        self.allocation.values().copied().fold(0u64, u64::saturating_add)
+        self.allocation
+            .values()
+            .copied()
+            .fold(0u64, u64::saturating_add)
     }
 
     /// This user's slice of the budget (`0` for a user with no allocation).
@@ -703,7 +706,10 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
     }
     /// A user's activation flag for a node, if they ever wrote one.
     pub fn activation(&self, user: UserId, node: &NodeId) -> Option<ActivationFlag> {
-        self.activation.get(&user).and_then(|m| m.get(node)).copied()
+        self.activation
+            .get(&user)
+            .and_then(|m| m.get(node))
+            .copied()
     }
 
     // -- membership ---------------------------------------------------------
@@ -778,7 +784,10 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         let bytes = contents.as_ref().len() as u64;
         self.afford(actor, bytes)?;
         let before = self.nodes.len();
-        let id = self.nodes.insert(parents, contents).map_err(WeaveOpError::Insert)?;
+        let id = self
+            .nodes
+            .insert(parents, contents)
+            .map_err(WeaveOpError::Insert)?;
         if self.nodes.len() > before {
             self.charge(actor, bytes);
         }
@@ -809,7 +818,9 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         let (id, grew) = {
             let seq = self.text.entry(node).or_default();
             let before = seq.len();
-            let id = seq.insert(anchor, contents).map_err(WeaveOpError::TextInsert)?;
+            let id = seq
+                .insert(anchor, contents)
+                .map_err(WeaveOpError::TextInsert)?;
             (id, seq.len() > before)
         };
         if grew {
@@ -872,7 +883,13 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         // wiring is a policy choice deliberately left open — see
         // `GatedEra.lean` §"the trade" (fail-closed shrinks, arbitration
         // agrees; opposite sign tables).
-        let op = MoveOp { lamport, replica: actor, child, dest, cite: 1 };
+        let op = MoveOp {
+            lamport,
+            replica: actor,
+            child,
+            dest,
+            cite: 1,
+        };
         self.moves.record(op);
         Ok(op)
     }
@@ -917,7 +934,12 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
             return Err(WeaveOpError::UnknownNode(node));
         }
         let flag = ActivationFlag::new(ts, active);
-        let slot = self.activation.entry(user).or_default().entry(node).or_insert(flag);
+        let slot = self
+            .activation
+            .entry(user)
+            .or_default()
+            .entry(node)
+            .or_insert(flag);
         *slot = slot.join(flag);
         Ok(())
     }
@@ -968,8 +990,11 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
                         });
                     }
                 }
-                self.seam.allocation =
-                    allocation.iter().filter(|(_, q)| **q > 0).map(|(u, q)| (*u, *q)).collect();
+                self.seam.allocation = allocation
+                    .iter()
+                    .filter(|(_, q)| **q > 0)
+                    .map(|(u, q)| (*u, *q))
+                    .collect();
                 Ok(())
             }
         }
@@ -1004,7 +1029,10 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         let mut bookmarks_learned = 0usize;
         let mut activations_advanced = 0usize;
 
-        let nodes = next.nodes.merge(&other.nodes).map_err(WeaveMergeError::Nodes)?;
+        let nodes = next
+            .nodes
+            .merge(&other.nodes)
+            .map_err(WeaveMergeError::Nodes)?;
 
         for (node, their_text) in &other.text {
             if !next.nodes.contains(node) {
@@ -1016,7 +1044,10 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
             });
             let stats = mine
                 .merge(their_text)
-                .map_err(|source| WeaveMergeError::Text { node: *node, source })?;
+                .map_err(|source| WeaveMergeError::Text {
+                    node: *node,
+                    source,
+                })?;
             text.inserted += stats.inserted;
             text.already_present += stats.already_present;
             text.tombstones_learned += stats.tombstones_learned;
@@ -1026,12 +1057,18 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         next.moves.merge(&other.moves);
         let moves_learned = next.moves.len() - moves_before;
 
-        let membership = next.group.merge(&other.group).map_err(WeaveMergeError::Membership)?;
+        let membership = next
+            .group
+            .merge(&other.group)
+            .map_err(WeaveMergeError::Membership)?;
 
         for (user, theirs) in &other.bookmarks {
             for node in theirs {
                 if !next.nodes.contains(node) {
-                    return Err(WeaveMergeError::DanglingBookmark { user: *user, node: *node });
+                    return Err(WeaveMergeError::DanglingBookmark {
+                        user: *user,
+                        node: *node,
+                    });
                 }
             }
             let mine = next.bookmarks.entry(*user).or_default();
@@ -1255,7 +1292,12 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         if actual >= required {
             Ok(())
         } else {
-            Err(WeaveOpError::PermissionDenied { actor, capability, required, actual })
+            Err(WeaveOpError::PermissionDenied {
+                actor,
+                capability,
+                required,
+                actual,
+            })
         }
     }
 
@@ -1266,7 +1308,12 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
         let allocated = self.seam.allocated(user);
         let spent = self.spent(user);
         if spent.saturating_add(bytes) > allocated {
-            Err(WeaveOpError::QuotaExceeded { user, allocated, spent, requested: bytes })
+            Err(WeaveOpError::QuotaExceeded {
+                user,
+                allocated,
+                spent,
+                requested: bytes,
+            })
         } else {
             Ok(())
         }
@@ -1281,7 +1328,11 @@ impl<T: AsRef<[u8]> + Clone + PartialEq> Weave<T> {
 /// A user's role in a resolution — outsiders are everyone the group never
 /// named.
 fn role_in(resolution: &EraResolution, user: UserId) -> EraRole {
-    resolution.roles.get(&user).copied().unwrap_or(EraRole::Outsider)
+    resolution
+        .roles
+        .get(&user)
+        .copied()
+        .unwrap_or(EraRole::Outsider)
 }
 
 // ---------------------------------------------------------------------------
@@ -1399,7 +1450,8 @@ mod tests {
         let mut w: Doc = Weave::new([(ALICE, 4096), (BOB, 4096)]);
         w.record_membership(EraEvent::join(1, ALICE)).unwrap();
         w.record_membership(EraEvent::join(2, BOB)).unwrap();
-        w.record_membership(EraEvent::promote(3, ALICE, BOB, EraRole::Writer)).unwrap();
+        w.record_membership(EraEvent::promote(3, ALICE, BOB, EraRole::Writer))
+            .unwrap();
         w.record_cut(1, 1);
         w.record_cut(1, 2);
         w.record_cut(1, 3);
@@ -1566,7 +1618,9 @@ mod tests {
         let mut b = shared.clone();
 
         // Alice, offline: a node, text, a bookmark, her cursor, a late move.
-        let a1 = a.add_node(ALICE, vec![n1], b"alice's leaf".to_vec()).unwrap();
+        let a1 = a
+            .add_node(ALICE, vec![n1], b"alice's leaf".to_vec())
+            .unwrap();
         let ha = a.insert_text(ALICE, root, None, b"hello ").unwrap();
         a.insert_text(ALICE, root, Some(ha), b"world").unwrap();
         a.bookmark(ALICE, a1).unwrap();
@@ -1589,7 +1643,10 @@ mod tests {
         let mut ba = b.clone();
         ba.merge(&a).unwrap();
 
-        assert_ne!(ab, ba, "the transports differ — the agreement below is the theorem");
+        assert_ne!(
+            ab, ba,
+            "the transports differ — the agreement below is the theorem"
+        );
 
         let va = ab.view();
         let vb = ba.view();
@@ -1598,20 +1655,42 @@ mod tests {
         // Spelled out, so a failure says which substrate broke.
         assert_eq!(va.order(), vb.order(), "document order");
         assert_eq!(ab.nodes().len(), 5, "root + 2 + both offline leaves");
-        assert!(ab.nodes().contains(&a1) && ab.nodes().contains(&b1), "both leaves merged");
+        assert!(
+            ab.nodes().contains(&a1) && ab.nodes().contains(&b1),
+            "both leaves merged"
+        );
         assert_eq!(ab.text(&root), ba.text(&root), "text converges");
-        assert_eq!(ab.text(&root).unwrap().len(), b"oh, hello world".len(), "no write lost");
+        assert_eq!(
+            ab.text(&root).unwrap().len(),
+            b"oh, hello world".len(),
+            "no write lost"
+        );
         assert_eq!(va.roles, vb.roles, "roles converge");
-        assert_eq!(va.role(CAROL), EraRole::Reader, "Carol's join, seen only by Alice");
-        assert_eq!(va.role(DAVE), EraRole::Reader, "Dave's join, seen only by Bob");
+        assert_eq!(
+            va.role(CAROL),
+            EraRole::Reader,
+            "Carol's join, seen only by Alice"
+        );
+        assert_eq!(
+            va.role(DAVE),
+            EraRole::Reader,
+            "Dave's join, seen only by Bob"
+        );
         assert_eq!(
             ab.bookmarks(ALICE).copied().collect::<Vec<_>>(),
             ba.bookmarks(ALICE).copied().collect::<Vec<_>>(),
             "bookmarks converge"
         );
-        assert_eq!(ab.activation(BOB, &n2), ba.activation(BOB, &n2), "activation converges");
+        assert_eq!(
+            ab.activation(BOB, &n2),
+            ba.activation(BOB, &n2),
+            "activation converges"
+        );
         assert_eq!(ab.spent(ALICE), ba.spent(ALICE), "spends converge");
-        assert!(ab.nodes().grounded(), "the DAG is still grounded after merging");
+        assert!(
+            ab.nodes().grounded(),
+            "the DAG is still grounded after merging"
+        );
 
         // Every bookmark points at a node that exists — the cross-field row,
         // observed on the merged document (`pointsAtExisting_iconfluent`).
@@ -1624,11 +1703,26 @@ mod tests {
         // `Move.view_not_stable` inside the composite: Bob's older op (t=4)
         // wins the order and Alice's (t=9) is retroactively skipped.
         let outcome = |op_child: NodeId| {
-            va.replay.iter().find(|(o, _)| o.child == op_child).map(|(_, s)| *s)
+            va.replay
+                .iter()
+                .find(|(o, _)| o.child == op_child)
+                .map(|(_, s)| *s)
         };
-        assert_eq!(outcome(n2), Some(OpOutcome::Applied), "the older op applied");
-        assert_eq!(outcome(n1), Some(OpOutcome::SkippedCycle), "the newer one was skipped");
-        assert_eq!(va.node(&n2).unwrap().effective_parent, Some(n1), "the view shows it");
+        assert_eq!(
+            outcome(n2),
+            Some(OpOutcome::Applied),
+            "the older op applied"
+        );
+        assert_eq!(
+            outcome(n1),
+            Some(OpOutcome::SkippedCycle),
+            "the newer one was skipped"
+        );
+        assert_eq!(
+            va.node(&n2).unwrap().effective_parent,
+            Some(n1),
+            "the view shows it"
+        );
     }
 
     /// **The permission test.** A demoted user's contribution merges as
@@ -1643,18 +1737,28 @@ mod tests {
         let mut alice_replica = shared.clone();
 
         // Bob, a Writer at the time, contributes offline.
-        let bnode = bob_replica.add_node(BOB, vec![n1], b"bob was here".to_vec()).unwrap();
-        bob_replica.insert_text(BOB, n1, None, b"bob's prose").unwrap();
+        let bnode = bob_replica
+            .add_node(BOB, vec![n1], b"bob was here".to_vec())
+            .unwrap();
+        bob_replica
+            .insert_text(BOB, n1, None, b"bob's prose")
+            .unwrap();
         let bmove = bob_replica.move_node(BOB, 5, n1, Some(n2)).unwrap();
 
         // On his own replica the op is in the feed and in effect.
         let before = bob_replica.view();
         assert_eq!(before.role(BOB), EraRole::Writer);
-        assert_eq!(before.node(&n1).unwrap().effective_parent, Some(n2), "his move applied");
+        assert_eq!(
+            before.node(&n1).unwrap().effective_parent,
+            Some(n2),
+            "his move applied"
+        );
         assert_eq!(before.denied_moves().count(), 0);
 
         // Alice, concurrently, demotes him.
-        alice_replica.record_membership(EraEvent::demote(4, ALICE, BOB, EraRole::Reader)).unwrap();
+        alice_replica
+            .record_membership(EraEvent::demote(4, ALICE, BOB, EraRole::Reader))
+            .unwrap();
 
         let mut merged = bob_replica.clone();
         merged.merge(&alice_replica).unwrap();
@@ -1671,7 +1775,10 @@ mod tests {
         // The view reflects the role change, everywhere it should.
         let after = merged.view();
         assert_eq!(after.role(BOB), EraRole::Reader, "the roster changed");
-        assert!(!merged.may(BOB, Capability::Write), "and the capability query with it");
+        assert!(
+            !merged.may(BOB, Capability::Write),
+            "and the capability query with it"
+        );
         assert_eq!(
             after.denied_moves().collect::<Vec<_>>(),
             vec![(&bmove, EraRole::Writer, EraRole::Reader)],
@@ -1682,13 +1789,20 @@ mod tests {
             after.node(&n1).unwrap().structural_parents.first().copied(),
             "the gated-out move is not in effect: n1 is back at its structural parent"
         );
-        assert!(after.node(&bnode).is_some(), "his node is in the rendered tree");
+        assert!(
+            after.node(&bnode).is_some(),
+            "his node is in the rendered tree"
+        );
 
         // Future ops of his are refused locally — op-validation, the half of
         // the gate that is not a view.
         assert!(matches!(
             merged.add_node(BOB, vec![n1], b"more".to_vec()),
-            Err(WeaveOpError::PermissionDenied { actor: BOB, required: EraRole::Writer, .. })
+            Err(WeaveOpError::PermissionDenied {
+                actor: BOB,
+                required: EraRole::Writer,
+                ..
+            })
         ));
         // But he can still read, bookmark and navigate.
         assert!(merged.bookmark(BOB, n1).is_ok());
@@ -1727,10 +1841,19 @@ mod tests {
         let (mut w, _root, n1, _n2) = base();
         assert!(matches!(
             w.move_node(BOB, 1, n1, None),
-            Err(WeaveOpError::PermissionDenied { capability: Capability::Detach, .. })
+            Err(WeaveOpError::PermissionDenied {
+                capability: Capability::Detach,
+                ..
+            })
         ));
-        assert!(w.move_node(BOB, 1, n1, Some(_n2)).is_ok(), "the same move under a node is fine");
-        assert!(w.move_node(ALICE, 2, n1, None).is_ok(), "the admin may detach");
+        assert!(
+            w.move_node(BOB, 1, n1, Some(_n2)).is_ok(),
+            "the same move under a node is fine"
+        );
+        assert!(
+            w.move_node(ALICE, 2, n1, None).is_ok(),
+            "the admin may detach"
+        );
     }
 
     /// **The seam refuses to pretend.** `weaveDocVerdict`'s witness pair, at
@@ -1758,7 +1881,10 @@ mod tests {
         a.merge(&b).unwrap();
         assert_eq!(a.seam().pin, Some(n2));
         assert!(a.view().node(&n2).unwrap().pinned);
-        assert!(!a.view().node(&n1).unwrap().pinned, "at most one pin, structurally");
+        assert!(
+            !a.view().node(&n1).unwrap().pinned,
+            "at most one pin, structurally"
+        );
     }
 
     /// Spends never wait inside an allocation, and re-allocation is the only
@@ -1776,7 +1902,11 @@ mod tests {
         a.merge(&b).unwrap();
         // Alice already paid for `base`'s three nodes ("root", "n1", "n2" = 8
         // bytes); Bob paid for nothing there.
-        assert_eq!(a.spent(ALICE), 8 + 100, "her nodes in `base`, plus this text");
+        assert_eq!(
+            a.spent(ALICE),
+            8 + 100,
+            "her nodes in `base`, plus this text"
+        );
         assert_eq!(a.spent(BOB), 200);
 
         // Seam equality decides whether two replicas may merge, so it is a
@@ -1790,7 +1920,11 @@ mod tests {
         poor.record_membership(EraEvent::join(1, ALICE)).unwrap();
         assert!(matches!(
             poor.add_node(ALICE, vec![], vec![0u8; 9]),
-            Err(WeaveOpError::QuotaExceeded { allocated: 8, requested: 9, .. })
+            Err(WeaveOpError::QuotaExceeded {
+                allocated: 8,
+                requested: 9,
+                ..
+            })
         ));
 
         // Re-allocation: the budget is fixed, and nobody's slice may drop
@@ -1800,14 +1934,21 @@ mod tests {
                 (ALICE, 4096),
                 (BOB, 5000)
             ]))),
-            Err(SeamError::BudgetChanged { expected: 8192, got: 9096 })
+            Err(SeamError::BudgetChanged {
+                expected: 8192,
+                got: 9096
+            })
         );
         assert_eq!(
             a.apply_seam_change(&SeamChange::Reallocate(BTreeMap::from([
                 (ALICE, 8192),
                 (BOB, 0)
             ]))),
-            Err(SeamError::AllocationBelowSpend { user: BOB, allocated: 0, spent: 200 })
+            Err(SeamError::AllocationBelowSpend {
+                user: BOB,
+                allocated: 0,
+                spent: 200
+            })
         );
         let agreed = SeamChange::Reallocate(BTreeMap::from([(ALICE, 7000), (BOB, 1192)]));
         a.apply_seam_change(&agreed).unwrap();
@@ -1834,14 +1975,19 @@ mod tests {
         let mut target = shared.clone();
         assert_eq!(
             target.merge(&peer),
-            Err(WeaveMergeError::DanglingBookmark { user: ALICE, node: ghost })
+            Err(WeaveMergeError::DanglingBookmark {
+                user: ALICE,
+                node: ghost
+            })
         );
         assert_eq!(target, shared, "nothing half-applied");
-        assert!(shared.clone().merge(&{
-            let mut ok = shared.clone();
-            ok.bookmark(ALICE, n1).unwrap();
-            ok
-        })
-        .is_ok());
+        assert!(shared
+            .clone()
+            .merge(&{
+                let mut ok = shared.clone();
+                ok.bookmark(ALICE, n1).unwrap();
+                ok
+            })
+            .is_ok());
     }
 }

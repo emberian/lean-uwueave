@@ -146,17 +146,29 @@ depends on it):
     recursion through fuel-bounded approximants. `approximate_embed` and
     `projection_sound_approx` prove conservativity and projection soundness at
     every finite fuel.
-  * ⟨UNDONE U-0013 only for infinitary recursion⟩ **No coinductive or infinite-trace
-    semantics.** The finite approximants do not define a limit object, a
-    bisimulation on infinite behavior, or temporal liveness of a recursive
-    protocol. Those stronger claims remain unbuilt.
-  * ⟨UNDONE U-0014 as temporal liveness⟩ **Deadlock-freedom in their sense.** Our only
-    blocking construct is `barrier`. `Uwueave.ChoreoRec` now proves the narrow
-    operational facts that one guarded barrier loop can take a step and one
-    mismatched barrier is deadlocked. Whether every roster replica eventually
-    reaches a barrier remains a *liveness* question (`Uwueave.Liveness` owns that
-    axis): no fairness, eventual-delivery, or temporal deadlock-freedom theorem is
-    claimed.
+  * ⟨DONE U-0013 in `Uwueave.ChoreoTemporal`⟩ **Recursive behavior now has an
+    infinite-trace semantics.** Its coalgebra exposes one labeled control event
+    and continuation forever, padding termination explicitly and exposing an
+    unguarded head as `stuck`. `unfoldPrefix_eq_finitePrefix` proves that an
+    independent bounded coalgebra iteration equals every finite trace prefix;
+    `guardedBarrierLoop_finite_prefix_approximation`
+    connects every prefix of the canonical infinite loop to `ChoreoRec`'s
+    existing fuel approximant. `Bisimilar` is the extensional greatest
+    observation relation, and `project_bisim_congr` proves endpoint projection
+    is a congruence. Exact barrier-loop and unguarded-loop fixtures separate the
+    positive and negative behaviors.
+  * ⟨DONE U-0014 under explicit temporal premises in `Uwueave.ChoreoTemporal`⟩
+    **Recursive barriers are temporally deadlock-free for accepted roster
+    executions.** `BarrierWellFormed` deliberately requires both ordinary
+    `WellGuarded` syntax and a successful finite-prefix barrier check for every
+    read-branch stream: the exact action-guarded `guardedReadLoop` does not
+    qualify. `temporal_deadlock_free` proves that every
+    such behavior reaches a matching nonempty-roster barrier under named
+    `PrefixFair` scheduling and that it is eventually released under the
+    separate `EventualBarrierDelivery` premise. No deployed scheduler is
+    declared fair. `ChoreoRec.mismatched_barrier_is_deadlocked` and the new
+    `mismatchedEndpoints_not_matching` remain the exact partial-roster
+    refutations.
   * ⟨DONE in `Uwueave.ChoreoChoice`⟩ **Communicated finite choices remove
     `ReadsAgree` from their projection theorem.** This core's silent `read` still
     sends no message: every replica evaluates the same predicate on its own copy,

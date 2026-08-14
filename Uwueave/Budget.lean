@@ -71,14 +71,18 @@ the verdict is indexed by.
     acceptance of **one replica's stream against one seam**, and a concurrent
     session's true cost is not bounded by it. This is not repairable inside this
     file's measure; it is the measure's domain of validity.
-  * ⟨UNDONE U-0004⟩ **`unavoidableFloor` is not a function.** The floor is a supremum
-    over clash decompositions, and nothing here computes that global supremum.
-    `ForcedFloor wl n` says "`n` is *a* forced floor", witnessed by a
-    decomposition; `rejected` carries that witness. §2.1 now computes a
-    different and deliberately bounded quantity: the exact achieved minimum of
-    an explicit finite list of witnessed plans. Its refusal quantifies only over
-    that list. Reading either a `ForcedFloor` or a finite-menu minimum as "the"
-    unrestricted floor is exactly the scope error the types prevent.
+  * ⟨DONE U-0004⟩ **The unrestricted `unavoidableFloor` is still not a
+    function, but its finite contract is executable and exact.**
+    `maximumForcedFloorCapped` checks a work cap before filtering or searching
+    a caller-supplied `FiniteDecompositionUniverse`. Inside that explicit
+    boundary it returns either an achieved forced decomposition with a proof
+    that every valid listed decomposition is no longer, or an exhaustive proof
+    that no listed decomposition is valid. The over-cap branch records the
+    exact required and permitted candidate counts. `budgetDecomposition*`
+    fixtures execute all three outcomes. None of these finite theorems claims
+    the unrestricted supremum: every maximality and refusal is indexed by the
+    supplied universe, while every found decomposition separately yields a
+    globally sound `ForcedFloor`.
   * ⟨DONE downstream in `Uwueave.CoordEffect`⟩ **Concurrent composition uses
     one shared strategy profile.** `opt_compose_ge_sum_opt` gives the generic
     compose-then-minimize inequality,
@@ -313,6 +317,256 @@ theorem ForcedFloor.le_cost.{u', v', w'} {S : Type u'} {Op : Type w'} [MergeStat
   rw [hflat] at hb
   show n ≤ @crossings S P.Seg Op P.segDecEq P.σ wl.step wl.start wl.ops
   omega
+
+/-! ### §3.1. Exact maximum over an explicit finite decomposition universe -/
+
+/-- The precise predicate searched by the finite forced-floor optimizer.  It is
+stronger than merely being a sequence of clash blocks: the blocks must flatten
+to the workload's own operation stream. -/
+def IsForcedDecomposition.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    (wl : Workload S Op) (blocks : List (List Op)) : Prop :=
+  ClashBlocks wl.I wl.step wl.start blocks ∧ blocks.flatten = wl.ops
+
+/-- A forced decomposition achieves a globally sound lower bound.  Only the
+*search for the greatest such witness* below is finite-universe relative. -/
+theorem IsForcedDecomposition.forcedFloor.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op} {blocks : List (List Op)}
+    (h : IsForcedDecomposition wl blocks) : ForcedFloor wl blocks.length :=
+  ⟨blocks, h.1, h.2, rfl⟩
+
+/-- The explicit boundary of U-0004's executable contract.  The list need not
+cover every decomposition of `wl.ops`; maximality and refusal intentionally
+quantify over exactly these candidates. -/
+structure FiniteDecompositionUniverse.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] (wl : Workload S Op) where
+  candidates : List (List (List Op))
+
+namespace FiniteDecompositionUniverse
+
+/-- Structural decision procedure for `ClashBlocks`.  It uses only the
+caller's decision procedure for the invariant and evaluates blocks one at a
+time. -/
+def clashBlocksDecidable.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    (I : Invariant S) [DecidablePred I] (step : S → Op → S) :
+    ∀ (start : S) (blocks : List (List Op)), Decidable (ClashBlocks I step start blocks)
+  | _, [] => isTrue trivial
+  | start, block :: rest =>
+      if hstart : I start then
+        if hend : I (run step start block) then
+          if hmerge : I (start ⊔ run step start block) then
+            isFalse fun h => h.2.2.1 hmerge
+          else
+            match clashBlocksDecidable I step (run step start block) rest with
+            | isTrue hrest => isTrue ⟨hstart, hend, hmerge, hrest⟩
+            | isFalse hrest => isFalse fun h => hrest h.2.2.2
+        else
+          isFalse fun h => hend h.2.1
+      else
+        isFalse fun h => hstart h.1
+
+/-- Decidability of the exact forced-decomposition predicate, assembled from
+the structural clash checker and list equality. -/
+def isForcedDecompositionDecidable.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op} [DecidableEq Op] [DecidablePred wl.I]
+    (blocks : List (List Op)) : Decidable (IsForcedDecomposition wl blocks) :=
+  match clashBlocksDecidable wl.I wl.step wl.start blocks with
+  | isTrue hclash =>
+      if hflatten : blocks.flatten = wl.ops then
+        isTrue ⟨hclash, hflatten⟩
+      else
+        isFalse fun h => hflatten h.2
+  | isFalse hclash =>
+      isFalse fun h => hclash h.1
+
+/-- Valid candidates, computed only after the outer cap check has admitted the
+raw candidate list. -/
+def validCandidates.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} [DecidableEq Op] [DecidablePred wl.I]
+    (U : FiniteDecompositionUniverse wl) :
+    List (List (List Op)) :=
+  U.candidates.filter fun blocks =>
+    @decide (IsForcedDecomposition wl blocks) (isForcedDecompositionDecidable blocks)
+
+theorem mem_validCandidates_iff.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op} [DecidableEq Op] [DecidablePred wl.I]
+    (U : FiniteDecompositionUniverse wl)
+    (blocks : List (List Op)) :
+    blocks ∈ U.validCandidates ↔
+      blocks ∈ U.candidates ∧ IsForcedDecomposition wl blocks := by
+  simp [validCandidates, decide_eq_true_eq]
+
+end FiniteDecompositionUniverse
+
+/-- A maximum is an achieved forced floor together with maximality over every
+valid member of the explicitly supplied finite universe. -/
+structure MaximumForcedFloor.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op}
+    (U : FiniteDecompositionUniverse wl) where
+  blocks : List (List Op)
+  supported : blocks ∈ U.candidates
+  achieved : IsForcedDecomposition wl blocks
+  greatest : ∀ other : List (List Op), other ∈ U.candidates →
+    IsForcedDecomposition wl other → other.length ≤ blocks.length
+
+/-- The achieved maximum is also a lower bound on every plan, including plans
+whose seam carrier lies outside the finite decomposition search. -/
+theorem MaximumForcedFloor.forcedFloor.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op} {U : FiniteDecompositionUniverse wl}
+    (maximum : MaximumForcedFloor U) : ForcedFloor wl maximum.blocks.length :=
+  maximum.achieved.forcedFloor
+
+/-- Evidence-bearing semantic result.  A refusal is exhaustive over the exact
+candidate universe; it is not a claim that no decomposition exists elsewhere. -/
+inductive MaximumForcedFloorResult.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op}
+    (U : FiniteDecompositionUniverse wl) where
+  | found (maximum : MaximumForcedFloor U)
+  | refused (exhaustive : ∀ blocks : List (List Op), blocks ∈ U.candidates →
+      ¬ IsForcedDecomposition wl blocks)
+
+namespace MaximumForcedFloorResult
+
+/-- Observable semantic branch for executable fixtures. -/
+def isFound.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {U : FiniteDecompositionUniverse wl} :
+    MaximumForcedFloorResult U → Bool
+  | .found _ => true
+  | .refused _ => false
+
+/-- The achieved maximum length, absent precisely on exhaustive refusal. -/
+def maximumLength?.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {U : FiniteDecompositionUniverse wl} :
+    MaximumForcedFloorResult U → Option Nat
+  | .found maximum => some maximum.blocks.length
+  | .refused _ => none
+
+/-- The selected decomposition, exposed so fixtures can lock down more than a
+numeric optimum. -/
+def blocks?.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {U : FiniteDecompositionUniverse wl} :
+    MaximumForcedFloorResult U → Option (List (List Op))
+  | .found maximum => some maximum.blocks
+  | .refused _ => none
+
+end MaximumForcedFloorResult
+
+/-- Exact optimizer over the admitted candidate list.  `List.maxOn?` retains a
+real member and makes the found branch constructive; the empty-valid-list case
+returns a quantified refusal. -/
+def maximumForcedFloor.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} [DecidableEq Op] [DecidablePred wl.I]
+    (U : FiniteDecompositionUniverse wl) :
+    MaximumForcedFloorResult U :=
+  match hmax : U.validCandidates.maxOn? List.length with
+  | none =>
+      .refused (by
+        have hempty : U.validCandidates = [] := by
+          cases hvalid : U.validCandidates with
+          | nil => rfl
+          | cons head tail =>
+              rw [hvalid] at hmax
+              rw [List.maxOn?_cons_eq_some_maxOn] at hmax
+              contradiction
+        intro blocks hsupported hvalid
+        have hmem : blocks ∈ U.validCandidates :=
+          (U.mem_validCandidates_iff blocks).2 ⟨hsupported, hvalid⟩
+        rw [hempty] at hmem
+        exact List.not_mem_nil hmem)
+  | some blocks =>
+      .found {
+        blocks := blocks
+        supported :=
+          (U.mem_validCandidates_iff blocks).1 (List.maxOn?_mem hmax) |>.1
+        achieved :=
+          (U.mem_validCandidates_iff blocks).1 (List.maxOn?_mem hmax) |>.2
+        greatest := by
+          intro other hsupported hvalid
+          have hother : other ∈ U.validCandidates :=
+            (U.mem_validCandidates_iff other).2 ⟨hsupported, hvalid⟩
+          have hnonempty : U.validCandidates ≠ [] := List.ne_nil_of_mem hother
+          have hselected :
+              U.validCandidates.maxOn List.length hnonempty = blocks :=
+            List.maxOn_eq_of_maxOn?_eq_some hmax
+          rw [← hselected]
+          exact List.le_apply_maxOn_of_mem hother
+      }
+
+/-- Resource admission wraps the semantic result.  `tooLarge` is deliberately
+separate from semantic refusal and records both sides of the failed cap. -/
+inductive CappedMaximumForcedFloorResult.{u', w'} {S : Type u'} {Op : Type w'}
+    [MergeState S] {wl : Workload S Op}
+    (U : FiniteDecompositionUniverse wl) (maximumCandidates : Nat) where
+  | ready (result : MaximumForcedFloorResult U)
+  | tooLarge (required : Nat) (required_eq : required = U.candidates.length)
+      (over : maximumCandidates < required)
+
+namespace CappedMaximumForcedFloorResult
+
+def isReady.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {U : FiniteDecompositionUniverse wl}
+    {maximumCandidates : Nat} :
+    CappedMaximumForcedFloorResult U maximumCandidates → Bool
+  | .ready _ => true
+  | .tooLarge .. => false
+
+def isFound.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {U : FiniteDecompositionUniverse wl}
+    {maximumCandidates : Nat} :
+    CappedMaximumForcedFloorResult U maximumCandidates → Bool
+  | .ready result => result.isFound
+  | .tooLarge .. => false
+
+def maximumLength?.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {U : FiniteDecompositionUniverse wl}
+    {maximumCandidates : Nat} :
+    CappedMaximumForcedFloorResult U maximumCandidates → Option Nat
+  | .ready result => result.maximumLength?
+  | .tooLarge .. => none
+
+/-- Exact `(required, permitted)` work counts on the cap branch. -/
+def capRefusal?.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} {U : FiniteDecompositionUniverse wl}
+    {maximumCandidates : Nat} :
+    CappedMaximumForcedFloorResult U maximumCandidates → Option (Nat × Nat)
+  | .ready _ => none
+  | .tooLarge required _ _ => some (required, maximumCandidates)
+
+end CappedMaximumForcedFloorResult
+
+/-- **Cap before enumeration.** The raw universe length is compared before the
+validity filter and `maxOn?` search appear in the admitted branch. -/
+def maximumForcedFloorCapped.{u', w'} {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} [DecidableEq Op] [DecidablePred wl.I]
+    (U : FiniteDecompositionUniverse wl)
+    (maximumCandidates : Nat) :
+    CappedMaximumForcedFloorResult U maximumCandidates :=
+  if hcap : U.candidates.length ≤ maximumCandidates then
+    .ready (maximumForcedFloor U)
+  else
+    .tooLarge U.candidates.length rfl (Nat.lt_of_not_ge hcap)
+
+/-- Below the cap, and only then, the exact search is exposed. -/
+theorem maximumForcedFloorCapped_eq_ready_of_le.{u', w'}
+    {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} [DecidableEq Op] [DecidablePred wl.I]
+    (U : FiniteDecompositionUniverse wl)
+    {maximumCandidates : Nat} (hcap : U.candidates.length ≤ maximumCandidates) :
+    maximumForcedFloorCapped U maximumCandidates =
+      .ready (maximumForcedFloor U) := by
+  simp [maximumForcedFloorCapped, hcap]
+
+/-- Above the cap, the result is an exact resource refusal without needing any
+semantic premise about a candidate. -/
+theorem maximumForcedFloorCapped_is_tooLarge_of_lt.{u', w'}
+    {S : Type u'} {Op : Type w'} [MergeState S]
+    {wl : Workload S Op} [DecidableEq Op] [DecidablePred wl.I]
+    (U : FiniteDecompositionUniverse wl)
+    {maximumCandidates : Nat} (hover : maximumCandidates < U.candidates.length) :
+    ∃ required hrequired hover', maximumForcedFloorCapped U maximumCandidates =
+      CappedMaximumForcedFloorResult.tooLarge required hrequired hover' := by
+  rw [maximumForcedFloorCapped]
+  simp only [dif_neg (Nat.not_le_of_lt hover)]
+  exact ⟨U.candidates.length, rfl, hover, rfl⟩
 
 /-! ## §4. The verdict — three constructors, each carrying its evidence -/
 
@@ -591,6 +845,105 @@ the two re-allocations. `Cost.unlinked_optimum_is_two` pairs this universal
 lower bound with `unlinkedPredictivePlan`'s achieved count of two. -/
 theorem unlinked_forced_two : ForcedFloor unlinkedWorkload 2 :=
   ⟨unlinkedBlocks, unlinked_clashBlocks, unlinkedBlocks_flatten, rfl⟩
+
+/-! ### Executed finite-maximum fixtures for U-0004 -/
+
+/-- The concrete budget invariant is executable pointwise; naming the instance
+keeps the generic search API independent of any classical decision procedure. -/
+instance budgetWorkloadInvariantDecidable : DecidablePred budgetWorkload.I :=
+  fun state =>
+    if htrue : state.2 true ≤ state.1 true then
+      if hfalse : state.2 false ≤ state.1 false then
+        if hsum : state.1 true + state.1 false = 10 then
+          isTrue ⟨⟨htrue, hfalse⟩, hsum⟩
+        else
+          isFalse fun h => hsum h.2
+      else
+        isFalse fun h => hfalse h.1.2
+    else
+      isFalse fun h => htrue h.1.1
+
+/-- Three explicit candidates for the budget workload: a coarse valid
+one-block decomposition, an invalid empty candidate, and the sharp valid
+three-block decomposition. -/
+def budgetDecompositionFoundUniverse :
+    FiniteDecompositionUniverse budgetWorkload where
+  candidates := [[budgetW], [], budgetBlocks]
+
+/-- A nonempty candidate universe with no decomposition of the workload's exact
+operation stream. -/
+def budgetDecompositionRefusalUniverse :
+    FiniteDecompositionUniverse budgetWorkload where
+  candidates := [[], [[0]], [[0, 5]]]
+
+/-- **Exact found fixture.** The optimizer selects the actual three-block
+decomposition, not merely the numeral three, from a universe that also contains
+a valid but weaker forced floor. -/
+theorem budgetDecompositionFound_exact :
+    (maximumForcedFloor budgetDecompositionFoundUniverse).blocks? =
+        some budgetBlocks
+      ∧ (maximumForcedFloorCapped budgetDecompositionFoundUniverse 3).isReady = true
+      ∧ (maximumForcedFloorCapped budgetDecompositionFoundUniverse 3).isFound = true
+      ∧ (maximumForcedFloorCapped budgetDecompositionFoundUniverse 3).maximumLength? =
+        some 3 := by
+  decide
+
+/-- The found fixture's proof payload is an achieved globally sound floor and
+is greatest among every valid member of the stated universe. -/
+theorem budgetDecompositionFound_evidence :
+    ∃ maximum : MaximumForcedFloor budgetDecompositionFoundUniverse,
+      maximum.blocks = budgetBlocks
+        ∧ ForcedFloor budgetWorkload maximum.blocks.length
+        ∧ (∀ other : List (List Nat),
+          other ∈ budgetDecompositionFoundUniverse.candidates →
+          IsForcedDecomposition budgetWorkload other →
+          other.length ≤ maximum.blocks.length) := by
+  generalize hresult : maximumForcedFloor budgetDecompositionFoundUniverse = result
+  cases result with
+  | found maximum =>
+      have hblocks := budgetDecompositionFound_exact.1
+      rw [hresult] at hblocks
+      simp only [MaximumForcedFloorResult.blocks?, Option.some.injEq] at hblocks
+      exact ⟨maximum, hblocks, maximum.forcedFloor, maximum.greatest⟩
+  | refused exhaustive =>
+      have hfound := budgetDecompositionFound_exact.2.2.1
+      rw [maximumForcedFloorCapped_eq_ready_of_le
+        budgetDecompositionFoundUniverse (by decide), hresult] at hfound
+      contradiction
+
+/-- **Exact exhaustive-refusal fixture.** The status computation is paired with
+the constructor's quantified proof below; `ready` confirms this is semantic
+refusal rather than a resource cap. -/
+theorem budgetDecompositionRefusal_exact :
+    (maximumForcedFloorCapped budgetDecompositionRefusalUniverse 3).isReady = true
+      ∧ (maximumForcedFloorCapped budgetDecompositionRefusalUniverse 3).isFound = false
+      ∧ (maximumForcedFloorCapped budgetDecompositionRefusalUniverse 3).maximumLength? =
+        none := by
+  decide
+
+theorem budgetDecompositionRefusal_exhaustive :
+    ∀ blocks : List (List Nat),
+      blocks ∈ budgetDecompositionRefusalUniverse.candidates →
+      ¬ IsForcedDecomposition budgetWorkload blocks := by
+  generalize hresult : maximumForcedFloor budgetDecompositionRefusalUniverse = result
+  cases result with
+  | refused exhaustive => exact exhaustive
+  | found maximum =>
+      have hrefused := budgetDecompositionRefusal_exact.2.1
+      rw [maximumForcedFloorCapped_eq_ready_of_le
+        budgetDecompositionRefusalUniverse (by decide), hresult] at hrefused
+      contradiction
+
+/-- **Exact cap fixture.** The same found universe needs three candidate slots;
+with only two permitted, it is rejected before semantic search and reports both
+counts exactly. -/
+theorem budgetDecompositionCap_exact :
+    (maximumForcedFloorCapped budgetDecompositionFoundUniverse 2).isReady = false
+      ∧ (maximumForcedFloorCapped budgetDecompositionFoundUniverse 2).isFound = false
+      ∧ (maximumForcedFloorCapped budgetDecompositionFoundUniverse 2).maximumLength? = none
+      ∧ (maximumForcedFloorCapped budgetDecompositionFoundUniverse 2).capRefusal? =
+        some (3, 2) := by
+  decide
 
 /-- **The bounded computation agrees with the global theorem.** The first
 conjunct is the finite calculation. The second is the existing universal floor

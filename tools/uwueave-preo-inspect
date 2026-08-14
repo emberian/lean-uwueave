@@ -4,4 +4,10 @@ set -euo pipefail
 tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(dirname -- "$tool_dir")
 cd "$repo_dir"
-exec lake env lean --run Uwueave/Preo/ArtifactInspectionMain.lean "$@"
+# Build the audited Main module first, then execute it through an import-only
+# source descriptor.  Elaborating Main directly prints its trust-floor audit
+# diagnostic to stdout before the JSON response.  The descriptor is separate
+# from stdin because journal mode reserves stdin for the exact artifact bytes.
+lake build Uwueave.Preo.ArtifactInspectionMain >/dev/null
+exec lake env lean --run \
+  <(printf '%s\n' 'import Uwueave.Preo.ArtifactInspectionMain') "$@"

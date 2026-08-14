@@ -89,12 +89,19 @@ filtered views answer `fromResults`; counting answers `needsEvidence`.
     exists, and every impossibility here bottoms out in `decide` on it. The
     *positive* results (§1–§3, §5, §6.1) are general and carry no carrier
     assumption.
-  * **`IncrementallyMergeable` says nothing about cost.** ⟨UNDONE U-0086⟩ It asks for a
-    combiner to exist, not for it to be cheap, small or shippable — the
-    `canonicalCombine` witnessing the ⟸ direction of
-    `incrementallyMergeable_iff_resultDetermined` is built from
-    `Classical.choice` and is not an algorithm. A verdict that also priced the
-    combiner is what an implementation would want and is not here.
+  * **The semantic judgement still says nothing about cost; its checked
+    executable successor does.** ⟨DONE downstream for the supported typed
+    fragment in `Uwueave.Preo.DerivedProgram`⟩ `ExecutableCombiner` carries an
+    executable result combiner, its correctness equation, an explicit
+    `combineSteps` measure, and a checked bound. `executableCombinerOfJoinHom`
+    uses exactly one top-level result-lattice merge and no `Classical.choice`;
+    `Program.executableCombiner` refines that operation for certified
+    `Preo.Expr` programs with a recursive primitive-node count bounded by the
+    result type's `bool`/`nat`/product/option shape.
+    `maxFields_executable_fixture` is positive, while
+    `card_executable_refused` and the typed `summed_fields_refused` retain both
+    semantic and classifier refusal. The typed bound counts primitive result
+    merges, not wall-clock time, allocation, or wire bytes.
   * **The general judgement remains semantic; a typed fragment now has a
     classifier.** ⟨DONE for `Preo.Expr`, terminal for arbitrary `f`⟩
     `Preo.DerivedProgram.preservesMerge_iff_joinHom` identifies the expression
@@ -221,6 +228,27 @@ def IncrementallyMergeable {S : Type u} {R : Type v} [MergeState S]
     (f : S → R) : Prop :=
   ∃ m : R → R → R, ∀ x y : S, f (x ⊔ y) = m (f x) (f y)
 
+/-- A proof-carrying executable combiner with an explicit work measure.
+
+`combineSteps` is the adapter's executable merge-work measure. The generic
+join-hom adapter below counts one top-level merge; the typed `Preo.Expr` adapter
+counts primitive merge nodes recursively. Neither claims machine time,
+allocation, or communication bytes. -/
+structure ExecutableCombiner {S : Type u} {R : Type v} [MergeState S]
+    (f : S → R) where
+  combine : R → R → R
+  combineSteps : R → R → Nat
+  maxSteps : Nat
+  correct : ∀ x y : S, f (x ⊔ y) = combine (f x) (f y)
+  steps_le : ∀ left right, combineSteps left right ≤ maxSteps
+
+/-- Every checked executable combiner supplies the original semantic verdict,
+now without an existentially chosen implementation. -/
+theorem ExecutableCombiner.incrementallyMergeable {S : Type u} {R : Type v}
+    [MergeState S] {f : S → R} (combiner : ExecutableCombiner f) :
+    IncrementallyMergeable f :=
+  ⟨combiner.combine, combiner.correct⟩
+
 /-- The negative side of the same coin: this computation cannot be merged from
 its results, so a replica must retain — and a peer must replay — source
 evidence. -/
@@ -234,6 +262,27 @@ theorem joinHom_incrementallyMergeable {S : Type u} {R : Type v}
     [MergeState S] [MergeState R] {f : S → R} (hf : JoinHom f) :
     IncrementallyMergeable f :=
   ⟨fun a b => a ⊔ b, hf⟩
+
+/-- The executable combiner for a proved join homomorphism: run the result
+lattice's merge once. Unlike `canonicalCombine`, this definition performs no
+preimage search and uses no choice. -/
+def executableCombinerOfJoinHom {S : Type u} {R : Type v}
+    [MergeState S] [MergeState R] (f : S → R) (hf : JoinHom f) :
+    ExecutableCombiner f where
+  combine := fun left right => left ⊔ right
+  combineSteps := fun _ _ => 1
+  maxSteps := 1
+  correct := hf
+  steps_le := fun _ _ => Nat.le_refl 1
+
+@[simp] theorem executableCombinerOfJoinHom_steps {S : Type u} {R : Type v}
+    [MergeState S] [MergeState R] (f : S → R) (hf : JoinHom f)
+    (left right : R) :
+    (executableCombinerOfJoinHom f hf).combineSteps left right = 1 := rfl
+
+@[simp] theorem executableCombinerOfJoinHom_maxSteps {S : Type u} {R : Type v}
+    [MergeState S] [MergeState R] (f : S → R) (hf : JoinHom f) :
+    (executableCombinerOfJoinHom f hf).maxSteps = 1 := rfl
 
 /-- **The results determine the merged result.** Two source states that produce
 equal results are interchangeable as far as the merged result is concerned —
@@ -416,6 +465,12 @@ theorem card_not_incrementallyMergeable : ¬ IncrementallyMergeable card := by
   obtain ⟨m, hm⟩ := h
   obtain ⟨x₁, y₁, x₂, y₂, _, _, _, hbad⟩ := no_count_merge_without_provenance m
   exact hbad ⟨(hm x₁ y₁).symm, (hm x₂ y₂).symm⟩
+
+/-- The executable successor does not weaken the old refusal: a checked
+combiner for raw counts would imply the semantic combiner already refuted. -/
+theorem card_executable_refused : ¬ Nonempty (ExecutableCombiner card) := by
+  rintro ⟨combiner⟩
+  exact card_not_incrementallyMergeable combiner.incrementallyMergeable
 
 /-- ⚠ **A monotone summary does not transport the judgement.** `n ≤ 1` is
 I-confluent on `Nat` under `max` (the max of two things ≤ 1 is ≤ 1), `card` is

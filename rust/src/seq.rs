@@ -111,7 +111,10 @@ pub enum SeqMergeError {
     IdCollision(NodeId),
     /// The other state contains an element whose anchor it does not contain —
     /// it was not anchor-closed, i.e. not produced by this API.
-    NotAnchorClosed { element: NodeId, missing_anchor: NodeId },
+    NotAnchorClosed {
+        element: NodeId,
+        missing_anchor: NodeId,
+    },
 }
 
 impl fmt::Display for SeqInsertError {
@@ -182,7 +185,9 @@ pub struct SeqCrdt {
 
 impl SeqCrdt {
     pub fn new() -> Self {
-        Self { elems: BTreeMap::new() }
+        Self {
+            elems: BTreeMap::new(),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -222,7 +227,15 @@ impl SeqCrdt {
             // Same anchor + same contents ⇒ same element (see module docs).
             return Ok(id);
         }
-        self.elems.insert(id, SeqElem { anchor, rank, deleted: false, contents: contents.to_vec() });
+        self.elems.insert(
+            id,
+            SeqElem {
+                anchor,
+                rank,
+                deleted: false,
+                contents: contents.to_vec(),
+            },
+        );
         Ok(id)
     }
 
@@ -296,8 +309,11 @@ impl SeqCrdt {
         // identical on every replica with the same element set. The index
         // order is the kernel's sibling-arbitration order.
         let ids: Vec<NodeId> = self.elems.keys().copied().collect();
-        let index: BTreeMap<NodeId, u64> =
-            ids.iter().enumerate().map(|(i, id)| (*id, i as u64)).collect();
+        let index: BTreeMap<NodeId, u64> = ids
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (*id, i as u64))
+            .collect();
         let n = ids.len();
 
         let mut words: Vec<u64> = Vec::with_capacity(1 + 2 * n);
@@ -345,7 +361,9 @@ impl SeqCrdt {
             out.len() >= 8 && out.len() % 8 == 0,
             "kernel response is not whole words"
         );
-        let mut w = out.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap()));
+        let mut w = out
+            .chunks_exact(8)
+            .map(|c| u64::from_le_bytes(c.try_into().unwrap()));
         let k = w.next().expect("length word") as usize;
         assert_eq!(
             out.len(),
@@ -355,7 +373,10 @@ impl SeqCrdt {
         );
         w.map(|idx| {
             let idx = idx as usize;
-            assert!(idx < n, "kernel emitted an out-of-range index {idx} (n = {n})");
+            assert!(
+                idx < n,
+                "kernel emitted an out-of-range index {idx} (n = {n})"
+            );
             ids[idx]
         })
         .collect()
@@ -447,7 +468,10 @@ mod tests {
         let c = s.insert(Some(a), b"c").unwrap();
         let vis = s.visible();
         assert_eq!(vis.len(), 2);
-        assert!(vis.contains(&b) && vis.contains(&c), "both children visible");
+        assert!(
+            vis.contains(&b) && vis.contains(&c),
+            "both children visible"
+        );
         assert!(!vis.contains(&a), "the tombstone itself stays invisible");
 
         // And deleting the anchor of a whole run leaves the run intact.
@@ -519,8 +543,7 @@ mod tests {
             // The anomaly, concretely: ownership strictly alternates, so
             // neither replica's contiguous run survived — the Lean
             // [4,3,2,1] witness, through the shipping kernel.
-            let owners: Vec<bool> =
-                merged.visible().iter().map(|id| xs.contains(id)).collect();
+            let owners: Vec<bool> = merged.visible().iter().map(|id| xs.contains(id)).collect();
             assert!(
                 owners.windows(2).all(|w| w[0] != w[1]),
                 "the two runs came out strictly alternated (interleaving_anomaly)"

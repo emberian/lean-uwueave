@@ -104,7 +104,8 @@ its witness.
 
 ## Non-claims
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0074⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ marks a theorem of this model; the bullets below are explicit
+caveats, not open obligations by themselves.
 
   * ⟨TERMINAL⟩ **`HistoryConvergent` is convergence of a derived function, not of
     a protocol.** Its two "replicas" are two derivations over records that

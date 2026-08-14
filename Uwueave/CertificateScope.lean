@@ -105,7 +105,8 @@ and the answer is split, both halves proved:
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0007⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ marks a theorem of this model; the bullets below are explicit
+caveats, not open obligations by themselves.
 
   * ⟨TERMINAL⟩ **The universal property is cheap here, and is stated as such.**
     "Coarsest" means terminal in the partition order and nothing else: no bound

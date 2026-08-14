@@ -137,15 +137,14 @@ works, with no hypothesis, because the class map is always a join homomorphism.
 
 ## Honest boundary
 
-  * **Content is a global labelling, not a field of the op.** ⟨TERMINAL for the
-    refutations, ⟨UNDONE U-0142⟩ as a model⟩ `glyph : Nat → Glyph` is faithful exactly
-    because ids are content-addressed in the crate (`blake3("uwueave.seq.v1" ‖
-    anchor ‖ contents)`), so an id determines its character; what it drops is two
-    ops disagreeing about one id's content, which the crate's identity scheme
-    forbids as well. The cost is visible in `tombstoned_content_never_read`,
-    which is therefore stated over *labellings* rather than as a `CtxEquiv`
-    collapse: content is not in the carrier, so the quotient cannot be asked
-    about it directly.
+  * **Content identity is operational downstream.** ⟨DONE downstream in
+    `Uwueave.TextOperational`⟩ `ContentState` retains content-bearing insert
+    operations and tombstones, `contentId` is the canonical miniature address,
+    and `projectContent` erases them to this file's sequence carrier.
+    `collision_free_batch_projects_to_global_glyph` proves that every canonical,
+    collision-free batch agrees with this file's exact global `glyph` labelling;
+    `collision_counterexample` exhibits the ambiguity when that premise is
+    dropped. The carrier in this file remains the intentionally erased model.
   * **This is the model, not the kernel.** ⟨UNDONE U-0143⟩ `visible` is
     `Sequence.linearize` plus an output filter — `linearizeK`'s shape, one line
     apart, and deliberately so — but there are no arrays, no byte codec, no
@@ -153,38 +152,40 @@ works, with no hypothesis, because the class map is always a join homomorphism.
     proved here is a separation about the abstract model; the kernel's agreement
     with the model is `SeqKernel.lean`'s business and is by construction only
     where that file says so.
-  * **Contexts are unrestricted, and causal stability is not modelled.**
-    ⟨UNDONE U-0144⟩ `CtxEquiv`'s `∀ z` ranges over every state, including ones the
-    shipping merge refuses. So `no_gc_summary_sufficient` proves garbage
-    collection unsound **on local state alone**; it does not prove GC
-    impossible. The real escape — knowing no future op can name the element
-    (causal stability, Baquero–Almeida–Shoker's compaction condition) — is a
-    restriction on the set of contexts, and nothing here provides or refutes
-    one. Naming that as the missing hypothesis is the content of this bullet.
+  * **Garbage collection requires certified causal scope.** ⟨DONE downstream
+    in `Uwueave.TextOperational`⟩ `StabilityCertificate` checks tombstoning,
+    future unnameability, and preservation for an explicit finite inventory of
+    admitted future contexts; `collect` performs physical compaction and
+    `visible_preserved` proves equality for every admitted future. This is not
+    an unrestricted claim: `unrestricted_gc_remains_unsound` retains
+    `no_gc_summary_sufficient` as the negative boundary outside the certificate.
   * **The addressable window is exact.** ⟨TERMINAL⟩
     `ctxEquiv_iff_agree_window` proves the full claim: any two states differing
     at an addressable pair are contextually distinguishable. The proof audits
     the model's malformed corner rather than assuming it away — saturation
     violates both `WF` and `UniqueAnchor`, yet omitting one edge changes the
     traversal. Thus the quotient drops exactly pairs outside the fixed window.
-  * **Fugue is entered through a wrapper.** ⟨UNDONE U-0145⟩ `Fugue.docOrder` is called
-    for real, but `Fugue.OpSet` is a `List InsOp` merged by append — associative,
-    not commutative, not idempotent, hence not a `MergeState` — so §6 uses
-    `GSet InsOp` materialised in a canonical enumeration order, and filters the
-    dense id space down to minted elements (`Fugue.lean` treats every in-range
-    index as an element). The *verdict* transfers through
-    `rendered_order_requiresEvidence`, which knows nothing about any of that;
-    the *witness computation* depends on the wrapper.
+  * **Fugue state is a canonical operation set.** ⟨DONE downstream in
+    `Uwueave.TextOperational`⟩ `FugueState` validates this file's
+    `GSet Fugue.InsOp` carrier as a commutative-idempotent `MergeState`.
+    `materializeFugue` performs the bounded canonical enumeration only at the
+    reference-call boundary; `materialized_docOrder_agrees_reference` and
+    `canonical_fugue_witness_agrees` prove both `docOrder` and the existing
+    `[.a, .b]` `TextSummary` witness agree with the reference computation.
   * **Small carriers.** ⟨TERMINAL for the refutations⟩ Three glyphs, bound `5`
     (RGA) and `4` (Fugue). The general results — `ctxEquiv_iff_agree_window`,
     `addressable_op_observable`, `tombstoned_content_never_read`,
     `rendered_order_requiresEvidence`, `text_view_sec` — carry no carrier
     assumption.
-  * **No cost model, no representation, no classifier.** ⟨UNDONE U-0146⟩ Inherited
-    verbatim from `JoinHom.lean` and `MinimalSummary.lean`: `IncrementallyMergeable`
-    asks only that a combiner exist, `CtxQuot` is a partition with no bound on
-    the bits a class takes, and the verdict is proved per computation by hand
-    because there is no syntax to recurse over.
+  * **Representation, executable cost, and classification are checked
+    downstream.** ⟨DONE downstream in `Uwueave.TextOperational`,
+    `Uwueave.Preo.DerivedProgram`, and
+    `Uwueave.Preo.ContextQueryCompiler`⟩ Content-bearing states project to
+    this file's exact glyph labelling with an explicit collision refusal;
+    supported typed programs expose proof-carrying executable combiners with
+    checked step bounds and negative fixtures; admitted finite typed queries
+    compile to sound-and-complete contextual classifier specifications. These
+    results retain their stated supported-fragment and finite-universe scopes.
   * **Nothing here says RGA is the right order.** `Sequence.run_order_by_id`'s
     caveat stands: sibling order is arbitration no user chose. §6 is the
     statement that choosing better does not make the string shippable.

@@ -114,7 +114,8 @@ id collision does the same with an honest arbiter).
 
 ## Honest boundary
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0030⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ marks a theorem of this model; the bullets below are explicit
+caveats, not open obligations by themselves.
 
   * ⟨TERMINAL⟩ **The certificate is about the finalised view, not the view.**
     `finalView` is what `Era.resolveFinal` reports; `fullView` is `Era.resolve`.

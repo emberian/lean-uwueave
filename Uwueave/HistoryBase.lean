@@ -115,7 +115,8 @@ prize:
 
 ## Non-claims
 
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0065⟩ = work wearing a caveat's clothes.
+⟨TERMINAL⟩ marks a theorem of this model; the bullets below are explicit
+caveats, not open obligations by themselves.
 
   * ⟨TERMINAL⟩ **`ValidInHistory` is not a procedure.** It is what a merge-base
     procedure's output must *prove*, exactly as `Histories.BaseSelection` is.
@@ -132,12 +133,15 @@ prize:
     op-reachable region has it. That is not a defect of the transport: it is the
     diagnosis. Where the bridge is unavailable the history-level notion still
     certifies, which is the whole point of defining it.
-  * ⟨UNDONE U-0066⟩ **No convergence, still.** Nothing here says two replicas agree.
-    `selected_unique` narrows the licence — the state level licenses the two
-    bases `Histories.swap_never_converges` builds its eternal two-cycle from,
-    and the history level licenses at most one of them
-    (`the_two_cycle_needs_two_bases_the_history_licenses_one`) — but "at most one
-    valid base" is not a proof that a run converges, and no such proof is here.
+  * ⟨DONE downstream for the explicit finite contract⟩ **Settled replicas
+    converge under a faithful record image and record-determined selector.**
+    `FiniteHistoryProtocol.SemanticReplica.view_eq_of_recordDetermined` composes
+    duplicate-tolerant finite delivery with `HistoryPolicy`'s convergence law;
+    it applies to histories containing repeated or criss-cross merges, while
+    `ResolvedHistoryGrowth.lock_two_round_criss_cross_fixture` supplies the
+    concrete two-round growth witness.  These named premises do not establish
+    fair or unbounded network execution: canonical U-0109 remains open for that
+    unrestricted operational claim.
   * ⟨SCOPE U-0067⟩ **The version index buys scoping, not separating power.** §6's
     `VersionCert` is strictly a *name* for a world: `versionCertSound_of_
     worldCertSound` is one line and there is no theorem that a version index
@@ -149,10 +153,14 @@ prize:
     `BasedWorld`, and `VersionCertSound` preserve those levels.  The downstream
     closure probe instantiates the history bridge and the world-certificate
     transport at deliberately mixed `Type 0`/`Type 1`/lifted carriers.
-  * ⟨UNDONE U-0069⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
-    expressible at the state level in the lock, where it costs nothing, and
-    inexpressible in the counter, where it decides the invariant — is two
-    histories. No theorem here says that is the general pattern.
+  * ⟨DONE U-0069 for an explicitly covered finite scope⟩ **Visibility and
+    harmlessness are classified separately.** §7's
+    `FiniteAmbiguityClassifier` gives exact Boolean iff specifications for
+    state-level visibility and derived-view agreement on its enumerated probes.
+    `ambiguity_classifier_acceptance_cases` classifies the lock fixture as
+    visible/harmless and the counter fixture as hidden/costly.  Its `covers`
+    field is deliberately load-bearing: no theorem extrapolates those two
+    finite cases to arbitrary histories or to operational convergence.
 
 Literature: as `Histories.lean` (Kaki et al., OOPSLA 2019; Sal 2026 §2; Bailis
 et al., VLDB 2015) and `WorldFuture.lean` (Power–Koutris–Hellerstein,
@@ -261,8 +269,10 @@ The same three-valued shape, re-obligated over versions. Three differences from
     so `Histories.lowestCommonBase_unique` applies and at most one version is
     ever selectable for a pair;
   * `ambiguous` demands two **maximal** common bases, so
-    `Histories.ambiguous_excludes_lowest` makes it a *proof* that no `selected`
-    answer exists — the ⟨UNDONE U-0070⟩ `MergeModel` §9's own docstring records;
+    `Histories.ambiguous_excludes_lowest` turns any `ValidInHistory` ambiguity
+    witness into a *proof* that no `LowestCommonBase` exists.  The general
+    exclusion is also exposed by `validInHistory_exclusive`, and
+    `Histories.cc_no_lowest` is the concrete criss-cross instance;
   * `unavailable` refutes the existence of a common ancestor **version**, which
     is the obligation §9 says it wants and the state level cannot carry. -/
 
@@ -512,8 +522,9 @@ licence is exactly what the state index fails to withhold. -/
 /-- ⚠ **The eternal two-cycle needs two valid bases, and `ValidInHistory`
 licenses at most one.** The first three conjuncts are `Histories.
 lock_two_valid_bases` and `swap_never_converges`, quoted; the last is
-`selected_unique`, which forbids the pair at the history level. ⟨UNDONE U-0071⟩ This
-withdraws the *licence*; it is not a convergence proof. -/
+`selected_unique`, which forbids the pair at the history level.  This withdraws
+the *licence*; it is not the delivery-and-selector convergence theorem required
+by U-0109. -/
 theorem the_two_cycle_needs_two_bases_the_history_licenses_one :
     (MergeModel.BaseDecision.selected (⟨true, false⟩ : Lock)).Valid lockImpl
         ⟨true, false⟩ ⟨false, true⟩
@@ -1269,6 +1280,301 @@ theorem the_model_certifies_what_the_history_breaks :
       ∧ ¬ (ccState .joinLeft ≤ 4) :=
   ⟨counter_decision_iconfluentIn, ccHistory_coherent, by decide, by decide⟩
 
+/-! ### §7.1 A finite visibility/harmlessness classifier
+
+The two observations used below are intentionally different.  Visibility asks
+whether the history-level pair of bases can be represented by a valid
+state-level `ambiguous` decision.  Harmlessness asks whether selecting either
+base gives the same derived view.  A finite classifier records both bits rather
+than assuming a relationship between them.
+
+`FiniteAmbiguityClassifier.covers` makes the boundary explicit: exactness holds
+only for the named finite scope.  In particular, the lock and counter fixtures
+below do not imply a theorem about every history, scheduler, or network run. -/
+
+/-- One ambiguity question: two endpoints and the two maximal base candidates
+supplied by a history-level procedure. -/
+structure AmbiguityProbe (V : Type uV) where
+  x : V
+  y : V
+  b₁ : V
+  b₂ : V
+  deriving DecidableEq, Repr
+
+/-- The history-level premise that makes an ambiguity probe honest. -/
+def AmbiguityProbe.HistoryValid {V : Type uV} {S : Type uS} {Op : Type uOp}
+    (H : History V S Op) (p : AmbiguityProbe V) : Prop :=
+  ValidInHistory H p.x p.y (.ambiguous p.b₁ p.b₂)
+
+/-- State-level visibility is literal validity of the transported ambiguous
+decision, not merely inequality of the two base versions. -/
+def StateAmbiguityVisible {V : Type uV} {S : Type uS} {Op : Type uOp}
+    (H : History V S Op) (impl : Impl S Op) (p : AmbiguityProbe V) : Prop :=
+  (MergeModel.BaseDecision.ambiguous (H.state p.b₁) (H.state p.b₂)).Valid
+    impl (H.state p.x) (H.state p.y)
+
+/-- Harmlessness at a probe is exact agreement of the two base-selected
+derived views.  The view is an explicit parameter, so this does not silently
+upgrade state agreement to operational convergence. -/
+def DerivedViewAgreement {V : Type uV} {S : Type uS} {Op : Type uOp}
+    {A : Type uA} (H : History V S Op) (M : AncestralMerge S) (view : S → A)
+    (p : AmbiguityProbe V) : Prop :=
+  view (M.merge3 (H.state p.b₁) (H.state p.x) (H.state p.y)) =
+    view (M.merge3 (H.state p.b₂) (H.state p.x) (H.state p.y))
+
+/-- The classifier reports visibility and harmlessness independently, allowing
+all four combinations. -/
+structure AmbiguityVerdict where
+  visible : Bool
+  harmless : Bool
+  deriving DecidableEq, Repr
+
+/-- Two verdicts are equal exactly when their two reported bits are equal. -/
+theorem AmbiguityVerdict.eq_of_fields {a b : AmbiguityVerdict}
+    (hvisible : a.visible = b.visible) (hharmless : a.harmless = b.harmless) :
+    a = b := by
+  cases a
+  cases b
+  simp_all
+
+/-- A verdict is semantically exact when each Boolean is an iff for its named
+property. -/
+def AmbiguityVerdict.Exact (d : AmbiguityVerdict)
+    (visible harmless : Prop) : Prop :=
+  (d.visible = true ↔ visible) ∧ (d.harmless = true ↔ harmless)
+
+/-- An executable classifier over a finite, explicitly covered scope.  The
+history-validity field prevents arbitrary tuples from masquerading as
+ambiguity cases; the two exactness fields are the soundness/completeness
+contract for the reported bits. -/
+structure FiniteAmbiguityClassifier
+    {V : Type uV} {S : Type uS} {Op : Type uOp} {A : Type uA}
+    (H : History V S Op) (impl : Impl S Op) (M : AncestralMerge S)
+    (view : S → A) (scope : AmbiguityProbe V → Prop) where
+  probes : List (AmbiguityProbe V)
+  covers : ∀ p, scope p ↔ p ∈ probes
+  historyValid : ∀ p, p ∈ probes → p.HistoryValid H
+  visibleB : AmbiguityProbe V → Bool
+  harmlessB : AmbiguityProbe V → Bool
+  visible_exact : ∀ p, p ∈ probes →
+    (visibleB p = true ↔ StateAmbiguityVisible H impl p)
+  harmless_exact : ∀ p, p ∈ probes →
+    (harmlessB p = true ↔ DerivedViewAgreement H M view p)
+
+namespace FiniteAmbiguityClassifier
+
+/-- Run both Boolean tests for one probe. -/
+def classify {V : Type uV} {S : Type uS} {Op : Type uOp} {A : Type uA}
+    {H : History V S Op} {impl : Impl S Op} {M : AncestralMerge S}
+    {view : S → A} {scope : AmbiguityProbe V → Prop}
+    (C : FiniteAmbiguityClassifier H impl M view scope) (p : AmbiguityProbe V) :
+    AmbiguityVerdict :=
+  ⟨C.visibleB p, C.harmlessB p⟩
+
+/-- The exact correlation criterion: the two independently computed bits agree.
+This is a per-probe observation, not a claim that all histories correlate. -/
+def correlatesB {V : Type uV} {S : Type uS} {Op : Type uOp} {A : Type uA}
+    {H : History V S Op} {impl : Impl S Op} {M : AncestralMerge S}
+    {view : S → A} {scope : AmbiguityProbe V → Prop}
+    (C : FiniteAmbiguityClassifier H impl M view scope) (p : AmbiguityProbe V) :
+    Bool :=
+  C.visibleB p == C.harmlessB p
+
+/-- **Exactness iff on the covered finite scope.** This is both soundness and
+completeness for each independently reported bit. -/
+theorem classify_exact {V : Type uV} {S : Type uS} {Op : Type uOp}
+    {A : Type uA} {H : History V S Op} {impl : Impl S Op}
+    {M : AncestralMerge S} {view : S → A}
+    {scope : AmbiguityProbe V → Prop}
+    (C : FiniteAmbiguityClassifier H impl M view scope) {p : AmbiguityProbe V}
+    (hp : scope p) :
+    (C.classify p).Exact (StateAmbiguityVisible H impl p)
+      (DerivedViewAgreement H M view p) := by
+  have hmem : p ∈ C.probes := (C.covers p).mp hp
+  exact ⟨C.visible_exact p hmem, C.harmless_exact p hmem⟩
+
+/-- **Exact correlation iff.** On a covered probe the equality of the Boolean
+bits is equivalent to state-level visibility agreeing with derived-view
+agreement. -/
+theorem correlatesB_eq_true_iff
+    {V : Type uV} {S : Type uS} {Op : Type uOp} {A : Type uA}
+    {H : History V S Op} {impl : Impl S Op} {M : AncestralMerge S}
+    {view : S → A} {scope : AmbiguityProbe V → Prop}
+    (C : FiniteAmbiguityClassifier H impl M view scope) {p : AmbiguityProbe V}
+    (hp : scope p) :
+    C.correlatesB p = true ↔
+      (StateAmbiguityVisible H impl p ↔ DerivedViewAgreement H M view p) := by
+  have hexact := C.classify_exact hp
+  cases hvisible : C.visibleB p <;> cases hharmless : C.harmlessB p <;>
+    simp_all [correlatesB, classify, AmbiguityVerdict.Exact]
+
+/-- The positive verdict is equivalent to visible ambiguity and agreement of
+the two derived views. -/
+theorem classify_visible_harmless_iff
+    {V : Type uV} {S : Type uS} {Op : Type uOp} {A : Type uA}
+    {H : History V S Op} {impl : Impl S Op} {M : AncestralMerge S}
+    {view : S → A} {scope : AmbiguityProbe V → Prop}
+    (C : FiniteAmbiguityClassifier H impl M view scope) {p : AmbiguityProbe V}
+    (hp : scope p) :
+    C.classify p = ⟨true, true⟩ ↔
+      StateAmbiguityVisible H impl p ∧ DerivedViewAgreement H M view p := by
+  have hexact := C.classify_exact hp
+  constructor
+  · intro h
+    constructor
+    · apply hexact.1.mp
+      exact congrArg AmbiguityVerdict.visible h
+    · apply hexact.2.mp
+      exact congrArg AmbiguityVerdict.harmless h
+  · rintro ⟨hvisible, hharmless⟩
+    apply AmbiguityVerdict.eq_of_fields
+    · exact hexact.1.mpr hvisible
+    · exact hexact.2.mpr hharmless
+
+/-- The negative verdict is equivalent to hidden ambiguity and disagreement of
+the two derived views. -/
+theorem classify_hidden_costly_iff
+    {V : Type uV} {S : Type uS} {Op : Type uOp} {A : Type uA}
+    {H : History V S Op} {impl : Impl S Op} {M : AncestralMerge S}
+    {view : S → A} {scope : AmbiguityProbe V → Prop}
+    (C : FiniteAmbiguityClassifier H impl M view scope) {p : AmbiguityProbe V}
+    (hp : scope p) :
+    C.classify p = ⟨false, false⟩ ↔
+      ¬ StateAmbiguityVisible H impl p ∧ ¬ DerivedViewAgreement H M view p := by
+  have hexact := C.classify_exact hp
+  constructor
+  · intro h
+    constructor
+    · intro hvisible
+      have ht : (C.classify p).visible = true := hexact.1.mpr hvisible
+      rw [h] at ht
+      contradiction
+    · intro hharmless
+      have ht : (C.classify p).harmless = true := hexact.2.mpr hharmless
+      rw [h] at ht
+      contradiction
+  · rintro ⟨hvisible, hharmless⟩
+    apply AmbiguityVerdict.eq_of_fields
+    · cases hb : (C.classify p).visible with
+      | false => rfl
+      | true => exact (hvisible (hexact.1.mp hb)).elim
+    · cases hb : (C.classify p).harmless with
+      | false => rfl
+      | true => exact (hharmless (hexact.2.mp hb)).elim
+
+end FiniteAmbiguityClassifier
+
+/-- The single history-level ambiguity probe exercised by the lock fixture. -/
+def lockAmbiguityProbe : AmbiguityProbe LVer :=
+  ⟨.m1, .m2, .alice, .bob⟩
+
+/-- The lock classifier's deliberately singleton scope. -/
+def lockAmbiguityScope (p : AmbiguityProbe LVer) : Prop :=
+  p = lockAmbiguityProbe
+
+/-- Positive fixture: the history ambiguity is state-visible and either base
+produces the same (identity) derived view. -/
+def lockAmbiguityClassifier :
+    FiniteAmbiguityClassifier lockHistory lockImpl lockAM (fun s : Lock => s)
+      lockAmbiguityScope where
+  probes := [lockAmbiguityProbe]
+  covers := by intro p; simp [lockAmbiguityScope]
+  historyValid := by
+    intro p hp
+    simp only [List.mem_singleton] at hp
+    subst p
+    exact ⟨lv_alice_maximal, lv_bob_maximal, by decide⟩
+  visibleB := fun _ => true
+  harmlessB := fun _ => true
+  visible_exact := by
+    intro p hp
+    simp only [List.mem_singleton] at hp
+    subst p
+    change true = true ↔
+      (MergeModel.BaseDecision.ambiguous (lvState .alice) (lvState .bob)).Valid
+        lockImpl (lvState .m1) (lvState .m2)
+    exact ⟨fun _ => lock_ambiguous_valid, fun _ => rfl⟩
+  harmless_exact := by
+    intro p hp
+    simp only [List.mem_singleton] at hp
+    subst p
+    change true = true ↔
+      lockAM.merge3 (lvState .alice) (lvState .m1) (lvState .m2) =
+        lockAM.merge3 (lvState .bob) (lvState .m1) (lvState .m2)
+    exact ⟨fun _ => lock_join_base_insensitive, fun _ => rfl⟩
+
+/-- The single history-level ambiguity probe exercised by the counter fixture. -/
+def counterAmbiguityProbe : AmbiguityProbe Ver :=
+  ⟨.mergeL, .mergeR, .left, .right⟩
+
+/-- The counter classifier's deliberately singleton scope. -/
+def counterAmbiguityScope (p : AmbiguityProbe Ver) : Prop :=
+  p = counterAmbiguityProbe
+
+/-- Negative fixture: the history ambiguity is hidden at state level and the
+two base-selected derived views disagree. -/
+def counterAmbiguityClassifier :
+    FiniteAmbiguityClassifier ccHistory (spendOps 2).impl counterAM
+      (fun n : Nat => n) counterAmbiguityScope where
+  probes := [counterAmbiguityProbe]
+  covers := by intro p; simp [counterAmbiguityScope]
+  historyValid := by
+    intro p hp
+    simp only [List.mem_singleton] at hp
+    subst p
+    exact ⟨cc_left_maximal, cc_right_maximal, by decide⟩
+  visibleB := fun _ => false
+  harmlessB := fun _ => false
+  visible_exact := by
+    intro p hp
+    simp only [List.mem_singleton] at hp
+    subst p
+    change false = true ↔
+      (MergeModel.BaseDecision.ambiguous (ccState .left) (ccState .right)).Valid
+        (spendOps 2).impl (ccState .mergeL) (ccState .mergeR)
+    constructor
+    · intro h
+      contradiction
+    · intro h
+      exact (no_state_ambiguous_decision_here _ _ h).elim
+  harmless_exact := by
+    intro p hp
+    simp only [List.mem_singleton] at hp
+    subst p
+    change false = true ↔
+      counterAM.merge3 (ccState .left) (ccState .mergeL) (ccState .mergeR) =
+        counterAM.merge3 (ccState .right) (ccState .mergeL) (ccState .mergeR)
+    constructor
+    · intro h
+      contradiction
+    · intro h
+      exact (crisscross_diverges h).elim
+
+/-- Soundness/completeness specialized to the positive lock fixture. -/
+theorem lock_ambiguity_classifier_iff :
+    lockAmbiguityClassifier.classify lockAmbiguityProbe = ⟨true, true⟩ ↔
+      StateAmbiguityVisible lockHistory lockImpl lockAmbiguityProbe ∧
+        DerivedViewAgreement lockHistory lockAM (fun s : Lock => s)
+          lockAmbiguityProbe :=
+  lockAmbiguityClassifier.classify_visible_harmless_iff rfl
+
+/-- Soundness/completeness specialized to the negative counter fixture. -/
+theorem counter_ambiguity_classifier_iff :
+    counterAmbiguityClassifier.classify counterAmbiguityProbe =
+        ⟨false, false⟩ ↔
+      ¬ StateAmbiguityVisible ccHistory (spendOps 2).impl counterAmbiguityProbe ∧
+        ¬ DerivedViewAgreement ccHistory counterAM (fun n : Nat => n)
+          counterAmbiguityProbe :=
+  counterAmbiguityClassifier.classify_hidden_costly_iff rfl
+
+/-- The two concrete acceptance cases: positive for the lock, negative for the
+counter.  This theorem computes only the explicitly covered singleton scopes. -/
+theorem ambiguity_classifier_acceptance_cases :
+    lockAmbiguityClassifier.classify lockAmbiguityProbe = ⟨true, true⟩ ∧
+      counterAmbiguityClassifier.classify counterAmbiguityProbe =
+        ⟨false, false⟩ := by
+  decide
+
 /-- **Whether ambiguity is visible at the state level, and whether it is free,
 come apart — in opposite directions, on two histories.** In the lock the two
 maximal bases carry distinct states, so `MergeModel.BaseDecision.ambiguous` is
@@ -1276,8 +1582,12 @@ valid there (`Histories.lock_ambiguous_valid`) — and the base choice costs
 nothing (`lock_join_base_insensitive`). In the counter no state-level `ambiguous`
 decision is valid at all — and the base choice decides the invariant.
 
-⟨UNDONE U-0073⟩ Two histories, not a classification: nothing here says visibility and
-harmlessness are always anti-correlated. -/
+⟨DONE U-0073 via U-0069's bounded classifier⟩ `ambiguity_classifier_acceptance_cases`
+uses these two fixtures as its positive and negative cases, while
+`lock_ambiguity_classifier_iff` and `counter_ambiguity_classifier_iff` give the
+corresponding exact semantic iff statements.  The classifier's finite `covers`
+premise preserves the nonclaim: these fixtures do not establish a universal
+correlation or global operational convergence. -/
 theorem ambiguity_is_visible_where_it_is_free :
     (MergeModel.BaseDecision.ambiguous (lvState .alice) (lvState .bob)).Valid lockImpl
         (lvState .m1) (lvState .m2)

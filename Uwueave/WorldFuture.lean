@@ -169,18 +169,16 @@ precise scope or disposition without turning an honest caveat into hidden work.
     receipts. ⟨PREMISE U-0155 at deployment boundaries⟩
     the decoder and signature security premise remain external, and
     `ResultEvidence` still carries neither id automatically.
-  * **The frontier here is still a flat set of sources.**
-    `Uwueave.Frontier` now supplies the Timely-style antichain whose advance
-    retires a timestamp range and a narrow theorem transporting complete,
-    settled worlds to stability of `Evidence.values`. ⟨UNDONE U-0156 for this carrier
-    and deployment⟩ `World.frontier` remains a `GSet Source`, and timestamps or
-    authentication records are not stored in `ResultEvidence`.
-    `Uwueave.AuthenticatedFrontier` and
-    `Uwueave.AuthenticatedWorldContext` authenticate proof-level progress and
-    bind it to a lawful decoded advance, but no runtime generates that progress
-    or discharges the deployed signature premise. Full `render` stability is
-    not claimed. `roster` bounds accepted membership, but a roster is not an
-    antichain.
+  * **The frontier here remains a flat projection; the timestamped successor
+    carries the antichain.** ⟨DONE U-0156 downstream with U-0039 in
+    `Uwueave.TimestampedEvidence`⟩ `TimestampedEvidence.State` stores
+    timestamped attributed candidates and a `SourceFrontier`, and its accepted
+    runtime progress binds an authenticated lawful advance to exact snapshots.
+    `accepted_progress_preserves_render` obtains full-render delivery stability
+    from terminal progress, not merely stability of `Evidence.values`.
+    `World.frontier` and `ResultEvidence` remain flat compatibility projections;
+    no runtime is claimed to generate the progress message or discharge the
+    deployed signature premise, and `roster` itself is not an antichain.
   * **A seal is still trusted, not verified.** ⟨PREMISE U-0157⟩ `epoch` and `sealed`
     are a producer's announcement, exactly as `Era.advance` announces a cut
     unconditionally. What is *new* here and not in `Evidence.lean` is that the
@@ -189,21 +187,24 @@ precise scope or disposition without turning an honest caveat into hidden work.
     can never be earned by delivery or by application writes alone. That makes
     the trust in the arbiter a load-bearing hypothesis with a theorem attached
     rather than an unremarked one; it does not make the arbiter honest.
-  * **`Wf` and `RosterKnown` are hypotheses, not invariants.** ⟨UNDONE U-0158⟩
-    Wellformedness (`observe w ⊑ pool w`) is carried as a side condition on the
-    future relations and proved for the concrete witnesses. No theorem says a
-    running system's worlds are wellformed, because there is no running system
-    here — that is what a state machine over these worlds would establish and
-    none is built.
+  * **`Wf` and `RosterKnown` are invariants of the checked world machine.**
+    ⟨DONE U-0158 — see §6⟩ `WorldMachine.SafeState` packages both invariants;
+    initialization, issuance, admitted membership, guarded delivery, sealing,
+    proof-carrying recovery, and rejected-step stuttering preserve them. This
+    is the accepted semantic state machine, not a claim that arbitrary network
+    bytes are accepted actions: signed-record refinement and authenticated
+    sealing remain the deployment premises U-0155 and U-0157.
   * **`renderW` is noncomputable.** ⟨TERMINAL at this carrier⟩ It is
     `Evidence.render` composed with a projection, and `render` quantifies over
     an unbounded value type. `Classical.choice` is inside the audit floor.
-  * **The separation is one witness, not a classification.** ⟨UNDONE U-0159⟩ §3 proves
-    that *some* pair of worlds is separated by the pool, which is what refutes
-    the collapse. It does **not** characterise which state/world pairs are
-    separated, or give a decidable test for when a state-indexed reading is
-    safe. `Quiesced` is one sufficient condition and there is no claim it is
-    necessary.
+  * **State-indexing is classified on an explicit finite covered universe.**
+    ⟨DONE U-0159 — see §7⟩ `FiniteDeliverySpec.stateIndexedSafeB` checks
+    exactly whether world delivery is constant on pairs with equal source and
+    target observations. `stateIndexedSafeB_eq_true_iff` proves equivalence to
+    existence of a state-indexed relation on the enumerated scope, and
+    `stateIndexedSafeB_global_iff` lifts it when the enumeration covers every
+    supported world. No unrestricted or infinite-world discovery is claimed;
+    the caller supplies exact Boolean observation and delivery tests.
 
 ## Literature — what each is for here
 
@@ -902,5 +903,365 @@ to the world is not a stronger check — it is the check, correctly keyed. -/
 theorem the_world_index_separates_them :
     Quiesced wQuiesced ∧ ¬ Quiesced wPending ∧ observe wQuiesced = observe wPending :=
   ⟨quiesced_wQuiesced, not_quiesced_wPending, same_observation⟩
+
+/-! ## §6. A checked running world machine
+
+The original carrier admits malformed values because `Wf` and `RosterKnown`
+are predicates.  A running consumer should not.  `SafeState` is the admitted
+state space, and `step?` is the checked transition boundary.  Rejected delivery
+attempts stutter; recovery accepts only a proof-carrying safe snapshot.
+
+These are semantic actions.  Turning signed network records into actions is a
+separate refinement/authenticity premise and is intentionally not postulated
+here. -/
+
+namespace WorldMachine
+
+/-- The empty grow-only set. -/
+def emptySet (beta : Type v) : GSet beta := fun _ => false
+
+/-- A one-element grow-only set. -/
+def singleton {beta : Type v} [DecidableEq beta] (value : beta) : GSet beta :=
+  fun other => decide (other = value)
+
+/-- The admitted running states: malformed worlds are outside the machine. -/
+structure SafeState (alpha : Type u) where
+  world : World alpha
+  wf : Wf world
+  rosterKnown : RosterKnown world
+
+/-- Initialization knows the supplied roster and has materialized no events or
+certificates.  Its observation equals its pool. -/
+def initial (alpha : Type u) (roster : GSet Evidence.Source) : SafeState alpha where
+  world := {
+    state := (emptySet (alpha × Evidence.Source), roster,
+      emptySet Evidence.Source)
+    issued := emptySet (alpha × Evidence.Source)
+    roster := roster
+    sealed := emptySet Evidence.Source
+    epoch := 0
+  }
+  wf := by
+    exact leq_refl _
+  rosterKnown := leq_refl _
+
+/-- Issuance grows only the hidden issued pool. -/
+def issue [DecidableEq alpha] (current : SafeState alpha)
+    (event : alpha × Evidence.Source) : SafeState alpha where
+  world := { current.world with
+    issued := current.world.issued ⊔ singleton event }
+  wf := by
+    apply Evidence.leq_of_components
+    · exact leq_trans (Evidence.candidates_mono
+          (s := observe current.world) (t := pool current.world) current.wf)
+        (le_merge_left _ _)
+    · exact Evidence.obligations_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+    · exact Evidence.certificates_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+  rosterKnown := current.rosterKnown
+
+/-- A guarded delivery materializes one event already present in the issued
+pool. -/
+def deliver [DecidableEq alpha] (current : SafeState alpha)
+    (event : alpha × Evidence.Source)
+    (issued : current.world.issued event = true) : SafeState alpha where
+  world := { current.world with
+    state := (delivered current.world ⊔ singleton event,
+      frontier current.world, held current.world) }
+  wf := by
+    apply Evidence.leq_of_components
+    · apply (Holes.gset_leq_iff_subset _ _).2
+      intro candidate hc
+      rcases (Holes.gset_mem_or _ _ candidate).1 hc with hold | hnew
+      · exact (Holes.gset_leq_iff_subset _ _).1
+          (Evidence.candidates_mono
+            (s := observe current.world) (t := pool current.world) current.wf)
+          candidate hold
+      · have heq : candidate = event := of_decide_eq_true hnew
+        simpa [heq] using issued
+    · exact Evidence.obligations_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+    · exact Evidence.certificates_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+  rosterKnown := current.rosterKnown
+
+/-- Membership admission grows the world roster and the materialized roster
+together, so knowledge never trails admission inside the checked machine. -/
+def admit [DecidableEq alpha] (current : SafeState alpha)
+    (source : Evidence.Source) : SafeState alpha where
+  world := { current.world with
+    state := (delivered current.world,
+      frontier current.world ⊔ singleton source, held current.world)
+    roster := current.world.roster ⊔ singleton source }
+  wf := by
+    apply Evidence.leq_of_components
+    · exact Evidence.candidates_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+    · apply (Holes.gset_leq_iff_subset _ _).2
+      intro member hm
+      rcases (Holes.gset_mem_or _ _ member).1 hm with hold | hnew
+      · exact (Holes.gset_mem_or _ _ member).2 <| Or.inl <|
+          (Holes.gset_leq_iff_subset _ _).1
+            (Evidence.obligations_mono
+              (s := observe current.world) (t := pool current.world) current.wf)
+            member hold
+      · exact (Holes.gset_mem_or _ _ member).2 (Or.inr hnew)
+    · exact Evidence.certificates_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+  rosterKnown := by
+    apply (Holes.gset_leq_iff_subset _ _).2
+    intro member hm
+    rcases (Holes.gset_mem_or _ _ member).1 hm with hold | hnew
+    · exact (Holes.gset_mem_or _ _ member).2 <| Or.inl <|
+        (Holes.gset_leq_iff_subset _ _).1 current.rosterKnown member hold
+    · exact (Holes.gset_mem_or _ _ member).2 (Or.inr hnew)
+
+/-- A semantic seal grows the sealed pool and the held certificates together.
+Authentication of this action remains U-0157. -/
+def sealSource [DecidableEq alpha] (current : SafeState alpha)
+    (source : Evidence.Source) : SafeState alpha where
+  world := { current.world with
+    state := (delivered current.world, frontier current.world,
+      held current.world ⊔ singleton source)
+    sealed := current.world.sealed ⊔ singleton source
+    epoch := current.world.epoch + 1 }
+  wf := by
+    apply Evidence.leq_of_components
+    · exact Evidence.candidates_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+    · exact Evidence.obligations_mono
+        (s := observe current.world) (t := pool current.world) current.wf
+    · apply (Holes.gset_leq_iff_subset _ _).2
+      intro member hm
+      rcases (Holes.gset_mem_or _ _ member).1 hm with hold | hnew
+      · exact (Holes.gset_mem_or _ _ member).2 <| Or.inl <|
+          (Holes.gset_leq_iff_subset _ _).1
+            (Evidence.certificates_mono
+              (s := observe current.world) (t := pool current.world) current.wf)
+            member hold
+      · exact (Holes.gset_mem_or _ _ member).2 (Or.inr hnew)
+  rosterKnown := current.rosterKnown
+
+/-- Commands accepted by the semantic consumer. Recovery carries its invariant
+proofs rather than trusting an unchecked snapshot. -/
+inductive Action (alpha : Type u) where
+  | issue (event : alpha × Evidence.Source)
+  | deliver (event : alpha × Evidence.Source)
+  | admit (source : Evidence.Source)
+  | certify (source : Evidence.Source)
+  | recover (snapshot : SafeState alpha)
+
+/-- Checked execution. Only delivery of an unissued event is rejected here;
+authentication/refinement may reject a record before it becomes an `Action`. -/
+def step? [DecidableEq alpha] (current : SafeState alpha) :
+    Action alpha → Option (SafeState alpha)
+  | .issue event => some (issue current event)
+  | .deliver event =>
+      if h : current.world.issued event = true then
+        some (deliver current event h)
+      else none
+  | .admit source => some (admit current source)
+  | .certify source => some (sealSource current source)
+  | .recover snapshot => some snapshot
+
+/-- Rejection is a stuttering transition. -/
+def runStep [DecidableEq alpha] (current : SafeState alpha)
+    (action : Action alpha) : SafeState alpha :=
+  match step? current action with
+  | some next => next
+  | none => current
+
+theorem initialization_preserves (alpha : Type u)
+    (roster : GSet Evidence.Source) :
+    Wf (initial alpha roster).world ∧
+      RosterKnown (initial alpha roster).world :=
+  ⟨(initial alpha roster).wf, (initial alpha roster).rosterKnown⟩
+
+theorem accepted_step_preserves [DecidableEq alpha]
+    {current next : SafeState alpha} {action : Action alpha}
+    (_accepted : step? current action = some next) :
+    Wf next.world ∧ RosterKnown next.world :=
+  ⟨next.wf, next.rosterKnown⟩
+
+theorem recovery_preserves [DecidableEq alpha]
+    (current snapshot : SafeState alpha) :
+    step? current (.recover snapshot) = some snapshot ∧
+      Wf snapshot.world ∧ RosterKnown snapshot.world :=
+  ⟨rfl, snapshot.wf, snapshot.rosterKnown⟩
+
+theorem unissued_delivery_is_rejected [DecidableEq alpha]
+    (current : SafeState alpha) (event : alpha × Evidence.Source)
+    (missing : current.world.issued event = false) :
+    step? current (.deliver event) = none := by
+  simp [step?, missing]
+
+theorem rejected_step_stutters [DecidableEq alpha]
+    (current : SafeState alpha) (action : Action alpha)
+    (rejected : step? current action = none) :
+    runStep current action = current := by
+  simp [runStep, rejected]
+
+theorem every_run_step_preserves [DecidableEq alpha]
+    (current : SafeState alpha) (action : Action alpha) :
+    Wf (runStep current action).world ∧
+      RosterKnown (runStep current action).world :=
+  ⟨(runStep current action).wf, (runStep current action).rosterKnown⟩
+
+end WorldMachine
+
+/-! ## §7. Exact finite classification of safe state indexing -/
+
+namespace FiniteDeliverySpec
+
+/-- An explicit finite delivery universe with exact executable observations.
+The two Boolean specifications are required only on the enumerated scope. -/
+structure Spec (alpha : Type u) where
+  worlds : List (World alpha)
+  observationEqB : World alpha → World alpha → Bool
+  deliveryB : World alpha → World alpha → Bool
+  observationEqB_spec : ∀ {x y}, x ∈ worlds → y ∈ worlds →
+    (observationEqB x y = true ↔ observe x = observe y)
+  deliveryB_spec : ∀ {x y}, x ∈ worlds → y ∈ worlds →
+    (deliveryB x y = true ↔ DeliveryFuture x y)
+
+/-- The semantic constancy condition: equal observed source/target pairs must
+receive the same world-indexed delivery verdict. -/
+def StateIndexedSafeWithin (spec : Spec alpha) : Prop :=
+  ∀ x₁ ∈ spec.worlds, ∀ x₂ ∈ spec.worlds,
+    ∀ y₁ ∈ spec.worlds, ∀ y₂ ∈ spec.worlds,
+      observe x₁ = observe x₂ → observe y₁ = observe y₂ →
+        (DeliveryFuture x₁ y₁ ↔ DeliveryFuture x₂ y₂)
+
+/-- Executable four-way scan of the exact constancy condition. -/
+def stateIndexedSafeB (spec : Spec alpha) : Bool :=
+  spec.worlds.all fun x₁ =>
+    spec.worlds.all fun x₂ =>
+      spec.worlds.all fun y₁ =>
+        spec.worlds.all fun y₂ =>
+          if spec.observationEqB x₁ x₂ && spec.observationEqB y₁ y₂ then
+            decide (spec.deliveryB x₁ y₁ = spec.deliveryB x₂ y₂)
+          else true
+
+theorem stateIndexedSafeB_eq_true_iff_safeWithin (spec : Spec alpha) :
+    stateIndexedSafeB spec = true ↔ StateIndexedSafeWithin spec := by
+  constructor
+  · intro checked x₁ hx₁ x₂ hx₂ y₁ hy₁ y₂ hy₂ hxeq hyeq
+    have hxB := (spec.observationEqB_spec (x := x₁) (y := x₂) hx₁ hx₂).2 hxeq
+    have hyB := (spec.observationEqB_spec (x := y₁) (y := y₂) hy₁ hy₂).2 hyeq
+    have h₁ := List.all_eq_true.mp checked x₁ hx₁
+    have h₂ := List.all_eq_true.mp h₁ x₂ hx₂
+    have h₃ := List.all_eq_true.mp h₂ y₁ hy₁
+    have h₄ := List.all_eq_true.mp h₃ y₂ hy₂
+    simp [hxB, hyB] at h₄
+    have hbool : spec.deliveryB x₁ y₁ = spec.deliveryB x₂ y₂ := h₄
+    rw [← spec.deliveryB_spec (x := x₁) (y := y₁) hx₁ hy₁,
+      ← spec.deliveryB_spec (x := x₂) (y := y₂) hx₂ hy₂, hbool]
+  · intro safe
+    apply List.all_eq_true.mpr
+    intro x₁ hx₁
+    apply List.all_eq_true.mpr
+    intro x₂ hx₂
+    apply List.all_eq_true.mpr
+    intro y₁ hy₁
+    apply List.all_eq_true.mpr
+    intro y₂ hy₂
+    by_cases hx : spec.observationEqB x₁ x₂ = true
+    · by_cases hy : spec.observationEqB y₁ y₂ = true
+      · have hxeq := (spec.observationEqB_spec (x := x₁) (y := x₂) hx₁ hx₂).1 hx
+        have hyeq := (spec.observationEqB_spec (x := y₁) (y := y₂) hy₁ hy₂).1 hy
+        have hdelivery := safe x₁ hx₁ x₂ hx₂ y₁ hy₁ y₂ hy₂
+          hxeq hyeq
+        have hiff : spec.deliveryB x₁ y₁ = true ↔
+            spec.deliveryB x₂ y₂ = true := by
+          rw [spec.deliveryB_spec (x := x₁) (y := y₁) hx₁ hy₁,
+            spec.deliveryB_spec (x := x₂) (y := y₂) hx₂ hy₂]
+          exact hdelivery
+        have heq : spec.deliveryB x₁ y₁ = spec.deliveryB x₂ y₂ := by
+          cases hleft : spec.deliveryB x₁ y₁ <;>
+            cases hright : spec.deliveryB x₂ y₂
+          · rfl
+          · exact False.elim ((hiff.mpr hright).symm.trans hleft |> Bool.noConfusion)
+          · exact False.elim ((hiff.mp hleft).symm.trans hright |> Bool.noConfusion)
+          · rfl
+        simp [hx, hy, heq]
+      · simp [hx, hy]
+    · simp [hx]
+
+/-- Exact semantic meaning of safe state indexing on the enumerated scope. -/
+def HasStateIndexedDeliveryWithin (spec : Spec alpha) : Prop :=
+  ∃ F : Evidence.Future (Evidence.ResultEvidence alpha),
+    ∀ x ∈ spec.worlds, ∀ y ∈ spec.worlds,
+      DeliveryFuture x y ↔ F (observe x) (observe y)
+
+theorem safeWithin_iff_hasStateIndexedDeliveryWithin (spec : Spec alpha) :
+    StateIndexedSafeWithin spec ↔ HasStateIndexedDeliveryWithin spec := by
+  constructor
+  · intro safe
+    let F : Evidence.Future (Evidence.ResultEvidence alpha) := fun s t =>
+      ∃ x ∈ spec.worlds, ∃ y ∈ spec.worlds,
+        observe x = s ∧ observe y = t ∧ DeliveryFuture x y
+    refine ⟨F, fun x hx y hy => ?_⟩
+    constructor
+    · intro hxy
+      exact ⟨x, hx, y, hy, rfl, rfl, hxy⟩
+    · rintro ⟨x', hx', y', hy', hxeq, hyeq, hdelivery⟩
+      exact (safe x' hx' x hx y' hy' y hy hxeq hyeq).1 hdelivery
+  · rintro ⟨F, hF⟩ x₁ hx₁ x₂ hx₂ y₁ hy₁ y₂ hy₂ hxeq hyeq
+    rw [hF x₁ hx₁ y₁ hy₁, hF x₂ hx₂ y₂ hy₂,
+      hxeq, hyeq]
+
+/-- **Exact classifier theorem**, scoped to the supplied enumeration. -/
+theorem stateIndexedSafeB_eq_true_iff (spec : Spec alpha) :
+    stateIndexedSafeB spec = true ↔ HasStateIndexedDeliveryWithin spec :=
+  (stateIndexedSafeB_eq_true_iff_safeWithin spec).trans
+    (safeWithin_iff_hasStateIndexedDeliveryWithin spec)
+
+/-- The explicit list covers the whole supported world universe. This is a
+caller-supplied finite-domain fact, never inferred for the unrestricted
+function-valued `World` carrier. -/
+def Covers (spec : Spec alpha) : Prop := ∀ w : World alpha, w ∈ spec.worlds
+
+/-- Under explicit coverage, the same Boolean exactly classifies a global
+state-indexed delivery relation. -/
+theorem stateIndexedSafeB_global_iff (spec : Spec alpha) (covers : Covers spec) :
+    stateIndexedSafeB spec = true ↔
+      ∃ F : Evidence.Future (Evidence.ResultEvidence alpha),
+        ∀ x y : World alpha, DeliveryFuture x y ↔ F (observe x) (observe y) := by
+  rw [stateIndexedSafeB_eq_true_iff]
+  constructor
+  · rintro ⟨F, hF⟩
+    exact ⟨F, fun x y => hF x (covers x) y (covers y)⟩
+  · rintro ⟨F, hF⟩
+    exact ⟨F, fun x _ y _ => hF x y⟩
+
+/-- A non-vacuous accepted classifier fixture: the one-world quiesced
+universe has the reflexive delivery relation, so state indexing is exact. -/
+def singletonQuiescedSpec : Spec Holes.Val where
+  worlds := [wQuiesced]
+  observationEqB := fun _ _ => true
+  deliveryB := fun _ _ => true
+  observationEqB_spec := by
+    intro x y hx hy
+    simp only [List.mem_singleton] at hx hy
+    subst x
+    subst y
+    simp
+  deliveryB_spec := by
+    intro x y hx hy
+    simp only [List.mem_singleton] at hx hy
+    subst x
+    subst y
+    constructor
+    · intro _
+      exact delivery_refl (wf_of_quiesced quiesced_wQuiesced)
+    · intro _
+      rfl
+
+theorem singleton_quiesced_classifier_accepts :
+    stateIndexedSafeB singletonQuiescedSpec = true := by
+  decide
+
+end FiniteDeliverySpec
 
 end Uwueave.WorldFuture

@@ -23,17 +23,18 @@
 //!   linear, `2.0` is quadratic. This is the evidence for every complexity claim
 //!   in `docs/PERFORMANCE.md`; it is a two-point local slope, not a fit.
 //!
-//! ## The raw-shim section
+//! ## The native-boundary section
 //!
-//! `crate::ffi` is private, so the encode / crossing / kernel / decode split is
-//! obtained by declaring the three C shim entry points here directly (they are in
-//! the same static archive `build.rs` links) and re-deriving the request bytes
-//! with a **reconstruction** of `movelog.rs`'s encoder. The reconstruction is not
+//! The encode / crossing / kernel / decode split uses safe, doc-hidden library
+//! adapters and re-derives the request bytes with a **reconstruction** of
+//! `movelog.rs`'s encoder. The reconstruction is not
 //! assumed faithful: it is checked against `Exec.requestCanonicalKernel` — the
 //! proven canonical encoder — on every size, and the harness aborts if it ever
 //! answers `false`. Since canonical encodings are unique, agreeing with the
 //! canonical encoder is agreeing with `movelog.rs`, which asserts the same thing
 //! in debug builds.
+
+#![deny(unsafe_code)]
 
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -41,18 +42,9 @@ use std::time::{Duration, Instant};
 use uwueave::causal::{CausalWeave, NodeId};
 use uwueave::era::{EraEvent, EraGroup};
 use uwueave::movelog::{Grant, MoveLog, MoveOp};
+use uwueave::native_bench;
 use uwueave::seq::SeqCrdt;
 use uwueave::weave::Weave;
-
-// The C shim, borrowed directly for the cost split. Same symbols `src/ffi.rs`
-// binds; the Lean runtime is initialized by the first library call we make in
-// `main`, before any of these run.
-extern "C" {
-    fn shim_uweave_replay(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
-    fn shim_uweave_free(p: *mut u8);
-    fn shim_uweave_request_canonical(input: *const u8, len: usize) -> u8;
-    fn shim_uweave_seq(input: *const u8, len: usize, out_len: *mut usize) -> *mut u8;
-}
 
 const MAGIC_V3: u64 = 0x5557_4541_5645_0003;
 
@@ -281,25 +273,15 @@ fn encode_request(
 }
 
 fn raw_replay(bytes: &[u8]) -> usize {
-    let mut out_len = 0usize;
-    unsafe {
-        let p = shim_uweave_replay(bytes.as_ptr(), bytes.len(), &mut out_len);
-        shim_uweave_free(p);
-    }
-    out_len
+    native_bench::replay_output_len(bytes)
 }
 
 fn raw_canonical(bytes: &[u8]) -> bool {
-    unsafe { shim_uweave_request_canonical(bytes.as_ptr(), bytes.len()) == 1 }
+    native_bench::request_canonical(bytes)
 }
 
 fn raw_seq(bytes: &[u8]) -> usize {
-    let mut out_len = 0usize;
-    unsafe {
-        let p = shim_uweave_seq(bytes.as_ptr(), bytes.len(), &mut out_len);
-        shim_uweave_free(p);
-    }
-    out_len
+    native_bench::seq_output_len(bytes)
 }
 
 /// A sequence CRDT of `n` elements, each anchored to the previous one — what
@@ -1168,8 +1150,7 @@ fn build_weave(n: usize, m: usize, ne: usize) -> Weave<Vec<u8>> {
 fn main() {
     let max: usize = std::env::var("BENCH_MAX").ok().and_then(|s| s.parse().ok()).unwrap_or(30000);
 
-    // First library call: initializes the Lean runtime, so the raw shim calls
-    // below never race the `Once`.
+    // First library call initializes the Lean runtime before measurement.
     let init = Instant::now();
     let (w0, _) = chain_weave(1);
     let l0 = log_of(&[], 1);

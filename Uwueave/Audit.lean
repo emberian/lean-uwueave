@@ -93,6 +93,7 @@ import Uwueave.Ancestral
 import Uwueave.RALin
 import Uwueave.SeamAlgebra
 import Uwueave.Gluing
+import Uwueave.GluingExtensions
 import Uwueave.Holes
 import Uwueave.Cost
 import Uwueave.JoinHom
@@ -103,15 +104,19 @@ import Uwueave.CoordEffect
 import Uwueave.SeamColoring
 import Uwueave.Budget
 import Uwueave.WorldFuture
+import Uwueave.TimestampedEvidence
 import Uwueave.Temporal
 import Uwueave.MinimalSummary
 import Uwueave.ContextCompiler
+import Uwueave.ShippingContextCompiler
 import Uwueave.FiniteSummaryCodec
+import Uwueave.FiniteThresholdSummary
 import Uwueave.Repair
 import Uwueave.MergeModel
 import Uwueave.ResultStatus
 import Uwueave.StatusEffects
 import Uwueave.Recoverable
+import Uwueave.EndpointResidual
 import Uwueave.CompositeDelta
 import Uwueave.HonestRender
 import Uwueave.Histories
@@ -121,6 +126,7 @@ import Uwueave.HistoryRuntime
 import Uwueave.FiniteHistoryGrowth
 import Uwueave.ResolvedHistoryGrowth
 import Uwueave.TextSummary
+import Uwueave.TextOperational
 import Uwueave.LiveBudget
 import Uwueave.EraCertificate
 import Uwueave.CliqueLive
@@ -135,6 +141,7 @@ import Uwueave.RenderProgress
 import Uwueave.HistoryBase
 import Uwueave.RenderSix
 import Uwueave.WovenEdit
+import Uwueave.WovenOperational
 import Uwueave.Bounds
 import Uwueave.MenuTotality
 import Uwueave.Preo.Demo
@@ -167,6 +174,7 @@ import Uwueave.Preo.Export
 import Uwueave.Preo.Expr
 import Uwueave.Preo.Incremental
 import Uwueave.Preo.ResultProgram
+import Uwueave.Preo.ContextQueryCompiler
 import Uwueave.Preo.StateProgram
 import Uwueave.Preo.BoundResult
 import Uwueave.Preo.ObservedBoundResult
@@ -226,6 +234,7 @@ import Uwueave.Preo.RuntimeAuthV4Examples
 import Uwueave.Preo.RuntimeAuthV4Fixtures
 import Uwueave.RuntimeInit
 import Uwueave.Tactics.Verdict
+import Uwueave.ChoreoTemporal
 import Uwueave.Tactics
 
 open Lean Elab Command in

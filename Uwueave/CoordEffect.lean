@@ -118,13 +118,16 @@ is exactly the number the scalar grade computes.
     protocol may emit zero, one, or several schedulable demands per crossing.
     Therefore no generic inequality converts this `optimum` into meetings, and
     nothing in this file calls it one.
-  * ⟨UNDONE U-0019, narrowed to the native surface and general subsumption⟩ **The
-    semantic typing target has landed.** `Protocol.Elaboration` produces checked
-    schedules and exact currency-profile bounds, and Preo has checked
-    `protocol`/`session` forms whose bodies are typed `Protocol.Term`s. What is
-    still absent is a custom parser for those six protocol constructors and a
-    general graded weakening/subsumption judgement over `CoordEffect.Profile`;
-    `SeamAlgebra`'s candidate laws are not connected to such a judgement here.
+  * ⟨DONE U-0019 here and downstream⟩ **The native surface and general graded
+    subsumption have landed.** `Protocol.Elaboration` produces checked schedules
+    and exact currency-profile bounds, and Preo's native `protocol`/`session`
+    surface parses all six `Protocol.Term` constructors. This file now supplies
+    `Profile.Subsumes`, its finite checked form `Profile.subsumesB`, weakening
+    and composition laws, and optimum soundness. `runProfile_subsumes_of_finer`
+    connects the judgement to `SeamAlgebra.Finer`, while `refinedStrategy`
+    retains that algebra's load-bearing `SeamStableOn` premise. The positive and
+    negative pin fixtures show that the checker accepts real weakening and
+    rejects an under-budget composed session.
   * ⟨TERMINAL for this file⟩ **`optimum` is a min over the supplied space.** Not
     a fix, a definition: the infimum over *all* seams is not a `Nat` this file
     can compute, because seams range over every type in every universe.
@@ -139,7 +142,7 @@ namespace Uwueave.CoordEffect
 
 open Uwueave Uwueave.Segmented Uwueave.Cost
 
-universe u v w
+universe u v w z
 
 /-! ## §1. Profiles — cost as a function of the strategy, composed pointwise -/
 
@@ -178,6 +181,38 @@ theorem Profile.zero_comp {X : Type u} (P : Profile X) : Profile.zero X ⊗ P = 
 theorem Profile.comp_zero {X : Type u} (P : Profile X) : P ⊗ Profile.zero X = P :=
   funext fun x => Nat.add_zero (P x)
 
+/-! ### General graded weakening -/
+
+/-- `required.Subsumes allowed` means that every strategy's required crossing
+count fits the corresponding allowance. This is pointwise deliberately: a
+session may weaken its budget, but it may not change strategies between
+components or compare independently minimized scalars. -/
+def Profile.Subsumes {X : Type u} (required allowed : Profile X) : Prop :=
+  ∀ strategy, required strategy ≤ allowed strategy
+
+theorem Profile.Subsumes.refl {X : Type u} (P : Profile X) : P.Subsumes P :=
+  fun _ => Nat.le_refl _
+
+theorem Profile.Subsumes.trans {X : Type u} {P Q T : Profile X}
+    (hPQ : P.Subsumes Q) (hQT : Q.Subsumes T) : P.Subsumes T :=
+  fun strategy => Nat.le_trans (hPQ strategy) (hQT strategy)
+
+/-- A zero-cost profile fits every allowance. -/
+theorem Profile.zero_subsumes {X : Type u} (P : Profile X) :
+    (Profile.zero X).Subsumes P :=
+  fun _ => Nat.zero_le _
+
+/-- Pointwise composition is monotone in both grades. -/
+theorem Profile.comp_subsumes_comp {X : Type u} {P P' Q Q' : Profile X}
+    (hP : P.Subsumes P') (hQ : Q.Subsumes Q') :
+    (P ⊗ Q).Subsumes (P' ⊗ Q') :=
+  fun strategy => Nat.add_le_add (hP strategy) (hQ strategy)
+
+/-- Any requirement may be weakened by adding a nonnegative allowance. -/
+theorem Profile.subsumes_comp_left {X : Type u} (P Q : Profile X) :
+    P.Subsumes (P ⊗ Q) :=
+  fun strategy => Nat.le_add_right (P strategy) (Q strategy)
+
 /-! ## §2. The strategy space, and the deferred minimum
 
 Minimization needs a space to minimize over, and the honest one is **finite and
@@ -203,6 +238,32 @@ theorem Admissible.head_mem {X : Type u} (A : Admissible X) : A.head ∈ A.toLis
 theorem Admissible.mem_of_mem_rest {X : Type u} {A : Admissible X} {x : X}
     (h : x ∈ A.rest) : x ∈ A.toList :=
   List.mem_cons_of_mem _ h
+
+/-! ### The finite checked form of graded weakening -/
+
+/-- The finite, supported checking judgement. `Admissible` is the explicit
+strategy universe being checked; no claim is made about strategies outside it. -/
+def Profile.SubsumesOn {X : Type u} (A : Admissible X)
+    (required allowed : Profile X) : Prop :=
+  ∀ strategy ∈ A.toList, required strategy ≤ allowed strategy
+
+/-- Executable graded-subsumption check over one explicit finite strategy
+universe. -/
+def Profile.subsumesB {X : Type u} (A : Admissible X)
+    (required allowed : Profile X) : Bool :=
+  A.toList.all fun strategy => decide (required strategy ≤ allowed strategy)
+
+/-- The checker accepts exactly the finite pointwise judgement. -/
+theorem Profile.subsumesB_eq_true_iff {X : Type u} (A : Admissible X)
+    (required allowed : Profile X) :
+    Profile.subsumesB A required allowed = true ↔
+      Profile.SubsumesOn A required allowed := by
+  simp [Profile.subsumesB, Profile.SubsumesOn]
+
+/-- A global pointwise proof is sound on every finite strategy universe. -/
+theorem Profile.Subsumes.on {X : Type u} {P Q : Profile X}
+    (h : P.Subsumes Q) (A : Admissible X) : P.SubsumesOn A Q :=
+  fun strategy _ => h strategy
 
 /-- The standard finite minimum of an accumulator and the mapped profile.
 `optimum` seeds it with the head strategy's cost, which is where nonemptiness
@@ -276,6 +337,18 @@ theorem optimum_achieved {X : Type u} (A : Admissible X) (P : Profile X) :
   rcases minAlong_achieved P (P A.head) A.rest with h | ⟨x, hx, hxe⟩
   · exact ⟨A.head, A.head_mem, h⟩
   · exact ⟨x, Admissible.mem_of_mem_rest hx, hxe⟩
+
+/-- Checked subsumption is sound for session closing: increasing every
+admissible strategy's allowance cannot decrease the resulting minimum. -/
+theorem optimum_mono_of_subsumesOn {X : Type u} (A : Admissible X)
+    {required allowed : Profile X}
+    (h : Profile.SubsumesOn A required allowed) :
+    optimum A required ≤ optimum A allowed := by
+  obtain ⟨strategy, hstrategy, hopt⟩ := optimum_achieved A allowed
+  calc
+    optimum A required ≤ required strategy := optimum_le_of_mem hstrategy
+    _ ≤ allowed strategy := h strategy hstrategy
+    _ = optimum A allowed := hopt.symm
 
 /-- **A richer catalogue of strategies never costs more.** This is the module's
 ⟨scope⟩ note as a theorem: `optimum A P` is a minimum over the strategies we
@@ -390,6 +463,56 @@ def streamProfile {S : Type u} {Seg : Type v} {Op : Type w} [MergeState S]
     [MergeState S] [DecidableEq Seg] {I : Invariant S} (step : S → Op → S) (s : S)
     (w : List Op) (τ : Strategy I Seg) :
     streamProfile step s w τ = crossings τ.seam step s w := rfl
+
+/-- A workload viewed as a profile over its possible starting states. This
+common index lets profiles induced by seams with different codomains be
+compared by the general subsumption judgement. -/
+def runProfile {S : Type u} {Seg : Type v} {Op : Type w}
+    [DecidableEq Seg] (seam : S → Seg) (step : S → Op → S)
+    (work : List Op) : Profile S :=
+  fun initial => crossings seam step initial work
+
+/-- Refining a seam can only add observed crossings. Equal values of the finer
+seam force equal values of the coarser seam, so every coarse change is also a
+fine change. This is the quantitative connection to `SeamAlgebra.Finer`. -/
+theorem crossings_mono_of_finer {S : Type u} {Seg : Type v} {T : Type w}
+    {Op : Type z} [DecidableEq Seg] [DecidableEq T]
+    {coarse : S → Seg} {fine : S → T}
+    (hfiner : SeamAlgebra.Finer fine coarse) (step : S → Op → S) :
+    ∀ (initial : S) (work : List Op),
+      crossings coarse step initial work ≤ crossings fine step initial work := by
+  intro initial work
+  induction work generalizing initial with
+  | nil => exact Nat.le_refl 0
+  | cons op work ih =>
+      have htail := ih (step initial op)
+      by_cases hf : fine (step initial op) = fine initial
+      · have hc : coarse (step initial op) = coarse initial :=
+          hfiner _ _ hf
+        simp [crossings, hf, hc, htail]
+      · by_cases hc : coarse (step initial op) = coarse initial
+        · simp only [crossings, if_pos hc, if_neg hf, Nat.zero_add]
+          omega
+        · simp [crossings, hf, hc, htail]
+
+/-- The coarser seam's run profile subsumes into the finer seam's profile. -/
+theorem runProfile_subsumes_of_finer {S : Type u} {Seg : Type v} {T : Type w}
+    {Op : Type z} [DecidableEq Seg] [DecidableEq T]
+    {coarse : S → Seg} {fine : S → T}
+    (hfiner : SeamAlgebra.Finer fine coarse) (step : S → Op → S)
+    (work : List Op) :
+    (runProfile coarse step work).Subsumes (runProfile fine step work) :=
+  fun initial => crossings_mono_of_finer hfiner step initial work
+
+/-- Turn a stable refinement into a checked coordination strategy. The
+`SeamStableOn` premise is intentionally retained: `SeamAlgebra.refinement_fails`
+proves that `Finer` alone does not preserve a valid seam. -/
+def refinedStrategy {S : Type u} {Seg : Type v} {T : Type w}
+    [MergeState S] {I : Invariant S} (coarse : Strategy I Seg)
+    (fine : S → T) (hfiner : SeamAlgebra.Finer fine coarse.seam)
+    (hstable : SeamAlgebra.SeamStableOn I fine) : Strategy I T where
+  seam := fine
+  valid := SeamAlgebra.segmented_of_finer coarse.valid hfiner hstable
 
 /-- **The spec-forced floor lower-bounds the profile's minimum.** A workload
 whose run passes through `n` clash pairs costs at least `n` under *every*
@@ -567,6 +690,44 @@ theorem pin_no_common_optimum (τ : Strategy pinInv Bool) (hτ : τ ∈ pinSpace
     pinTrueProfile pinFalseProfile hτ h1 h2
   have hstrict := pin_opt_compose_strict
   omega
+
+/-! ### Checked subsumption fixtures -/
+
+/-- Positive fixture: the true-pin stream fits the composed session allowance
+at every explicitly admitted strategy. -/
+theorem pin_true_subsumes_session :
+    Profile.SubsumesOn pinSpace pinTrueProfile
+      (pinTrueProfile ⊗ pinFalseProfile) :=
+  (Profile.subsumes_comp_left pinTrueProfile pinFalseProfile).on pinSpace
+
+theorem pin_true_subsumes_session_checked :
+    Profile.subsumesB pinSpace pinTrueProfile
+      (pinTrueProfile ⊗ pinFalseProfile) = true :=
+  (Profile.subsumesB_eq_true_iff _ _ _).2 pin_true_subsumes_session
+
+/-- Negative fixture: a zero allowance does not subsume the composed pin
+session. The failure is semantic, not a checker artefact: its optimum is one. -/
+theorem pin_session_not_subsumed_by_zero :
+    ¬ Profile.SubsumesOn pinSpace
+      (pinTrueProfile ⊗ pinFalseProfile) (Profile.zero _) := by
+  intro h
+  have hopt := optimum_mono_of_subsumesOn pinSpace h
+  have hzero : optimum pinSpace (Profile.zero _) = 0 :=
+    Nat.eq_zero_of_le_zero
+      (optimum_le_of_mem (P := Profile.zero _) pinSpace.head_mem)
+  rw [pin_session_costs_exactly_one] at hopt
+  rw [hzero] at hopt
+  omega
+
+theorem pin_session_subsumes_zero_checked_false :
+    Profile.subsumesB pinSpace
+      (pinTrueProfile ⊗ pinFalseProfile) (Profile.zero _) = false := by
+  cases hcheck : Profile.subsumesB pinSpace
+      (pinTrueProfile ⊗ pinFalseProfile) (Profile.zero _) with
+  | false => rfl
+  | true =>
+      exact False.elim (pin_session_not_subsumed_by_zero
+        ((Profile.subsumesB_eq_true_iff _ _ _).1 hcheck))
 
 /-! ## §6. The readings, side by side
 
