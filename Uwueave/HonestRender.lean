@@ -149,7 +149,7 @@ committed one. `ResultStatus` still imports nothing from here.
     `Classical.choice` can turn `says_total` into a projection. So the barrier
     against extraction is `no_honest_projection` — a statement about what such a
     function can *mean* — and never the absence of one.
-  * **The future index is phantom in the data.** ⟨UNDONE U-0084⟩ `Result F α` mentions
+  * **The future index is phantom in the data.** ⟨SCOPE U-0084⟩ `Result F α` mentions
     `F` in its type and in every honesty statement, and
     `ResultStatus.exact_does_not_strengthen` prices dropping it. Nothing
     prevents a `cast` between `Result F α` and `Result G α`; the index is a
@@ -176,7 +176,7 @@ committed one. `ResultStatus` still imports nothing from here.
     leaves `pending`. `statusOf_pendingActionable` constructs the offer only
     from live authority, while `a_revoked_actor_gets_no_button` rejects the
     same affordance after revocation.
-  * **The empirical claim of §8 is untouched.** ⟨UNDONE U-0085⟩ *That a recurring class
+  * **The empirical claim of §8 is untouched.** ⟨PREMISE U-0085⟩ *That a recurring class
     of local-first UI misrepresentations consists of unproved coercions from
     open/forked evidence to exact singular presentation* needs a defect corpus
     and a coding protocol. This file proves the coercions are unsound; it says

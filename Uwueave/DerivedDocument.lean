@@ -92,7 +92,7 @@ which is what the impossibility said the escape route would have to look like.
     two distinct sources, a fan of siblings — not a deep parent-linked DAG.
     `Uwueave.EvidenceGraph` now supplies typed candidate/source/obligation/
     certificate vertices, rank-descending internal edges, endpoint well-formedness,
-    and `flat_encodeEvidence_is_projection` back to this carrier. ⟨UNDONE U-0025 at the
+    and `flat_encodeEvidence_is_projection` back to this carrier. ⟨PREMISE U-0025 at the
     deployment boundary⟩ Those graph identities are still logical ids, not
     cryptographic or content-addressed identities; no hash/signature binding is
     manufactured by the typed graph. §4's DAG remains the dependency graph
@@ -124,7 +124,7 @@ which is what the impossibility said the escape route would have to look like.
     rank-grounded multi-slot pipeline still recomputes through `matFuel`; no
     differential scheduler for that recursive graph is claimed.
   * **§5 needs a height bound handed in, and it does NOT hold at §1's carrier.**
-    ⟨UNDONE U-0026⟩ `BoundedHeight` is a *hypothesis* — a
+    ⟨SCOPE U-0026⟩ `BoundedHeight` is a *hypothesis* — a
     strictly-increasing-along-strict-ascents height with a global ceiling.
     `bitBoundedHeight` inhabits it at the one-bit derived lattice, so §5 is not
     a theorem about an empty class; but `EvidenceDoc α` over an infinite `α`

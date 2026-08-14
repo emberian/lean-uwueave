@@ -99,7 +99,7 @@ context is observable, so a set-valued carrier does not degrade to a counter.
     The membership pole remains the one global case where the class itself is
     exhibited as a `Bool` (`mem_quot_bit`).
   * **`decodeSummary` is `Classical.choice`, not a global algorithm.**
-    ⟨UNDONE U-0111 beyond an explicit finite universe⟩ Same caveat as
+    ⟨SCOPE U-0111 beyond an explicit finite universe⟩ Same caveat as
     `JoinHom.canonicalCombine`: it witnesses that a decoder exists. The
     quotient's own decoder `ctxAnswer` is choice-free (`Quotient.lift f`), and
     `ContextCompiler.Spec.representative?` now gives a second, executable,

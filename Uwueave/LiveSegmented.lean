@@ -66,7 +66,7 @@ was computed under — §4's whole content is that the two numbers differ.
   * ⟨TERMINAL⟩ `LiveSegmented` is **not** robust under enlarging `Op`. That is a
     property of the definition, not a gap: it quantifies over the runs of the `P`
     it is given. This is the whole reason the global certificate is kept.
-  * ⟨UNDONE U-0092⟩ **Faithfulness of `P` is the modeller's.** Nothing here checks that a
+  * ⟨PREMISE U-0092⟩ **Faithfulness of `P` is the modeller's.** Nothing here checks that a
     `RunModel`'s `step` is the protocol the deployment actually runs. A live
     certificate issued against an over-permissive `P` is weaker than it looks, and
     against an under-permissive `P` it is unsound for the real deployment. This is

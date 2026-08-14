@@ -131,7 +131,7 @@ identity seam and refutes it at `Exits.balTotal`.
     meeting count. `balanceEscrow_price_and_delta` couples that price projection
     to the exact `PromiseRelation.strengthened` delta and a concrete source-legal
     state the escrowed promise forbids.
-  * ⟨UNDONE U-0131, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+  * ⟨SCOPE U-0131, narrowed to unrestricted candidate discovery⟩ **No unrestricted
     menu search.** `MenuTotality.synth` searches for a seam over a covering pool,
     while downstream `FiniteRepairMenu` chooses from an explicitly supplied,
     checked finite catalog. The escrow partition and candidate universe are still

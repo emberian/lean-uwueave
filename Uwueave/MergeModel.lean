@@ -123,7 +123,7 @@ clothes.
   * ⟨UNDONE U-0107⟩ **No verdict routes, no exits.** The field-kind sketch has three
     more slots (`classify` routes, exits with prices, obligation types). This
     file settles only the merge slot, which is the one codex refused.
-  * ⟨UNDONE U-0108⟩ **`contextObs` is a list, not a frontier.** A context that names
+  * ⟨SCOPE U-0108⟩ **`contextObs` is a list, not a frontier.** A context that names
     two ambiguous bases exposes both; a context that names an antichain of
     frontiers (codex's Timely correction) would want more structure. The list
     is enough for selected/ambiguous/unavailable and no more.

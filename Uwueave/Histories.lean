@@ -159,7 +159,7 @@ replaced.
     that they need not: `base_accident_decides_the_invariant` (results 5 vs 4)
     and `swap_never_converges` (an eternal two-cycle under a state-level base
     policy `MergeModel.BaseDecision.Valid` fully licenses).
-  * ⟨UNDONE U-0061, narrowed to unrestricted/infinite selection⟩ **No total
+  * ⟨SCOPE U-0061, narrowed to unrestricted/infinite selection⟩ **No total
     merge-base procedure for an arbitrary `VersionDag`.** Downstream
     `FiniteHistory.Enumeration` makes finiteness an explicit coverage premise;
     under it, `FiniteHistory.reaches_iff_bounded` and

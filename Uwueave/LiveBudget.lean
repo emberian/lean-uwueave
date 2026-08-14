@@ -91,17 +91,17 @@ constructor, with a different soundness theorem, saying a different thing.
     (`WorldFuture.delivery_futures_differ`), so "the model can perform `step`"
     does not by itself say *where the session starts*. The partial groundings
     `LiveCost.lean` names as undefined are undefined here too.
-  * ⟨UNDONE U-0087⟩ **No completeness for the promotion.** `carrierGlobal_promotes` is
+  * ⟨SCOPE U-0087⟩ **No completeness for the promotion.** `carrierGlobal_promotes` is
     one direction. Whether a live rejection always transports *back* to a
     carrier-global one is false in general and not stated: a live floor is proved
     against a live seam certificate, and §7's `slotLivePlan` is exactly a seam
     the carrier-global judgement refuses.
-  * ⟨UNDONE U-0088⟩ **The abstract cost is a `List Op` cost.** `LiveRealization.
+  * ⟨SCOPE U-0088⟩ **The abstract cost is a `List Op` cost.** `LiveRealization.
     cost_agrees` pins a live path to the abstract stream's crossing count. Two
     live paths realizing one workload therefore agree in cost, which is what
     `LiveObligation.notBoth` needs — but nothing here says a deployment has only
     one realization, and a model with several is not studied.
-  * ⟨UNDONE U-0089⟩ **Crossings are not meetings**, inherited whole from `Cost.lean`.
+  * ⟨SCOPE U-0089⟩ **Crossings are not meetings**, inherited whole from `Cost.lean`.
 -/
 import Uwueave.LiveCost
 import Uwueave.LiveSegmented

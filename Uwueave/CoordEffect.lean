@@ -130,7 +130,7 @@ is exactly the number the scalar grade computes.
     can compute, because seams range over every type in every universe.
     `Cost.coordination_forced` is the tool for statements over all seams, and
     §4 is the only bridge claimed.
-  * ⟨UNDONE U-0020⟩ **No liveness, no delivery, no time** — as in `Cost.lean`. A
+  * ⟨SCOPE U-0020⟩ **No liveness, no delivery, no time** — as in `Cost.lean`. A
     profile counts events, never wall-clock.
 -/
 import Uwueave.Cost

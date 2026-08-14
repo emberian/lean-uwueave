@@ -127,13 +127,13 @@ neither fixes it nor imports that file.
     what a total `step` deserves, and it is what fails in a delivery model, where
     an op can be delivered only once. A partial grounding — enough to carry one
     particular stream — would transport more workloads and is not defined here.
-  * ⟨UNDONE U-0090⟩ **Crossings are not meetings**, inherited whole from `Cost.lean` and
+  * ⟨SCOPE U-0090⟩ **Crossings are not meetings**, inherited whole from `Cost.lean` and
     `CoordEffect.lean`. Every `Nat` here is a seam crossing along one replica's
     path.
   * ⟨scope⟩ **`[DecidableEq Seg]`** on every seam, inherited from
     `Cost.crossings`. Not vacuous: `Bounds.id_segmented` and `Bounds.orsetDecEq`
     instantiate the OR-Set bound at a concrete seam.
-  * ⟨UNDONE U-0091⟩ **No liveness, no delivery schedule, no time.** A `Path` says a
+  * ⟨SCOPE U-0091⟩ **No liveness, no delivery schedule, no time.** A `Path` says a
     sequence of steps *may* happen, never that it will. `Liveness.lean` owns that
     axis and is not composed with this one.
 -/

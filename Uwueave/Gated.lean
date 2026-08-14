@@ -99,7 +99,7 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     authenticates the request reaching the kernel; no concrete EUF-CMA proof is
     present. The gate bounds what a cited grant can DO, not who may cite it.
   * **The kernel searches grants by FIRST match; `permitted` quantifies over
-    all of them.** ⟨TERMINAL under content addressing, else ⟨UNDONE U-0053⟩⟩ On a
+    all of them.** ⟨TERMINAL under content addressing, else ⟨PREMISE U-0053⟩⟩ On a
     substrate satisfying `UniqueGrant` the two coincide, and that is exactly
     the hypothesis `kernel_gate_agrees` carries. Without it the kernel can
     only admit FEWER ops than the abstraction (`kernel_admits_only_authorised`
@@ -133,7 +133,7 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     substrate it was built from — a digest the caller cannot vary per call —
     and that is unbuilt.
   * **Scope is a `Nat` ceiling on node ids — and in the kernel, on node
-    INDICES.** ⟨UNDONE U-0055⟩ Enough to make covering decidable and the theorems
+    INDICES.** ⟨SCOPE U-0055⟩ Enough to make covering decidable and the theorems
     honest, and now enough to make the kernel's coverage check one
     comparison. But note what the port made concrete: `GOp.node` is an id
     here and `Exec.Op.child` is an index into the request's node block, so a

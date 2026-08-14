@@ -161,7 +161,7 @@ remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
     merge/monotonicity classifier's positive and negative cases. `f : World → α`
     here remains intentionally unrestricted and therefore cannot itself be
     classified by syntax inspection.
-  * **`f` may read the representation, not just the valuation.** ⟨UNDONE U-0079⟩ A
+  * **`f` may read the representation, not just the valuation.** ⟨SCOPE U-0079⟩ A
     `World` is a `List Val` — register `r` reads `read w r`, everything past
     the end reads `0` (`read_beyond`), so finite support is structural. But
     `[1]` and `[1, 0]` are distinct worlds with identical reads, and an

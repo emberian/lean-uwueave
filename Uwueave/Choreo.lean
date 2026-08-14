@@ -170,7 +170,7 @@ depends on it):
     replica views; `twoParty_remote_missing_label` refuses to invent an absent
     label. This is finite safety over generated traces, not channel duality,
     recursion liveness, fairness, authenticity, or eventual delivery.
-  * ⟨UNDONE U-0015⟩ **Liveness of delivery.** `coordination_free_converges` says *given*
+  * ⟨PREMISE U-0015⟩ **Liveness of delivery.** `coordination_free_converges` says *given*
     that a delivery list contains the run's results, every replica agrees. That every
     result is eventually delivered is the CRDT premise and is not proved here.
 -/

@@ -158,7 +158,7 @@ clothes.
     an exact typed consuming delivery. No theorem generates those messages or
     proves a runtime honestly advances its frontier, and full `render`
     stability is still not claimed.
-  * **A certificate is trusted, not verified.** ⟨UNDONE U-0040⟩ Nothing here says a
+  * **A certificate is trusted, not verified.** ⟨PREMISE U-0040⟩ Nothing here says a
     certificate was *earned*: `certify` adds one unconditionally, exactly as
     `Era.advance` announces a cut unconditionally, and the price is the same
     trust in the arbiter that `Era.lean`'s §5.1 prices. The transport from
@@ -166,7 +166,7 @@ clothes.
     `certificates` bit is still prose — `Holes.lean` listed that bridge as
     unbuilt and this file narrows it to one component rather than closing it.
   * **`SealedFuture` closes the source set by fiat.** ⟨TERMINAL for soundness,
-    ⟨UNDONE U-0041⟩ as deployment⟩ The retraction theorem shows why the restriction is
+    ⟨PREMISE U-0041⟩ as deployment⟩ The retraction theorem shows why the restriction is
     needed; what is *not* built is any mechanism that establishes membership
     closure in a running system. A deployment that cannot close its source set
     gets `provisional`, correctly, forever. `Uwueave.WorldFuture` is the next

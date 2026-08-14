@@ -146,7 +146,7 @@ projection, and:
 clothes.
 
   * **No deployed network, scheduler proof, or time.** ⟨TERMINAL for this
-    file's question, ⟨UNDONE U-0154⟩ as a system model⟩ A delivery future here is a
+    file's question, ⟨PREMISE U-0154⟩ as a system model⟩ A delivery future here is a
     *relation between two worlds*, not a run of a protocol. The successor
     `Uwueave.Temporal` now supplies the missing formal run layer:
     `WorldAdapter.pendingDeliveryTrace_adjacent` is an infinite adjacent trace
@@ -166,7 +166,7 @@ clothes.
     boundary with accepted-and-issued signed typed-position claims, exact
     signed world/value/position binding, signed-decoded origin/version checks,
     authenticated lawful frontier progress, and grow-only capability-use
-    receipts. ⟨UNDONE U-0155 at deployment boundaries⟩
+    receipts. ⟨PREMISE U-0155 at deployment boundaries⟩
     the decoder and signature security premise remain external, and
     `ResultEvidence` still carries neither id automatically.
   * **The frontier here is still a flat set of sources.**
@@ -181,7 +181,7 @@ clothes.
     or discharges the deployed signature premise. Full `render` stability is
     not claimed. `roster` bounds accepted membership, but a roster is not an
     antichain.
-  * **A seal is still trusted, not verified.** ⟨UNDONE U-0157⟩ `epoch` and `sealed`
+  * **A seal is still trusted, not verified.** ⟨PREMISE U-0157⟩ `epoch` and `sealed`
     are a producer's announcement, exactly as `Era.advance` announces a cut
     unconditionally. What is *new* here and not in `Evidence.lean` is that the
     announcement is **priced**: `no_closure_within_an_epoch` proves no

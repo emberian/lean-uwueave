@@ -55,7 +55,7 @@ manufactures it.
 transport, revocation antitonicity, and key-epoch rejection are theorems of the
 model below.
 
-⟨UNDONE U-0001 at the deployment-cryptography boundary⟩ A deployment must instantiate
+⟨PREMISE U-0001 at the deployment-cryptography boundary⟩ A deployment must instantiate
 `SignatureScheme`, its key registry, key rotation, and its issuance log, then
 justify `EUFStylePremise` by an actual EUF-CMA-style reduction for the chosen
 signature scheme. `AuthenticatedAdmission.authenticIssuer_to_signatureAuthentic`

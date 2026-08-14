@@ -137,14 +137,14 @@ and the answer is split, both halves proved:
     repair: a known roster turns every delivery into an `Evidence.SealedFuture`,
     and `Evidence.render_congr` transports stability of `(values, Closed)` to
     the rendered view.
-  * ⟨UNDONE U-0009 outside finite context-indexed query families⟩ **One residual
+  * ⟨SCOPE U-0009 outside finite context-indexed query families⟩ **One residual
     evaluator at a time.** `ContextCompiler` now constructs the common
     refinement for a finite homogeneous family of merge-context-indexed
     queries. That is not this file's residual construction: a residual forgets
     which future produced an answer and keeps only the image. Common refinements
     of arbitrary future relations, residual images, heterogeneous queries, or
     infinite evaluator families remain unstated.
-  * ⟨UNDONE U-0010 beyond a supplied finite contextual compiler⟩ **The witnesses
+  * ⟨SCOPE U-0010 beyond a supplied finite contextual compiler⟩ **The witnesses
     are witnesses.** §5's separations are the three worlds `WorldFuture.lean`
     built. `ContextCompiler.sameClass` decides equality of its own finite,
     context-indexed signature and `sufficient_refines_signature` proves that

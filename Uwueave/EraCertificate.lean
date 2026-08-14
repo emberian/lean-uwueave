@@ -138,11 +138,11 @@ id collision does the same with an honest arbiter).
     reverses the duel. The conditional model theorem has now landed in
     `Uwueave.Byzantine.authentic_issuance_preserves_finality`, under `Settled`,
     `AnnouncementsGrounded`, `IdAuthentic`, and `Issuance`; its exact
-    contrapositive is `finality_failure_refutes_id_authenticity`. ⟨UNDONE U-0031 at the
+    contrapositive is `finality_failure_refutes_id_authenticity`. ⟨PREMISE U-0031 at the
     deployment boundary⟩ Recursive hash/signature binding, fraud-proof
     detection, and the bridge from accepted bytes to those predicates remain
     unproved.
-  * ⟨UNDONE U-0032⟩ **`HonestExtension` is a hypothesis, not a detection.** It is
+  * ⟨PREMISE U-0032⟩ **`HonestExtension` is a hypothesis, not a detection.** It is
     satisfiable (`honest_setup_to_later`) and refutable
     (`backdating_is_not_honest`) and nothing here decides which one a live
     announcement is. The paper answers with signatures and fraud proofs (§5.1);
@@ -155,7 +155,7 @@ id collision does the same with an honest arbiter).
     the arbiter does not have.
   * ⟨UNDONE U-0034⟩ **One evaluator at a time**, and `Type 0` only —
     `CertificateScope`'s two, inherited.
-  * ⟨UNDONE U-0035⟩ **The witnesses are witnesses.** §3-§6's separations run on
+  * ⟨SCOPE U-0035⟩ **The witnesses are witnesses.** §3-§6's separations run on
     `Era.duelLog` and its two cut sets. No theorem here characterises which
     worlds a key glues, and there is no decision procedure for `Settled` over
     unbounded pools.
@@ -929,7 +929,7 @@ finalised prefix, and reverses the duel.
 
 So the certificate of §3 is unsound for `Issuance` as well as for
 `Announcement`, and for a different reason: not the arbiter acting, but a cut
-naming an id rather than an event. ⟨UNDONE U-0036⟩ in the boundary — the repair is
+naming an id rather than an event. ⟨PREMISE U-0036⟩ in the boundary — the repair is
 §2's hash linking, which this miniature drops by design. -/
 theorem an_event_born_finalised_rewrites_the_view :
     Era.finalized Era.laterCuts eForged = true

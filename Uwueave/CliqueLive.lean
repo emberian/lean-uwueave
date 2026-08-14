@@ -127,7 +127,7 @@ theorem is not the same as having it.
   * ⟨scope⟩ Everything here is `Cost.crossings` currency and inherits
     `Cost.lean`'s "crossings are not meetings" whole.
   * ⟨scope⟩ `LiveWidth` is protocol-relative and inherits `LiveSegmented`'s
-    ⟨UNDONE U-0016⟩ "faithfulness of `P` is the modeller's": a live clique bound issued
+    ⟨PREMISE U-0016⟩ "faithfulness of `P` is the modeller's": a live clique bound issued
     against an under-permissive `RunModel` is unsound for the real deployment.
   * ⟨UNDONE U-0017⟩ No clique is *synthesised*. Every bound below consumes a clique
     somebody exhibits; finding the maximum one is the same search

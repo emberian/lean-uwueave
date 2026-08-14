@@ -76,7 +76,7 @@ seam in this library actually discharges.
   * ⟨TERMINAL⟩ Colouring does not characterise the closure clause. This is not
     undone work: `coloring_alone_does_not_segment` proves no such implication
     exists, and the extra hypothesis in the headline is `SeamStableOn`, exactly.
-  * ⟨UNDONE U-0140⟩ **Infinite carriers.** Every statement that turns a colouring back
+  * ⟨SCOPE U-0140⟩ **Infinite carriers.** Every statement that turns a colouring back
     into a segmentation takes a covering pool `hV : ∀ s : S, s ∈ V`. Nothing
     here reasons about a reachable *fragment* of an infinite carrier as such;
     `SegmentedIConfluentOn` states what a non-covering pool does buy, which is

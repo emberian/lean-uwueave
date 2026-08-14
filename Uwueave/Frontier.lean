@@ -41,7 +41,7 @@ claim because the unseen issued pool remains load-bearing.
     those closures.  The two-dimensional witness below contains two
     incomparable points.
   * **Progress is authenticated by the proof-model successor, not generated.**
-    ⟨DONE at the model boundary; ⟨UNDONE U-0049⟩ for runtime and deployment⟩
+    ⟨DONE at the model boundary; ⟨PREMISE U-0049⟩ for runtime and deployment⟩
     `DeliveryAdvance` checks only the semantic price of an advance.
     `Uwueave.AuthenticatedFrontier` separately retains a received, accepted and
     genuinely issued signed progress event, binds its decoded issued/delivered

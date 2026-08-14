@@ -94,7 +94,7 @@ clothes.
 
   * **"No branch selection through an implicit coercion" is enforced at the
     typed-derive result surface, not for unrestricted Lean terms.**
-    ⟨DONE at `typed derive`, ⟨UNDONE U-0137⟩ for unrestricted projection⟩ `ResolvedBy
+    ⟨DONE at `typed derive`, ⟨SCOPE U-0137⟩ for unrestricted projection⟩ `ResolvedBy
     π e` names its policy and evidence, and `resolved_value_is_not_a_function_
     of_the_evidence` proves the policy index is load-bearing. Preoscript's
     `typed derive` emits a preserve-fork `CheckedDeclaration` and checked
@@ -123,7 +123,7 @@ clothes.
     verbatim from `Evidence.render`: both decisions quantify over an unbounded
     value type. `Classical.choice` is inside the audit floor.
   * **Finite authored reach is inferred and surfaced; running reach remains a
-    supplied boundary.** ⟨DONE for finite `typed derive`, ⟨UNDONE U-0138⟩ for
+    supplied boundary.** ⟨DONE for finite `typed derive`, ⟨PREMISE U-0138⟩ for
     running/arbitrary reach⟩ `StatusEffects.infer_is_least` proves support and
     leastness, and `typed derive` installs that inference in its generated
     `CheckedDeclaration`; membership-gated reports retain the authored reach

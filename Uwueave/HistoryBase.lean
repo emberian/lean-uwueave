@@ -138,7 +138,7 @@ prize:
     and the history level licenses at most one of them
     (`the_two_cycle_needs_two_bases_the_history_licenses_one`) — but "at most one
     valid base" is not a proof that a run converges, and no such proof is here.
-  * ⟨UNDONE U-0067⟩ **The version index buys scoping, not separating power.** §6's
+  * ⟨SCOPE U-0067⟩ **The version index buys scoping, not separating power.** §6's
     `VersionCert` is strictly a *name* for a world: `versionCertSound_of_
     worldCertSound` is one line and there is no theorem that a version index
     separates two worlds a `WorldFuture.WorldCert` cannot. What it buys is a
@@ -1077,7 +1077,7 @@ def BasedCertSound {α : Type uA} {V : Type uV} (B : BasedWorld α V) (b : V) (C
     Evidence.FreeTermination WorldFuture.DeliveryFuture WorldFuture.renderW (B.world v)
 
 /-- A world-indexed certificate names a version's world; the version index is a
-name for it, no more. ⟨UNDONE U-0072⟩ There is no theorem here that the version index
+name for it, no more. ⟨SCOPE U-0072⟩ There is no theorem here that the version index
 separates worlds a `WorldFuture.WorldCert` cannot — it does not. -/
 theorem versionCertSound_of_worldCertSound {α : Type uA} {V : Type uV} (B : BasedWorld α V)
     {C : WorldFuture.WorldCert α} (h : WorldFuture.WorldCertSound C) :

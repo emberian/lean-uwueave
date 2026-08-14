@@ -77,7 +77,7 @@ flat enum all four are peers in one list.
 
 ## Non-claims, labelled
 
-  * ⟨UNDONE U-0121, narrowed to unrestricted candidate discovery⟩ **No unrestricted
+  * ⟨SCOPE U-0121, narrowed to unrestricted candidate discovery⟩ **No unrestricted
     search.** A `Repair` is a value someone *constructs*. Downstream
     `RepairSynthesis` and `FiniteRepairMenu` search an explicitly supplied finite
     catalog and return exhaustive refusal only inside it; they do not discover a
@@ -95,7 +95,7 @@ flat enum all four are peers in one list.
     one component this tree can refute: singularity of the read
     (`fork_loses_singularity`). A repair that changes the observation type while
     keeping singularity is not distinguished by this axis.
-  * ⟨UNDONE U-0124⟩ **`rollbackWindow` is a declared bound, not a derived one.**
+  * ⟨PREMISE U-0124⟩ **`rollbackWindow` is a declared bound, not a derived one.**
     `Era.final_view_immune` proves the exposure is confined to the *pending*
     suffix — that the window exists and is not everything. Nothing here computes
     its size from a log, so the field is an author's claim about their own
@@ -195,7 +195,7 @@ structure Price where
   Justified by `GatedEra.ge_not_antitone` (an arriving event flips a verdict)
   and bounded — that the window is not "everything" — by
   `Era.final_view_immune` (a finalised prefix is immune to every pending
-  event). ⟨UNDONE U-0125⟩ the *number* is declared, not derived. -/
+  event). ⟨PREMISE U-0125⟩ the *number* is declared, not derived. -/
   rollbackWindow : Nat
   /-- Resolution writes left for the application or the user to issue.
   Justified by `MVRegister.resolution_is_a_write`: a surfaced conflict is
@@ -373,7 +373,7 @@ workload's coordination frequency, not a bound on it. -/
 def seamPrice : Price := { Price.free with seamCrossings := 3 }
 
 /-- Arbitration's price: one trusted announcement, one epoch of rollback
-exposure, two charged premises — **and zero crossings**. ⟨UNDONE U-0127⟩ the two `1`s
+exposure, two charged premises — **and zero crossings**. ⟨PREMISE U-0127⟩ the two `1`s
 are declared; §3.2 and §3.3 prove the currencies are real, not that these are
 their amounts. -/
 def arbitrationPrice : Price :=
@@ -382,7 +382,7 @@ def arbitrationPrice : Price :=
     assumptions := [Premise.trustedAnnouncer, Premise.verdictKnownEverywhere] }
 
 /-- The fork's price: the read goes plural, and somebody must eventually write a
-resolution — **and zero crossings**. ⟨UNDONE U-0128⟩ the `1` is declared; §3.4 proves
+resolution — **and zero crossings**. ⟨PREMISE U-0128⟩ the `1` is declared; §3.4 proves
 only that no merge issues the write. -/
 def forkPrice : Price :=
   { Price.free with resolutionWrites := 1, pluralRead := true }

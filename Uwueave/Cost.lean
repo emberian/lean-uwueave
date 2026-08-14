@@ -112,7 +112,7 @@ validity, and we state it as scope:
 
 ## Non-claims, labelled
 
-  * ⟨UNDONE U-0021⟩ **Crossings are not meetings.** A "coordination event" here is a
+  * ⟨SCOPE U-0021⟩ **Crossings are not meetings.** A "coordination event" here is a
     seam crossing on one replica's stream. How many peers must attend, and
     whether two replicas crossing "the same" boundary hold one meeting or two,
     is not determined by this judgement. `Scheduling.lean` now models those
@@ -120,7 +120,7 @@ validity, and we state it as scope:
     the other; this file deliberately has no transport to that richer layer.
     §8's batching result amortizes only by *re-blocking the workload*, not by
     agreeing in advance.
-  * ⟨UNDONE U-0022⟩ **No liveness, no delivery, no time.** `crossings` counts events,
+  * ⟨SCOPE U-0022⟩ **No liveness, no delivery, no time.** `crossings` counts events,
     never wall-clock; `Liveness.lean`/`Delta.lean` own that axis and are not
     composed with this one.
   * ⟨TERMINAL⟩ **`crossings = 0` on a run is strictly weaker than
@@ -959,7 +959,7 @@ one op: floor one, achieved one.
 The saving is not a trick of the measure. It is the content of batching: the
 intermediate allocations were the clash pairs, and a batch is the statement
 that no replica is ever in them. What this does **not** model, and the module
-docstring records as ⟨UNDONE U-0023⟩, is a *meeting* that agrees several future seam
+docstring records as ⟨SCOPE U-0023⟩, is a *meeting* that agrees several future seam
 values in one round while replicas do occupy the intermediate states. -/
 theorem batched_cost_is_one :
     (∀ {Seg : Type v} [DecidableEq Seg] (σ : QuotaState → Seg),

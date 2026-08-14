@@ -56,7 +56,7 @@ the verdict is indexed by.
 
 ## Non-claims, labelled
 
-  * ⟨UNDONE U-0003⟩ **Crossings are not meetings.** Repeated from `Cost.lean` rather
+  * ⟨SCOPE U-0003⟩ **Crossings are not meetings.** Repeated from `Cost.lean` rather
     than inherited from it: a "coordination event" here is a seam crossing on
     one replica's stream. How many peers must attend, and whether two replicas
     crossing "the same" boundary hold one meeting or two, is not determined by
