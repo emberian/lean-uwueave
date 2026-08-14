@@ -3,53 +3,99 @@ name: CI
 on:
   push:
     branches: [dev]
+    tags: ['v*']
   pull_request:
     branches: [dev]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  lean:
-    name: lean
-    runs-on: ubuntu-latest
+  policy:
+    name: policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache elan and lake artifacts
-        uses: actions/cache@v4
+      # actions/checkout v4, resolved 2026-08-14.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          path: |
-            ~/.elan
-            .lake
-          key: lean-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lakefile.toml') }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install elan
-        run: |
-          curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Metadata, debt, census, and mocked hbox gates
+        env:
+          # Temporary exact hash of the four line-anchor shifts documented in
+          # RELEASE.md. Remove this after the marker-reconciliation commit.
+          UWUEAVE_V02_ALLOW_STALE_CENSUS_SHA256: 18e175d00d2ae3f1e32a20439da5b34981c434f0b278f4b56ae009513af8bed8
+        run: scripts/v02-policy.sh
 
-      - name: Build the proofs
-        run: lake build
-
-  rust:
-    name: rust
-    runs-on: ubuntu-latest
+  lean-acceptance:
+    name: lean acceptance (cold Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache elan and lake artifacts
-        uses: actions/cache@v4
+      # actions/checkout v4, resolved 2026-08-14.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          path: |
-            ~/.elan
-            .lake
-          key: lean-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lakefile.toml') }}
+          persist-credentials: false
 
-      # The cargo build script invokes lake and links the Lean toolchain's
-      # libleanshared, so the rust job needs elan too.
-      - name: Install elan
-        run: |
-          curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      # leanprover/lean-action v1, resolved 2026-08-14. It is used only to
+      # install elan/the pinned lean-toolchain; all cache/build features are off.
+      - name: Install the pinned Lean toolchain
+        uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+          use-github-cache: false
+          use-mathlib-cache: false
 
-      - name: Test
-        working-directory: rust
-        run: cargo test
+      - name: Cold proof build and acceptance suite
+        env:
+          UWUEAVE_V02_COLD_BUILD: 1
+        run: scripts/v02-lean-acceptance.sh
+
+  native:
+    name: native (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      # actions/checkout v4, resolved 2026-08-14.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned Lean toolchain
+        uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+          use-github-cache: false
+          use-mathlib-cache: false
+
+      # dtolnay/rust-toolchain stable branch, resolved 2026-08-14; the action
+      # implementation and selected Rust release are both immutable here.
+      - name: Install Rust 1.97.0
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.97.0
+
+      - name: Hydrate locked Cargo dependencies
+        run: cargo fetch --manifest-path rust/Cargo.toml --locked
+
+      - name: Frozen all-target native suite
+        run: cargo test --manifest-path rust/Cargo.toml --frozen --all-targets

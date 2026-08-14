@@ -306,4 +306,4 @@ development does not settle comes back `UNCLASSIFIED` rather than guessed;
   environment, including what the build gate *cannot* prove
 - `../docs/BIBLIOGRAPHY.md` — every paper, what we took, and what we declined
 
-License: Unlicense OR MIT.
+License: Unlicense.

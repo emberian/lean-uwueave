@@ -426,4 +426,4 @@ us where we were wrong.
 
 The name is spelled lean-uwueave. That was never a typo.
 
-License: Unlicense OR MIT.
+License: Unlicense.

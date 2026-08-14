@@ -2,7 +2,8 @@
 name = "uwueave"
 version = "0.1.0"
 edition = "2021"
-license = "Unlicense OR MIT"
+publish = false
+license = "Unlicense"
 description = "The coordination-free fragment of a weave, implemented as proved: content-addressed causal DAG + op-log moves. Companion to the Uwueave theorems."
 repository = "https://github.com/emberian/lean-uwueave"
 categories = ["data-structures"]
