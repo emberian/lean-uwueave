@@ -95,25 +95,30 @@ without its JSONL newline. `prior_marker_sha256` must equal that row's exact
 marker hash. Dispositions are:
 
 - `proved`: evidence is exactly one Lean declaration check.
-- `implemented`: evidence is exactly one case in the repository-owned aggregate
-  dispatcher.
-- `obsolete`: still requires at least one runnable command.
+- `implemented`: evidence is exactly one per-ID case manifest.
+- `obsolete`: evidence is exactly one Lean declaration or per-ID case manifest.
 - `superseded`: `evidence` is empty and `replacement_id` names a distinct
   active item of the same class; an obligation replacement may not weaken
   severity.
 
 Each evidence object binds one tracked, non-symlinked regular file by exact
-SHA-256 and records the only admitted canonical command. Schema v1 deliberately
-admits only two reviewed runners:
+SHA-256. It has only `kind`, `path`, and `sha256`; commands, declaration names,
+selectors, and expected output are not receipt-controlled. Schema v1 admits
+only these two evidence forms:
 
 ```json
-{"command":["lake","env","lean","tests/DebtClosures/U_0001.lean"],"declaration":"debtClosure_U_0001","kind":"lean_decl","path":"tests/DebtClosures/U_0001.lean","sha256":"64 lowercase hex digits"}
-{"command":["bash","scripts/debt-closures.sh","--debt-case","U-0001"],"kind":"aggregate_case","path":"scripts/debt-closures.sh","sha256":"64 lowercase hex digits"}
+{"kind":"lean_decl","path":"tests/DebtClosures/U_0001.lean","sha256":"64 lowercase hex digits"}
+{"kind":"case_manifest","path":"tests/DebtClosures/U_0001.case.json","sha256":"64 lowercase hex digits"}
 ```
 
 The gate derives rather than trusts execution arguments, runs from the
 repository root in a sanitized environment, and applies a timeout and output
-bound. It compiles the exact hashed Lean source as a temporary module, then a
+bound. Evidence and child artifacts must exactly match their stage-0 Git-index
+blobs before execution.
+
+For `lean_decl`, the ID fixes both the path above and declaration name
+`debtClosure_U_0001`. The gate compiles the exact hashed Lean source as a
+temporary module, then a
 separately parsed trusted inspector loads the resulting `.olean` with
 `Lean.importModules`, verifies exact module ownership, and queries
 `Lean.collectAxioms` through the environment API. Fixture-defined parser or
@@ -121,14 +126,57 @@ command extensions therefore cannot shadow inspection. The declaration may
 depend only on Lean's reviewed core axioms (`propext`, `Classical.choice`, and
 `Quot.sound`).
 
-Implementation cases go only through the fixed, repository-owned and
-SHA-bound `scripts/debt-closures.sh` dispatcher, which may invoke reviewed Rust,
-Python, or shell suites internally and must emit exactly
-`debt-evidence: U-####: PASS`. Arbitrary per-receipt Python, Rust custom harness,
-and shell commands are not schema-v1 evidence. Every ordinary check reruns all
-receipt evidence, including immutable historical receipts. This establishes
-runner reachability and byte identity; human review must still establish that
-the evidence semantically closes the named debt.
+The `case_manifest` is itself canonical one-line UTF-8/LF JSON. Its exact
+schema-v1 form is:
+
+```json
+{"checks":[{"kind":"rust_test","sha256":"64 lowercase hex digits"}],"id":"U-0001","schema":1}
+```
+
+The manifest ID must equal the receipt ID. `checks` is nonempty, sorted by
+kind, contains no duplicate kind, and schema v1 admits exactly one
+`rust_test`. The ID and kind derive the only child path,
+`rust/tests/debt_u_0001.rs`, Cargo target `debt_u_0001`, and libtest name
+`debt_closure_u_0001`; none is supplied by the receipt or manifest. The child
+is a separately tracked regular non-symlinked file and its exact bytes must
+match the manifest SHA-256 and Git index.
+
+Rust evidence fails closed unless `cargo` and `rustc` are the exact official
+1.89.0 release and commit hashes recorded by the release policy. The sanitized
+runner retains resolved `cargo`, `rustc`, and job-private `lake` directories,
+plus narrowly validated `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `CARGO_HOME`, and
+`ELAN_HOME` selectors, so
+the crate's Lean build dependency remains reachable without inheriting the
+ambient `PATH`. Policy CI installs Rust 1.89.0 and hydrates locked dependencies
+before running the frozen debt gate.
+
+Before execution, Cargo metadata must map the derived target to the exact
+SHA-bound child source. A matching explicit `[[test]]` may not redirect the
+path or disable the standard harness. The gate then asks libtest to list the
+target and requires exactly one derived `: test` entry. It runs that exact
+test with ignored tests included and one test thread, requires exit status
+zero, and requires one exact `... ok` line plus the standard one-passed,
+zero-failed harness summary. A zero-match Cargo success and an early
+`process::exit(0)` without a completed harness transcript are therefore red.
+
+Python and shell cases are deliberately not schema-v1 evidence. An in-process
+Python test can call `os._exit(0)` before a trusted unittest wrapper checks its
+result, while a shell case is an unconstrained program. Adding either runner
+requires a separately reviewed supervisor with equally strong completion
+semantics.
+
+Every ordinary check reruns all current receipt evidence. The history walk also
+requires each manifest and child blob to exist in its receipt-introduction
+commit and to retain identical regular-file mode and bytes in every descendant,
+so adding a different ID's case never invalidates earlier receipts and temporary
+mutation followed by restoration cannot evade the gate.
+
+These checks establish exact runner selection, reachability, byte identity,
+and ordinary harness completion. They do not make child output cryptographically
+unforgeable: a malicious, reviewed SHA-bound Rust test could print a plausible
+libtest transcript before `process::exit(0)`. Exact artifact review remains in
+the trusted computing base, and human review must establish that the evidence
+semantically closes the named debt.
 
 Receipts present at the comparison base must remain byte-identical forever.
 There is no waived or reclassified disposition.
@@ -146,12 +194,15 @@ with `git ls-tree` and `git cat-file`. It rejects:
 - reused IDs or new IDs at or below the historical maximum;
 - duplicate, unregistered, malformed, non-comment, or legacy markers;
 - unknown references, missing evidence, path traversal, unknown JSON keys,
-  duplicate keys, and noncanonical serialization.
+  duplicate keys, noncanonical serialization, evidence/index drift, Cargo
+  target redirection, wrong Rust toolchains, and zero-test successes.
 
 The comparison is not merely base-versus-worktree. The gate walks every
 committed descendant on an ancestry path from the base to `HEAD`, checks each
 parent transition, carries the historical maximum forward, and rejects an ID
 or receipt that disappeared, changed, or was reused in an intermediate commit.
+It applies the same existence, SHA, canonical-manifest, and byte-identity checks
+to every committed evidence blob and manifest child.
 
 ## Guarded initial bootstrap (completed)
 

@@ -21,10 +21,12 @@ import re
 import selectors
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -57,10 +59,18 @@ RECEIPT_KEYS = {
 CLASSES = {"obligation", "premise", "scope", "unclassified"}
 SEVERITIES = {"P0", "P1", "P2", "P3"}
 DISPOSITIONS = {"proved", "implemented", "obsolete", "superseded"}
-EVIDENCE_KINDS = {"lean_decl", "aggregate_case"}
+EVIDENCE_KINDS = {"lean_decl", "case_manifest"}
+# Runnable implementation evidence is deliberately Rust-only in schema v1.
+# A Python fixture can terminate its own interpreter with ``os._exit(0)`` before
+# a trusted in-process unittest wrapper verifies that one test completed.  Rust
+# libtest is instead checked out of process by a list pass and an exact result
+# transcript below.  More runner kinds require an equally strong supervisor.
+CASE_CHECK_KINDS = {"rust_test"}
 EVIDENCE_TIMEOUT_SECONDS = 300
 EVIDENCE_OUTPUT_LIMIT = 1024 * 1024
-AGGREGATE_EVIDENCE_RUNNER = "scripts/debt-closures.sh"
+RUST_RELEASE = "1.89.0"
+RUSTC_COMMIT = "29483883eed69d5fb4db01964cdf2af4d86e9cb2"
+CARGO_COMMIT = "c24e1064277fe51ab72011e2612e556ac56addf7"
 LEAN_INSPECTOR_SOURCE = r'''import Lean
 
 open Lean
@@ -230,6 +240,46 @@ def parse_receipt_bytes(data: bytes, label: str) -> Dict[str, Any]:
     return value
 
 
+def parse_case_manifest_bytes(
+    data: bytes, label: str, expected_id: Optional[str] = None
+) -> Dict[str, Any]:
+    text = decode_canonical_bytes(data, label)
+    body = text[:-1]
+    if "\n" in body:
+        raise DebtError(f"{label}: case manifest must be one compact JSON line")
+    value = parse_json(body, label)
+    if not isinstance(value, dict):
+        raise DebtError(f"{label}: case manifest must be a JSON object")
+    if canonical_json(value) != body:
+        raise DebtError(f"{label}: case manifest is not canonical compact sorted JSON")
+    _require_exact_keys(value, {"checks", "id", "schema"}, label)
+    _require_schema(value["schema"], label + ".schema")
+    debt_id = _require_id(value["id"], label + ".id")
+    if expected_id is not None and debt_id != expected_id:
+        raise DebtError(f"{label}: manifest id does not match receipt id")
+    checks = value["checks"]
+    if not isinstance(checks, list) or not checks:
+        raise DebtError(f"{label}.checks: expected a nonempty list")
+    kinds: List[str] = []
+    for index, check in enumerate(checks):
+        check_label = f"{label}.checks[{index}]"
+        if not isinstance(check, dict):
+            raise DebtError(f"{check_label}: check must be an object")
+        _require_exact_keys(check, {"kind", "sha256"}, check_label)
+        kind = check["kind"]
+        if kind not in CASE_CHECK_KINDS:
+            raise DebtError(f"{check_label}.kind: unknown case check kind")
+        digest = check["sha256"]
+        if not isinstance(digest, str) or not HEX_RE.fullmatch(digest):
+            raise DebtError(f"{check_label}.sha256: expected lowercase SHA-256 hex")
+        kinds.append(kind)
+    if kinds != sorted(kinds):
+        raise DebtError(f"{label}.checks: checks must be sorted lexicographically by kind")
+    if len(kinds) != len(set(kinds)):
+        raise DebtError(f"{label}.checks: duplicate case check kind")
+    return value
+
+
 def _require_exact_keys(value: Mapping[str, Any], keys: Iterable[str], label: str) -> None:
     expected = set(keys)
     actual = set(value)
@@ -266,7 +316,7 @@ def _require_clean_text(value: Any, label: str, allow_empty: bool = False) -> st
 
 
 def canonical_repo_path(value: Any, label: str, prefixes: Sequence[str], suffix: str) -> str:
-    if not isinstance(value, str) or not value or "\\" in value:
+    if not isinstance(value, str) or not value or "\\" in value or "\0" in value:
         raise DebtError(f"{label}: expected a canonical repository-relative path")
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
@@ -335,17 +385,19 @@ def validate_receipt_shape(value: Mapping[str, Any], label: str) -> None:
         if encoded in seen:
             raise DebtError(f"{label}.evidence: duplicate evidence object")
         seen.add(encoded)
-        kind = validate_evidence_command_shape(debt_id, item, item_label)
+        kind = validate_evidence_shape(debt_id, item, item_label)
         kinds.append(kind)
     if disposition == "proved":
         if kinds != ["lean_decl"]:
             raise DebtError(f"{label}: proved closure requires exactly one Lean declaration")
     elif disposition == "implemented":
-        if kinds != ["aggregate_case"]:
-            raise DebtError(f"{label}: implemented closure requires one aggregate case")
+        if kinds != ["case_manifest"]:
+            raise DebtError(f"{label}: implemented closure requires one case manifest")
     elif disposition == "obsolete":
-        if not evidence:
-            raise DebtError(f"{label}: obsolete closure still requires executable evidence")
+        if kinds not in (["lean_decl"], ["case_manifest"]):
+            raise DebtError(
+                f"{label}: obsolete closure requires exactly one executable evidence item"
+            )
     elif disposition == "superseded":
         replacement = _require_id(value["replacement_id"], label + ".replacement_id")
         if replacement == debt_id:
@@ -354,44 +406,24 @@ def validate_receipt_shape(value: Mapping[str, Any], label: str) -> None:
             raise DebtError(f"{label}: superseded closure uses replacement_id, not evidence")
 
 
-def _require_command(value: Any, label: str) -> List[str]:
-    if not isinstance(value, list) or not value:
-        raise DebtError(f"{label}: command must be a nonempty argv list")
-    if any(not isinstance(arg, str) or not arg or "\0" in arg for arg in value):
-        raise DebtError(f"{label}: command arguments must be nonempty strings")
-    return value
-
-
-def validate_evidence_command_shape(
-    debt_id: str, item: Mapping[str, Any], label: str
-) -> str:
+def validate_evidence_shape(debt_id: str, item: Mapping[str, Any], label: str) -> str:
     kind = item.get("kind")
     if kind not in EVIDENCE_KINDS:
         raise DebtError(f"{label}.kind: unknown evidence kind")
-    keys = {"command", "kind", "path", "sha256"}
-    if kind == "lean_decl":
-        keys.add("declaration")
-    _require_exact_keys(item, keys, label)
+    _require_exact_keys(item, {"kind", "path", "sha256"}, label)
     path = canonical_repo_path(item["path"], label + ".path", ("scripts/", "tests/"), "")
     digest = item["sha256"]
     if not isinstance(digest, str) or not HEX_RE.fullmatch(digest):
         raise DebtError(f"{label}.sha256: expected lowercase SHA-256 hex")
-    command = _require_command(item["command"], label + ".command")
+    stem = debt_id.replace("-", "_")
     if kind == "lean_decl":
-        expected_path = f"tests/DebtClosures/{debt_id.replace('-', '_')}.lean"
-        declaration = item["declaration"]
-        expected_declaration = "debtClosure_" + debt_id.replace("-", "_")
-        expected = ["lake", "env", "lean", expected_path]
-        if (
-            path != expected_path
-            or declaration != expected_declaration
-            or command != expected
-        ):
-            raise DebtError(f"{label}: Lean declaration command/path/name must be exact")
+        expected_path = f"tests/DebtClosures/{stem}.lean"
+        if path != expected_path:
+            raise DebtError(f"{label}: Lean declaration path must be exact")
     else:
-        expected = ["bash", AGGREGATE_EVIDENCE_RUNNER, "--debt-case", debt_id]
-        if path != AGGREGATE_EVIDENCE_RUNNER or command != expected:
-            raise DebtError(f"{label}: aggregate evidence must use the reviewed dispatcher")
+        expected_path = f"tests/DebtClosures/{stem}.case.json"
+        if path != expected_path:
+            raise DebtError(f"{label}: case manifest path must be exact")
     return kind
 
 
@@ -743,13 +775,20 @@ def git_path_entry(root: Path, base: str, path: str) -> Optional[Tuple[str, str,
 
 
 def git_file(root: Path, base: str, path: str) -> Optional[bytes]:
+    result = git_regular_blob(root, base, path)
+    return None if result is None else result[1]
+
+
+def git_regular_blob(
+    root: Path, base: str, path: str
+) -> Optional[Tuple[str, bytes]]:
     entry = git_path_entry(root, base, path)
     if entry is None:
         return None
     mode, kind, object_id = entry
     if kind != "blob" or mode not in {"100644", "100755"}:
         raise DebtError(f"{base}:{path}: expected a regular tracked blob, found {mode} {kind}")
-    return _run_git(root, ["cat-file", "blob", object_id])
+    return mode, _run_git(root, ["cat-file", "blob", object_id])
 
 
 def read_base_receipts(
@@ -842,19 +881,25 @@ def ensure_tracked_regular(root: Path, relative: str, label: str) -> Path:
         raise DebtError(f"{label}: evidence must be one tracked stage-0 file")
     try:
         metadata, recorded = records[0].split(b"\t", 1)
-        mode, _object_id, stage = metadata.decode("ascii").split(" ")
+        mode, object_id, stage = metadata.decode("ascii").split(" ")
         recorded_path = recorded.decode("utf-8")
     except (ValueError, UnicodeDecodeError):
         raise DebtError(f"{label}: malformed Git index entry") from None
     if mode not in {"100644", "100755"} or stage != "0" or recorded_path != relative:
         raise DebtError(f"{label}: evidence must be one tracked regular stage-0 file")
+    index_content = _run_git(root, ["cat-file", "blob", object_id])
+    if index_content != path.read_bytes():
+        raise DebtError(f"{label}: evidence bytes must exactly match the Git index")
+    worktree_executable = bool(path.stat().st_mode & stat.S_IXUSR)
+    if worktree_executable != (mode == "100755"):
+        raise DebtError(f"{label}: evidence executable mode must match the Git index")
     return path
 
 
-def _evidence_environment(executable: str, root: Path) -> Dict[str, str]:
-    executable_dir = str(Path(executable).absolute().parent)
-    path_parts = [executable_dir, "/usr/local/bin", "/usr/bin", "/bin"]
-    return {
+def _evidence_environment(executables: Sequence[str], root: Path) -> Dict[str, str]:
+    path_parts = [str(Path(item).absolute().parent) for item in executables]
+    path_parts.extend(["/usr/local/bin", "/usr/bin", "/bin"])
+    environment = {
         "CARGO_BUILD_JOBS": "1",
         "CARGO_TERM_COLOR": "never",
         "HOME": os.environ.get("HOME", str(root)),
@@ -865,16 +910,38 @@ def _evidence_environment(executable: str, root: Path) -> Dict[str, str]:
         "PYTHONDONTWRITEBYTECODE": "1",
         "TMPDIR": tempfile.gettempdir(),
     }
+    # CI installs elan below a job-private ELAN_HOME, while rustup installations
+    # may similarly use job-private homes or an explicit exact toolchain.  Keep
+    # only these narrowly validated selectors; do not inherit the ambient PATH.
+    for key in ("ELAN_HOME", "RUSTUP_HOME", "CARGO_HOME"):
+        value = os.environ.get(key)
+        if value is None:
+            continue
+        if not os.path.isabs(value) or any(char in value for char in "\0\r\n"):
+            raise DebtError(f"evidence environment: {key} must be an absolute clean path")
+        environment[key] = value
+    toolchain = os.environ.get("RUSTUP_TOOLCHAIN")
+    if toolchain is not None:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", toolchain):
+            raise DebtError(
+                "evidence environment: RUSTUP_TOOLCHAIN must be a simple exact name"
+            )
+        environment["RUSTUP_TOOLCHAIN"] = toolchain
+    return environment
 
 
 def _execute_evidence_command(
-    root: Path, argv: Sequence[str], executable: str, label: str
+    root: Path,
+    argv: Sequence[str],
+    executable: str,
+    label: str,
+    path_executables: Sequence[str] = (),
 ) -> str:
     actual_argv = [executable, *argv[1:]]
     process = subprocess.Popen(
         actual_argv,
         cwd=root,
-        env=_evidence_environment(executable, root),
+        env=_evidence_environment([executable, *path_executables], root),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -886,12 +953,28 @@ def _execute_evidence_command(
     selector = selectors.DefaultSelector()
     selector.register(process.stdout, selectors.EVENT_READ)
     exceeded = False
+
+    def stop_process() -> None:
+        if process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            # Some hosts deny process-group signals despite start_new_session;
+            # still reap the direct runner and fail the gate closed.
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+        process.wait()
+
     try:
         while selector.get_map():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
+                stop_process()
                 raise DebtError(
                     f"{label}: evidence command timed out after {EVIDENCE_TIMEOUT_SECONDS}s"
                 )
@@ -903,16 +986,14 @@ def _execute_evidence_command(
                 output.extend(chunk)
                 if len(output) > EVIDENCE_OUTPUT_LIMIT:
                     exceeded = True
-                    os.killpg(process.pid, signal.SIGKILL)
+                    stop_process()
                     selector.unregister(key.fileobj)
                     break
         if exceeded:
-            process.wait()
             raise DebtError(f"{label}: evidence command exceeded output limit")
         returncode = process.wait(timeout=max(0.0, deadline - time.monotonic()))
     except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
-        process.wait()
+        stop_process()
         raise DebtError(
             f"{label}: evidence command timed out after {EVIDENCE_TIMEOUT_SECONDS}s"
         ) from None
@@ -926,16 +1007,57 @@ def _execute_evidence_command(
     return text
 
 
-def _resolved_executable(kind: str, label: str) -> str:
-    if kind == "aggregate_case":
-        candidate = "/bin/bash"
-    else:
-        candidate = "lake"
+def _resolved_executable(candidate: str, label: str) -> str:
     resolved = shutil.which(candidate)
     if resolved is None:
         raise DebtError(f"{label}: required evidence runner {candidate} is unavailable")
     # Preserve a multicall symlink's basename (for example cargo -> rustup).
     return str(Path(resolved).absolute())
+
+
+def _version_fields(output: str) -> Dict[str, str]:
+    fields: Dict[str, str] = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key and value.startswith(" "):
+            fields[key] = value[1:]
+    return fields
+
+
+def validate_rust_toolchain(
+    root: Path, cargo: str, rustc: str, lake: str, label: str
+) -> None:
+    path_executables = [rustc, lake]
+    rustc_output = _execute_evidence_command(
+        root,
+        ["rustc", "--version", "--verbose"],
+        rustc,
+        label + ".rustc-version",
+        [cargo, lake],
+    )
+    rustc_fields = _version_fields(rustc_output)
+    if (
+        rustc_fields.get("release") != RUST_RELEASE
+        or rustc_fields.get("commit-hash") != RUSTC_COMMIT
+    ):
+        raise DebtError(
+            f"{label}: Rust evidence requires official rustc {RUST_RELEASE} ({RUSTC_COMMIT})"
+        )
+    cargo_output = _execute_evidence_command(
+        root,
+        ["cargo", "--version", "--verbose"],
+        cargo,
+        label + ".cargo-version",
+        path_executables,
+    )
+    cargo_fields = _version_fields(cargo_output)
+    if (
+        cargo_fields.get("release") != RUST_RELEASE
+        or cargo_fields.get("commit-hash") != CARGO_COMMIT
+    ):
+        raise DebtError(
+            f"{label}: Rust evidence requires official cargo {RUST_RELEASE} ({CARGO_COMMIT})"
+        )
 
 
 def validate_lean_declaration(
@@ -985,6 +1107,172 @@ def validate_lean_declaration(
         shutil.rmtree(temporary)
 
 
+def validate_rust_target_binding(
+    root: Path,
+    debt_id: str,
+    cargo: str,
+    rustc: str,
+    lake: str,
+    label: str,
+) -> None:
+    stem = debt_id.replace("-", "_").lower()
+    target_name = f"debt_{stem}"
+    relative = f"rust/tests/{target_name}.rs"
+    expected_source = (root / relative).resolve(strict=True)
+    cargo_toml = ensure_tracked_regular(root, "rust/Cargo.toml", label + ".cargo-toml")
+    try:
+        cargo_data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise DebtError(f"{label}: rust/Cargo.toml is not valid UTF-8 TOML: {exc}") from None
+    explicit = [
+        item
+        for item in cargo_data.get("test", [])
+        if isinstance(item, dict) and item.get("name") == target_name
+    ]
+    if len(explicit) > 1:
+        raise DebtError(f"{label}: Cargo declares the exact debt test target more than once")
+    if explicit:
+        item = explicit[0]
+        if item.get("harness", True) is not True:
+            raise DebtError(f"{label}: Rust debt test target must use the standard harness")
+        if item.get("path", f"tests/{target_name}.rs") != f"tests/{target_name}.rs":
+            raise DebtError(f"{label}: Cargo redirects the exact debt test target path")
+    metadata_output = _execute_evidence_command(
+        root,
+        [
+            "cargo",
+            "metadata",
+            "--quiet",
+            "--manifest-path",
+            "rust/Cargo.toml",
+            "--frozen",
+            "--no-deps",
+            "--format-version",
+            "1",
+        ],
+        cargo,
+        label + ".metadata",
+        [rustc, lake],
+    )
+    metadata = parse_json(metadata_output.strip(), label + ".metadata")
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("packages"), list):
+        raise DebtError(f"{label}: Cargo metadata has an unexpected shape")
+    targets: List[Mapping[str, Any]] = []
+    for package in metadata["packages"]:
+        if not isinstance(package, dict):
+            continue
+        manifest_path = package.get("manifest_path")
+        if not isinstance(manifest_path, str):
+            continue
+        try:
+            manifest = Path(manifest_path).resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if manifest != cargo_toml.resolve(strict=True):
+            continue
+        for target in package.get("targets", []):
+            if isinstance(target, dict) and target.get("name") == target_name:
+                targets.append(target)
+    if len(targets) != 1:
+        raise DebtError(f"{label}: Cargo metadata must expose one exact debt test target")
+    target = targets[0]
+    try:
+        source = Path(target["src_path"]).resolve(strict=True)
+    except (KeyError, OSError, RuntimeError, TypeError):
+        raise DebtError(f"{label}: Cargo metadata returned an invalid debt target path") from None
+    if source != expected_source or target.get("kind") != ["test"] or target.get("test") is not True:
+        raise DebtError(f"{label}: Cargo metadata did not bind the exact standard test source")
+
+
+def validate_rust_case(root: Path, debt_id: str, label: str) -> None:
+    stem = debt_id.replace("-", "_").lower()
+    target = f"debt_{stem}"
+    test_name = f"debt_closure_{stem}"
+    cargo = _resolved_executable("cargo", label)
+    rustc = _resolved_executable("rustc", label)
+    lake = _resolved_executable("lake", label)
+    validate_rust_toolchain(root, cargo, rustc, lake, label)
+    validate_rust_target_binding(root, debt_id, cargo, rustc, lake, label)
+    shared = [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "--frozen",
+        "--color",
+        "never",
+        "--test",
+        target,
+    ]
+    path_executables = [rustc, lake]
+    listing = _execute_evidence_command(
+        root,
+        [*shared, "--", "--list", "--format", "terse"],
+        cargo,
+        label + ".list",
+        path_executables,
+    )
+    listed = [
+        line.strip()
+        for line in listing.splitlines()
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_:]*: (?:test|benchmark)", line.strip())
+    ]
+    expected_listing = f"{test_name}: test"
+    if listed != [expected_listing]:
+        raise DebtError(
+            f"{label}: Rust case must list exactly one owned test {expected_listing}"
+        )
+    output = _execute_evidence_command(
+        root,
+        [
+            *shared,
+            test_name,
+            "--",
+            "--exact",
+            "--include-ignored",
+            "--test-threads",
+            "1",
+        ],
+        cargo,
+        label + ".run",
+        path_executables,
+    )
+    ok_line = f"test {test_name} ... ok"
+    ok_count = sum(line.strip() == ok_line for line in output.splitlines())
+    summary_re = re.compile(
+        r"test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; "
+        r"0 filtered out; finished in .+"
+    )
+    summary_count = sum(
+        summary_re.fullmatch(line.strip()) is not None for line in output.splitlines()
+    )
+    if ok_count != 1 or summary_count != 1:
+        raise DebtError(
+            f"{label}: Rust harness did not report one exact completed passing test"
+        )
+
+
+def validate_case_manifest(
+    root: Path, debt_id: str, content: bytes, label: str
+) -> None:
+    manifest = parse_case_manifest_bytes(content, label, debt_id)
+    stem = debt_id.replace("-", "_").lower()
+    for index, check in enumerate(manifest["checks"]):
+        check_label = f"{label}.checks[{index}]"
+        kind = check["kind"]
+        if kind == "rust_test":
+            relative = f"rust/tests/debt_{stem}.rs"
+        else:  # Shape validation makes this unreachable in schema v1.
+            raise DebtError(f"{check_label}.kind: unsupported case check kind")
+        path = ensure_tracked_regular(root, relative, check_label)
+        artifact = path.read_bytes()
+        if not artifact:
+            raise DebtError(f"{check_label}: case artifact must be nonempty")
+        if sha256_bytes(artifact) != check["sha256"]:
+            raise DebtError(f"{check_label}: case artifact SHA-256 does not match exact bytes")
+        validate_rust_case(root, debt_id, check_label)
+
+
 def validate_receipt_evidence(root: Path, receipt: Mapping[str, Any]) -> None:
     debt_id = receipt["id"]
     receipt_label = f"docs/debt/closed/{debt_id}.json"
@@ -997,18 +1285,14 @@ def validate_receipt_evidence(root: Path, receipt: Mapping[str, Any]) -> None:
         if sha256_bytes(content) != item["sha256"]:
             raise DebtError(f"{label}: evidence SHA-256 does not match exact file bytes")
         kind = item["kind"]
-        executable = _resolved_executable(kind, label)
         if kind == "lean_decl":
+            executable = _resolved_executable("lake", label)
+            declaration = "debtClosure_" + debt_id.replace("-", "_")
             validate_lean_declaration(
-                root, debt_id, content, item["declaration"], executable, label
+                root, debt_id, content, declaration, executable, label
             )
         else:
-            output = _execute_evidence_command(
-                root, list(item["command"]), executable, label
-            )
-            expected = f"debt-evidence: {debt_id}: PASS"
-            if output.strip() != expected:
-                raise DebtError(f"{label}: aggregate dispatcher did not emit unique exact PASS")
+            validate_case_manifest(root, debt_id, content, label)
 
 
 def validate_head(
@@ -1121,6 +1405,61 @@ def validate_against_base(
             )
 
 
+def validate_committed_evidence_blobs(
+    root: Path,
+    commit: str,
+    receipts: Mapping[str, Mapping[str, Any]],
+    versions: Dict[Tuple[str, str], Tuple[str, bytes]],
+) -> None:
+    for debt_id in sorted(receipts):
+        receipt = receipts[debt_id]
+        for index, item in enumerate(receipt["evidence"]):
+            label = f"{commit}:docs/debt/closed/{debt_id}.json.evidence[{index}]"
+            blob = git_regular_blob(root, commit, item["path"])
+            if blob is None:
+                raise DebtError(f"{label}: committed evidence blob is missing")
+            mode, data = blob
+            if not data:
+                raise DebtError(f"{label}: committed evidence blob is empty")
+            if sha256_bytes(data) != item["sha256"]:
+                raise DebtError(f"{label}: committed evidence SHA-256 does not match")
+            version_key = (debt_id, item["path"])
+            prior = versions.get(version_key)
+            if prior is not None and prior != (mode, data):
+                raise DebtError(f"{label}: committed evidence mode or bytes changed")
+            versions[version_key] = (mode, data)
+            if item["kind"] != "case_manifest":
+                continue
+            manifest = parse_case_manifest_bytes(data, label, debt_id)
+            stem = debt_id.replace("-", "_").lower()
+            for check_index, check in enumerate(manifest["checks"]):
+                check_label = f"{label}.checks[{check_index}]"
+                if check["kind"] == "rust_test":
+                    relative = f"rust/tests/debt_{stem}.rs"
+                else:
+                    raise DebtError(f"{check_label}.kind: unsupported case check kind")
+                artifact_blob = git_regular_blob(root, commit, relative)
+                if artifact_blob is None:
+                    raise DebtError(f"{check_label}: committed case artifact is missing")
+                artifact_mode, artifact = artifact_blob
+                if not artifact:
+                    raise DebtError(f"{check_label}: committed case artifact is empty")
+                if sha256_bytes(artifact) != check["sha256"]:
+                    raise DebtError(
+                        f"{check_label}: committed case artifact SHA-256 does not match"
+                    )
+                artifact_key = (debt_id, relative)
+                prior_artifact = versions.get(artifact_key)
+                if prior_artifact is not None and prior_artifact != (
+                    artifact_mode,
+                    artifact,
+                ):
+                    raise DebtError(
+                        f"{check_label}: committed case artifact mode or bytes changed"
+                    )
+                versions[artifact_key] = (artifact_mode, artifact)
+
+
 def validate_committed_history(root: Path, base: str) -> None:
     listing = _run_git(
         root,
@@ -1139,8 +1478,10 @@ def validate_committed_history(root: Path, base: str) -> None:
     max_through: Dict[str, int] = {}
     active_versions: Dict[str, str] = {}
     receipt_versions: Dict[str, bytes] = {}
+    evidence_versions: Dict[Tuple[str, str], Tuple[str, bytes]] = {}
     for commit in commits:
         active, receipt_raw, receipts = read_base_state(root, commit)
+        validate_committed_evidence_blobs(root, commit, receipts, evidence_versions)
         active_by_id = {entry["id"]: entry for entry in active}
         overlap = sorted(set(active_by_id) & set(receipts))
         if overlap:

@@ -104,23 +104,44 @@ class TempRepo:
         path.write_text(GATE.canonical_json(receipt) + "\n", encoding="utf-8")
         return path
 
-    def aggregate_evidence(self, debt_id: str = "U-0001", passing: bool = True):
-        path = self.root / "scripts/debt-closures.sh"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            "#!/bin/bash\n"
-            "set -eu\n"
-            f"test \"$1\" = --debt-case && test \"$2\" = {debt_id}\n"
-            f"printf '%s\\n' 'debt-evidence: {debt_id}: {'PASS' if passing else 'FAIL'}'\n",
+    def case_manifest(self, debt_id: str = "U-0001"):
+        stem = debt_id.replace("-", "_").lower()
+        artifact = self.root / "rust/tests" / f"debt_{stem}.rs"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text(
+            f"#[test]\nfn debt_closure_{stem}() {{ assert!(true); }}\n",
             encoding="utf-8",
         )
-        path.chmod(0o755)
-        run_git(self.root, "add", "scripts/debt-closures.sh")
+        cargo_toml = self.root / "rust/Cargo.toml"
+        cargo_toml.write_text(
+            '[package]\nname = "debt-fixture"\nversion = "0.1.0"\n'
+            'edition = "2021"\n',
+            encoding="utf-8",
+        )
+        manifest = self.root / "tests/DebtClosures" / f"{debt_id.replace('-', '_')}.case.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            GATE.canonical_json(
+                {
+                    "checks": [{"kind": "rust_test", "sha256": digest(artifact)}],
+                    "id": debt_id,
+                    "schema": 1,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        run_git(
+            self.root,
+            "add",
+            artifact.relative_to(self.root).as_posix(),
+            cargo_toml.relative_to(self.root).as_posix(),
+            manifest.relative_to(self.root).as_posix(),
+        )
         return {
-            "command": ["bash", "scripts/debt-closures.sh", "--debt-case", debt_id],
-            "kind": "aggregate_case",
-            "path": "scripts/debt-closures.sh",
-            "sha256": digest(path),
+            "kind": "case_manifest",
+            "path": manifest.relative_to(self.root).as_posix(),
+            "sha256": digest(manifest),
         }
 
     def lean_evidence(self, debt_id: str = "U-0001"):
@@ -133,12 +154,90 @@ class TempRepo:
         run_git(self.root, "add", path.relative_to(self.root).as_posix())
         relative = path.relative_to(self.root).as_posix()
         return {
-            "command": ["lake", "env", "lean", relative],
-            "declaration": declaration,
             "kind": "lean_decl",
             "path": relative,
             "sha256": digest(path),
         }
+
+    def fake_rust_tools(
+        self,
+        debt_id: str = "U-0001",
+        *,
+        passing: bool = True,
+        listed: bool = True,
+        completed: bool = True,
+        redirected: bool = False,
+        exact_toolchain: bool = True,
+    ):
+        directory = self.root / "fake-bin"
+        directory.mkdir(exist_ok=True)
+        stem = debt_id.replace("-", "_").lower()
+        test_name = f"debt_closure_{stem}"
+        source = self.root / "rust/tests" / f"debt_{stem}.rs"
+        if redirected:
+            source = self.root / "rust/tests/redirected.rs"
+            source.write_text("fn main() {}\n", encoding="utf-8")
+        metadata = GATE.canonical_json(
+            {
+                "packages": [
+                    {
+                        "manifest_path": str(self.root / "rust/Cargo.toml"),
+                        "targets": [
+                            {
+                                "kind": ["test"],
+                                "name": f"debt_{stem}",
+                                "src_path": str(source),
+                                "test": True,
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        cargo = directory / "cargo"
+        argv_log = self.root / "fake-cargo-argv.log"
+        cargo.write_text(
+            "#!/bin/sh\n"
+            f"printf '%s\\n' \"$*\" >> '{argv_log}'\n"
+            "case \"$1\" in\n"
+            "  --version)\n"
+            "    printf '%s\\n' 'cargo 1.89.0' 'release: 1.89.0' "
+            f"'commit-hash: {'c24e1064277fe51ab72011e2612e556ac56addf7' if exact_toolchain else '0' * 40}' ;;\n"
+            "  metadata)\n"
+            f"    printf '%s\\n' '{metadata}' ;;\n"
+            "  test)\n"
+            "    case \" $* \" in\n"
+            "      *' --list '*) "
+            f"printf '%s\\n' '{test_name + ': test' if listed else 'unrelated: test'}' ;;\n"
+            "      *)\n"
+            + (
+                f"        printf '%s\\n' 'running 1 test' 'test {test_name} ... ok' "
+                "'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; "
+                "0 filtered out; finished in 0.00s'\n        exit 0 ;;\n"
+                if passing and completed
+                else "        exit 0 ;;\n"
+                if passing
+                else "        printf '%s\\n' 'test failed'\n        exit 1 ;;\n"
+            )
+            + "    esac ;;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        rustc = directory / "rustc"
+        rustc.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' 'rustc 1.89.0' 'release: 1.89.0' "
+            f"'commit-hash: {'29483883eed69d5fb4db01964cdf2af4d86e9cb2' if exact_toolchain else '0' * 40}'\n",
+            encoding="utf-8",
+        )
+        lake = directory / "lake"
+        lake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        for path in (cargo, rustc, lake):
+            path.chmod(0o755)
+        return mock.patch.dict(
+            os.environ,
+            {"PATH": str(directory) + os.pathsep + os.environ.get("PATH", "")},
+        )
 
     def fake_lake(self, debt_id: str = "U-0001"):
         directory = self.root / "fake-bin"
@@ -439,7 +538,7 @@ class ReceiptTests(RepoTestCase):
         if disposition == "proved":
             evidence = [self.repo.lean_evidence()]
         else:
-            evidence = [self.repo.aggregate_evidence()]
+            evidence = [self.repo.case_manifest()]
         receipt = receipt_for(entry, disposition, evidence)
         self.repo.write_receipt(receipt)
         return entry, base, receipt
@@ -453,7 +552,11 @@ class ReceiptTests(RepoTestCase):
                     self.repo = repo
                     try:
                         _, base, _ = self.close_base(disposition)
-                        context = repo.fake_lake() if disposition == "proved" else mock.patch.dict(os.environ, {})
+                        context = (
+                            repo.fake_lake()
+                            if disposition == "proved"
+                            else repo.fake_rust_tools()
+                        )
                         with context:
                             result = GATE.check(repo.root, base, None)
                         self.assertEqual(result["closed"], 1)
@@ -501,11 +604,11 @@ class ReceiptTests(RepoTestCase):
         # Shape validation happens when the gate reads the canonical receipt.
         self.repo.write_receipt(receipt)
         self.assertDebtError(
-            "implemented closure requires one aggregate case",
+            "implemented closure requires one case manifest",
             lambda: GATE.check(self.repo.root, base, None),
         )
 
-        item = self.repo.aggregate_evidence()
+        item = self.repo.case_manifest()
         (self.repo.root / item["path"]).unlink()
         receipt["evidence"] = [item]
         self.repo.write_receipt(receipt)
@@ -515,34 +618,220 @@ class ReceiptTests(RepoTestCase):
         )
 
         evidence_path = self.repo.root / item["path"]
-        evidence_path.write_text("# a comment is not executable evidence\n")
+        evidence_path.write_text("{}\n")
         self.assertDebtError(
-            "SHA-256 does not match",
+            "bytes must exactly match the Git index",
             lambda: GATE.check(self.repo.root, base, None),
         )
 
     def test_evidence_hash_change_and_symlink_are_rejected(self) -> None:
         _, base, receipt = self.close_base("implemented")
         path = self.repo.root / receipt["evidence"][0]["path"]
-        path.write_text("# changed after receipt\n", encoding="utf-8")
+        path.chmod(0o755)
         self.assertDebtError(
-            "SHA-256 does not match",
+            "executable mode must match the Git index",
             lambda: GATE.check(self.repo.root, base, None),
         )
-        other = path.with_name("other.sh")
-        other.write_text("# target\n", encoding="utf-8")
+        path.chmod(0o644)
+        path.write_text("# changed after receipt\n", encoding="utf-8")
+        self.assertDebtError(
+            "bytes must exactly match the Git index",
+            lambda: GATE.check(self.repo.root, base, None),
+        )
+        other = path.with_name("other.case.json")
+        other.write_text("{}\n", encoding="utf-8")
         path.unlink()
         path.symlink_to(other.name)
         self.assertDebtError("symlinks are forbidden", lambda: GATE.check(self.repo.root, base, None))
 
-    def test_runnable_evidence_must_actually_pass_exactly_one_test(self) -> None:
+    def test_runnable_evidence_requires_registered_and_completed_test(self) -> None:
         entry, base = self.make_base()
         (self.repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
         self.repo.write_active([])
-        evidence = self.repo.aggregate_evidence(passing=False)
+        evidence = self.repo.case_manifest()
         self.repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
+        for kwargs, expected in (
+            ({"listed": False}, "must list exactly one owned test"),
+            ({"completed": False}, "did not report one exact completed"),
+            ({"passing": False}, "evidence command failed"),
+        ):
+            with self.subTest(kwargs=kwargs), self.repo.fake_rust_tools(**kwargs):
+                self.assertDebtError(
+                    expected,
+                    lambda: GATE.check(self.repo.root, base, None),
+                )
+
+    def test_rust_runner_derives_exact_argv_from_id(self) -> None:
+        _, base, _ = self.close_base("implemented")
+        with self.repo.fake_rust_tools():
+            GATE.check(self.repo.root, base, None)
+        lines = (self.repo.root / "fake-cargo-argv.log").read_text().splitlines()
+        self.assertEqual(
+            lines,
+            [
+                "--version --verbose",
+                "metadata --quiet --manifest-path rust/Cargo.toml --frozen --no-deps --format-version 1",
+                "test --manifest-path rust/Cargo.toml --frozen --color never --test debt_u_0001 -- --list --format terse",
+                "test --manifest-path rust/Cargo.toml --frozen --color never --test debt_u_0001 debt_closure_u_0001 -- --exact --include-ignored --test-threads 1",
+            ],
+        )
+
+    def test_real_rust_189_case_when_available(self) -> None:
+        rustc = shutil.which("rustc")
+        cargo = shutil.which("cargo")
+        lake = shutil.which("lake")
+        if rustc is None or cargo is None or lake is None:
+            self.skipTest("Rust/Lean evidence toolchain unavailable")
+        version = subprocess.run(
+            [rustc, "--version", "--verbose"], check=True, text=True, capture_output=True
+        ).stdout
+        fields = GATE._version_fields(version)
+        if (
+            fields.get("release") != GATE.RUST_RELEASE
+            or fields.get("commit-hash") != GATE.RUSTC_COMMIT
+        ):
+            self.skipTest("exact Rust 1.89.0 is not selected")
+        evidence = self.repo.case_manifest()
+        subprocess.run(
+            [cargo, "generate-lockfile", "--manifest-path", "rust/Cargo.toml"],
+            cwd=self.repo.root,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        run_git(self.repo.root, "add", "rust/Cargo.lock")
+        GATE.validate_receipt_evidence(
+            self.repo.root, {"id": "U-0001", "evidence": [evidence]}
+        )
+
+    def test_case_manifest_is_per_id_and_binds_its_child_artifact(self) -> None:
+        _, base, receipt = self.close_base("implemented")
+        # Extending the evidence directory for another ID does not alter either
+        # immutable U-0001 blob.
+        self.repo.case_manifest("U-0002")
+        with self.repo.fake_rust_tools():
+            self.assertEqual(GATE.check(self.repo.root, base, None)["closed"], 1)
+
+        artifact = self.repo.root / "rust/tests/debt_u_0001.rs"
+        original_artifact = artifact.read_bytes()
+        artifact.write_text("#[test]\nfn debt_closure_u_0001() {}\n", encoding="utf-8")
+        run_git(self.repo.root, "add", artifact.relative_to(self.repo.root).as_posix())
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "case artifact SHA-256 does not match",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+
+        artifact.write_bytes(original_artifact)
+        run_git(self.repo.root, "add", artifact.relative_to(self.repo.root).as_posix())
+        manifest_path = self.repo.root / receipt["evidence"][0]["path"]
+        manifest = GATE.parse_case_manifest_bytes(manifest_path.read_bytes(), "fixture")
+        manifest["id"] = "U-0002"
+        manifest_path.write_text(GATE.canonical_json(manifest) + "\n", encoding="utf-8")
+        run_git(self.repo.root, "add", manifest_path.relative_to(self.repo.root).as_posix())
+        receipt["evidence"][0]["sha256"] = digest(manifest_path)
+        self.repo.write_receipt(receipt)
         self.assertDebtError(
-            "aggregate dispatcher did not emit unique exact PASS",
+            "manifest id does not match receipt id",
+            lambda: GATE.check(self.repo.root, base, None),
+        )
+
+    def test_case_child_must_be_tracked_regular_and_not_symlinked(self) -> None:
+        _, base, _ = self.close_base("implemented")
+        artifact = self.repo.root / "rust/tests/debt_u_0001.rs"
+        run_git(self.repo.root, "rm", "--cached", artifact.relative_to(self.repo.root).as_posix())
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "tracked stage-0",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+        run_git(self.repo.root, "add", artifact.relative_to(self.repo.root).as_posix())
+        alternate = artifact.with_name("alternate.rs")
+        alternate.write_text(artifact.read_text(encoding="utf-8"), encoding="utf-8")
+        artifact.unlink()
+        artifact.symlink_to(alternate.name)
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "symlinks are forbidden",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+
+    def test_rust_runner_rejects_wrong_toolchain_redirect_and_custom_harness(self) -> None:
+        _, base, _ = self.close_base("implemented")
+        with self.repo.fake_rust_tools(exact_toolchain=False):
+            self.assertDebtError(
+                "requires official rustc 1.89.0",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+        with self.repo.fake_rust_tools(redirected=True):
+            self.assertDebtError(
+                "did not bind the exact standard test source",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+
+        cargo_toml = self.repo.root / "rust/Cargo.toml"
+        cargo_toml.write_text(
+            cargo_toml.read_text(encoding="utf-8")
+            + '\n[[test]]\nname = "debt_u_0001"\npath = "tests/debt_u_0001.rs"\n'
+            + "harness = false\n",
+            encoding="utf-8",
+        )
+        run_git(self.repo.root, "add", "rust/Cargo.toml")
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "must use the standard harness",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+
+    def test_intermediate_committed_evidence_mutation_cannot_be_restored_away(self) -> None:
+        _, _, base = self.make_base_with_old_receipt()
+        manifest = self.repo.root / "tests/DebtClosures/U_0001.case.json"
+        original = manifest.read_bytes()
+        manifest.write_text("{}\n", encoding="utf-8")
+        self.repo.commit("temporarily corrupt immutable evidence")
+        manifest.write_bytes(original)
+        self.repo.commit("restore immutable evidence")
+        self.assertDebtError(
+            "committed evidence SHA-256 does not match",
+            lambda: GATE.check(self.repo.root, base, None),
+        )
+
+    def test_intermediate_committed_child_mutation_cannot_be_restored_away(self) -> None:
+        _, _, base = self.make_base_with_old_receipt()
+        artifact = self.repo.root / "rust/tests/debt_u_0001.rs"
+        original = artifact.read_bytes()
+        artifact.write_text("#[test]\nfn debt_closure_u_0001() {}\n", encoding="utf-8")
+        self.repo.commit("temporarily corrupt immutable child")
+        artifact.write_bytes(original)
+        self.repo.commit("restore immutable child")
+        self.assertDebtError(
+            "committed case artifact SHA-256 does not match",
+            lambda: GATE.check(self.repo.root, base, None),
+        )
+
+    def test_intermediate_committed_evidence_mode_change_is_rejected(self) -> None:
+        _, _, base = self.make_base_with_old_receipt()
+        manifest = self.repo.root / "tests/DebtClosures/U_0001.case.json"
+        manifest.chmod(0o755)
+        self.repo.commit("temporarily change immutable evidence mode")
+        manifest.chmod(0o644)
+        self.repo.commit("restore immutable evidence mode")
+        self.assertDebtError(
+            "committed evidence mode or bytes changed",
+            lambda: GATE.check(self.repo.root, base, None),
+        )
+
+    def test_committed_symlink_cannot_masquerade_as_evidence(self) -> None:
+        _, _, base = self.make_base_with_old_receipt()
+        artifact = self.repo.root / "rust/tests/debt_u_0001.rs"
+        original = artifact.read_bytes()
+        alternate = artifact.with_name("alternate.rs")
+        alternate.write_bytes(original)
+        artifact.unlink()
+        artifact.symlink_to(alternate.name)
+        self.repo.commit("replace immutable child by symlink")
+        self.assertDebtError(
+            "expected a regular tracked blob, found 120000 blob",
             lambda: GATE.check(self.repo.root, base, None),
         )
 
@@ -550,7 +839,7 @@ class ReceiptTests(RepoTestCase):
         self.repo.write_source("U-0002")
         active = self.repo.active_entry("U-0002")
         self.repo.write_active([active])
-        evidence = self.repo.aggregate_evidence("U-0001")
+        evidence = self.repo.case_manifest("U-0001")
         old = {
             "disposition": "obsolete",
             "evidence": [evidence],
@@ -585,7 +874,8 @@ class ReceiptTests(RepoTestCase):
             source.read_text(encoding="utf-8") + "-- ⟨DEBT-REF U-0001⟩\n",
             encoding="utf-8",
         )
-        result = GATE.check(self.repo.root, base, None)
+        with self.repo.fake_rust_tools():
+            result = GATE.check(self.repo.root, base, None)
         self.assertEqual(result["refs"], 1)
 
     def test_closed_id_cannot_be_reused(self) -> None:
@@ -593,10 +883,11 @@ class ReceiptTests(RepoTestCase):
         self.repo.write_source("U-0001", path="Uwueave/Reused.lean")
         entries = [self.repo.active_entry("U-0001"), self.repo.active_entry("U-0002")]
         self.repo.write_active(entries)
-        self.assertDebtError(
-            "both active and closed|reused",
-            lambda: GATE.check(self.repo.root, base, None),
-        )
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "both active and closed|reused",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
 
     def test_new_id_must_exceed_historical_maximum(self) -> None:
         self.repo.write_source("U-0002")
@@ -708,10 +999,8 @@ elab (priority := high) \"#print\" \"axioms\" id:ident : command =>
             "disposition": "implemented",
             "evidence": [
                 {
-                    "command": ["lake", "env", "lean", "tests/../escape.lean"],
-                    "declaration": "debtClosure_U_0001",
-                    "kind": "lean_decl",
-                    "path": "tests/../escape.lean",
+                    "kind": "case_manifest",
+                    "path": "tests/../escape.case.json",
                     "sha256": "2" * 64,
                 }
             ],
@@ -728,10 +1017,8 @@ elab (priority := high) \"#print\" \"axioms\" id:ident : command =>
 
         receipt["evidence"] = [
             {
-                "command": ["lake", "env", "lean", "tests/DebtClosures/U_0001.lean"],
-                "declaration": "debtClosure_U_0001",
-                "kind": "lean_decl",
-                "path": "tests/DebtClosures/U_0001.lean",
+                "kind": "case_manifest",
+                "path": "tests/DebtClosures/U_0001.case.json",
                 "sha256": "2" * 64,
             }
         ]
@@ -740,6 +1027,158 @@ elab (priority := high) \"#print\" \"axioms\" id:ident : command =>
             GATE.parse_receipt_bytes(
                 (GATE.canonical_json(receipt) + "\n").encode(), "receipt"
             )
+
+    def test_case_manifest_canonical_shape_and_runner_fields_are_fail_closed(self) -> None:
+        valid = {
+            "checks": [{"kind": "rust_test", "sha256": "2" * 64}],
+            "id": "U-0001",
+            "schema": 1,
+        }
+        parsed = GATE.parse_case_manifest_bytes(
+            (GATE.canonical_json(valid) + "\n").encode(), "manifest", "U-0001"
+        )
+        self.assertEqual(parsed, valid)
+        cases = []
+        for data, expected in (
+            (b"\xef\xbb\xbf{}\n", "BOM"),
+            (b"{}\r\n", "LF, not CR"),
+            (b"{}", "end with one LF"),
+            (b'{"checks":[],"checks":[],"id":"U-0001","schema":1}\n', "duplicate JSON key"),
+            (
+                (GATE.canonical_json(valid).replace(",", ", ") + "\n").encode(),
+                "not canonical",
+            ),
+            ((GATE.canonical_json(dict(valid, checks=[])) + "\n").encode(), "nonempty"),
+            (
+                (GATE.canonical_json(dict(valid, id="U-0002")) + "\n").encode(),
+                "does not match receipt id",
+            ),
+        ):
+            cases.append((data, expected))
+        unknown_check = {**valid, "checks": [{"kind": "python_unittest", "sha256": "2" * 64}]}
+        cases.append(
+            ((GATE.canonical_json(unknown_check) + "\n").encode(), "unknown case check kind")
+        )
+        duplicate_check = {**valid, "checks": [valid["checks"][0], valid["checks"][0]]}
+        cases.append(
+            ((GATE.canonical_json(duplicate_check) + "\n").encode(), "duplicate case check kind")
+        )
+        extra = {**valid, "command": ["true"]}
+        cases.append(((GATE.canonical_json(extra) + "\n").encode(), "unknown=command"))
+        for data, expected in cases:
+            with self.subTest(expected=expected), self.assertRaisesRegex(
+                GATE.DebtError, expected
+            ):
+                GATE.parse_case_manifest_bytes(data, "manifest", "U-0001")
+
+        receipt = {
+            "disposition": "implemented",
+            "evidence": [
+                {
+                    "kind": "case_manifest",
+                    "path": "tests/DebtClosures/U_0001.case.json",
+                    "sha256": "2" * 64,
+                }
+            ],
+            "id": "U-0001",
+            "prior_entry_sha256": "0" * 64,
+            "prior_marker_sha256": "1" * 64,
+            "rationale": "Executable closure.",
+            "schema": 1,
+        }
+        for field, value in (
+            ("command", ["cargo", "test"]),
+            ("expected_output", "PASS"),
+        ):
+            forged = dict(receipt)
+            forged["evidence"] = [dict(receipt["evidence"][0], **{field: value})]
+            with self.subTest(field=field), self.assertRaisesRegex(
+                GATE.DebtError, f"unknown={field}"
+            ):
+                GATE.parse_receipt_bytes(
+                    (GATE.canonical_json(forged) + "\n").encode(), "receipt"
+                )
+
+        for path, expected in (
+            ("/tests/DebtClosures/U_0001.case.json", "traversal|noncanonical"),
+            ("tests\\DebtClosures\\U_0001.case.json", "canonical repository-relative"),
+            ("tests/DebtClosures/../U_0001.case.json", "traversal"),
+            ("tests/DebtClosures/U_0001.case.json\0", "canonical repository-relative"),
+            ("tests/DebtClosures/U_0002.case.json", "path must be exact"),
+        ):
+            with self.subTest(path=path), self.assertRaisesRegex(GATE.DebtError, expected):
+                GATE.validate_evidence_shape(
+                    "U-0001",
+                    {"kind": "case_manifest", "path": path, "sha256": "2" * 64},
+                    "evidence",
+                )
+
+
+class RunnerControlTests(unittest.TestCase):
+    def test_sanitized_environment_keeps_only_validated_toolchain_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="debt-job-tools-") as temporary:
+            elan_home = Path(temporary) / "elan"
+            elan_bin = elan_home / "bin"
+            elan_bin.mkdir(parents=True)
+            lake = elan_bin / "lake"
+            lake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            lake.chmod(0o755)
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "PATH": str(elan_bin) + os.pathsep + "/usr/bin:/bin",
+                    "ELAN_HOME": str(elan_home),
+                    "RUSTUP_HOME": "/job/rustup",
+                    "CARGO_HOME": "/job/cargo",
+                    "RUSTUP_TOOLCHAIN": "1.89.0",
+                    "HOSTILE_CASE_VALUE": "must-not-pass",
+                },
+                clear=False,
+            ):
+                resolved_lake = GATE._resolved_executable("lake", "fixture")
+                environment = GATE._evidence_environment(
+                    ["/job/cargo/bin/cargo", resolved_lake], SCRIPT.parent.parent
+                )
+            self.assertEqual(resolved_lake, str(lake))
+            self.assertEqual(environment["ELAN_HOME"], str(elan_home))
+            self.assertEqual(environment["RUSTUP_TOOLCHAIN"], "1.89.0")
+            self.assertNotIn("HOSTILE_CASE_VALUE", environment)
+            self.assertTrue(
+                environment["PATH"].startswith(f"/job/cargo/bin:{elan_bin}:")
+            )
+
+        with mock.patch.dict(os.environ, {"ELAN_HOME": "relative"}, clear=False):
+            with self.assertRaisesRegex(GATE.DebtError, "ELAN_HOME must be an absolute"):
+                GATE._evidence_environment(["/bin/sh"], SCRIPT.parent.parent)
+
+    def test_evidence_runner_uses_null_stdin_timeout_and_output_limit(self) -> None:
+        root = SCRIPT.parent.parent
+        with mock.patch.dict(os.environ, {"HOSTILE_CASE_VALUE": "must-not-pass"}):
+            output = GATE._execute_evidence_command(
+                root,
+                [
+                    "sh",
+                    "-c",
+                    'test -z "${HOSTILE_CASE_VALUE+x}" && ! read line && printf controlled',
+                ],
+                "/bin/sh",
+                "fixture",
+            )
+        self.assertEqual(output, "controlled")
+
+        with mock.patch.object(GATE, "EVIDENCE_OUTPUT_LIMIT", 32):
+            with self.assertRaisesRegex(GATE.DebtError, "exceeded output limit"):
+                GATE._execute_evidence_command(
+                    root,
+                    ["sh", "-c", "i=0; while [ $i -lt 100 ]; do printf x; i=$((i+1)); done"],
+                    "/bin/sh",
+                    "fixture",
+                )
+        with mock.patch.object(GATE, "EVIDENCE_TIMEOUT_SECONDS", 0.05):
+            with self.assertRaisesRegex(GATE.DebtError, "timed out"):
+                GATE._execute_evidence_command(
+                    root, ["sleep", "5"], "/bin/sleep", "fixture"
+                )
 
 
 class BootstrapTests(RepoTestCase):
