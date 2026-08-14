@@ -36,11 +36,11 @@ byte string authoritative.
   * The canonical-byte and logical torn-tail layers are paid:
     `projectionBytes` is exact and `two_frames_then_torn_third` proves recovery
     under an explicit `Durable.TornFrame` premise.
-  * ⟨UNDONE U-0115⟩ No deployment refinement proves that a host serializer agrees
-    byte-for-byte with `projectionBytes`, or that filesystem, flush,
-    atomic-sector, or power-loss observations satisfy `Durable.TornFrame` and
-    its prefix premise. `Durable` names rather than manufactures those
-    assumptions.
+  * ⟨DEBT-REF U-0170⟩ No deployment refinement proves that a host serializer
+    agrees byte-for-byte with `projectionBytes`; the canonical host-refinement
+    obligation is recorded in `Durable`, separately from its external
+    filesystem/crash premise ⟨DEBT-REF U-0168⟩ and source-only deployment
+    scope ⟨DEBT-REF U-0169⟩.
 -/
 import Uwueave.Preo.ArtifactData
 import Uwueave.Durable

@@ -49,10 +49,25 @@ premise that real storage produces such an image.
   * The logical layer is paid for artifact projections:
     `Preo.ArtifactDurable` supplies canonical `List UInt8`, version/domain
     separation, and logical torn-tail recovery.
-  * ⟨UNDONE U-0027⟩ No refinement proves that a host serializer emits those bytes
-    byte-for-byte, or connects a file descriptor, database transaction, flush
-    primitive, or filesystem crash observation to the required prefix shape.
-    `DeploymentAssumptions` names that missing boundary.
+  * ⟨PREMISE U-0168⟩ A supported deployment must instantiate the append,
+    write, sync, locking, path, filesystem, and power-loss assumptions under
+    which storage yields complete frames followed by at most one torn final
+    frame. Tests can observe those conditions; this logical layer does not
+    manufacture them. Direct `ArtifactEmit` partial writes must establish the
+    `TornFrame` premise here rather than borrowing the outer journal scanner's
+    stronger refusal behavior.
+  * ⟨SCOPE U-0169⟩ Version 0.2 is source-only and makes no C-ABI, binary,
+    relocatability, or artifact-upload promise. Native implementation evidence
+    is scoped to Ubuntu 24.04 x86-64 and macOS 15 arm64; widening that matrix
+    allocates new obligations.
+  * ⟨UNDONE U-0170⟩ No mechanically checked host refinement yet proves that
+    Rust's `RawJournal` scan and append expose exact complete outer `UWARJ`
+    record bodies plus at most one syntactically valid final outer-record
+    prefix, withhold every incomplete outer body, and pass accepted inner bytes
+    satisfying `Durable.recover_encodeJournal`. The logical recovery therefore
+    sees a degenerate empty torn suffix, not a nonempty `Durable.TornFrame`.
+    Direct `ArtifactEmit` partial writes remain under the external crash premise
+    ⟨DEBT-REF U-0168⟩; deployment scope remains ⟨DEBT-REF U-0169⟩.
 -/
 import Std
 

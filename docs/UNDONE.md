@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 110
-- **Extracted blocks (marker-bearing source lines):** 108
-- **Lean files containing markers:** 37
+- **Marker occurrences:** 114
+- **Extracted blocks (marker-bearing source lines):** 112
+- **Lean files containing markers:** 36
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -161,13 +161,17 @@ was reaching for. -/
 
 ## `Uwueave/Durable.lean`
 
-### [`Uwueave/Durable.lean:52`](../Uwueave/Durable.lean#L52)
+### [`Uwueave/Durable.lean:63`](../Uwueave/Durable.lean#L63)
 
 ````text
-  * ⟨UNDONE U-0027⟩ No refinement proves that a host serializer emits those bytes
-    byte-for-byte, or connects a file descriptor, database transaction, flush
-    primitive, or filesystem crash observation to the required prefix shape.
-    `DeploymentAssumptions` names that missing boundary.
+  * ⟨UNDONE U-0170⟩ No mechanically checked host refinement yet proves that
+    Rust's `RawJournal` scan and append expose exact complete outer `UWARJ`
+    record bodies plus at most one syntactically valid final outer-record
+    prefix, withhold every incomplete outer body, and pass accepted inner bytes
+    satisfying `Durable.recover_encodeJournal`. The logical recovery therefore
+    sees a degenerate empty torn suffix, not a nonempty `Durable.TornFrame`.
+    Direct `ArtifactEmit` partial writes remain under the external crash premise
+    ⟨DEBT-REF U-0168⟩; deployment scope remains ⟨DEBT-REF U-0169⟩.
 ````
 
 ## `Uwueave/EraCertificate.lean`
@@ -364,25 +368,59 @@ rather than reworded.
 ### [`Uwueave/Gated.lean:158`](../Uwueave/Gated.lean#L158)
 
 ````text
-    ⟨UNDONE U-0056, in eight named pieces⟩ This item used to read "⟨TERMINAL for this
-    repo⟩ … the Rust marshaller's bytes and Lean's C backend", which is exactly
-    the claim `docs/TRUST.md` exists to retract: an external reviewer (codex)
-    read "the C backend TCB is terminal" and demolished it, and Ledger 2 is the
-    replacement — **ten rows: eight OBLIGATION and two PAID controls**, each
-    with a named disposition. *Nothing open in the execution stack is
-    terminal.* Lean's C code generator, the C compiler and linker, the Lean
-    runtime, `shim.c`, the ABI/FFI boundary, Rust `unsafe`, storage/index glue
-    and durability are eight distinct open boundaries, not one:
-    CakeML is the existence proof for a verified compiler of a functional
-    source language (the codegen half), and CompCert covers exactly one row —
-    the C compiler — because it *starts* at C and does not reach Lean's IR.
-    The former Rust byte marshaller is gone: typed lanes cross the FFI and
-    `Exec.encodeRequestKernel_eq` proves the Lean export delegates to the one
-    canonical `encodeRequest`. That wire-decision boundary and fail-closed
-    build freshness are the two paid controls; neither pays the ABI, shim,
-    runtime or code-generation rows.
-    Read `docs/TRUST.md` Ledger 2, not this bullet, for the current shape;
-    `Exec.lean`'s claim-discipline header is the Lean-side ledger.
+    ⟨UNDONE U-0160⟩ The former umbrella is now a registry-integrity
+    obligation, not a claim that one aggregate test closes the execution TCB.
+    A machine-readable Ledger 2 gate must preserve the exact mapping to Lean
+    code generation ⟨DEBT-REF U-0161⟩, the host C toolchain
+    ⟨DEBT-REF U-0162⟩, the Lean runtime ⟨DEBT-REF U-0163⟩, `shim.c`
+    ⟨DEBT-REF U-0164⟩, ABI/FFI ⟨DEBT-REF U-0165⟩, Rust `unsafe`
+    ⟨DEBT-REF U-0166⟩, storage/index glue ⟨DEBT-REF U-0167⟩, the
+    filesystem/crash premise ⟨DEBT-REF U-0168⟩, the supported native scope
+    ⟨DEBT-REF U-0169⟩, and canonical host durability
+    ⟨DEBT-REF U-0170⟩. The two paid controls remain Lean-owned request
+    encoding and fail-closed native-closure freshness. Nothing else is paid by
+    this decomposition.
+````
+
+### [`Uwueave/Gated.lean:170`](../Uwueave/Gated.lean#L170)
+
+````text
+  * ⟨UNDONE U-0161⟩ Lean IR-to-C lowering for the exact `RuntimeInit` closure
+    is unverified. Translation validation or a proved exporter must cover every
+    module and exported function; differential outputs alone do not prove the
+    lowering.
+````
+
+### [`Uwueave/Gated.lean:181`](../Uwueave/Gated.lean#L181)
+
+````text
+  * ⟨UNDONE U-0164⟩ `shim.c` still needs generated or mechanically checked
+    object construction, bounds, copies, allocation, consumption, and reference
+    counting, with mutation negatives and sanitizer-backed integration gates.
+````
+
+### [`Uwueave/Gated.lean:184`](../Uwueave/Gated.lean#L184)
+
+````text
+  * ⟨UNDONE U-0165⟩ Rust, C, and generated Lean declarations still need one
+    canonical interface description that checks symbols, signatures, layouts,
+    calling conventions, and ownership on both supported native platforms.
+````
+
+### [`Uwueave/Gated.lean:187`](../Uwueave/Gated.lean#L187)
+
+````text
+  * ⟨UNDONE U-0166⟩ Direct unsafe shim calls remain in the benchmark target,
+    and the crate lacks an exact AST inventory enforcing `unsafe` only at the
+    dedicated FFI boundary. This row also depends on the shim and ABI rows.
+````
+
+### [`Uwueave/Gated.lean:190`](../Uwueave/Gated.lean#L190)
+
+````text
+  * ⟨UNDONE U-0167⟩ Remaining host storage and index transitions still need
+    refinement to Lean-owned references or Lean-owned decisions, including
+    rebuilt-versus-incremental index equality after every supported trace.
 ````
 
 ## `Uwueave/Gluing.lean`
@@ -797,18 +835,6 @@ clothes.
     positive results (§1–§3) carry no carrier assumption. But "five classes"
     is a fact about `|U| = 3, k = 2`; no general formula for the threshold
     quotient's size is proved.
-````
-
-## `Uwueave/Preo/ArtifactDurableCore.lean`
-
-### [`Uwueave/Preo/ArtifactDurableCore.lean:39`](../Uwueave/Preo/ArtifactDurableCore.lean#L39)
-
-````text
-  * ⟨UNDONE U-0115⟩ No deployment refinement proves that a host serializer agrees
-    byte-for-byte with `projectionBytes`, or that filesystem, flush,
-    atomic-sector, or power-loss observations satisfy `Durable.TornFrame` and
-    its prefix premise. `Durable` names rather than manufactures those
-    assumptions.
 ````
 
 ## `Uwueave/Recoverable.lean`

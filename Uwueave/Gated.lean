@@ -155,25 +155,41 @@ and arbitration's price is that it loses `gated_antitone`'s shrinkage
     complete under `WF` + `UniqueGrant`. The undecidability is a fact about
     the abstraction, not a hole under the implementation.
   * **Below the Lean, the execution TCB — and it is NOT terminal.**
-    ⟨UNDONE U-0056, in eight named pieces⟩ This item used to read "⟨TERMINAL for this
-    repo⟩ … the Rust marshaller's bytes and Lean's C backend", which is exactly
-    the claim `docs/TRUST.md` exists to retract: an external reviewer (codex)
-    read "the C backend TCB is terminal" and demolished it, and Ledger 2 is the
-    replacement — **ten rows: eight OBLIGATION and two PAID controls**, each
-    with a named disposition. *Nothing open in the execution stack is
-    terminal.* Lean's C code generator, the C compiler and linker, the Lean
-    runtime, `shim.c`, the ABI/FFI boundary, Rust `unsafe`, storage/index glue
-    and durability are eight distinct open boundaries, not one:
-    CakeML is the existence proof for a verified compiler of a functional
-    source language (the codegen half), and CompCert covers exactly one row —
-    the C compiler — because it *starts* at C and does not reach Lean's IR.
-    The former Rust byte marshaller is gone: typed lanes cross the FFI and
-    `Exec.encodeRequestKernel_eq` proves the Lean export delegates to the one
-    canonical `encodeRequest`. That wire-decision boundary and fail-closed
-    build freshness are the two paid controls; neither pays the ABI, shim,
-    runtime or code-generation rows.
-    Read `docs/TRUST.md` Ledger 2, not this bullet, for the current shape;
-    `Exec.lean`'s claim-discipline header is the Lean-side ledger.
+    ⟨UNDONE U-0160⟩ The former umbrella is now a registry-integrity
+    obligation, not a claim that one aggregate test closes the execution TCB.
+    A machine-readable Ledger 2 gate must preserve the exact mapping to Lean
+    code generation ⟨DEBT-REF U-0161⟩, the host C toolchain
+    ⟨DEBT-REF U-0162⟩, the Lean runtime ⟨DEBT-REF U-0163⟩, `shim.c`
+    ⟨DEBT-REF U-0164⟩, ABI/FFI ⟨DEBT-REF U-0165⟩, Rust `unsafe`
+    ⟨DEBT-REF U-0166⟩, storage/index glue ⟨DEBT-REF U-0167⟩, the
+    filesystem/crash premise ⟨DEBT-REF U-0168⟩, the supported native scope
+    ⟨DEBT-REF U-0169⟩, and canonical host durability
+    ⟨DEBT-REF U-0170⟩. The two paid controls remain Lean-owned request
+    encoding and fail-closed native-closure freshness. Nothing else is paid by
+    this decomposition.
+  * ⟨UNDONE U-0161⟩ Lean IR-to-C lowering for the exact `RuntimeInit` closure
+    is unverified. Translation validation or a proved exporter must cover every
+    module and exported function; differential outputs alone do not prove the
+    lowering.
+  * ⟨PREMISE U-0162⟩ Native evidence assumes the semantic correctness of the
+    selected host C compiler, archiver, and linker. Each run must record their
+    exact identities; a binary-distribution claim requires a new verified-
+    compilation obligation.
+  * ⟨PREMISE U-0163⟩ Native evidence assumes the selected toolchain's
+    `libleanshared`, including allocation, reference counting, initialization,
+    and exported-call semantics. Shim-owned lifecycle work remains separate.
+  * ⟨UNDONE U-0164⟩ `shim.c` still needs generated or mechanically checked
+    object construction, bounds, copies, allocation, consumption, and reference
+    counting, with mutation negatives and sanitizer-backed integration gates.
+  * ⟨UNDONE U-0165⟩ Rust, C, and generated Lean declarations still need one
+    canonical interface description that checks symbols, signatures, layouts,
+    calling conventions, and ownership on both supported native platforms.
+  * ⟨UNDONE U-0166⟩ Direct unsafe shim calls remain in the benchmark target,
+    and the crate lacks an exact AST inventory enforcing `unsafe` only at the
+    dedicated FFI boundary. This row also depends on the shim and ABI rows.
+  * ⟨UNDONE U-0167⟩ Remaining host storage and index transitions still need
+    refinement to Lean-owned references or Lean-owned decisions, including
+    rebuilt-versus-incremental index equality after every supported trace.
 
     ⚑ The qualifier is the part that falls off in transit. `docs/TRUST.md`
     cites *this section* as its seed, for writing "⟨TERMINAL, **at this
