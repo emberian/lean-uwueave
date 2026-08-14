@@ -872,7 +872,7 @@ theorem ceiling_seam_tag_applies (n : Nat) :
 
 /-- The ceiling's escrow row: **impossible**, for every quota, by
 `Exits.pin_escrow_starves`. `Exits.ceilingMenu` has no escrow row at all, and its
-own ⟨UNDONE U-0135⟩ says an absent row means "nobody proved it". -/
+own ⟨DEBT-REF U-0130⟩ says an absent row means "nobody proved it". -/
 def ceilingEscrowRow : RepairCandidate ceilingPromise :=
   .impossible (Exit.escrow (S := Cost.PinSet) Bool (fun _ => 1) Exits.pinCharge)
     "escrow (starves a slot at every quota)"

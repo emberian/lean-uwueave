@@ -4,9 +4,9 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 102
-- **Extracted blocks (marker-bearing source lines):** 100
-- **Lean files containing markers:** 34
+- **Marker occurrences:** 96
+- **Extracted blocks (marker-bearing source lines):** 94
+- **Lean files containing markers:** 33
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
@@ -573,18 +573,6 @@ the stability clause** — never in the colouring clause, which
 `greedySeamFor_properColoring` supplies unconditionally.
 ````
 
-### [`Uwueave/MenuTotality.lean:50`](../Uwueave/MenuTotality.lean#L50)
-
-````text
-`Exits.lean:106-110` — ⟨UNDONE U-0097⟩ **"`Exit.seam`'s `floor` field is free data."**
-§1 proves that it is: `seam_applies_ignores_the_floor` is `Iff.rfl`, so no
-property of the number is derivable from `Applies`, and
-`applies_certifies_no_floor` exhibits an applicable row whose quoted floor `5`
-exceeds the workload's true cost `0`. §5 closes it with `CertifiedSeam`, a
-structure whose floor is *forced by a carried clique* — and forced under **every**
-valid seam, not just the carried one (`CertifiedSeam.floor_is_forced`).
-````
-
 ### [`Uwueave/MenuTotality.lean:60`](../Uwueave/MenuTotality.lean#L60)
 
 ````text
@@ -603,31 +591,6 @@ forces `k` fibers, hence `k-1` crossings — is not here."* It is here.
 
 ````text
 not one of the two trivial inhabitants that ⟨UNDONE U-0101⟩ note rules out. -/
-````
-
-### [`Uwueave/MenuTotality.lean:235`](../Uwueave/MenuTotality.lean#L235)
-
-````text
-**exactly** a failure of fiber stability. So the ⟨UNDONE U-0102⟩ "an absent row means
-nobody proved it" weakens for this row to something checkable: an absent seam
-row means a decided stability failure of the *greedy* colouring over the pool.
-````
-
-### [`Uwueave/MenuTotality.lean:303`](../Uwueave/MenuTotality.lean#L303)
-
-````text
-`SeamColoring.lean:87-89` lists this as ⟨UNDONE U-0103⟩. The graph vocabulary is that
-file's; the bound, the ceiling characterisation and the coordination floor are
-new here. -/
-````
-
-### [`Uwueave/MenuTotality.lean:582`](../Uwueave/MenuTotality.lean#L582)
-
-````text
-`⟨UNDONE U-0104⟩` generalisation named in that file's non-claims. No ordering between
-the streams appears anywhere — which is the whole difference from
-`Cost.ClashBlocks`, and the reason the bound survives where the block calculus
-reports nothing (see `the_clique_floor_is_invisible_to_the_block_calculus`). -/
 ````
 
 ## `Uwueave/MergeModel.lean`
@@ -818,12 +781,6 @@ handed and cannot decide. `Exits.lean`'s ⟨UNDONE U-0134⟩ — *"it reports th
 exists for a σ you hand it; it does not synthesize the σ"* — with a type. -/
 ````
 
-### [`Uwueave/RepairMenu.lean:875`](../Uwueave/RepairMenu.lean#L875)
-
-````text
-own ⟨UNDONE U-0135⟩ says an absent row means "nobody proved it". -/
-````
-
 ## `Uwueave/ResultStatus.lean`
 
 ### [`Uwueave/ResultStatus.lean:92`](../Uwueave/ResultStatus.lean#L92)
@@ -831,16 +788,6 @@ own ⟨UNDONE U-0135⟩ says an absent row means "nobody proved it". -/
 ````text
 ⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0136⟩ = work wearing a caveat's
 clothes.
-````
-
-## `Uwueave/SeamColoring.lean`
-
-### [`Uwueave/SeamColoring.lean:90`](../Uwueave/SeamColoring.lean#L90)
-
-````text
-  * ⟨UNDONE U-0141⟩ **Clique lower bounds.** §6 proves the two-stream floor from a
-    single edge. The graph-theoretic generalisation — a `k`-clique in the clash
-    graph forces `k` fibers, hence `k-1` crossings — is not here.
 ````
 
 ## `Uwueave/TextSummary.lean`

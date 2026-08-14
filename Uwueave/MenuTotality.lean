@@ -47,7 +47,7 @@ covering pool does not exist; §4 shows that this is a real obstruction via
 here is that bar on one clash, not a general theorem that synthesis always
 beats the identity.
 
-`Exits.lean:106-110` — ⟨UNDONE U-0097⟩ **"`Exit.seam`'s `floor` field is free data."**
+`Exits.lean:106-110` — ⟨DEBT-REF U-0046⟩ **"`Exit.seam`'s `floor` field is free data."**
 §1 proves that it is: `seam_applies_ignores_the_floor` is `Iff.rfl`, so no
 property of the number is derivable from `Applies`, and
 `applies_certifies_no_floor` exhibits an applicable row whose quoted floor `5`
@@ -232,7 +232,7 @@ def seamRow? {S : Type} [DecidableEq S] [MergeState S] (I : Invariant S)
 pool the synthesiser either returns a row — whose exit is the synthesised seam,
 carrying its proof — or returns nothing, and in that case the colouring clause
 still holds (`greedySeamFor_properColoring`, unconditionally) and the failure is
-**exactly** a failure of fiber stability. So the ⟨UNDONE U-0102⟩ "an absent row means
+**exactly** a failure of fiber stability. So the ⟨DEBT-REF U-0096⟩ "an absent row means
 nobody proved it" weakens for this row to something checkable: an absent seam
 row means a decided stability failure of the *greedy* colouring over the pool.
 
@@ -300,7 +300,7 @@ theorem pin_synth_beats_full_coordination :
 
 /-! ## §4. The clique bound.
 
-`SeamColoring.lean:87-89` lists this as ⟨UNDONE U-0103⟩. The graph vocabulary is that
+`SeamColoring.lean:87-89` lists this as ⟨DEBT-REF U-0098⟩. The graph vocabulary is that
 file's; the bound, the ceiling characterisation and the coordination floor are
 new here. -/
 
@@ -579,7 +579,7 @@ because two streams sitting in one fiber would have their endpoints certified
 mergeable by the seam, and the clique says they are not.
 
 `SeamColoring.clash_edge_forces_crossing` is the case `k = 2`; this is the
-`⟨UNDONE U-0104⟩` generalisation named in that file's non-claims. No ordering between
+`⟨DEBT-REF U-0098⟩` generalisation named in that file's non-claims. No ordering between
 the streams appears anywhere — which is the whole difference from
 `Cost.ClashBlocks`, and the reason the bound survives where the block calculus
 reports nothing (see `the_clique_floor_is_invisible_to_the_block_calculus`). -/

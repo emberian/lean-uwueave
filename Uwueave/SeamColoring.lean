@@ -87,7 +87,7 @@ seam in this library actually discharges.
     finite covering carrier by a supplied finite palette and returns a genuine
     minimum, or an exhaustive refusal theorem for exactly that space. It does
     not pretend to enumerate an arbitrary universe-polymorphic seam type.
-  * ⟨UNDONE U-0141⟩ **Clique lower bounds.** §6 proves the two-stream floor from a
+  * ⟨DEBT-REF U-0098⟩ **Clique lower bounds.** §6 proves the two-stream floor from a
     single edge. The graph-theoretic generalisation — a `k`-clique in the clash
     graph forces `k` fibers, hence `k-1` crossings — is not here.
   * Classical logic: turning "no monochromatic edge" back into "same colour
