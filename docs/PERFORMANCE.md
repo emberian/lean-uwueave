@@ -1717,3 +1717,48 @@ inspect 1; authenticated runtime 10; ergonomics 4; persistence 15; properties
 2; and artifact binary/examples 0. These timings demonstrate a fresh linked
 boundary and regression coverage; they do not measure authentication latency
 or throughput.
+
+## 20. Preoscript V3 generated-info lifetime — 2026-08-14
+
+The retained V3 proof-surface factoring baseline consumed **6,060,032 B/item =
+5.779296875 MiB/item** at `N=16`, above the 4 MiB compiler-memory gate.  C and
+olean growth represented only about 1.4% of that slope; the dominant transient
+state was the term/tactic information retained for 37 synthetic declarations
+inside every `preo_export_v3` command.
+
+The command now preserves its ordinary outer command information and authored
+diagnostic source references, but restores the pre-command `InfoState` after
+elaborating the generated declaration transaction.  This also discards lazy
+information assignments installed by async theorem elaboration even when
+information recording is disabled.  The 37 public declarations remain
+ordinary environment constants with the same names and types.  The intentional
+editor tradeoff is narrow: no term/tactic hover or navigation data is retained
+for their synthetic bodies.
+
+The exact Wave27 golden passed **37/37 declarations**.  V3 acceptance passed
+**3 positive and 14 expected-refusal fixtures**, including exact rollback/name
+reuse, wrong-plan/world/future/certificate phases, resource/validator refusal,
+and custom-axiom/`sorry`/`native_decide` floors.  A focused canary additionally
+executes late-failure and success paths through the registered elaborator,
+requires exactly one outer command tree with zero generated assignments or
+lazy assignments, rejects every failed-prefix declaration, and then observes
+exactly 37 environment constants after successful reuse of the same name.
+
+The final hbox cohort was serialized at `N=0/1/4/16`, with two warmups and five
+measured runs per row; all four rows were non-noisy.  The production source and
+four fixtures were checksum-frozen before and verified after measurement.
+
+| N | median peak RSS | median user | tactic execution |
+|---:|---:|---:|---:|
+| 0 | **1,488,924,672 B** | **0.34 s** | **1.32 ms** |
+| 1 | **1,519,226,880 B** | **0.63 s** | **155 ms** |
+| 4 | **1,528,721,408 B** | **1.56 s** | **622 ms** |
+| 16 | **1,549,324,288 B** | **5.01 s** | **2,450 ms** |
+
+Subtracting `N=0` from `N=16` gives **3,774,976 B/item = 3.60009765625
+MiB/item**, **37.706995607%** below the authoritative baseline and **419,328
+B/item** below the hard cap.  The frozen source SHA-256 was
+`7c6df336d84e9285b12e5e7a6f5600e4e899d92df4ddfe753ec82649a5a622dc`;
+the result TSV SHA-256 was
+`659c384e7897f146de8a610b2d43112d1aac834615a0b6d00fa698b898a05dc4`.
+This is compiler peak-memory evidence, not runtime throughput or query latency.

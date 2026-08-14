@@ -11,6 +11,15 @@ The command is a separate syntax kind from the immutable V2 `preo_export`.
 Every generated declaration belongs to one environment transaction.  An
 explicit finite work limit is checked before result construction, and V3
 validation remains the final fail-closed admission boundary.
+
+The outer command keeps its ordinary parser and command information.  The
+synthetic declarations elaborated inside it deliberately do not retain their
+term/tactic `InfoTree`s: those trees duplicate large proof contexts once per
+export and otherwise live until the whole source file is finished.  Generated
+declarations are still ordinary environment constants (and remain available
+to name resolution, completion, inspection, and downstream references), but
+editors cannot navigate into or hover over the synthetic declaration bodies.
+Phase errors continue to point at the corresponding authored command field.
 -/
 import Uwueave.Preo.Elab.Internal
 import Uwueave.Preo.ObservedBoundResult
@@ -343,8 +352,26 @@ private def requireDecidable (ref : Syntax) (phase : String) (proposition : Term
     throwErrorAt ref "preo_export_v3: {phase}. The whole export prefix was \
       rolled back and may be reused."
 
-/-- Non-registered implementation for direct transaction testing. -/
-def elabPreoExportV3Core : CommandElab := fun stx => withEnvTransaction do
+/-- Run generated elaboration without retaining its subordinate information
+trees.  Async theorem elaboration installs lazy information-tree assignments
+even while tree recording is disabled, so restoring the complete saved state
+is necessary to avoid keeping those proof contexts alive.  The surrounding
+command elaborator still records its one ordinary top-level command node. -/
+private def withoutRetainedGeneratedInfoTrees {α : Type} (action : CommandElabM α) :
+    CommandElabM α := do
+  let savedInfo ← getInfoState
+  try
+    withEnableInfoTree false action
+  finally
+    modifyInfoState fun _ => savedInfo
+
+/-- Non-registered implementation for direct transaction testing.
+
+Parsing stays in the outer command's information context.  Only the generated
+declaration/preflight region disables information-tree collection, so its
+proof contexts cannot accumulate across many exports. -/
+def elabPreoExportV3Core : CommandElab := fun stx =>
+  withoutRetainedGeneratedInfoTrees <| withEnvTransaction do
   let `(command| preo_export_v3 $name:ident from $program:ident := {
       base := $base,
       futureDecl := $futureDecl,

@@ -13,6 +13,7 @@ open PreoV3AcceptanceSupport
 error: preo_export_v3: the automatic V3 route exceeded `maxWork`
 -/
 #guard_msgs (error, substring := true) in
+#assert_v3_failed_info_clean Reused in
 preo_export_v3 Reused from Journey := {
   base := baseArtifact,
   futureDecl := QueryFuture,
@@ -40,6 +41,7 @@ preo_export_v3 Reused from Journey := {
 #assert_no_decl Reused.Validated
 #assert_no_decl Reused.Bytes
 
+#assert_v3_success_info_clean Reused in
 preo_export_v3 Reused from Journey := {
   base := baseArtifact,
   futureDecl := QueryFuture,
