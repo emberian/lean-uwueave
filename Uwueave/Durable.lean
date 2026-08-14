@@ -182,6 +182,53 @@ theorem decodePayload_encodePayload_append (payload following : Bytes) :
   rw [decodePayload_end]
   simp
 
+/-- Successful payload decoding identifies the exact canonical prefix that it
+consumed.  This is the converse direction needed when a host supplies bytes
+accepted by the decoder rather than bytes first constructed by Lean. -/
+theorem encodePayload_append_of_decodePayload
+    {bytes payload following : Bytes}
+    (accepted : decodePayload bytes = some (payload, following)) :
+    encodePayload payload ++ following = bytes := by
+  cases bytes with
+  | nil => simp [decodePayload] at accepted
+  | cons tag rest =>
+      cases rest with
+      | nil =>
+          simp only [decodePayload] at accepted
+          split at accepted
+          · subst tag
+            simp only [Option.some.injEq, Prod.mk.injEq] at accepted
+            obtain ⟨rfl, rfl⟩ := accepted
+            simp [encodePayload, encodeData]
+          · contradiction
+      | cons byte tail =>
+          simp only [decodePayload] at accepted
+          split at accepted
+          · next isEnd =>
+              subst tag
+              simp only [Option.some.injEq, Prod.mk.injEq] at accepted
+              obtain ⟨rfl, rfl⟩ := accepted
+              simp [encodePayload, encodeData]
+          · next notEnd =>
+              split at accepted
+              · next isData =>
+                  subst tag
+                  cases decoded : decodePayload tail with
+                  | none => simp [decoded] at accepted
+                  | some result =>
+                      cases result with
+                      | mk decodedPayload decodedFollowing =>
+                          simp only [decoded, Option.some.injEq,
+                            Prod.mk.injEq] at accepted
+                          obtain ⟨rfl, rfl⟩ := accepted
+                          have exactTail :=
+                            encodePayload_append_of_decodePayload decoded
+                          simp only [encodePayload, encodeData,
+                            List.cons_append]
+                          simpa [encodePayload, List.append_assoc] using exactTail
+              · contradiction
+termination_by bytes.length
+
 /-- An encoded data prefix with no terminator is refused. -/
 theorem decodePayload_encodeData_none (payload : Bytes) :
     decodePayload (encodeData payload) = none := by
@@ -224,6 +271,41 @@ theorem decodeEnvelope_encodeEnvelope_append
       simp [encodeEnvelope, decodeEnvelope,
         decodePayload_encodePayload_append, magic₀, magic₁]
 
+/-- Successful envelope decoding likewise reconstructs the exact envelope
+prefix and leaves precisely the reported following bytes. -/
+theorem encodeEnvelope_append_of_decodeEnvelope
+    {bytes : Bytes} {envelope : Envelope} {following : Bytes}
+    (accepted : decodeEnvelope bytes = some (envelope, following)) :
+    encodeEnvelope envelope ++ following = bytes := by
+  cases bytes with
+  | nil => simp [decodeEnvelope] at accepted
+  | cons m₀ rest₀ =>
+      cases rest₀ with
+      | nil => simp [decodeEnvelope] at accepted
+      | cons m₁ rest₁ =>
+          cases rest₁ with
+          | nil => simp [decodeEnvelope] at accepted
+          | cons version rest₂ =>
+              cases rest₂ with
+              | nil => simp [decodeEnvelope] at accepted
+              | cons domain body =>
+                  simp only [decodeEnvelope] at accepted
+                  split at accepted
+                  · next magic =>
+                      rcases magic with ⟨rfl, rfl⟩
+                      cases decoded : decodePayload body with
+                      | none => simp [decoded] at accepted
+                      | some result =>
+                          cases result with
+                          | mk payload decodedFollowing =>
+                              simp only [decoded, Option.some.injEq,
+                                Prod.mk.injEq] at accepted
+                              obtain ⟨rfl, rfl⟩ := accepted
+                              have exactBody :=
+                                encodePayload_append_of_decodePayload decoded
+                              simp [encodeEnvelope, exactBody]
+                  · contradiction
+
 /-- Decode one frame only when both its semantic version and domain match. -/
 def decodeFor (expected : FormatTag) (bytes : Bytes) :
     Option (Bytes × Bytes) :=
@@ -245,6 +327,27 @@ theorem decodeFor_encodeFrame_append
     decodeFor tag (encodeFrame tag payload ++ following) =
       some (payload, following) := by
   simp [decodeFor, encodeFrame, decodeEnvelope_encodeEnvelope_append]
+
+/-- Successful tag-directed decoding identifies the exact canonical frame
+prefix, including its version and domain. -/
+theorem encodeFrame_append_of_decodeFor
+    {expected : FormatTag} {bytes payload following : Bytes}
+    (accepted : decodeFor expected bytes = some (payload, following)) :
+    encodeFrame expected payload ++ following = bytes := by
+  unfold decodeFor at accepted
+  cases decoded : decodeEnvelope bytes with
+  | none => simp [decoded] at accepted
+  | some result =>
+      cases result with
+      | mk envelope decodedFollowing =>
+          simp only [decoded] at accepted
+          split at accepted
+          · next tagMatches =>
+              simp only [Option.some.injEq, Prod.mk.injEq] at accepted
+              obtain ⟨rfl, rfl⟩ := accepted
+              subst expected
+              exact encodeEnvelope_append_of_decodeEnvelope decoded
+          · contradiction
 
 /-- Version and domain separation are enforced, not display metadata: a frame
 encoded for one tag is refused by every distinct tag. -/
@@ -278,6 +381,32 @@ theorem decodeValue_encodeValue_append {α : Type}
       some (value, following) := by
   simp [decodeValue, encodeValue, decodeFor_encodeFrame_append,
     codec.decode_encode]
+
+/-- A successfully decoded canonical value accounts for exactly the consumed
+frame bytes.  In particular, acceptance cannot silently canonicalize a
+different payload supplied by a host. -/
+theorem encodeValue_append_of_decodeValue {α : Type}
+    (codec : CanonicalCodec α) (tag : FormatTag)
+    {bytes : Bytes} {value : α} {following : Bytes}
+    (accepted : decodeValue codec tag bytes = some (value, following)) :
+    encodeValue codec tag value ++ following = bytes := by
+  unfold decodeValue at accepted
+  change (decodeFor tag bytes).bind (fun (payload, decodedFollowing) =>
+      (codec.decode payload).bind (fun decodedValue =>
+        if codec.encode decodedValue = payload then
+          some (decodedValue, decodedFollowing)
+        else none)) = some (value, following) at accepted
+  rw [Option.bind_eq_some_iff] at accepted
+  obtain ⟨⟨payload, decodedFollowing⟩, framed, accepted⟩ := accepted
+  rw [Option.bind_eq_some_iff] at accepted
+  obtain ⟨decodedValue, decoded, accepted⟩ := accepted
+  split at accepted
+  · next canonical =>
+      simp only [Option.some.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨rfl, rfl⟩ := accepted
+      rw [encodeValue, canonical]
+      exact encodeFrame_append_of_decodeFor framed
+  · contradiction
 
 /-! ## Torn frames: every pre-terminator stopping point. -/
 

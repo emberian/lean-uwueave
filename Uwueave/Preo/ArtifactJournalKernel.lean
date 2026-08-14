@@ -64,6 +64,41 @@ theorem validateOne_projectionBytes (value : ArtifactEncoding) :
     validateOne (projectionBytes value) = some value := by
   simp [validateOne, decodeProjection_projectionBytes]
 
+/-- Successful exact-one validation means that the supplied host bytes were
+already the canonical projection of the returned value.  Validation does not
+decode and silently re-encode a different byte string. -/
+theorem validateOne_some_exact {bytes : Bytes} {value : ArtifactEncoding}
+    (accepted : validateOne bytes = some value) :
+    bytes = projectionBytes value := by
+  unfold validateOne at accepted
+  cases decoded : decodeProjection bytes with
+  | none => simp [decoded] at accepted
+  | some result =>
+      cases result with
+      | mk decodedValue following =>
+          cases following with
+          | nil =>
+              simp only [decoded, Option.some.injEq] at accepted
+              subst decodedValue
+              have exactBytes := Durable.encodeValue_append_of_decodeValue
+                artifactCodec artifactFormat decoded
+              simpa [projectionBytes] using exactBytes.symm
+          | cons byte rest => simp [decoded] at accepted
+
+/-- The boolean tested by the host validator accepts exactly canonical
+artifact projections, with the semantic value existentially hidden from the
+Rust side of the boundary. -/
+theorem validateOne_isSome_iff_exists_projection (bytes : Bytes) :
+    (validateOne bytes).isSome = true ↔
+      ∃ value : ArtifactEncoding, bytes = projectionBytes value := by
+  constructor
+  · intro accepted
+    cases decoded : validateOne bytes with
+    | none => simp [decoded] at accepted
+    | some value => exact ⟨value, validateOne_some_exact decoded⟩
+  · rintro ⟨value, rfl⟩
+    simp [validateOne_projectionBytes]
+
 theorem validateOne_projectionBytes_append_cons_refused
     (value : ArtifactEncoding) (byte : UInt8) (trailing : Bytes) :
     validateOne (projectionBytes value ++ byte :: trailing) = none := by
@@ -244,6 +279,79 @@ def scan (bytes : Bytes) : ScanResult :=
 def encodeJournal : List ArtifactEncoding → Bytes
   | [] => []
   | value :: rest => projectionBytes value ++ encodeJournal rest
+
+/-- The artifact-level journal is definitionally the generic durable journal
+of the canonical artifact payloads. -/
+theorem encodeJournal_eq_durable (values : List ArtifactEncoding) :
+    encodeJournal values =
+      Durable.encodeJournal artifactFormat (values.map artifactCodec.encode) := by
+  induction values with
+  | nil => rfl
+  | cons value rest ih =>
+      simp [encodeJournal, Durable.encodeJournal, projectionBytes,
+        Durable.encodeValue, ih]
+
+/-- Pairwise evidence that a host-returned body list and a semantic value list
+have the same shape and that each body passed exact one-frame validation. -/
+inductive ValidatedBodies : List Bytes → List ArtifactEncoding → Prop where
+  | nil : ValidatedBodies [] []
+  | cons {body : Bytes} {value : ArtifactEncoding}
+      {bodies : List Bytes} {values : List ArtifactEncoding}
+      (head : validateOne body = some value)
+      (tail : ValidatedBodies bodies values) :
+      ValidatedBodies (body :: bodies) (value :: values)
+
+/-- Per-body success bits, which are all the current host FFI reveals, suffice
+to obtain a semantic value list related by `ValidatedBodies`. -/
+theorem exists_validatedBodies_of_all_isSome (bodies : List Bytes)
+    (accepted : bodies.all (fun body => (validateOne body).isSome) = true) :
+    ∃ values : List ArtifactEncoding, ValidatedBodies bodies values := by
+  induction bodies with
+  | nil => exact ⟨[], .nil⟩
+  | cons body rest ih =>
+      simp only [List.all_cons, Bool.and_eq_true] at accepted
+      obtain ⟨acceptedBody, acceptedRest⟩ := accepted
+      cases decoded : validateOne body with
+      | none => simp [decoded] at acceptedBody
+      | some value =>
+          obtain ⟨values, validatedRest⟩ := ih acceptedRest
+          exact ⟨value :: values, .cons decoded validatedRest⟩
+
+/-- Exact bodies accepted one by one concatenate to the canonical semantic
+journal for the values returned by the Lean decoder. -/
+theorem validatedBodies_flatten_eq_encodeJournal
+    {bodies : List Bytes} {values : List ArtifactEncoding}
+    (accepted : ValidatedBodies bodies values) :
+    bodies.flatten = encodeJournal values := by
+  induction accepted with
+  | nil => rfl
+  | cons acceptedBody acceptedRest ih =>
+      rw [List.flatten_cons, validateOne_some_exact acceptedBody,
+        encodeJournal, ih]
+
+/-- A host list of complete bodies admitted by the existing Lean validator
+satisfies the generic durable recovery law exactly.  This starts from the
+bodies returned by a host scanner and makes no claim about how a filesystem or
+power loss produced those bytes. -/
+theorem recover_validatedBodies
+    {bodies : List Bytes} {values : List ArtifactEncoding}
+    (accepted : ValidatedBodies bodies values) :
+    Durable.recover artifactFormat bodies.flatten =
+      values.map artifactCodec.encode := by
+  rw [validatedBodies_flatten_eq_encodeJournal accepted,
+    encodeJournal_eq_durable, Durable.recover_encodeJournal]
+
+/-- Existential recovery form matching the host's boolean-only validation
+surface: all accepted complete bodies recover as some exact canonical artifact
+payload list. -/
+theorem exists_recovery_of_all_isSome (bodies : List Bytes)
+    (accepted : bodies.all (fun body => (validateOne body).isSome) = true) :
+    ∃ values : List ArtifactEncoding,
+      Durable.recover artifactFormat bodies.flatten =
+        values.map artifactCodec.encode := by
+  obtain ⟨values, validated⟩ :=
+    exists_validatedBodies_of_all_isSome bodies accepted
+  exact ⟨values, recover_validatedBodies validated⟩
 
 /-- Expected record boundaries for a canonical semantic journal. -/
 def recordsAt : Nat → List ArtifactEncoding → List Record
@@ -661,6 +769,29 @@ constructor and performs no filesystem operation. -/
 def validateOneKernelBytes (input : ByteArray) : ByteArray :=
   ByteArray.empty.push
     (if (validateOne (ofByteArray input)).isSome then 1 else 0)
+
+/-- The exact success byte returned across the current FFI boundary is
+equivalent to existence of a semantic artifact whose canonical projection is
+the unchanged input byte list. -/
+theorem validateOneKernelBytes_accepts_iff (input : ByteArray) :
+    validateOneKernelBytes input = ByteArray.empty.push 1 ↔
+      ∃ value : ArtifactEncoding,
+        ofByteArray input = projectionBytes value := by
+  cases accepted : (validateOne (ofByteArray input)).isSome with
+  | false =>
+      have noValue : ¬ ∃ value : ArtifactEncoding,
+          ofByteArray input = projectionBytes value := by
+        intro existsValue
+        have := (validateOne_isSome_iff_exists_projection
+          (ofByteArray input)).mpr existsValue
+        simp [accepted] at this
+      simp only [validateOneKernelBytes, accepted, Bool.false_eq_true,
+        ↓reduceIte, noValue, iff_false]
+      decide
+  | true =>
+      have existsValue := (validateOne_isSome_iff_exists_projection
+        (ofByteArray input)).mp accepted
+      simp [validateOneKernelBytes, accepted, existsValue]
 
 @[export uwueave_preo_artifact_v2_validate_one]
 def validateOneKernel (input : ByteArray) : ByteArray :=
