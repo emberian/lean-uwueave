@@ -8,7 +8,8 @@ file uses `#guard_msgs` and then successfully reuses each failed declaration
 name in the same environment.
 
 `scripts/preo-bench.sh profile` performs two warmups followed by five serialized
-`lean -j1 --profile` runs under `/usr/bin/time -lp`. It never clears caches and
+`lean -j1 --profile` runs under macOS `/usr/bin/time -lp` or a canonicalized
+GNU-time format; peak RSS is normalized to bytes. It never clears caches and
 does not enable `trace.profiler`. Persistent wall/user MAD above 8% is reported
 as infrastructure noise after a nine-run retry. Import-only controls separate
 module cost from fields/custom fields at 1/8/32, typed derives at 0/1/4/16, and

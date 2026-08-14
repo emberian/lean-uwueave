@@ -24,7 +24,7 @@ Modes:
   wave26-compare BASE CUR   Compare Wave26 profiles. Wall time is informational;
                             work phases and RSS are hard regression gates.
   wave26-all                Run Wave26 goldens, baseline, current, and compare.
-  wave27-golden             Check the exact 48-constant V3 export prefix,
+  wave27-golden             Check the exact 37-constant V3 export prefix,
                             rollback/name reuse, and Wave27 API status.
   wave27-record-goldens DIR Write freshly canonicalized Wave27 goldens to DIR.
   wave27-profile [ROOT]     Profile optimized V3 export and available controls.
@@ -68,6 +68,14 @@ wave29_baseline_file="$repo_root/tests/preo-bench/baselines/8f649c8-wave29.tsv"
 warmups=${PREO_BENCH_WARMUPS:-2}
 runs=${PREO_BENCH_RUNS:-5}
 case_filter=${PREO_BENCH_CASE:-}
+
+# macOS exposes peak RSS in bytes through `-lp`; GNU time exposes it in KiB.
+# Use one canonical line format on GNU hosts and normalize both paths to bytes
+# in `time_value`, so the same serialized protocol can run on hbox.
+time_style=macos
+if /usr/bin/time --version 2>&1 | grep -q 'GNU Time'; then
+  time_style=gnu
+fi
 
 if ! [[ $warmups =~ ^[0-9]+$ ]]; then
   echo "preo-bench: PREO_BENCH_WARMUPS must be a nonnegative integer" >&2
@@ -478,8 +486,8 @@ wave27_golden_check() {
   local count
   count=$(LC_ALL=C awk '$1 == "CONST" { n++ } END { print n + 0 }' \
     "$actual/export-prefix.tsv")
-  if [[ $count != 48 ]]; then
-    echo "preo-bench: Wave27 export prefix has $count constants; expected 48" >&2
+  if [[ $count != 37 ]]; then
+    echo "preo-bench: Wave27 export prefix has $count constants; expected 37" >&2
     failed=1
   fi
   (( failed == 0 )) || exit 1
@@ -564,11 +572,27 @@ time_value() {
       $0 ~ /^[[:space:]]*[0-9]+[[:space:]]+maximum resident set size$/ {
         value = $1; next
       }
+    wanted == "maximum resident set size" &&
+      $0 ~ /^[[:space:]]*[0-9]+[[:space:]]+maximum resident set size kib$/ {
+        value = 1024 * $1; next
+      }
     wanted != "maximum resident set size" && $1 == wanted && NF == 2 {
       value = $2
     }
     END { if (value == "") exit 1; print value }
   ' "$log"
+}
+
+run_timed_lean() {
+  local root=$1 source=$2
+  if [[ $time_style == gnu ]]; then
+    (cd -- "$root" && /usr/bin/time \
+      -f 'real %e\nuser %U\nsys %S\n%M maximum resident set size kib' \
+      lake env lean -j1 --profile "$source")
+  else
+    (cd -- "$root" && /usr/bin/time -lp \
+      lake env lean -j1 --profile "$source")
+  fi
 }
 
 profile_ms() {
@@ -630,8 +654,7 @@ measure_case() {
     echo "preo-bench: measuring $name ($count run(s), serialized)" >&2
     for ((i = 1; i <= count; i++)); do
       local log="$case_dir/run-$i.log"
-      if ! (cd -- "$root" && /usr/bin/time -lp lake env lean -j1 --profile "$source") \
-          >"$log" 2>&1; then
+      if ! run_timed_lean "$root" "$source" >"$log" 2>&1; then
         echo "preo-bench: measured run failed: $name/$i" >&2
         sed -n '1,320p' "$log" >&2
         return 1

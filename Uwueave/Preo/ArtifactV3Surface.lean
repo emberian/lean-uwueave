@@ -148,6 +148,56 @@ def addCertificateOfCheckedResult
     Uwueave.Preo.ArtifactV3.ArtifactV3Encoding :=
   encoding.addCertificate certificate.checked futurePresent worldPresent idOrdered
 
+/-- Assemble the one-query checked V3 encoding without re-elaborating the
+append-only builder proofs below every exported prefix.  The arguments retain
+the same checked indices and exact base-membership premise as that builder
+chain; its four singleton appends are written in their reduced record form.
+This avoids generating nine large, prefix-specific auxiliary proof
+declarations for each export. -/
+def encodingOfCheckedResult
+    {State : Type} {Γ : Uwueave.Preo.Expr.Schema}
+    {source : Uwueave.Preo.StateProgram State Γ}
+    {stateResolution : Uwueave.StatusEffects.Resolution
+      State source.program.type.denote}
+    {name futureName : String}
+    {stateSurface : Uwueave.Preo.ResultProgram.SurfacePolicy
+      State source.program.type.denote}
+    {M : Uwueave.Preo.Future.WorldModel}
+    {futureDecl : Uwueave.Preo.Future.FutureDecl M}
+    {binding : Uwueave.Preo.BoundResult.WorldBinding futureDecl
+      (source.declaration name futureName stateResolution stateSurface)}
+    {K : Type} {key : M.World → K} {C : K → Prop}
+    {index : Uwueave.Preo.Future.WorldIndex M}
+    {base : Uwueave.Preo.Artifact.Artifact}
+    {query : Uwueave.Preo.ArtifactV3.CheckedQuery base source}
+    {future : Uwueave.Preo.Artifact.CheckedFuture futureDecl.future}
+    {world : Uwueave.Preo.ArtifactV3.CheckedWorld index}
+    {report : binding.CertifiedReport key C index}
+    {result : Uwueave.Preo.ArtifactV3.CheckedResult query future world report}
+    (exactBranch : report.ExactBranch)
+    (certificate : CertificatePackage result)
+    (_futurePresent : base.futures.any
+      (fun row => row.id == future.id) = true) :
+    Uwueave.Preo.ArtifactV3.ArtifactV3Encoding where
+  base := base.canonicalEncoding
+  schema := query.schema
+  worlds := [world.id]
+  queries := [query.toRow]
+  results := [result.toExactRow exactBranch]
+  certificates := [certificate.checked.toRow]
+
+/-- Extract the validated value once `ValidationResult.isOk` has been checked.
+The command emits only a call to this shared eliminator, rather than a fresh
+dependent match and its auxiliary declarations below every export prefix. -/
+noncomputable def validatedOfIsOk
+    (validation : Uwueave.Preo.ProjectionV3.ValidationResult
+      Uwueave.Preo.ProjectionV3.ValidatedProjectionV3)
+    (accepted : validation.isOk = true) :
+    Uwueave.Preo.ProjectionV3.ValidatedProjectionV3 :=
+  match validation with
+  | .ok value => value
+  | .error _ => False.elim (Bool.noConfusion accepted)
+
 /-! ## Parser-hard surface -/
 
 /-- Export one exact checked state program and authenticated certified report.
@@ -453,16 +503,7 @@ def elabPreoExportV3Core : CommandElab := fun stx => withEnvTransaction do
 
   emitPhase name "the checked append-only V3 builder chain was refused" <| ← `(command|
     def $(n.encoding) : Uwueave.Preo.ArtifactV3.ArtifactV3Encoding :=
-      let encoded :=
-        Uwueave.Preo.ArtifactV3.ArtifactV3Encoding.ofArtifact
-          $(n.base) ($(n.query)).schema
-      let encoded := encoded.addQuery $(n.query) rfl rfl
-        (by intro previous member; cases member)
-      let encoded := encoded.addWorld $(n.world)
-        (by intro previous member; cases member)
-      let encoded := encoded.addExactResult $(n.result) $(n.exactBranch)
-        rfl rfl $(n.futureInBase) (by intro previous member; cases member)
-      Uwueave.Preo.ArtifactV3Surface.addCertificateOfCheckedResult
+      Uwueave.Preo.ArtifactV3Surface.encodingOfCheckedResult
         (State := $programState) (Γ := $programSchema)
         (source := $(n.stateProgram))
         (stateResolution := $programResolution)
@@ -472,8 +513,7 @@ def elabPreoExportV3Core : CommandElab := fun stx => withEnvTransaction do
         (index := $(n.index)) (base := $(n.base))
         (query := $(n.query)) (future := $(n.future)) (world := $(n.world))
         (report := $(n.report)) (result := $(n.result))
-        encoded $(n.certificate) $(n.futureInBase) rfl
-          (by intro previous member; cases member))
+        $(n.exactBranch) $(n.certificate) $(n.futureInBase))
   emitRequired (← `(command|
     def $(n.projection) : Uwueave.Preo.ProjectionV3.Projection :=
       Uwueave.Preo.ProjectionV3.Projection.ofEncoding $(n.encoding)))
@@ -493,12 +533,8 @@ def elabPreoExportV3Core : CommandElab := fun stx => withEnvTransaction do
   emitRequired (← `(command|
     noncomputable def $(n.validated) :
         Uwueave.Preo.ProjectionV3.ValidatedProjectionV3 :=
-      match h : $(n.validation) with
-      | .ok value => value
-      | .error _ => False.elim (by
-          have accepted := $(n.validationOk)
-          rw [h] at accepted
-          cases accepted)))
+      Uwueave.Preo.ArtifactV3Surface.validatedOfIsOk
+        $(n.validation) $(n.validationOk)))
   emitRequired (← `(command|
     /-- The whole validation-admitted export value. -/
     noncomputable def $(n.checked) :
