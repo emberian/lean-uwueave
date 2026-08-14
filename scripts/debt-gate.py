@@ -89,7 +89,7 @@ EVIDENCE_KINDS = {"lean_decl", "case_manifest"}
 # a trusted in-process unittest wrapper verifies that one test completed.  Rust
 # libtest is instead checked out of process by a list pass and an exact result
 # transcript below.  More runner kinds require an equally strong supervisor.
-CASE_CHECK_KINDS = {"rust_test"}
+CASE_CHECK_KINDS = {"rust_test", "rust_unit"}
 EVIDENCE_TIMEOUT_SECONDS = 300
 EVIDENCE_OUTPUT_LIMIT = 1024 * 1024
 RUST_RELEASE = "1.89.0"
@@ -302,6 +302,26 @@ def parse_case_manifest_bytes(
     if len(kinds) != len(set(kinds)):
         raise DebtError(f"{label}.checks: duplicate case check kind")
     return value
+
+
+def case_artifact_relative(debt_id: str, kind: str) -> str:
+    """Derive the only source path admitted for one case-manifest check."""
+    stem = debt_id.replace("-", "_").lower()
+    if kind == "rust_test":
+        return f"rust/tests/debt_{stem}.rs"
+    if kind == "rust_unit":
+        return f"rust/src/persistence/debt_{stem}.rs"
+    raise DebtError(f"unknown case check kind: {kind}")
+
+
+def rust_unit_case_binding(debt_id: str) -> Tuple[str, str, str, str]:
+    """Derive private module, prefix, selector, and the canonical source hook."""
+    stem = debt_id.replace("-", "_").lower()
+    module = f"debt_{stem}"
+    prefix = f"persistence::record::{module}::"
+    selector = prefix + f"debt_closure_{stem}_fault_paths"
+    hook = f'#[cfg(test)] #[path = "{module}.rs"] mod {module};'
+    return module, prefix, selector, hook
 
 
 def _require_exact_keys(value: Mapping[str, Any], keys: Iterable[str], label: str) -> None:
@@ -1131,6 +1151,184 @@ def validate_lean_declaration(
         shutil.rmtree(temporary)
 
 
+def _decode_rust_source(data: bytes, label: str) -> str:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise DebtError(f"{label}: Rust source is not UTF-8: {exc}") from None
+    if "\0" in text or "\r" in text:
+        raise DebtError(f"{label}: Rust source contains NUL or CR")
+    return text
+
+
+def _rust_without_comments(text: str, label: str) -> str:
+    """Mask Rust comments while preserving lines and string literals.
+
+    This is intentionally a small lexical check, not a Rust parser.  It knows
+    nested block comments plus ordinary/raw string and character literals so a
+    commented or quoted module hook cannot satisfy the evidence binding.
+    """
+    result = list(text)
+    index = 0
+    length = len(text)
+
+    def mask(start: int, stop: int) -> None:
+        for position in range(start, stop):
+            if result[position] != "\n":
+                result[position] = " "
+
+    while index < length:
+        if text.startswith("//", index):
+            stop = text.find("\n", index + 2)
+            if stop < 0:
+                stop = length
+            mask(index, stop)
+            index = stop
+            continue
+        if text.startswith("/*", index):
+            start = index
+            depth = 1
+            index += 2
+            while index < length and depth:
+                if text.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif text.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                raise DebtError(f"{label}: unterminated Rust block comment")
+            mask(start, index)
+            continue
+
+        raw_start = index
+        if text.startswith("br", index):
+            raw_start = index + 1
+        if text.startswith("r", raw_start):
+            cursor = raw_start + 1
+            while cursor < length and text[cursor] == "#":
+                cursor += 1
+            if cursor < length and text[cursor] == '"':
+                hashes = cursor - raw_start - 1
+                terminator = '"' + ("#" * hashes)
+                stop = text.find(terminator, cursor + 1)
+                if stop < 0:
+                    raise DebtError(f"{label}: unterminated Rust raw string")
+                index = stop + len(terminator)
+                continue
+
+        quote_index = index + 1 if text.startswith(('b"', "b'"), index) else index
+        if quote_index < length and text[quote_index] in {'"', "'"}:
+            quote = text[quote_index]
+            # Apostrophes beginning lifetimes are not character literals.
+            if quote == "'" and re.match(r"[A-Za-z_]", text[quote_index + 1 : quote_index + 2]):
+                close = text.find("'", quote_index + 2)
+                if close < 0 or "\n" in text[quote_index + 1 : close]:
+                    index = quote_index + 1
+                    continue
+            cursor = quote_index + 1
+            escaped = False
+            while cursor < length:
+                char = text[cursor]
+                if char == "\n" and quote == '"':
+                    raise DebtError(f"{label}: unterminated Rust string literal")
+                if not escaped and char == quote:
+                    index = cursor + 1
+                    break
+                if not escaped and char == "\\":
+                    escaped = True
+                else:
+                    escaped = False
+                cursor += 1
+            else:
+                raise DebtError(f"{label}: unterminated Rust literal")
+            continue
+        index += 1
+    return "".join(result)
+
+
+def _require_plain_module_line(
+    data: bytes, expected_line: str, module_name: str, label: str
+) -> None:
+    source = _rust_without_comments(_decode_rust_source(data, label), label)
+    significant = [line.strip() for line in source.splitlines() if line.strip()]
+    if significant.count(expected_line) != 1:
+        raise DebtError(f"{label}: missing or duplicate exact module declaration {expected_line}")
+    index = significant.index(expected_line)
+    if index > 0 and significant[index - 1].startswith("#["):
+        raise DebtError(f"{label}: module {module_name} must not be redirected or cfg-gated")
+
+
+def _validate_rust_unit_chain_bytes(
+    debt_id: str,
+    cargo_bytes: bytes,
+    lib_bytes: bytes,
+    persistence_bytes: bytes,
+    record_bytes: bytes,
+    label: str,
+) -> Tuple[str, str]:
+    try:
+        cargo_text = cargo_bytes.decode("utf-8")
+        cargo_data = tomllib.loads(cargo_text)
+    except (UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise DebtError(f"{label}: rust/Cargo.toml is not valid UTF-8 TOML: {exc}") from None
+    package = cargo_data.get("package")
+    if not isinstance(package, dict) or not isinstance(package.get("name"), str):
+        raise DebtError(f"{label}: Cargo package must have one string name")
+    library = cargo_data.get("lib", {})
+    if not isinstance(library, dict):
+        raise DebtError(f"{label}: Cargo [lib] must be a table")
+    if library.get("path", "src/lib.rs") != "src/lib.rs":
+        raise DebtError(f"{label}: Cargo redirects the standard library source")
+    if library.get("harness", True) is not True:
+        raise DebtError(f"{label}: Rust debt unit must use the standard library harness")
+    if library.get("test", True) is not True:
+        raise DebtError(f"{label}: Rust debt unit library tests must remain enabled")
+    if library.get("crate-type", ["lib"]) != ["lib"]:
+        raise DebtError(f"{label}: Rust debt unit requires the standard lib crate type")
+
+    _require_plain_module_line(
+        lib_bytes, "pub mod persistence;", "persistence", label + ".lib-source"
+    )
+    _require_plain_module_line(
+        persistence_bytes, "mod record;", "record", label + ".persistence-source"
+    )
+    module, _, _, hook = rust_unit_case_binding(debt_id)
+    _require_plain_module_line(record_bytes, hook, module, label + ".record-source")
+    library_name = library.get("name", package["name"].replace("-", "_"))
+    if not isinstance(library_name, str) or not library_name:
+        raise DebtError(f"{label}: Cargo library must have one string name")
+    return package["name"], library_name
+
+
+def _reject_repository_cargo_config(root: Path, label: str) -> None:
+    for relative in (
+        ".cargo/config",
+        ".cargo/config.toml",
+        "rust/.cargo/config",
+        "rust/.cargo/config.toml",
+    ):
+        if (root / relative).exists() or (root / relative).is_symlink():
+            raise DebtError(
+                f"{label}: repository Cargo config is forbidden for immutable evidence"
+            )
+
+
+def _reject_committed_cargo_config(root: Path, commit: str, label: str) -> None:
+    for relative in (
+        ".cargo/config",
+        ".cargo/config.toml",
+        "rust/.cargo/config",
+        "rust/.cargo/config.toml",
+    ):
+        if git_path_entry(root, commit, relative) is not None:
+            raise DebtError(
+                f"{label}: committed repository Cargo config is forbidden for immutable evidence"
+            )
+
+
 def validate_rust_target_binding(
     root: Path,
     debt_id: str,
@@ -1139,6 +1337,7 @@ def validate_rust_target_binding(
     lake: str,
     label: str,
 ) -> None:
+    _reject_repository_cargo_config(root, label)
     stem = debt_id.replace("-", "_").lower()
     target_name = f"debt_{stem}"
     relative = f"rust/tests/{target_name}.rs"
@@ -1206,6 +1405,84 @@ def validate_rust_target_binding(
         raise DebtError(f"{label}: Cargo metadata returned an invalid debt target path") from None
     if source != expected_source or target.get("kind") != ["test"] or target.get("test") is not True:
         raise DebtError(f"{label}: Cargo metadata did not bind the exact standard test source")
+
+
+def validate_rust_unit_target_binding(
+    root: Path,
+    debt_id: str,
+    cargo: str,
+    rustc: str,
+    lake: str,
+    label: str,
+) -> None:
+    _reject_repository_cargo_config(root, label)
+    cargo_toml = ensure_tracked_regular(root, "rust/Cargo.toml", label + ".cargo-toml")
+    lib_source = ensure_tracked_regular(root, "rust/src/lib.rs", label + ".lib-source")
+    persistence_source = ensure_tracked_regular(
+        root, "rust/src/persistence/mod.rs", label + ".persistence-source"
+    )
+    record_source = ensure_tracked_regular(
+        root, "rust/src/persistence/record.rs", label + ".record-source"
+    )
+    package_name, library_name = _validate_rust_unit_chain_bytes(
+        debt_id,
+        cargo_toml.read_bytes(),
+        lib_source.read_bytes(),
+        persistence_source.read_bytes(),
+        record_source.read_bytes(),
+        label,
+    )
+    expected_source = lib_source.resolve(strict=True)
+    metadata_output = _execute_evidence_command(
+        root,
+        [
+            "cargo",
+            "metadata",
+            "--quiet",
+            "--manifest-path",
+            "rust/Cargo.toml",
+            "--frozen",
+            "--no-deps",
+            "--format-version",
+            "1",
+        ],
+        cargo,
+        label + ".metadata",
+        [rustc, lake],
+    )
+    metadata = parse_json(metadata_output.strip(), label + ".metadata")
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("packages"), list):
+        raise DebtError(f"{label}: Cargo metadata has an unexpected shape")
+    targets: List[Mapping[str, Any]] = []
+    for package in metadata["packages"]:
+        if not isinstance(package, dict) or package.get("name") != package_name:
+            continue
+        manifest_path = package.get("manifest_path")
+        if not isinstance(manifest_path, str):
+            continue
+        try:
+            manifest = Path(manifest_path).resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if manifest != cargo_toml.resolve(strict=True):
+            continue
+        for target in package.get("targets", []):
+            if isinstance(target, dict) and target.get("name") == library_name:
+                targets.append(target)
+    if len(targets) != 1:
+        raise DebtError(f"{label}: Cargo metadata must expose one exact library test target")
+    target = targets[0]
+    try:
+        source = Path(target["src_path"]).resolve(strict=True)
+    except (KeyError, OSError, RuntimeError, TypeError):
+        raise DebtError(f"{label}: Cargo metadata returned an invalid library path") from None
+    if (
+        source != expected_source
+        or target.get("kind") != ["lib"]
+        or target.get("crate_types") != ["lib"]
+        or target.get("test") is not True
+    ):
+        raise DebtError(f"{label}: Cargo metadata did not bind the exact standard library harness")
 
 
 def validate_rust_case(root: Path, debt_id: str, label: str) -> None:
@@ -1276,25 +1553,91 @@ def validate_rust_case(root: Path, debt_id: str, label: str) -> None:
         )
 
 
+def validate_rust_unit_case(root: Path, debt_id: str, label: str) -> None:
+    _, module_prefix, test_name, _ = rust_unit_case_binding(debt_id)
+    cargo = _resolved_executable("cargo", label)
+    rustc = _resolved_executable("rustc", label)
+    lake = _resolved_executable("lake", label)
+    validate_rust_toolchain(root, cargo, rustc, lake, label)
+    validate_rust_unit_target_binding(root, debt_id, cargo, rustc, lake, label)
+    shared = [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "--frozen",
+        "--color",
+        "never",
+        "--lib",
+    ]
+    path_executables = [rustc, lake]
+    listing = _execute_evidence_command(
+        root,
+        [*shared, module_prefix, "--", "--list", "--format", "terse"],
+        cargo,
+        label + ".list",
+        path_executables,
+    )
+    listed = [
+        line.strip()
+        for line in listing.splitlines()
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_:]*: (?:test|benchmark)", line.strip())
+    ]
+    expected_listing = f"{test_name}: test"
+    if listed != [expected_listing]:
+        raise DebtError(
+            f"{label}: Rust unit must list exactly one owned test {expected_listing}"
+        )
+    output = _execute_evidence_command(
+        root,
+        [
+            *shared,
+            test_name,
+            "--",
+            "--exact",
+            "--include-ignored",
+            "--test-threads",
+            "1",
+        ],
+        cargo,
+        label + ".run",
+        path_executables,
+    )
+    ok_line = f"test {test_name} ... ok"
+    ok_count = sum(line.strip() == ok_line for line in output.splitlines())
+    summary_re = re.compile(
+        r"test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; "
+        r"0 filtered out; finished in .+"
+    )
+    summary_count = sum(
+        summary_re.fullmatch(line.strip()) is not None for line in output.splitlines()
+    )
+    if ok_count != 1 or summary_count != 1:
+        raise DebtError(
+            f"{label}: Rust unit harness did not report one exact completed passing test"
+        )
+
+
 def validate_case_manifest(
     root: Path, debt_id: str, content: bytes, label: str
 ) -> None:
     manifest = parse_case_manifest_bytes(content, label, debt_id)
-    stem = debt_id.replace("-", "_").lower()
     for index, check in enumerate(manifest["checks"]):
         check_label = f"{label}.checks[{index}]"
         kind = check["kind"]
-        if kind == "rust_test":
-            relative = f"rust/tests/debt_{stem}.rs"
-        else:  # Shape validation makes this unreachable in schema v1.
-            raise DebtError(f"{check_label}.kind: unsupported case check kind")
+        relative = case_artifact_relative(debt_id, kind)
         path = ensure_tracked_regular(root, relative, check_label)
         artifact = path.read_bytes()
         if not artifact:
             raise DebtError(f"{check_label}: case artifact must be nonempty")
         if sha256_bytes(artifact) != check["sha256"]:
             raise DebtError(f"{check_label}: case artifact SHA-256 does not match exact bytes")
-        validate_rust_case(root, debt_id, check_label)
+        if kind == "rust_test":
+            validate_rust_case(root, debt_id, check_label)
+        elif kind == "rust_unit":
+            validate_rust_unit_case(root, debt_id, check_label)
+        else:  # Manifest shape validation makes this unreachable.
+            raise DebtError(f"{check_label}.kind: unsupported case check kind")
 
 
 def validate_receipt_evidence(root: Path, receipt: Mapping[str, Any]) -> None:
@@ -1479,13 +1822,10 @@ def validate_committed_evidence_blobs(
             if item["kind"] != "case_manifest":
                 continue
             manifest = parse_case_manifest_bytes(data, label, debt_id)
-            stem = debt_id.replace("-", "_").lower()
             for check_index, check in enumerate(manifest["checks"]):
                 check_label = f"{label}.checks[{check_index}]"
-                if check["kind"] == "rust_test":
-                    relative = f"rust/tests/debt_{stem}.rs"
-                else:
-                    raise DebtError(f"{check_label}.kind: unsupported case check kind")
+                kind = check["kind"]
+                relative = case_artifact_relative(debt_id, kind)
                 artifact_blob = git_regular_blob(root, commit, relative)
                 if artifact_blob is None:
                     raise DebtError(f"{check_label}: committed case artifact is missing")
@@ -1506,6 +1846,31 @@ def validate_committed_evidence_blobs(
                         f"{check_label}: committed case artifact mode or bytes changed"
                     )
                 versions[artifact_key] = (artifact_mode, artifact)
+                if kind != "rust_unit":
+                    continue
+                _reject_committed_cargo_config(root, commit, check_label)
+                chain_paths = (
+                    "rust/Cargo.toml",
+                    "rust/src/lib.rs",
+                    "rust/src/persistence/mod.rs",
+                    "rust/src/persistence/record.rs",
+                )
+                chain_blobs: List[bytes] = []
+                for chain_path in chain_paths:
+                    chain_blob = git_regular_blob(root, commit, chain_path)
+                    if chain_blob is None:
+                        raise DebtError(
+                            f"{check_label}: committed Rust unit module chain is missing {chain_path}"
+                        )
+                    chain_blobs.append(chain_blob[1])
+                _validate_rust_unit_chain_bytes(
+                    debt_id,
+                    chain_blobs[0],
+                    chain_blobs[1],
+                    chain_blobs[2],
+                    chain_blobs[3],
+                    check_label,
+                )
 
 
 def validate_committed_history(root: Path, base: str) -> None:

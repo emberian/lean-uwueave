@@ -143,13 +143,31 @@ schema-v1 form is:
 {"checks":[{"kind":"rust_test","sha256":"64 lowercase hex digits"}],"id":"U-0001","schema":1}
 ```
 
+A private unit singleton uses the same closed shape:
+
+```json
+{"checks":[{"kind":"rust_unit","sha256":"64 lowercase hex digits"}],"id":"U-0001","schema":1}
+```
+
 The manifest ID must equal the receipt ID. `checks` is nonempty, sorted by
-kind, contains no duplicate kind, and schema v1 admits exactly one
-`rust_test`. The ID and kind derive the only child path,
+kind, contains no duplicate kind, and schema v1 admits at most one each of
+`rust_test` and `rust_unit`. A manifest may contain either singleton or both,
+in this canonical order:
+
+```json
+{"checks":[{"kind":"rust_test","sha256":"64 lowercase hex digits"},{"kind":"rust_unit","sha256":"64 lowercase hex digits"}],"id":"U-0001","schema":1}
+```
+
+For `rust_test`, the ID and kind derive the only child path
 `rust/tests/debt_u_0001.rs`, Cargo target `debt_u_0001`, and libtest name
-`debt_closure_u_0001`; none is supplied by the receipt or manifest. The child
-is a separately tracked regular non-symlinked file and its exact bytes must
-match the manifest SHA-256 and Git index.
+`debt_closure_u_0001`. For `rust_unit`, they derive child path
+`rust/src/persistence/debt_u_0001.rs`, private module prefix
+`persistence::record::debt_u_0001::`, and exact libtest name
+`persistence::record::debt_u_0001::debt_closure_u_0001_fault_paths`. Paths,
+modules, selectors, commands, arguments, harness settings, and expected output
+are never supplied by the receipt or manifest. Every child is a separately
+tracked regular non-symlinked file whose exact bytes and mode must match the
+manifest SHA-256 and Git index.
 
 Rust evidence fails closed unless `cargo` and `rustc` are the exact official
 1.89.0 release and commit hashes recorded by the release policy. The sanitized
@@ -160,14 +178,40 @@ the crate's Lean build dependency remains reachable without inheriting the
 ambient `PATH`. Policy CI installs Rust 1.89.0 and hydrates locked dependencies
 before running the frozen debt gate.
 
-Before execution, Cargo metadata must map the derived target to the exact
-SHA-bound child source. A matching explicit `[[test]]` may not redirect the
-path or disable the standard harness. The gate then asks libtest to list the
-target and requires exactly one derived `: test` entry. It runs that exact
-test with ignored tests included and one test thread, requires exit status
-zero, and requires one exact `... ok` line plus the standard one-passed,
-zero-failed harness summary. A zero-match Cargo success and an early
-`process::exit(0)` without a completed harness transcript are therefore red.
+Before a `rust_test` executes, Cargo metadata must map the derived target to
+the exact SHA-bound child source. A matching explicit `[[test]]` may not
+redirect the path or disable the standard harness.
+
+Before a `rust_unit` executes, `[lib]` must retain the default exact
+`src/lib.rs` path, standard harness, enabled tests, and standard `lib` crate
+type; Cargo metadata must independently report that exact library target. The
+gate also structurally checks the tracked module chain
+`lib.rs -> persistence/mod.rs -> record.rs` and requires this exact one-line
+private-source hook, with no cfg or path redirection at an earlier link:
+
+```rust
+#[cfg(test)] #[path = "debt_u_0001.rs"] mod debt_u_0001;
+```
+
+Repository `.cargo/config` and `.cargo/config.toml` files are forbidden at
+both the repository root and `rust/`, preventing a checked-in target runner or
+compiler wrapper from replacing the standard harness. The job-private Cargo
+home and its pinned installation remain part of the CI/toolchain trust base.
+
+The unit listing command is derived exactly as:
+
+```sh
+cargo test --manifest-path rust/Cargo.toml --frozen --color never --lib \
+  persistence::record::debt_u_0001:: -- --list --format terse
+```
+
+It must list exactly one owned `: test` entry, the full derived selector. The
+run replaces the module prefix with that full selector and passes only
+`--exact --include-ignored --test-threads 1` to libtest. Integration evidence
+similarly lists its isolated target. Both runners require exit status zero,
+one exact `... ok` line, and the standard one-passed, zero-failed summary. A
+zero-match Cargo success, an extra owned unit test/benchmark, an incomplete
+transcript, or a nonzero exit despite forged success text is red.
 
 Python and shell cases are deliberately not schema-v1 evidence. An in-process
 Python test can call `os._exit(0)` before a trusted unittest wrapper checks its
@@ -176,17 +220,20 @@ requires a separately reviewed supervisor with equally strong completion
 semantics.
 
 Every ordinary check reruns all current receipt evidence. The history walk also
-requires each manifest and child blob to exist in its receipt-introduction
-commit and to retain identical regular-file mode and bytes in every descendant,
-so adding a different ID's case never invalidates earlier receipts and temporary
-mutation followed by restoration cannot evade the gate.
+requires each manifest and every integration/unit child blob to exist in its
+receipt-introduction commit and retain identical regular-file mode and bytes in
+every descendant. For unit evidence it structurally revalidates the Cargo
+library settings and module chain at every commit without freezing unrelated
+parent-source bytes. Adding a different ID's case therefore never invalidates
+earlier receipts, while temporary child mutation, mode change, module redirect,
+custom harness, or Cargo runner followed by restoration cannot evade the gate.
 
 These checks establish exact runner selection, reachability, byte identity,
 and ordinary harness completion. They do not make child output cryptographically
-unforgeable: a malicious, reviewed SHA-bound Rust test could print a plausible
-libtest transcript before `process::exit(0)`. Exact artifact review remains in
-the trusted computing base, and human review must establish that the evidence
-semantically closes the named debt.
+unforgeable: a malicious, reviewed SHA-bound integration or unit test could
+print a plausible libtest transcript before `process::exit(0)`. Exact artifact
+review remains in the trusted computing base, and human review must establish
+that the evidence semantically closes the named debt.
 
 Receipts present at the comparison base must remain byte-identical forever.
 There is no waived or reclassified disposition.

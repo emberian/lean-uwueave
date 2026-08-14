@@ -12,6 +12,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -103,15 +104,41 @@ class TempRepo:
         path.write_text(GATE.canonical_json(receipt) + "\n", encoding="utf-8")
         return path
 
-    def case_manifest(self, debt_id: str = "U-0001"):
+    def case_manifest(
+        self, debt_id: str = "U-0001", check_kinds=("rust_test",)
+    ):
         stem = debt_id.replace("-", "_").lower()
-        artifact = self.root / "rust/tests" / f"debt_{stem}.rs"
-        artifact.parent.mkdir(parents=True, exist_ok=True)
-        artifact.write_text(
-            f"#[test]\nfn debt_closure_{stem}() {{ assert!(true); }}\n",
-            encoding="utf-8",
-        )
+        artifacts = []
+        checks = []
+        if "rust_test" in check_kinds:
+            artifact = self.root / "rust/tests" / f"debt_{stem}.rs"
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_text(
+                f"#[test]\nfn debt_closure_{stem}() {{ assert!(true); }}\n",
+                encoding="utf-8",
+            )
+            artifacts.append(artifact)
+            checks.append({"kind": "rust_test", "sha256": digest(artifact)})
+        if "rust_unit" in check_kinds:
+            artifact = self.root / "rust/src/persistence" / f"debt_{stem}.rs"
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_text(
+                f"#[test]\nfn debt_closure_{stem}_fault_paths() {{ assert!(true); }}\n",
+                encoding="utf-8",
+            )
+            artifacts.append(artifact)
+            lib = self.root / "rust/src/lib.rs"
+            persistence = self.root / "rust/src/persistence/mod.rs"
+            record = self.root / "rust/src/persistence/record.rs"
+            lib.write_text("pub mod persistence;\n", encoding="utf-8")
+            persistence.write_text("mod record;\n", encoding="utf-8")
+            record.write_text(
+                f'#[cfg(test)] #[path = "debt_{stem}.rs"] mod debt_{stem};\n',
+                encoding="utf-8",
+            )
+            checks.append({"kind": "rust_unit", "sha256": digest(artifact)})
         cargo_toml = self.root / "rust/Cargo.toml"
+        cargo_toml.parent.mkdir(parents=True, exist_ok=True)
         cargo_toml.write_text(
             '[package]\nname = "debt-fixture"\nversion = "0.1.0"\n'
             'edition = "2021"\n',
@@ -122,7 +149,7 @@ class TempRepo:
         manifest.write_text(
             GATE.canonical_json(
                 {
-                    "checks": [{"kind": "rust_test", "sha256": digest(artifact)}],
+                    "checks": sorted(checks, key=lambda item: item["kind"]),
                     "id": debt_id,
                     "schema": 1,
                 }
@@ -130,13 +157,16 @@ class TempRepo:
             + "\n",
             encoding="utf-8",
         )
-        run_git(
-            self.root,
-            "add",
-            artifact.relative_to(self.root).as_posix(),
-            cargo_toml.relative_to(self.root).as_posix(),
-            manifest.relative_to(self.root).as_posix(),
-        )
+        tracked = [*artifacts, cargo_toml, manifest]
+        if "rust_unit" in check_kinds:
+            tracked.extend(
+                [
+                    self.root / "rust/src/lib.rs",
+                    self.root / "rust/src/persistence/mod.rs",
+                    self.root / "rust/src/persistence/record.rs",
+                ]
+            )
+        run_git(self.root, "add", *(path.relative_to(self.root).as_posix() for path in tracked))
         return {
             "kind": "case_manifest",
             "path": manifest.relative_to(self.root).as_posix(),
@@ -167,6 +197,16 @@ class TempRepo:
         completed: bool = True,
         redirected: bool = False,
         exact_toolchain: bool = True,
+        unit_listed: bool = True,
+        unit_multiple: bool = False,
+        unit_completed: bool = True,
+        unit_passing: bool = True,
+        unit_redirected: bool = False,
+        unit_forged_nonzero: bool = False,
+        unit_metadata_kind=("lib",),
+        unit_metadata_crate_types=("lib",),
+        unit_metadata_test: bool = True,
+        unit_metadata_duplicate: bool = False,
     ):
         directory = self.root / "fake-bin"
         directory.mkdir(exist_ok=True)
@@ -176,25 +216,63 @@ class TempRepo:
         if redirected:
             source = self.root / "rust/tests/redirected.rs"
             source.write_text("fn main() {}\n", encoding="utf-8")
+        lib_source = self.root / "rust/src/lib.rs"
+        if unit_redirected:
+            lib_source = self.root / "rust/src/redirected.rs"
+            lib_source.parent.mkdir(parents=True, exist_ok=True)
+            lib_source.write_text("pub mod persistence {}\n", encoding="utf-8")
+        unit_target = {
+            "crate_types": list(unit_metadata_crate_types),
+            "kind": list(unit_metadata_kind),
+            "name": "debt_fixture",
+            "src_path": str(lib_source),
+            "test": unit_metadata_test,
+        }
+        targets = [unit_target]
+        if unit_metadata_duplicate:
+            targets.append(dict(unit_target))
+        targets.append(
+            {
+                "kind": ["test"],
+                "name": f"debt_{stem}",
+                "src_path": str(source),
+                "test": True,
+            }
+        )
         metadata = GATE.canonical_json(
             {
                 "packages": [
                     {
                         "manifest_path": str(self.root / "rust/Cargo.toml"),
-                        "targets": [
-                            {
-                                "kind": ["test"],
-                                "name": f"debt_{stem}",
-                                "src_path": str(source),
-                                "test": True,
-                            }
-                        ],
+                        "name": "debt-fixture",
+                        "targets": targets,
                     }
                 ]
             }
         )
         cargo = directory / "cargo"
         argv_log = self.root / "fake-cargo-argv.log"
+        unit_prefix = f"persistence::record::debt_{stem}::"
+        unit_name = unit_prefix + f"debt_closure_{stem}_fault_paths"
+        unit_listing = unit_name + ": test"
+        if unit_multiple:
+            unit_listing += "\\n" + unit_prefix + "second: test"
+        elif not unit_listed:
+            unit_listing = unit_prefix + "wrong: test"
+        unit_run = (
+            f"        printf '%s\\n' 'running 1 test' 'test {unit_name} ... ok' "
+            "'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; "
+            "0 filtered out; finished in 0.00s'\n        exit 1 ;;\n"
+            if unit_forged_nonzero
+            else
+            f"        printf '%s\\n' 'running 1 test' 'test {unit_name} ... ok' "
+            "'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; "
+            "0 filtered out; finished in 0.00s'\n        exit 0 ;;\n"
+            if unit_passing and unit_completed
+            else "        exit 0 ;;\n"
+            if unit_passing
+            else "        printf '%s\\n' 'test failed'\n        exit 1 ;;\n"
+        )
         cargo.write_text(
             "#!/bin/sh\n"
             f"printf '%s\\n' \"$*\" >> '{argv_log}'\n"
@@ -205,6 +283,15 @@ class TempRepo:
             "  metadata)\n"
             f"    printf '%s\\n' '{metadata}' ;;\n"
             "  test)\n"
+            "    case \" $* \" in\n"
+            "      *' --lib '*)\n"
+            "        case \" $* \" in\n"
+            "          *' --list '*) "
+            f"printf '%b\\n' '{unit_listing}'; exit 0 ;;\n"
+            "          *)\n"
+            + unit_run
+            + "        esac ;;\n"
+            "    esac\n"
             "    case \" $* \" in\n"
             "      *' --list '*) "
             f"printf '%s\\n' '{test_name + ': test' if listed else 'unrelated: test'}' ;;\n"
@@ -685,6 +772,138 @@ class ReceiptTests(RepoTestCase):
             ],
         )
 
+    def test_honest_rust_unit_and_dual_manifests_are_backward_compatible(self) -> None:
+        original = self.repo
+        try:
+            for kinds in (("rust_unit",), ("rust_test", "rust_unit")):
+                with self.subTest(kinds=kinds):
+                    repo = TempRepo()
+                    self.repo = repo
+                    try:
+                        entry, base = self.make_base()
+                        (repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
+                        repo.write_active([])
+                        evidence = repo.case_manifest(check_kinds=kinds)
+                        repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
+                        with repo.fake_rust_tools():
+                            result = GATE.check(repo.root, base, None)
+                        self.assertEqual(result["closed"], 1)
+                    finally:
+                        repo.close()
+        finally:
+            self.repo = original
+
+    def test_rust_unit_runner_derives_exact_path_selector_and_argv(self) -> None:
+        entry, base = self.make_base()
+        (self.repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
+        self.repo.write_active([])
+        evidence = self.repo.case_manifest(check_kinds=("rust_unit",))
+        self.repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
+        with self.repo.fake_rust_tools():
+            GATE.check(self.repo.root, base, None)
+        lines = (self.repo.root / "fake-cargo-argv.log").read_text().splitlines()
+        self.assertEqual(
+            lines,
+            [
+                "--version --verbose",
+                "metadata --quiet --manifest-path rust/Cargo.toml --frozen --no-deps --format-version 1",
+                "test --manifest-path rust/Cargo.toml --frozen --color never --lib persistence::record::debt_u_0001:: -- --list --format terse",
+                "test --manifest-path rust/Cargo.toml --frozen --color never --lib persistence::record::debt_u_0001::debt_closure_u_0001_fault_paths -- --exact --include-ignored --test-threads 1",
+            ],
+        )
+
+    def test_rust_unit_requires_one_owned_completed_test(self) -> None:
+        entry, base = self.make_base()
+        (self.repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
+        self.repo.write_active([])
+        evidence = self.repo.case_manifest(check_kinds=("rust_unit",))
+        self.repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
+        for kwargs, expected in (
+            ({"unit_listed": False}, "must list exactly one owned test"),
+            ({"unit_multiple": True}, "must list exactly one owned test"),
+            ({"unit_completed": False}, "did not report one exact completed"),
+            ({"unit_passing": False}, "evidence command failed"),
+            ({"unit_forged_nonzero": True}, "evidence command failed"),
+        ):
+            with self.subTest(kwargs=kwargs), self.repo.fake_rust_tools(**kwargs):
+                self.assertDebtError(
+                    expected, lambda: GATE.check(self.repo.root, base, None)
+                )
+
+    def test_rust_unit_rejects_module_target_harness_and_config_redirects(self) -> None:
+        entry, base = self.make_base()
+        (self.repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
+        self.repo.write_active([])
+        evidence = self.repo.case_manifest(check_kinds=("rust_unit",))
+        self.repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
+        cargo_toml = self.repo.root / "rust/Cargo.toml"
+        original_cargo = cargo_toml.read_text(encoding="utf-8")
+        for setting, expected in (
+            ('\n[lib]\npath = "src/redirected.rs"\n', "redirects the standard library"),
+            ("\n[lib]\nharness = false\n", "standard library harness"),
+            ("\n[lib]\ntest = false\n", "tests must remain enabled"),
+            ('\n[lib]\ncrate-type = ["staticlib"]\n', "standard lib crate type"),
+        ):
+            with self.subTest(setting=setting):
+                cargo_toml.write_text(original_cargo + setting, encoding="utf-8")
+                run_git(self.repo.root, "add", "rust/Cargo.toml")
+                with self.repo.fake_rust_tools():
+                    self.assertDebtError(
+                        expected, lambda: GATE.check(self.repo.root, base, None)
+                    )
+        cargo_toml.write_text(original_cargo, encoding="utf-8")
+        run_git(self.repo.root, "add", "rust/Cargo.toml")
+
+        with self.repo.fake_rust_tools(unit_redirected=True):
+            self.assertDebtError(
+                "did not bind the exact standard library harness",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+        for kwargs, expected in (
+            ({"unit_metadata_kind": ("bin",)}, "did not bind the exact"),
+            ({"unit_metadata_crate_types": ("staticlib",)}, "did not bind the exact"),
+            ({"unit_metadata_test": False}, "did not bind the exact"),
+            ({"unit_metadata_duplicate": True}, "must expose one exact"),
+        ):
+            with self.subTest(kwargs=kwargs), self.repo.fake_rust_tools(**kwargs):
+                self.assertDebtError(
+                    expected, lambda: GATE.check(self.repo.root, base, None)
+                )
+
+        chain_cases = (
+            ("rust/src/lib.rs", '#[path = "alternate.rs"]\npub mod persistence;\n'),
+            ("rust/src/persistence/mod.rs", '#[path = "alternate.rs"]\nmod record;\n'),
+            (
+                "rust/src/persistence/record.rs",
+                '#[cfg(test)] #[path = "alternate.rs"] mod debt_u_0001;\n',
+            ),
+            (
+                "rust/src/persistence/record.rs",
+                '/* #[cfg(test)] #[path = "debt_u_0001.rs"] mod debt_u_0001; */\n',
+            ),
+        )
+        originals = {}
+        for relative, replacement in chain_cases:
+            path = self.repo.root / relative
+            originals.setdefault(relative, path.read_text(encoding="utf-8"))
+            path.write_text(replacement, encoding="utf-8")
+            run_git(self.repo.root, "add", relative)
+            with self.subTest(relative=relative), self.repo.fake_rust_tools():
+                self.assertDebtError(
+                    "module|declaration", lambda: GATE.check(self.repo.root, base, None)
+                )
+            path.write_text(originals[relative], encoding="utf-8")
+            run_git(self.repo.root, "add", relative)
+
+        config = self.repo.root / ".cargo/config.toml"
+        config.parent.mkdir()
+        config.write_text('[target.x86_64-unknown-linux-gnu]\nrunner = "fake"\n')
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "repository Cargo config is forbidden",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+
     def test_real_rust_189_case_when_available(self) -> None:
         rustc = shutil.which("rustc")
         cargo = shutil.which("cargo")
@@ -701,6 +920,34 @@ class ReceiptTests(RepoTestCase):
         ):
             self.skipTest("exact Rust 1.89.0 is not selected")
         evidence = self.repo.case_manifest()
+        subprocess.run(
+            [cargo, "generate-lockfile", "--manifest-path", "rust/Cargo.toml"],
+            cwd=self.repo.root,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        run_git(self.repo.root, "add", "rust/Cargo.lock")
+        GATE.validate_receipt_evidence(
+            self.repo.root, {"id": "U-0001", "evidence": [evidence]}
+        )
+
+    def test_real_rust_189_unit_case_when_available(self) -> None:
+        rustc = shutil.which("rustc")
+        cargo = shutil.which("cargo")
+        lake = shutil.which("lake")
+        if rustc is None or cargo is None or lake is None:
+            self.skipTest("Rust/Lean evidence toolchain unavailable")
+        version = subprocess.run(
+            [rustc, "--version", "--verbose"], check=True, text=True, capture_output=True
+        ).stdout
+        fields = GATE._version_fields(version)
+        if (
+            fields.get("release") != GATE.RUST_RELEASE
+            or fields.get("commit-hash") != GATE.RUSTC_COMMIT
+        ):
+            self.skipTest("exact Rust 1.89.0 is not selected")
+        evidence = self.repo.case_manifest(check_kinds=("rust_unit",))
         subprocess.run(
             [cargo, "generate-lockfile", "--manifest-path", "rust/Cargo.toml"],
             cwd=self.repo.root,
@@ -752,6 +999,38 @@ class ReceiptTests(RepoTestCase):
         with self.repo.fake_rust_tools():
             self.assertDebtError(
                 "tracked stage-0",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+
+    def test_rust_unit_child_is_stage_hash_mode_and_symlink_bound(self) -> None:
+        entry, base = self.make_base()
+        (self.repo.root / "Uwueave/Debt.lean").write_text("/- closed -/\n")
+        self.repo.write_active([])
+        evidence = self.repo.case_manifest(check_kinds=("rust_unit",))
+        self.repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
+        artifact = self.repo.root / "rust/src/persistence/debt_u_0001.rs"
+
+        artifact.write_text("#[test]\nfn drift() {}\n", encoding="utf-8")
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "bytes must exactly match the Git index",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+        run_git(self.repo.root, "checkout", "--", artifact.relative_to(self.repo.root).as_posix())
+        artifact.chmod(0o755)
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "executable mode must match the Git index",
+                lambda: GATE.check(self.repo.root, base, None),
+            )
+        artifact.chmod(0o644)
+        alternate = artifact.with_name("alternate.rs")
+        alternate.write_bytes(artifact.read_bytes())
+        artifact.unlink()
+        artifact.symlink_to(alternate.name)
+        with self.repo.fake_rust_tools():
+            self.assertDebtError(
+                "symlinks are forbidden",
                 lambda: GATE.check(self.repo.root, base, None),
             )
         run_git(self.repo.root, "add", artifact.relative_to(self.repo.root).as_posix())
@@ -844,11 +1123,11 @@ class ReceiptTests(RepoTestCase):
             lambda: GATE.check(self.repo.root, base, None),
         )
 
-    def make_base_with_old_receipt(self):
+    def make_base_with_old_receipt(self, check_kinds=("rust_test",)):
         self.repo.write_source("U-0002")
         active = self.repo.active_entry("U-0002")
         self.repo.write_active([active])
-        evidence = self.repo.case_manifest("U-0001")
+        evidence = self.repo.case_manifest("U-0001", check_kinds=check_kinds)
         old = {
             "disposition": "obsolete",
             "evidence": [evidence],
@@ -860,6 +1139,99 @@ class ReceiptTests(RepoTestCase):
         }
         path = self.repo.write_receipt(old)
         return path, old, self.repo.commit()
+
+    def test_rust_unit_history_rejects_restored_child_mode_chain_and_harness(self) -> None:
+        mutations = (
+            (
+                "child bytes",
+                "rust/src/persistence/debt_u_0001.rs",
+                lambda path: path.write_text("#[test]\nfn changed() {}\n", encoding="utf-8"),
+                "committed case artifact SHA-256 does not match",
+            ),
+            (
+                "child mode",
+                "rust/src/persistence/debt_u_0001.rs",
+                lambda path: path.chmod(0o755),
+                "committed case artifact mode or bytes changed",
+            ),
+            (
+                "module redirect",
+                "rust/src/persistence/record.rs",
+                lambda path: path.write_text(
+                    '#[cfg(test)] #[path = "alternate.rs"] mod debt_u_0001;\n',
+                    encoding="utf-8",
+                ),
+                "module declaration",
+            ),
+            (
+                "library harness",
+                "rust/Cargo.toml",
+                lambda path: path.write_text(
+                    path.read_text(encoding="utf-8") + "\n[lib]\nharness = false\n",
+                    encoding="utf-8",
+                ),
+                "standard library harness",
+            ),
+        )
+        original_repo = self.repo
+        try:
+            for name, relative, mutate, expected in mutations:
+                with self.subTest(name=name):
+                    repo = TempRepo()
+                    self.repo = repo
+                    try:
+                        _, _, base = self.make_base_with_old_receipt(("rust_unit",))
+                        path = repo.root / relative
+                        original = path.read_bytes()
+                        original_mode = path.stat().st_mode
+                        mutate(path)
+                        repo.commit("temporarily mutate rust unit binding")
+                        path.write_bytes(original)
+                        path.chmod(stat.S_IMODE(original_mode))
+                        repo.commit("restore rust unit binding")
+                        self.assertDebtError(
+                            expected, lambda: GATE.check(repo.root, base, None)
+                        )
+                    finally:
+                        repo.close()
+        finally:
+            self.repo = original_repo
+
+    def test_rust_unit_history_rejects_restored_deletion_and_cargo_runner(self) -> None:
+        original_repo = self.repo
+        try:
+            for case in ("child deletion", "Cargo runner"):
+                with self.subTest(case=case):
+                    repo = TempRepo()
+                    self.repo = repo
+                    try:
+                        _, _, base = self.make_base_with_old_receipt(("rust_unit",))
+                        if case == "child deletion":
+                            child = repo.root / "rust/src/persistence/debt_u_0001.rs"
+                            original = child.read_bytes()
+                            child.unlink()
+                            repo.commit("temporarily delete rust unit child")
+                            child.write_bytes(original)
+                            repo.commit("restore rust unit child")
+                            expected = "committed case artifact is missing"
+                        else:
+                            config = repo.root / ".cargo/config.toml"
+                            config.parent.mkdir()
+                            config.write_text(
+                                '[target.x86_64-unknown-linux-gnu]\nrunner = "fake"\n',
+                                encoding="utf-8",
+                            )
+                            repo.commit("temporarily add Cargo runner")
+                            config.unlink()
+                            repo.commit("remove Cargo runner")
+                            expected = "committed repository Cargo config is forbidden"
+                        self.assertDebtError(
+                            expected, lambda: GATE.check(repo.root, base, None)
+                        )
+                    finally:
+                        repo.close()
+        finally:
+            self.repo = original_repo
 
     def test_old_receipt_cannot_be_modified_or_deleted(self) -> None:
         path, old, base = self.make_base_with_old_receipt()
@@ -1038,6 +1410,19 @@ elab (priority := high) \"#print\" \"axioms\" id:ident : command =>
             )
 
     def test_case_manifest_canonical_shape_and_runner_fields_are_fail_closed(self) -> None:
+        self.assertEqual(
+            GATE.case_artifact_relative("U-0170", "rust_unit"),
+            "rust/src/persistence/debt_u_0170.rs",
+        )
+        self.assertEqual(
+            GATE.rust_unit_case_binding("U-0170"),
+            (
+                "debt_u_0170",
+                "persistence::record::debt_u_0170::",
+                "persistence::record::debt_u_0170::debt_closure_u_0170_fault_paths",
+                '#[cfg(test)] #[path = "debt_u_0170.rs"] mod debt_u_0170;',
+            ),
+        )
         valid = {
             "checks": [{"kind": "rust_test", "sha256": "2" * 64}],
             "id": "U-0001",
@@ -1047,6 +1432,14 @@ elab (priority := high) \"#print\" \"axioms\" id:ident : command =>
             (GATE.canonical_json(valid) + "\n").encode(), "manifest", "U-0001"
         )
         self.assertEqual(parsed, valid)
+        unit = {"kind": "rust_unit", "sha256": "3" * 64}
+        dual = {**valid, "checks": [valid["checks"][0], unit]}
+        self.assertEqual(
+            GATE.parse_case_manifest_bytes(
+                (GATE.canonical_json(dual) + "\n").encode(), "manifest", "U-0001"
+            ),
+            dual,
+        )
         cases = []
         for data, expected in (
             (b"\xef\xbb\xbf{}\n", "BOM"),
@@ -1072,6 +1465,29 @@ elab (priority := high) \"#print\" \"axioms\" id:ident : command =>
         cases.append(
             ((GATE.canonical_json(duplicate_check) + "\n").encode(), "duplicate case check kind")
         )
+        reverse_check = {**valid, "checks": [unit, valid["checks"][0]]}
+        cases.append(
+            ((GATE.canonical_json(reverse_check) + "\n").encode(), "sorted lexicographically")
+        )
+        duplicate_unit = {**valid, "checks": [unit, unit]}
+        cases.append(
+            ((GATE.canonical_json(duplicate_unit) + "\n").encode(), "duplicate case check kind")
+        )
+        for field, value in (
+            ("path", "rust/src/persistence/debt_u_0001.rs"),
+            ("module", "persistence::record"),
+            ("selector", "forged"),
+            ("command", "cargo"),
+            ("argv", []),
+            ("args", []),
+            ("expected_output", "PASS"),
+            ("harness", False),
+        ):
+            forged_check = {**unit, field: value}
+            forged = {**valid, "checks": [forged_check]}
+            cases.append(
+                ((GATE.canonical_json(forged) + "\n").encode(), f"unknown={field}")
+            )
         extra = {**valid, "command": ["true"]}
         cases.append(((GATE.canonical_json(extra) + "\n").encode(), "unknown=command"))
         for data, expected in cases:
