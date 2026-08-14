@@ -20,6 +20,8 @@ if package.get("publish") is not False:
     raise SystemExit("rust/Cargo.toml must keep publish = false before self-contained packaging")
 if package.get("license") != "Unlicense":
     raise SystemExit("Cargo license must match the repository's sole Unlicense text")
+if package.get("rust-version") != "1.89":
+    raise SystemExit("Cargo rust-version must remain the empirically verified 1.89 MSRV")
 license_text = (root / "LICENSE").read_text(encoding="utf-8")
 if "free and unencumbered software released into the public domain" not in license_text:
     raise SystemExit("LICENSE is not the expected Unlicense grant")

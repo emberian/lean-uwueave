@@ -2,6 +2,7 @@
 name = "uwueave"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.89"
 publish = false
 license = "Unlicense"
 description = "The coordination-free fragment of a weave, implemented as proved: content-addressed causal DAG + op-log moves. Companion to the Uwueave theorems."

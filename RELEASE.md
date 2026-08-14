@@ -20,6 +20,22 @@ package or a binary distribution. It requires:
 - exact agreement among the `v0.2.0` tag, Cargo/Lake metadata, lockfile,
   changelog, and a future canonical release manifest.
 
+CI installs elan directly from the official v4.2.3 release assets. The
+platform-specific URL is fixed by that release tag and every Linux/macOS,
+x86-64/arm64 archive is checked against its recorded upstream SHA-256 before
+extraction. The script then installs exactly the name in `lean-toolchain`;
+neither a moving installer branch nor an action-owned toolchain selection is
+in the trust path. CI gives it a new job-private `ELAN_HOME`, and the installer
+refuses an existing path so cached or preinstalled toolchains cannot bypass the
+setup.
+
+The crate declares Rust 1.89 as its MSRV. On an isolated hbox checkout, the
+locked all-target build—including `build.rs`'s full Lean build and runtime
+closure—fails under Rust 1.88.0 at the then-unstable standard-library file-lock
+API and succeeds under Rust 1.89.0. Native CI runs that exact compiler on both
+supported development hosts and checks it against Cargo metadata before the
+frozen suite.
+
 The v0.2 contract makes no C ABI promise. The C shim and Lean exports remain
 private implementation details. It also makes no relocatable-binary promise:
 the current native build links the Lean shared runtime from the installing
@@ -27,8 +43,10 @@ elan toolchain. Cargo publication remains disabled because the present crate
 root excludes the Lean sources and Lake metadata required by `build.rs`.
 
 The full authenticated Preoscript V3 export currently measures
-6.493408203 MiB of peak-RSS growth per item on hbox, above the retained
-4 MiB/item gate. That red result is disclosed, not waived; it blocks v0.3.
+5.779296875 MiB of peak-RSS growth per item on hbox after the first safe
+generator factoring pass (down 10.9975% from 6.493408203 MiB/item), still above
+the retained 4 MiB/item gate. That red result is disclosed, not waived; it
+blocks v0.3.
 
 ## v0.3.0 — finite closure and source packaging
 
@@ -82,6 +100,24 @@ Release-only work starts from a clean tagged checkout with no build caches and
 adds extracted-package verification, clean-machine archive smoke tests,
 checksums, SBOM generation, and OIDC-backed artifact provenance.
 
+## Toolchain pin renewal
+
+Renew the elan bootstrap only from an official `leanprover/elan` release.
+Record the annotated tag's peeled source commit in
+`scripts/install-pinned-elan.sh`, replace every supported asset digest with the
+SHA-256 reported by the official GitHub release API and independently download
+and hash each artifact. Review the archive listing before changing the single
+`elan-init` payload expectation. The change is accepted only after the install
+script completes on the CI matrix's exact Ubuntu and macOS images and the cold
+Lean acceptance job remains green. Changes to the compiler are separate:
+`lean-toolchain` stays the sole authoritative Lean selection.
+
+Raise `rust-version` only from a fresh isolated checkout. The immediately
+preceding stable Rust release must fail for a compiler-version reason present
+in the crate or its locked target dependency closure, and the candidate must
+complete the real all-target Cargo build with the Lean-dependent build script.
+Update the exact CI toolchain and `scripts/v02-rust-msrv.sh` in the same change.
+
 ## Pre-candidate v0.2 P1 limitations
 
 The following items are visible during development and must be registered and
@@ -95,9 +131,3 @@ must close them before their stricter release contracts can hold.
   exactly the pinned diagnostic hash when CI supplies the matching temporary
   environment value. Any further census drift fails. Remove that value and
   regenerate the census in the dedicated marker-reconciliation change.
-- CI pins the reviewed `lean-action` commit, but that action's internal elan
-  bootstrap still downloads its installer from an upstream moving branch.
-  The Lean compiler itself remains fixed by `lean-toolchain`. Pinning and
-  checksumming the elan bootstrap artifact remains a release P1.
-- Rust CI is fixed to 1.97.0, but the crate does not yet declare a supported
-  MSRV. Set `rust-version` only after the lower bound has been measured.

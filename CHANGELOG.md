@@ -19,6 +19,13 @@ independently versioned wire and persistence formats.
   sources and Lake metadata required by `build.rs`.
 - Cargo metadata now advertises the repository's actual Unlicense grant.
 - The Lake manifest package name now agrees with `lakefile.toml`.
+- CI now verifies official elan v4.2.3 release archives by platform-specific
+  SHA-256 before installing the repository-selected Lean toolchain.
+- Cargo now declares the empirically verified Rust 1.89 MSRV, which native CI
+  tests exactly on Linux and macOS.
+- Preoscript V3 export factoring removes eleven generated proof auxiliaries
+  while retaining all 37 intentional declarations; hbox RSS scaling improves
+  by 10.9975% but remains honestly red against the 4 MiB/item gate.
 
 ### Security
 
