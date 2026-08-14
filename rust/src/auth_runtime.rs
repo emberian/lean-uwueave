@@ -12,6 +12,15 @@
 //! successful call is evidence about the configured implementations, not a
 //! cryptographic theorem.  Recovery is authoritative only relative to the
 //! externally supplied journal head pin and the historical context provider.
+//!
+//! Construction and recovery do not claim Lean `Authority.WF` or
+//! `Authority.UniqueGrant` for the provider's grant substrate. The runtime
+//! scope carries no root-scope policy from which to check `WF`, while a finite
+//! duplicate-id check would not discharge the content-addressing premise
+//! behind `UniqueGrant`. Adding partial checks here would therefore overstate
+//! the boundary and disrupt historical providers. Admission instead rejects
+//! citation zero independently and retains the existing hypothesis-free gate
+//! safety direction; exact substrate premises remain provider obligations.
 
 use crate::auth::{
     project_runtime_auth_v4_admission, RuntimeAuthV4AdmissionOutcome,
@@ -24,6 +33,7 @@ use crate::persistence::{
     StoreDecision, StorePreview,
 };
 use crate::{CausalWeave, MoveLog, MoveOp, NodeId, OpOutcome};
+use std::collections::BTreeSet;
 
 /// One immutable historical context returned by the deployment.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,13 +97,138 @@ pub enum AuthorityRefusal {
     Unavailable,
 }
 
+/// The exact values presented to an authority policy.
+///
+/// `context_commitment` and `authority_policy` identify the immutable policy
+/// snapshot. `issuer`, `cite`, and `operation` bind the holder decision to the
+/// exact signed principal and resolved move that continue through admission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthorityInput<'a> {
+    pub context_commitment: &'a [u8],
+    pub authority_policy: u64,
+    pub issuer: u64,
+    pub cite: u64,
+    pub operation: &'a MoveOp,
+}
+
+/// A trusted authority provider's attestation that it accepted one exact
+/// holder check.
+///
+/// Construction is public because [`MoveAuthority`] is a deployment-owned
+/// trust boundary. This is an ordinary receipt, not an unforgeable capability
+/// or formal proof; admission still checks that the receipt exactly matches
+/// the input currently moving through the pipeline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorityAcceptance {
+    context_commitment: Vec<u8>,
+    authority_policy: u64,
+    issuer: u64,
+    cite: u64,
+    operation: MoveOp,
+}
+
+impl AuthorityAcceptance {
+    /// Attest that a trusted authority provider accepted this exact input.
+    /// Calling this constructor performs no authority check.
+    pub fn from_authority_acceptance(input: AuthorityInput<'_>) -> Self {
+        Self {
+            context_commitment: input.context_commitment.to_vec(),
+            authority_policy: input.authority_policy,
+            issuer: input.issuer,
+            cite: input.cite,
+            operation: *input.operation,
+        }
+    }
+
+    /// Check that this trusted-boundary receipt names exactly `input`.
+    pub fn matches_input(&self, input: AuthorityInput<'_>) -> bool {
+        self.context_commitment == input.context_commitment
+            && self.authority_policy == input.authority_policy
+            && self.issuer == input.issuer
+            && self.cite == input.cite
+            && self.operation == *input.operation
+    }
+}
+
 pub trait MoveAuthority<C> {
     fn authorize(
         &self,
         context: &PinnedAdmissionContext<C>,
-        issuer: u64,
-        operation: &MoveOp,
-    ) -> Result<(), AuthorityRefusal>;
+        input: AuthorityInput<'_>,
+    ) -> Result<AuthorityAcceptance, AuthorityRefusal>;
+}
+
+/// Immutable issuer/citation holder bindings carried by a pinned context.
+///
+/// The relation answers the holder question omitted by the execution grant
+/// triple itself: which authenticated issuer may exercise a given grant id.
+/// Multiple issuers may legitimately hold the same citation.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GrantHolderBindings {
+    holders: BTreeSet<(u64, u64)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrantHolderBindingRefusal {
+    NullCitation,
+    DuplicateBinding { issuer: u64, cite: u64 },
+}
+
+impl GrantHolderBindings {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add one immutable holder binding. Duplicate pairs are refused, while
+    /// distinct issuers may hold the same nonzero citation. Citation zero is
+    /// the execution carrier's "cites nothing" sentinel and cannot acquire a
+    /// holder through deployment policy.
+    pub fn bind(&mut self, issuer: u64, cite: u64) -> Result<(), GrantHolderBindingRefusal> {
+        if cite == 0 {
+            return Err(GrantHolderBindingRefusal::NullCitation);
+        }
+        if !self.holders.insert((issuer, cite)) {
+            return Err(GrantHolderBindingRefusal::DuplicateBinding { issuer, cite });
+        }
+        Ok(())
+    }
+
+    pub fn holds(&self, issuer: u64, cite: u64) -> bool {
+        self.holders.contains(&(issuer, cite))
+    }
+}
+
+/// A context substrate exposing its immutable citation-holder relation.
+pub trait GrantHolderContext {
+    fn holds_grant(&self, issuer: u64, cite: u64) -> bool;
+}
+
+impl GrantHolderContext for GrantHolderBindings {
+    fn holds_grant(&self, issuer: u64, cite: u64) -> bool {
+        self.holds(issuer, cite)
+    }
+}
+
+/// Deterministic holder policy backed by the exact pinned context substrate.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ContextGrantHolderAuthority;
+
+impl<C: GrantHolderContext> MoveAuthority<C> for ContextGrantHolderAuthority {
+    fn authorize(
+        &self,
+        context: &PinnedAdmissionContext<C>,
+        input: AuthorityInput<'_>,
+    ) -> Result<AuthorityAcceptance, AuthorityRefusal> {
+        if input.cite == 0
+            || input.context_commitment != context.commitment
+            || input.authority_policy != context.authority_policy
+            || input.cite != input.operation.cite
+            || !context.substrate.holds_grant(input.issuer, input.cite)
+        {
+            return Err(AuthorityRefusal::Denied);
+        }
+        Ok(AuthorityAcceptance::from_authority_acceptance(input))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,6 +355,7 @@ pub enum AdmissionRefusal {
     MissingStableId,
     StableIndexMismatch { signed: u64, resolved: u64 },
     AuthorityDenied,
+    AuthorityReceiptMismatch,
     MembershipDenied,
     Execution(ExecutionRefusal),
     CheckedBoundary(&'static str),
@@ -748,14 +884,36 @@ where
         dest: destination.map(|node| node.node_id),
         cite: projection.exec_cite,
     };
-    authority
-        .authorize(&context, projection.issuer, &operation)
-        .map_err(|reason| match reason {
-            AuthorityRefusal::Denied => StageFailure::Refused(AdmissionRefusal::AuthorityDenied),
-            AuthorityRefusal::Unavailable => {
-                StageFailure::Unavailable(AdmissionUnavailable::Authority)
-            }
-        })?;
+    // Citation zero is the FORMAT-v3 "cites nothing" sentinel. Reject it in
+    // the orchestration itself, before consulting even a trusted authority
+    // provider: a malformed substrate containing a live grant id zero must
+    // not let a permissive provider turn the sentinel into authority.
+    if operation.cite == 0 {
+        return Err(StageFailure::Refused(AdmissionRefusal::AuthorityDenied));
+    }
+    let authority_input = AuthorityInput {
+        context_commitment: &context.commitment,
+        authority_policy: context.authority_policy,
+        issuer: projection.issuer,
+        cite: operation.cite,
+        operation: &operation,
+    };
+    let authority_acceptance =
+        authority
+            .authorize(&context, authority_input)
+            .map_err(|reason| match reason {
+                AuthorityRefusal::Denied => {
+                    StageFailure::Refused(AdmissionRefusal::AuthorityDenied)
+                }
+                AuthorityRefusal::Unavailable => {
+                    StageFailure::Unavailable(AdmissionUnavailable::Authority)
+                }
+            })?;
+    if !authority_acceptance.matches_input(authority_input) {
+        return Err(StageFailure::Refused(
+            AdmissionRefusal::AuthorityReceiptMismatch,
+        ));
+    }
     membership
         .allows_move(&context, projection.issuer, &operation)
         .map_err(|reason| match reason {
