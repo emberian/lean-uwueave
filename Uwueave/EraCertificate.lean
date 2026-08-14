@@ -147,12 +147,15 @@ id collision does the same with an honest arbiter).
     (`backdating_is_not_honest`) and nothing here decides which one a live
     announcement is. The paper answers with signatures and fraud proofs (§5.1);
     both are out of scope in `Era.lean` and remain out of scope here.
-  * ⟨UNDONE U-0033⟩ **The announcement future has no certificate at all.** §5 says what
-    an honest announcement *does* to the finalised view; it exhibits no
-    predicate on a world that licenses a stop under `Announcement`, and
-    `announcement_moves_the_finalised_view` shows quiescence is not one. What
-    would serve is a bound on the arbiter's remaining announcements — the pool
-    the arbiter does not have.
+  * ⟨DONE U-0033⟩ **Announcement certificates are exact only for a supplied
+    finite pool.** Downstream
+    `BoundedEraAnnouncement.traceStableB_iff_freeTermination` decides canonical
+    final-trace stability exactly under `AnnouncementWithin available` at a
+    wellformed base. `BoundedEraAnnouncement.no_finite_pool_covers_unrestricted`
+    proves that every such pool misses a fresh valid `Announcement`. Thus the
+    bounded certificate does not license stopping under the unrestricted
+    announcement future without a separately proved external coverage or
+    sealing premise; ERA's arbiter still has no internal pool.
   * ⟨UNDONE U-0034⟩ **One evaluator at a time**, and `Type 0` only —
     `CertificateScope`'s two, inherited.
   * ⟨SCOPE U-0035⟩ **The witnesses are witnesses.** §3-§6's separations run on

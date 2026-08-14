@@ -4,25 +4,13 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 109
-- **Extracted blocks (marker-bearing source lines):** 107
-- **Lean files containing markers:** 35
+- **Marker occurrences:** 102
+- **Extracted blocks (marker-bearing source lines):** 100
+- **Lean files containing markers:** 34
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
 Each block begins at one marker-bearing source line and includes its following continuation lines up to the next blank line, list item, Markdown heading, or Lean comment terminator. Two markers on one source line therefore count as two occurrences but one extracted block. This ledger intentionally includes definitions, quotations, inherited caveats, and references to older items: it gates lexical drift, not the semantic status of the work.
-
-## `Uwueave/Bounds.lean`
-
-### [`Uwueave/Bounds.lean:113`](../Uwueave/Bounds.lean#L113)
-
-````text
-  * ⟨UNDONE U-0002⟩ **No exact modal/quantitative correspondence is claimed or
-    available.** §4 is a proof that none exists at zero for the per-stream
-    measure, and §6 is a one-directional bridge at the session level. What a
-    quantity whose zero *is* the modal zero would look like — a fork-aware floor,
-    minimized over seams globally — is not defined here.
-````
 
 ## `Uwueave/Budget.lean`
 
@@ -39,22 +27,7 @@ Each block begins at one marker-bearing source line and includes its following c
     unrestricted floor is exactly the scope error the types prevent.
 ````
 
-### [`Uwueave/Budget.lean:82`](../Uwueave/Budget.lean#L82)
-
-````text
-  * ⟨UNDONE U-0005⟩ **Composition is sequential only.** `accepted_andThen` composes two
-    accepted stretches *of one stream under one seam*, from `crossings_append`.
-    Two **concurrent** accepted sessions under one budget need the profile
-    discipline — a sibling lane is proving `opt_compose_ge_sum_opt` in
-    `Uwueave/CoordEffect.lean`, and this file deliberately does not import it.
-    The connection, in prose: an optimum over seams does not distribute over
-    concurrent composition, because the seam is a *global* choice — which is
-    precisely what `Cost.no_seam_frees_both` exhibits. So `cost(A ∥ B)` is not
-    `cost A + cost B`, and a composed budget check needs a profile that survives
-    the min-over-seams, not a sum of per-stream verdicts.
-````
-
-### [`Uwueave/Budget.lean:736`](../Uwueave/Budget.lean#L736)
+### [`Uwueave/Budget.lean:735`](../Uwueave/Budget.lean#L735)
 
 ````text
 harder one — see the module docstring's ⟨UNDONE U-0006⟩ and the sibling
@@ -69,18 +42,7 @@ harder one — see the module docstring's ⟨UNDONE U-0006⟩ and the sibling
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0007⟩ = work wearing a caveat's clothes.
 ````
 
-### [`Uwueave/CertificateScope.lean:127`](../Uwueave/CertificateScope.lean#L127)
-
-````text
-  * ⟨UNDONE U-0008⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
-    implementation. What is proved here is about `World.epoch`, the producer's
-    counter `WorldFuture.lean` defines; `Era.lean`'s arbiter cut is *not*
-    transported to this carrier, and `WorldFuture.lean`'s boundary ("a seal is
-    trusted, not verified") stands unchanged. `epoch_sufficient_on_wellformed`
-    is a fact about a `Nat` field, not about a finalisation.
-````
-
-### [`Uwueave/CertificateScope.lean:155`](../Uwueave/CertificateScope.lean#L155)
+### [`Uwueave/CertificateScope.lean:158`](../Uwueave/CertificateScope.lean#L158)
 
 ````text
   * ⟨UNDONE U-0011⟩ **The evidence/world boundary remains `Type 0`.** Residuals,
@@ -90,7 +52,7 @@ harder one — see the module docstring's ⟨UNDONE U-0006⟩ and the sibling
     at `Type 0` because those imported carriers still require it.
 ````
 
-### [`Uwueave/CertificateScope.lean:1319`](../Uwueave/CertificateScope.lean#L1319)
+### [`Uwueave/CertificateScope.lean:1322`](../Uwueave/CertificateScope.lean#L1322)
 
 ````text
 ⟨UNDONE U-0012⟩ It says nothing about an Era cut, which is the instance `Holes.lean`
@@ -193,18 +155,7 @@ had run Era through it:
 ⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0030⟩ = work wearing a caveat's clothes.
 ````
 
-### [`Uwueave/EraCertificate.lean:150`](../Uwueave/EraCertificate.lean#L150)
-
-````text
-  * ⟨UNDONE U-0033⟩ **The announcement future has no certificate at all.** §5 says what
-    an honest announcement *does* to the finalised view; it exhibits no
-    predicate on a world that licenses a stop under `Announcement`, and
-    `announcement_moves_the_finalised_view` shows quiescence is not one. What
-    would serve is a bound on the arbiter's remaining announcements — the pool
-    the arbiter does not have.
-````
-
-### [`Uwueave/EraCertificate.lean:156`](../Uwueave/EraCertificate.lean#L156)
+### [`Uwueave/EraCertificate.lean:159`](../Uwueave/EraCertificate.lean#L159)
 
 ````text
   * ⟨UNDONE U-0034⟩ **One evaluator at a time**, and `Type 0` only —
@@ -542,22 +493,6 @@ harmlessness are always anti-correlated. -/
 remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
 ````
 
-### [`Uwueave/Holes.lean:197`](../Uwueave/Holes.lean#L197)
-
-````text
-  * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE U-0080, and narrowed⟩ §6's
-    stability licence is abstract (`Stable Arriving P`), and
-    `stable_inputs_seal_the_result` proves the *mechanism* — stability of the
-    inputs transports to stability of the result, along the headline. What is
-    **not** built is the transport from `Era.final_view_immune` (finalised
-    prefixes of an event *list*, under an arbiter's cuts) into a `Stable`
-    hypothesis on a `GSet World`. ⚑ What *has* landed since is one rung of it:
-    `Evidence.closed_freezes` derives the freeze from the evidence a replica
-    actually holds — "this is what `Holes.lean` §6 assumed under the name
-    `Stable`", in its own words — so the remaining gap is Era's arbiter cut,
-    not the licence in general.
-````
-
 ## `Uwueave/HonestRender.lean`
 
 ### [`Uwueave/HonestRender.lean:122`](../Uwueave/HonestRender.lean#L122)
@@ -704,17 +639,7 @@ reports nothing (see `the_clique_floor_is_invisible_to_the_block_calculus`). -/
 clothes.
 ````
 
-### [`Uwueave/MergeModel.lean:118`](../Uwueave/MergeModel.lean#L118)
-
-````text
-  * ⟨UNDONE U-0106⟩ **The full universe chain is not closed.** This file's key, state,
-    context, result, and observation now inhabit independent universes, and all
-    generic instances below follow. Downstream `Histories.VersionDag` /
-    `Histories.History` and the evidence/world carriers remain in `Type 0`, so
-    the end-to-end history/certificate chain is still bounded there.
-````
-
-### [`Uwueave/MergeModel.lean:123`](../Uwueave/MergeModel.lean#L123)
+### [`Uwueave/MergeModel.lean:127`](../Uwueave/MergeModel.lean#L127)
 
 ````text
   * ⟨UNDONE U-0107⟩ **No verdict routes, no exits.** The field-kind sketch has three
@@ -722,7 +647,7 @@ clothes.
     file settles only the merge slot, which is the one codex refused.
 ````
 
-### [`Uwueave/MergeModel.lean:136`](../Uwueave/MergeModel.lean#L136)
+### [`Uwueave/MergeModel.lean:140`](../Uwueave/MergeModel.lean#L140)
 
 ````text
   * ⟨UNDONE U-0109, narrowed to operational convergence⟩ **Repeated and criss-cross
@@ -736,20 +661,7 @@ clothes.
 
 ## `Uwueave/MinimalSummary.lean`
 
-### [`Uwueave/MinimalSummary.lean:93`](../Uwueave/MinimalSummary.lean#L93)
-
-````text
-    ⟨UNDONE U-0110 beyond an explicit finite universe⟩ The coarsest *partition* is not the
-    smallest *message*. `CtxQuot f` is a quotient type: no bound on the bits a
-    class takes, no encoding, and no cost model. `ContextCompiler.Spec.classKeys`
-    does make class membership computable for caller-supplied finite state,
-    context, and homogeneous-query lists; that concrete list representation is
-    not a bit-optimal encoding or a representation of an unrestricted quotient.
-    The membership pole remains the one global case where the class itself is
-    exhibited as a `Bool` (`mem_quot_bit`).
-````
-
-### [`Uwueave/MinimalSummary.lean:110`](../Uwueave/MinimalSummary.lean#L110)
+### [`Uwueave/MinimalSummary.lean:112`](../Uwueave/MinimalSummary.lean#L112)
 
 ````text
     states.** ⟨UNDONE U-0112 beyond a supplied finite context universe⟩
@@ -761,7 +673,7 @@ clothes.
     trusting the caller's list.
 ````
 
-### [`Uwueave/MinimalSummary.lean:126`](../Uwueave/MinimalSummary.lean#L126)
+### [`Uwueave/MinimalSummary.lean:128`](../Uwueave/MinimalSummary.lean#L128)
 
 ````text
   * **No syntax, so no classifier.** ⟨UNDONE U-0113⟩ `f` is an arbitrary Lean
@@ -769,7 +681,7 @@ clothes.
     part named in `Holes.lean` and `JoinHom.lean`, unchanged.
 ````
 
-### [`Uwueave/MinimalSummary.lean:130`](../Uwueave/MinimalSummary.lean#L130)
+### [`Uwueave/MinimalSummary.lean:132`](../Uwueave/MinimalSummary.lean#L132)
 
 ````text
     for the refutations, ⟨UNDONE U-0114⟩ for a formula⟩ Two- and three-element

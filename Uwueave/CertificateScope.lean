@@ -124,12 +124,15 @@ and the answer is split, both halves proved:
     unstable one because the unstable one has no future of itself. At
     `World α` the condition is `Wf` (`WorldFuture.delivery_refl`), which
     `WorldFuture.lean` already carries as a hypothesis and not an invariant.
-  * ⟨UNDONE U-0008⟩ **No Era placement.** Codex names "a sealed epoch" as a candidate
-    implementation. What is proved here is about `World.epoch`, the producer's
-    counter `WorldFuture.lean` defines; `Era.lean`'s arbiter cut is *not*
-    transported to this carrier, and `WorldFuture.lean`'s boundary ("a seal is
-    trusted, not verified") stands unchanged. `epoch_sufficient_on_wellformed`
-    is a fact about a `Nat` field, not about a finalisation.
+  * ⟨DONE U-0008⟩ **ERA placement is downstream and delivery-scoped.**
+    `EraCertificate.era_finalisation_is_a_sound_certificate` transports ERA's
+    finalised view into this file's `KeyCertSound` vocabulary, while
+    `EraCertificate.eraKey_sufficient_on_wf` supplies the exact reusable key on
+    wellformed worlds. `EraCertificate.era_stops_before_quiescence` witnesses
+    the payoff: the finalised view can stop under delivery while the full view
+    cannot. This does not identify `World.epoch` with an arbiter cut or verify a
+    trusted seal; the placement lives on ERA's separate carrier and freezes the
+    announcement axis.
   * ⟨TERMINAL⟩ **`Evidence.Closed` licenses values; closure plus a known roster
     licenses the view.** `closed_licenses_the_values` proves the first statement,
     while `closed_is_not_a_sound_delivery_certificate` refutes closure alone

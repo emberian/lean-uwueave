@@ -89,15 +89,17 @@ context is observable, so a set-valued carrier does not degrade to a counter.
 
 ## Honest boundary
 
-  * **The global quotient still has no message representation.**
-    ⟨UNDONE U-0110 beyond an explicit finite universe⟩ The coarsest *partition* is not the
-    smallest *message*. `CtxQuot f` is a quotient type: no bound on the bits a
-    class takes, no encoding, and no cost model. `ContextCompiler.Spec.classKeys`
-    does make class membership computable for caller-supplied finite state,
-    context, and homogeneous-query lists; that concrete list representation is
-    not a bit-optimal encoding or a representation of an unrestricted quotient.
-    The membership pole remains the one global case where the class itself is
-    exhibited as a `Bool` (`mem_quot_bit`).
+  * **The global quotient still has no unrestricted message representation.**
+    ⟨DONE downstream in `FiniteSummaryCodec` for an explicit finite state
+    universe and a complete finite context universe⟩ `CompleteSpec` turns the
+    duplicate-free contextual class table into exactly `Fin classCount`:
+    `class_count_exact`, `decode_encode_key`, and `encode_decode_index` prove
+    the two representations equivalent, while
+    `fixedWidth_information_lower_bound` proves the honest fixed-width
+    information bound. The scope is deliberately finite and completeness is
+    proof data; none of these results encodes an unrestricted `CtxQuot f` or
+    supplies a global cost model. The membership pole remains the one global
+    case where the class itself is exhibited as a `Bool` (`mem_quot_bit`).
   * **`decodeSummary` is `Classical.choice`, not a global algorithm.**
     ⟨SCOPE U-0111 beyond an explicit finite universe⟩ Same caveat as
     `JoinHom.canonicalCombine`: it witnesses that a decoder exists. The

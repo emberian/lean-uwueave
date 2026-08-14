@@ -194,17 +194,18 @@ remove it) or ⟨UNDONE U-0078⟩ (work, wearing a caveat's clothes).
     `coordination_free_iff_iconfluent` and the seam refinement
     `seam_coordination_free`. It is kept in this list rather than deleted only
     because the sentence is the one Choreo quotes.
-  * **The `Stable` → `Era` bridge is prose.** ⟨UNDONE U-0080, and narrowed⟩ §6's
-    stability licence is abstract (`Stable Arriving P`), and
-    `stable_inputs_seal_the_result` proves the *mechanism* — stability of the
-    inputs transports to stability of the result, along the headline. What is
-    **not** built is the transport from `Era.final_view_immune` (finalised
-    prefixes of an event *list*, under an arbiter's cuts) into a `Stable`
-    hypothesis on a `GSet World`. ⚑ What *has* landed since is one rung of it:
-    `Evidence.closed_freezes` derives the freeze from the evidence a replica
-    actually holds — "this is what `Holes.lean` §6 assumed under the name
-    `Stable`", in its own words — so the remaining gap is Era's arbiter cut,
-    not the licence in general.
+  * **The `Stable` → `Era` bridge is proved.** ⟨DONE U-0080 — see
+    `Uwueave.EraCertificate` §7⟩ §6's stability licence remains abstract
+    (`Stable Arriving P`), and `stable_inputs_seal_the_result` proves the
+    *mechanism* — stability of the inputs transports to stability of the
+    result, along the headline. `EraCertificate.era_cut_licenses_the_collapse`
+    now transports the delivery future of a settled Era world into that
+    licence, and `era_seal_survives` runs the generic seal theorem on it. The
+    boundary is still axis-specific rather than silently universal:
+    `the_cut_axis_breaks_the_seal` and `the_unlicensed_collapse_is_a_lie`
+    refute the same licence and collapse across arbiter announcements.
+    `Evidence.closed_freezes` remains the separate evidence-derived route to a
+    freeze; the Era theorem is the concrete arbiter-cut discharge.
   * **Determinacy's refutation is not a new theorem.** ⟨TERMINAL, and said
     plainly⟩ `determinacy_not_iconfluent` is `Ceiling.uniqueness_ceiling` at
     the constant selector, i.e. `Ceiling.ceiling_atMostOne` read at a new

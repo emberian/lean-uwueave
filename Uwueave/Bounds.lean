@@ -110,11 +110,13 @@ the modal model*, which is the contact this file was looking for.
   * ⟨TERMINAL for this file⟩ **Crossings are not meetings**, inherited whole from
     `Cost.lean` and `CoordEffect.lean`. Every `Nat` here is a seam crossing on a
     replica's stream; nothing in this file models attendance or coalescing.
-  * ⟨UNDONE U-0002⟩ **No exact modal/quantitative correspondence is claimed or
-    available.** §4 is a proof that none exists at zero for the per-stream
-    measure, and §6 is a one-directional bridge at the session level. What a
-    quantity whose zero *is* the modal zero would look like — a fork-aware floor,
-    minimized over seams globally — is not defined here.
+  * ⟨DONE downstream in `Uwueave.ForkGrade`⟩ **The exact correspondence now
+    exists for a fork-aware quantity.**
+    `ForkGrade.liveScenario_optimum_eq_zero_iff_no_live_clash` proves that its
+    live optimum is zero exactly when there is no live clash, and
+    `tests/DebtClosures/U_0002.lean` instantiates both directions at
+    `ForkGrade.growSpace`. The §4 counterexample for the per-stream measure and
+    the one-directional §6 session bridge remain unchanged.
   * ⟨scope⟩ **`[DecidableEq Seg]`** on every seam, inherited from
     `Cost.crossings`. The `∀ σ` floors are not vacuous over an empty class:
     `id_segmented` shows the identity seam is always valid, and

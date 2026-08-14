@@ -79,16 +79,15 @@ the verdict is indexed by.
     an explicit finite list of witnessed plans. Its refusal quantifies only over
     that list. Reading either a `ForcedFloor` or a finite-menu minimum as "the"
     unrestricted floor is exactly the scope error the types prevent.
-  * ⟨UNDONE U-0005⟩ **Composition is sequential only.** `accepted_andThen` composes two
-    accepted stretches *of one stream under one seam*, from `crossings_append`.
-    Two **concurrent** accepted sessions under one budget need the profile
-    discipline — a sibling lane is proving `opt_compose_ge_sum_opt` in
-    `Uwueave/CoordEffect.lean`, and this file deliberately does not import it.
-    The connection, in prose: an optimum over seams does not distribute over
-    concurrent composition, because the seam is a *global* choice — which is
-    precisely what `Cost.no_seam_frees_both` exhibits. So `cost(A ∥ B)` is not
-    `cost A + cost B`, and a composed budget check needs a profile that survives
-    the min-over-seams, not a sum of per-stream verdicts.
+  * ⟨DONE downstream in `Uwueave.CoordEffect`⟩ **Concurrent composition uses
+    one shared strategy profile.** `opt_compose_ge_sum_opt` gives the generic
+    compose-then-minimize inequality,
+    `opt_compose_eq_sum_opt_of_common_optimum` gives equality when both profiles
+    share a minimizer, and `pin_opt_compose_strict` proves the inequality can be
+    strict. `tests/DebtClosures/U_0005.lean` packages all three results with
+    their generic types. `accepted_andThen` remains the sequential special case:
+    it composes two stretches of one stream under one seam via
+    `crossings_append`.
   * ⟨scope⟩ **`RunLegal`, not step-totality.** A `Workload` carries legality of
     the states its own run occupies, not `∀ s o, I s → I (step s o)`. The
     unlinked document below is why: `Cost.docStep`'s version bump does *not*

@@ -115,11 +115,15 @@ clothes.
     causal metadata, and nothing here claims otherwise. §7's theorems say the
     three *models* differ, not that any invariant is unimplementable in any of
     them.
-  * ⟨UNDONE U-0106⟩ **The full universe chain is not closed.** This file's key, state,
-    context, result, and observation now inhabit independent universes, and all
-    generic instances below follow. Downstream `Histories.VersionDag` /
-    `Histories.History` and the evidence/world carriers remain in `Type 0`, so
-    the end-to-end history/certificate chain is still bounded there.
+  * ⟨DONE U-0106 — guarded by the 45 homogeneous and mixed probes in
+    `tests/DebtClosures/U_0106.lean`⟩ **The full universe chain is closed.**
+    This file's key, state, context, result, and observation inhabit independent
+    universes, and all generic instances below follow. Downstream
+    `Histories.VersionDag` / `Histories.History`, the evidence/world carriers,
+    and the history/certificate bridges now elaborate across the probed
+    `Type 0` / `Type 1` / `Type 2` combinations. These are compile-time
+    polymorphism probes, not claims that every deployment should use a
+    higher-universe carrier.
   * ⟨UNDONE U-0107⟩ **No verdict routes, no exits.** The field-kind sketch has three
     more slots (`classify` routes, exits with prices, obligation types). This
     file settles only the merge slot, which is the one codex refused.
