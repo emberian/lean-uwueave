@@ -65,6 +65,7 @@ import Uwueave.FiniteHistory
 import Uwueave.HistoryEngine
 import Uwueave.HistoryRuntime
 import Uwueave.FiniteHistoryGrowth
+import Uwueave.ResolvedHistoryGrowth
 import Uwueave.TextSummary
 import Uwueave.LiveBudget
 import Uwueave.EraCertificate
