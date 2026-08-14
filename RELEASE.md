@@ -118,16 +118,17 @@ in the crate or its locked target dependency closure, and the candidate must
 complete the real all-target Cargo build with the Lean-dependent build script.
 Update the exact CI toolchain and `scripts/v02-rust-msrv.sh` in the same change.
 
-## Pre-candidate v0.2 P1 limitations
+## Development and release debt policy
 
-The following items are visible during development and must be registered and
-disclosed rather than silently waived.  The v0.2 source preview forbids
-unclassified and P0 release debt; these named P1 limitations may remain only
-with their exact boundary and acceptance criterion intact.  Later milestones
-must close them before their stricter release contracts can hold.
+Branches and pull requests use `development-v0.2`: unclassified debt is red,
+while active P0s remain visible without blocking ordinary integration. An exact
+`v0.2.0` tag selects `release-v0.2` and fails on any active P0. An exact
+`v0.5.0` tag selects `release-v0.5` and fails while any obligation remains.
+Every other tag fails closed until its policy is explicitly registered. The
+policy reads canonical registry class and severity fields; it
+does not infer release state from marker, summary, acceptance, or document
+prose.
 
-- The census checked into the current semantic wave differs from a fresh
-  census only at four shifted line anchors. `scripts/v02-policy.sh` permits
-  exactly the pinned diagnostic hash when CI supplies the matching temporary
-  environment value. Any further census drift fails. Remove that value and
-  regenerate the census in the dedicated marker-reconciliation change.
+Debt-policy success is only one release condition. It does not authenticate a
+tag, establish that runnable evidence is semantically relevant, discharge
+external premises, or verify manifests, signatures, provenance, or artifacts.

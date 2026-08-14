@@ -2,8 +2,7 @@
 """Isolated tests for scripts/debt-gate.py.
 
 These fixtures create temporary Git repositories.  They do not inspect or
-modify the production marker corpus, whose migration is intentionally a later
-patch.
+modify the active production marker corpus.
 """
 
 from __future__ import annotations
@@ -295,11 +294,13 @@ class RepoTestCase(unittest.TestCase):
 class CurrentAndDeletionTests(RepoTestCase):
     def test_positive_current_and_deterministic_cli_output(self) -> None:
         _, base = self.make_base()
-        first = GATE.check(self.repo.root, base, "v0.2")
-        second = GATE.check(self.repo.root, base, "v0.2")
+        first = GATE.check(self.repo.root, base, "development-v0.2")
+        second = GATE.check(self.repo.root, base, "development-v0.2")
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "ok")
         self.assertEqual(first["active"], 1)
+        self.assertEqual(first["policy_profile"], "development-v0.2")
+        self.assertIsNone(first["release_tag"])
 
         command = [
             sys.executable,
@@ -309,14 +310,22 @@ class CurrentAndDeletionTests(RepoTestCase):
             "check",
             "--base",
             base,
-            "--milestone",
-            "v0.2",
+            "--profile",
+            "development-v0.2",
         ]
         environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
         one = subprocess.run(command, check=True, capture_output=True, env=environment).stdout
         two = subprocess.run(command, check=True, capture_output=True, env=environment).stdout
         self.assertEqual(one, two)
         self.assertEqual(one, (GATE.canonical_json(first) + "\n").encode())
+        compatibility_command = command[:-2] + ["--milestone", "v0.2"]
+        compatibility = subprocess.run(
+            compatibility_command,
+            check=True,
+            capture_output=True,
+            env=environment,
+        ).stdout
+        self.assertEqual(compatibility, one)
 
     def test_marker_deletion_with_row_fails(self) -> None:
         _, base = self.make_base()
@@ -1181,6 +1190,181 @@ class RunnerControlTests(unittest.TestCase):
                 )
 
 
+class PolicyProfileTests(RepoTestCase):
+    def write_policy_base(self, specs):
+        entries = []
+        for debt_id, debt_class, severity in specs:
+            label = {"premise": "PREMISE", "scope": "SCOPE"}.get(
+                debt_class, "UNDONE"
+            )
+            path = f"Uwueave/Debt{debt_id[2:]}.lean"
+            self.repo.write_source(debt_id, label=label, path=path)
+            entry = self.repo.active_entry(
+                debt_id, debt_class=debt_class, severity=severity
+            )
+            entries.append(entry)
+        self.repo.write_active(entries)
+        return entries, self.repo.commit("policy base")
+
+    def test_development_allows_p0_but_v02_release_rejects_sorted_ids(self) -> None:
+        entries, base = self.write_policy_base(
+            [("U-0002", "obligation", "P0"), ("U-0001", "obligation", "P0")]
+        )
+        for entry in entries:
+            entry["summary"] = "P3 and waived appear only as untrusted prose."
+        self.repo.write_active(entries)
+        base = self.repo.commit("canonical prose fixture")
+
+        result = GATE.check(self.repo.root, base, "development-v0.2")
+        self.assertEqual(result["policy_profile"], "development-v0.2")
+        self.assertDebtError(
+            r"policy release-v0\.2 forbids active severity P0: U-0001,U-0002",
+            lambda: GATE.check(self.repo.root, base, "release-v0.2"),
+        )
+        self.assertDebtError(
+            r"policy release-v0\.2 forbids active severity P0: U-0001,U-0002",
+            lambda: GATE.check(self.repo.root, base, release_tag="v0.2.0"),
+        )
+
+    def test_v02_release_allows_p1_p2_p3_premise_and_scope(self) -> None:
+        entries, base = self.write_policy_base(
+            [
+                ("U-0001", "obligation", "P1"),
+                ("U-0002", "obligation", "P2"),
+                ("U-0003", "obligation", "P3"),
+                ("U-0004", "premise", None),
+                ("U-0005", "scope", None),
+            ]
+        )
+        entries[0]["summary"] = "P0 appears here but is not policy data."
+        entries[0]["acceptance"] = "Close the named P0-looking prose fixture."
+        self.repo.write_active(entries)
+        base = self.repo.commit("prose is not severity")
+
+        result = GATE.check(self.repo.root, base, "release-v0.2")
+        self.assertEqual(result["policy_profile"], "release-v0.2")
+
+    def test_v05_release_rejects_every_obligation_including_p1(self) -> None:
+        _, base = self.write_policy_base(
+            [
+                ("U-0001", "obligation", "P0"),
+                ("U-0002", "obligation", "P1"),
+                ("U-0003", "obligation", "P2"),
+                ("U-0004", "obligation", "P3"),
+                ("U-0005", "premise", None),
+            ]
+        )
+        self.assertDebtError(
+            r"policy release-v0\.5 forbids active class obligation: "
+            r"U-0001,U-0002,U-0003,U-0004",
+            lambda: GATE.check(self.repo.root, base, release_tag="v0.5.0"),
+        )
+
+    def test_v05_release_accepts_only_premise_and_scope(self) -> None:
+        _, base = self.write_policy_base(
+            [("U-0001", "premise", None), ("U-0002", "scope", None)]
+        )
+        result = GATE.check(self.repo.root, base, release_tag="v0.5.0")
+        self.assertEqual(result["policy_profile"], "release-v0.5")
+        self.assertEqual(result["release_tag"], "v0.5.0")
+
+    def test_closed_p0_and_reference_do_not_count_as_active(self) -> None:
+        self.repo.write_source("U-0001")
+        entry = self.repo.active_entry("U-0001", severity="P0")
+        self.repo.write_active([entry])
+        base = self.repo.commit("active P0 base")
+
+        source = self.repo.root / "Uwueave/Debt.lean"
+        source.write_text("-- ⟨DEBT-REF U-0001⟩\n", encoding="utf-8")
+        self.repo.write_active([])
+        evidence = self.repo.case_manifest("U-0001")
+        self.repo.write_receipt(receipt_for(entry, "implemented", [evidence]))
+        with self.repo.fake_rust_tools():
+            result = GATE.check(self.repo.root, base, release_tag="v0.2.0")
+        self.assertEqual(result["active"], 0)
+        self.assertEqual(result["closed"], 1)
+        self.assertEqual(result["refs"], 1)
+
+    def test_unclassified_profiles_and_deprecated_alias(self) -> None:
+        _, base = self.write_policy_base([("U-0001", "unclassified", None)])
+        self.assertEqual(GATE.check(self.repo.root, base)["unclassified"], 1)
+        for profile in ("development-v0.2", "release-v0.2", "release-v0.5", "v0.2"):
+            with self.subTest(profile=profile):
+                self.assertDebtError(
+                    "forbids unclassified debt: U-0001",
+                    lambda profile=profile: GATE.check(self.repo.root, base, profile),
+                )
+
+    def test_exact_tag_mapping_and_cli_mutual_exclusion_fail_closed(self) -> None:
+        self.assertEqual(
+            GATE.resolve_policy(None, "v0.2.0"), ("release-v0.2", "v0.2.0")
+        )
+        self.assertEqual(
+            GATE.resolve_policy(None, "v0.5.0"), ("release-v0.5", "v0.5.0")
+        )
+        for tag in (
+            "v0.2.1",
+            "v0.2.0-rc.1",
+            "v0.3.0",
+            "v0.4.0",
+            "v0.5.1",
+            "v0.2.0\nrelease",
+            "$(printf forged)",
+            "",
+        ):
+            with self.subTest(tag=tag):
+                self.assertDebtError(
+                    "unsupported release tag",
+                    lambda tag=tag: GATE.resolve_policy(None, tag),
+                )
+        self.assertDebtError(
+            "mutually exclusive",
+            lambda: GATE.resolve_policy("development-v0.2", "v0.2.0"),
+        )
+        self.assertDebtError(
+            "unknown debt policy profile",
+            lambda: GATE.resolve_policy("unknown", None),
+        )
+        parser = GATE.build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(
+                [
+                    "check",
+                    "--base",
+                    "deadbeef",
+                    "--profile",
+                    "development-v0.2",
+                    "--release-tag",
+                    "v0.2.0",
+                ]
+            )
+        with self.assertRaises(SystemExit):
+            parser.parse_args(
+                ["check", "--base", "deadbeef", "--profile", "unknown"]
+            )
+
+    def test_policy_wrapper_exposes_only_an_exact_release_tag_argument(self) -> None:
+        wrapper = SCRIPT.with_name("v02-policy.sh")
+        for arguments in (
+            ["--profile", "release-v0.2"],
+            ["--release-tag"],
+            ["--release-tag", ""],
+            ["--release-tag", "v0.2.0", "trailing"],
+        ):
+            with self.subTest(arguments=arguments):
+                process = subprocess.run(
+                    ["bash", wrapper, *arguments],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(process.returncode, 2)
+                self.assertEqual(
+                    process.stderr,
+                    "usage: scripts/v02-policy.sh [--release-tag EXACT_TAG]\n",
+                )
+
+
 class BootstrapTests(RepoTestCase):
     def test_guarded_bootstrap_is_base_exact_atomic_and_unclassified(self) -> None:
         self.repo.write_source("U-0001")
@@ -1293,17 +1477,6 @@ class BootstrapTests(RepoTestCase):
             lambda: GATE.bootstrap(
                 self.repo.root, base, "docs/debt/active.jsonl", True
             ),
-        )
-
-    def test_milestone_rejects_unclassified_but_plain_check_allows_it(self) -> None:
-        self.repo.write_source("U-0001")
-        entry = self.repo.active_entry("U-0001", debt_class="unclassified")
-        self.repo.write_active([entry])
-        base = self.repo.commit()
-        self.assertEqual(GATE.check(self.repo.root, base, None)["unclassified"], 1)
-        self.assertDebtError(
-            "milestone v0.2 forbids unclassified debt",
-            lambda: GATE.check(self.repo.root, base, "v0.2"),
         )
 
     def test_symlinked_registry_and_source_are_rejected(self) -> None:

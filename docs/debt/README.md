@@ -8,7 +8,7 @@ fully classified `active.jsonl`. The normal repository gate is:
 ```sh
 scripts/debt-gate.py check \
   --base 6331af269f80c25c26775299b4678c29b45716cc \
-  --milestone v0.2
+  --profile development-v0.2
 ```
 
 That baseline SHA is source-controlled and is the same for pull requests,
@@ -18,10 +18,13 @@ amend, or cherry-pick the baseline under a new identity after a descendant
 names it. CI uses a full-history checkout so the gate can inspect every
 post-baseline commit.
 
-A green registry check is not a release claim. The `v0.2` milestone forbids
-unclassified rows, but it does not forbid P0/P1 obligations, establish the
-semantic relevance of runnable closure evidence, discharge external trust
-premises, authenticate GitHub refs, or verify release signatures and artifacts.
+A green development registry check is not a release claim. The
+`development-v0.2` profile forbids unclassified rows but permits active P0s so
+ordinary branches and pull requests can carry visible work. `release-v0.2`
+also rejects every active P0; `release-v0.5` rejects every active obligation.
+These policies do not establish the semantic relevance of runnable closure
+evidence, discharge external trust premises, authenticate GitHub refs, or
+verify release signatures and artifacts.
 
 ## Source grammar
 
@@ -76,12 +79,19 @@ and exactly these keys:
 - `UNDONE` admits `obligation` or `unclassified`; the other marker labels map
   exactly to their corresponding classes.
 
-An ordinary check permits unclassified rows during triage. Supplying a release
-milestone does not:
+An ordinary profile-free check permits unclassified rows during local triage.
+CI development and release profiles do not:
 
 ```sh
-scripts/debt-gate.py check --base BASE_COMMIT --milestone v0.2
+scripts/debt-gate.py check --base BASE_COMMIT --profile development-v0.2
+scripts/debt-gate.py check --base BASE_COMMIT --release-tag v0.2.0
 ```
+
+Release tags map through an exact, source-controlled table. `v0.2.0` selects
+`release-v0.2`, and `v0.5.0` selects `release-v0.5`; unknown, malformed, patch,
+and prerelease tags fail closed until explicitly registered. The deprecated
+`--milestone v0.2` spelling temporarily aliases only `development-v0.2` for
+in-flight receipt tooling and can never select a release policy.
 
 ## Immutable closure receipts
 

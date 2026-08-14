@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [dev]
-    tags: ['v*']
+    tags: ['**']
   pull_request:
     branches: [dev]
 
@@ -47,8 +47,15 @@ jobs:
       - name: Hydrate locked debt-evidence dependencies
         run: cargo fetch --manifest-path rust/Cargo.toml --locked
 
-      - name: Metadata, debt, census, and mocked hbox gates
+      - name: Development metadata, debt, census, and mocked hbox gates
+        if: github.ref_type != 'tag'
         run: scripts/v02-policy.sh
+
+      - name: Release-tag metadata, debt, census, and mocked hbox gates
+        if: github.ref_type == 'tag'
+        env:
+          UWUEAVE_RELEASE_TAG: ${{ github.ref_name }}
+        run: scripts/v02-policy.sh --release-tag "$UWUEAVE_RELEASE_TAG"
 
   lean-acceptance:
     name: lean acceptance (cold Linux)

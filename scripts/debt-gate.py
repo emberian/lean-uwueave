@@ -34,8 +34,32 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 SCHEMA = 1
 ID_RE = re.compile(r"U-[0-9]{4}\Z")
 HEX_RE = re.compile(r"[0-9a-f]{64}\Z")
-MILESTONE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 BASE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/@{}^~+\-]*\Z")
+
+# Release policy is structured data over canonical registry fields.  It never
+# searches summaries, acceptance text, marker prose, or release documentation.
+POLICY_PROFILES = {
+    "development-v0.2": {
+        "forbid_unclassified": True,
+        "forbidden_classes": frozenset(),
+        "forbidden_severities": frozenset(),
+    },
+    "release-v0.2": {
+        "forbid_unclassified": True,
+        "forbidden_classes": frozenset(),
+        "forbidden_severities": frozenset({"P0"}),
+    },
+    "release-v0.5": {
+        "forbid_unclassified": True,
+        "forbidden_classes": frozenset({"obligation"}),
+        "forbidden_severities": frozenset(),
+    },
+}
+RELEASE_TAG_PROFILES = {
+    "v0.2.0": "release-v0.2",
+    "v0.5.0": "release-v0.5",
+}
+DEPRECATED_MILESTONE_PROFILES = {"v0.2": "development-v0.2"}
 
 ACTIVE_KEYS = {
     "acceptance",
@@ -1300,7 +1324,7 @@ def validate_head(
     active: Sequence[Mapping[str, Any]],
     receipts: Mapping[str, Mapping[str, Any]],
     scan: SourceScan,
-    milestone: Optional[str],
+    policy_profile: Optional[str],
 ) -> None:
     active_by_id = {entry["id"]: entry for entry in active}
     active_ids = set(active_by_id)
@@ -1338,15 +1362,39 @@ def validate_head(
                 raise DebtError(
                     f"docs/debt/closed/{debt_id}.json: replacement_id must name an active item"
                 )
-    if milestone is not None:
-        if not MILESTONE_RE.fullmatch(milestone):
-            raise DebtError("--milestone must be a simple stable label")
+    if policy_profile is not None:
+        policy = POLICY_PROFILES.get(policy_profile)
+        if policy is None:
+            raise DebtError(f"unknown debt policy profile: {policy_profile}")
         unclassified = sorted(
             entry["id"] for entry in active if entry["class"] == "unclassified"
         )
-        if unclassified:
+        if policy["forbid_unclassified"] and unclassified:
             raise DebtError(
-                f"milestone {milestone} forbids unclassified debt: " + ",".join(unclassified)
+                f"policy {policy_profile} forbids unclassified debt: "
+                + ",".join(unclassified)
+            )
+        forbidden_severities = sorted(
+            entry["id"]
+            for entry in active
+            if entry["severity"] in policy["forbidden_severities"]
+        )
+        if forbidden_severities:
+            labels = ",".join(sorted(policy["forbidden_severities"]))
+            raise DebtError(
+                f"policy {policy_profile} forbids active severity {labels}: "
+                + ",".join(forbidden_severities)
+            )
+        forbidden_classes = sorted(
+            entry["id"]
+            for entry in active
+            if entry["class"] in policy["forbidden_classes"]
+        )
+        if forbidden_classes:
+            labels = ",".join(sorted(policy["forbidden_classes"]))
+            raise DebtError(
+                f"policy {policy_profile} forbids active class {labels}: "
+                + ",".join(forbidden_classes)
             )
 
 
@@ -1574,13 +1622,36 @@ def validate_committed_history(root: Path, base: str) -> None:
         states[commit] = (active_by_id, receipt_raw, receipts)
 
 
-def check(root: Path, base_name: str, milestone: Optional[str]) -> Dict[str, Any]:
+def resolve_policy(
+    policy_profile: Optional[str], release_tag: Optional[str]
+) -> Tuple[Optional[str], Optional[str]]:
+    if policy_profile is not None and release_tag is not None:
+        raise DebtError("--profile and --release-tag are mutually exclusive")
+    if release_tag is not None:
+        resolved = RELEASE_TAG_PROFILES.get(release_tag)
+        if resolved is None:
+            raise DebtError(f"unsupported release tag: {release_tag}")
+        return resolved, release_tag
+    if policy_profile in DEPRECATED_MILESTONE_PROFILES:
+        policy_profile = DEPRECATED_MILESTONE_PROFILES[policy_profile]
+    if policy_profile is not None and policy_profile not in POLICY_PROFILES:
+        raise DebtError(f"unknown debt policy profile: {policy_profile}")
+    return policy_profile, None
+
+
+def check(
+    root: Path,
+    base_name: str,
+    policy_profile: Optional[str] = None,
+    release_tag: Optional[str] = None,
+) -> Dict[str, Any]:
+    policy_profile, release_tag = resolve_policy(policy_profile, release_tag)
     base = resolve_base(root, base_name)
     ensure_base_ancestor(root, base)
     _, active = read_active(root)
     receipt_raw, receipts = read_receipts(root)
     scan = scan_sources(root)
-    validate_head(root, active, receipts, scan, milestone)
+    validate_head(root, active, receipts, scan, policy_profile)
     validate_committed_history(root, base)
     head = _run_git(root, ["rev-parse", "--verify", "HEAD^{commit}"]).decode("ascii").strip()
     head_active, head_receipt_raw, head_receipts = read_base_state(root, head)
@@ -1593,7 +1664,8 @@ def check(root: Path, base_name: str, milestone: Optional[str]) -> Dict[str, Any
         "active": len(active),
         "base": base,
         "closed": len(receipts),
-        "milestone": milestone,
+        "policy_profile": policy_profile,
+        "release_tag": release_tag,
         "refs": len(scan.refs),
         "schema": SCHEMA,
         "status": "ok",
@@ -1725,12 +1797,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", help="repository root (test-only override)")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("audit", help="report pre-migration marker state without gating")
+    subparsers.add_parser("audit", help="report lexical registry state without gating")
 
     check_parser = subparsers.add_parser("check", help="run the post-migration gate")
     check_parser.add_argument("--base", required=True, help="trusted comparison commit")
-    check_parser.add_argument(
-        "--milestone", help="release milestone; forbids unclassified active debt"
+    policy_group = check_parser.add_mutually_exclusive_group()
+    policy_group.add_argument(
+        "--profile",
+        choices=sorted(POLICY_PROFILES),
+        help="explicit development or release debt policy",
+    )
+    policy_group.add_argument(
+        "--release-tag",
+        help="exact registered release tag; unknown tags fail closed",
+    )
+    policy_group.add_argument(
+        "--milestone",
+        choices=sorted(DEPRECATED_MILESTONE_PROFILES),
+        help=argparse.SUPPRESS,
     )
 
     bootstrap_parser = subparsers.add_parser(
@@ -1750,7 +1834,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if arguments.command == "audit":
             result = audit_sources(root)
         elif arguments.command == "check":
-            result = check(root, arguments.base, arguments.milestone)
+            selected_profile = arguments.profile or arguments.milestone
+            result = check(root, arguments.base, selected_profile, arguments.release_tag)
         else:
             result = bootstrap(
                 root,

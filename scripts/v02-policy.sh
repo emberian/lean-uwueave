@@ -3,6 +3,19 @@
 
 set -euo pipefail
 
+usage() {
+  echo 'usage: scripts/v02-policy.sh [--release-tag EXACT_TAG]' >&2
+}
+
+debt_policy_args=(--profile development-v0.2)
+if (( $# != 0 )); then
+  if (( $# != 2 )) || [[ $1 != --release-tag || -z $2 ]]; then
+    usage
+    exit 2
+  fi
+  debt_policy_args=(--release-tag "$2")
+fi
+
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/.." && pwd)
 cd -- "$repo_root"
@@ -47,7 +60,7 @@ bash tests/hbox-checkpoint.sh
 
 echo 'v0.2 policy: checking the immutable debt registry and committed ancestry'
 readonly debt_registry_base=6331af269f80c25c26775299b4678c29b45716cc
-scripts/debt-gate.py check --base "$debt_registry_base" --milestone v0.2
+scripts/debt-gate.py check --base "$debt_registry_base" "${debt_policy_args[@]}"
 
 echo 'v0.2 policy: checking the lexical UNDONE census'
 LC_ALL=C scripts/undone-census.sh --check
