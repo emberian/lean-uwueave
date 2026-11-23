@@ -16,29 +16,42 @@ Modes:
   compare BASELINE CURRENT  Apply regression and scaling thresholds to two TSVs.
   all                       Run goldens, current profile, and compare with the
                             committed ab4c767 baseline.
-  wave26-golden             Check Wave26 names/types/semantic rows, diagnostics,
-                            rollback/name reuse, and API availability status.
-  wave26-record-goldens DIR Write freshly canonicalized Wave26 goldens to DIR.
-  wave26-profile [ROOT]     Profile program, plan, observation, and V3 controls.
-  wave26-baseline [COMMIT]  Profile an isolated commit (default: 49881d3).
-  wave26-compare BASE CUR   Compare Wave26 profiles. Wall time is informational;
-                            work phases and RSS are hard regression gates.
-  wave26-all                Run Wave26 goldens, baseline, current, and compare.
-  wave27-golden             Check the exact 37-constant V3 export prefix,
-                            rollback/name reuse, and Wave27 API status.
-  wave27-record-goldens DIR Write freshly canonicalized Wave27 goldens to DIR.
-  wave27-profile [ROOT]     Profile optimized V3 export and available controls.
-  wave27-baseline [COMMIT]  Profile an isolated commit (default: 81aa899).
-  wave27-compare BASE CUR   Compare Wave27 profiles; wall is informational and
-                            the V3 export RSS ceiling is 4 MiB/item.
-  wave27-all                Run Wave27 goldens, baseline, current, and compare.
-  wave29-golden             Check finite repair/history outputs and API status.
-  wave29-record-goldens DIR Write freshly canonicalized Wave29 goldens to DIR.
-  wave29-profile [ROOT]     Profile finite repair/history N=0/1/4/16 controls.
-  wave29-baseline [COMMIT]  Profile an isolated commit (default: 8f649c8).
-  wave29-compare BASE CUR   Compare Wave29 scaling; wall is informational and
-                            RSS growth may not exceed 4 MiB/item.
-  wave29-all                Run Wave29 goldens, baseline, current, and compare.
+  program-surface-golden    Check program, plan, and observation names, types,
+                            semantic rows, diagnostics, rollback/name reuse,
+                            and API availability status.
+  program-surface-record-goldens DIR
+                            Write freshly canonicalized goldens to DIR.
+  program-surface-profile [ROOT]
+                            Profile program, plan, observation, and V3 controls.
+  program-surface-baseline [COMMIT]
+                            Profile an isolated commit (default: 49881d3).
+  program-surface-compare BASE CUR
+                            Compare profiles. Wall time is informational; work
+                            phases and RSS are hard regression gates.
+  program-surface-all       Run goldens, baseline, current, and compare.
+  export-schema-golden      Check the exact 37-constant V3 export prefix,
+                            rollback/name reuse, and API status.
+  export-schema-record-goldens DIR
+                            Write freshly canonicalized goldens to DIR.
+  export-schema-profile [ROOT]
+                            Profile optimized V3 export and available controls.
+  export-schema-baseline [COMMIT]
+                            Profile an isolated commit (default: 81aa899).
+  export-schema-compare BASE CUR
+                            Compare profiles; wall is informational and the V3
+                            export RSS ceiling is 4 MiB/item.
+  export-schema-all         Run goldens, baseline, current, and compare.
+  history-delivery-golden   Check finite repair/history outputs and API status.
+  history-delivery-record-goldens DIR
+                            Write freshly canonicalized goldens to DIR.
+  history-delivery-profile [ROOT]
+                            Profile finite repair/history N=0/1/4/16 controls.
+  history-delivery-baseline [COMMIT]
+                            Profile an isolated commit (default: 8f649c8).
+  history-delivery-compare BASE CUR
+                            Compare scaling; wall is informational and RSS
+                            growth may not exceed 4 MiB/item.
+  history-delivery-all      Run goldens, baseline, current, and compare.
 
 Profiling uses two warmups and five measured serialized `lean -j1 --profile`
 runs by default. If wall or user MAD exceeds 8%, it retries with nine measured
@@ -202,7 +215,7 @@ prepare_root() {
 prepare_wave26_root() {
   local root=$1
   if [[ ${PREO_BENCH_SKIP_BUILD:-0} != 1 ]]; then
-    echo "preo-bench: refreshing Wave26 benchmark dependencies in $root" >&2
+    echo "preo-bench: refreshing program-surface benchmark dependencies in $root" >&2
     local targets=(Uwueave.Preo.StateProgramSurfaceTests
       Uwueave.Preo.PlanningSurface Uwueave.Preo.Quickstart
       Uwueave.Preo.ProjectionV3)
@@ -249,7 +262,7 @@ wave27_api_available() {
 prepare_wave27_root() {
   local root=$1
   if [[ ${PREO_BENCH_SKIP_BUILD:-0} != 1 ]]; then
-    echo "preo-bench: refreshing Wave27 benchmark dependencies in $root" >&2
+    echo "preo-bench: refreshing export-schema benchmark dependencies in $root" >&2
     local targets=(Uwueave.Preo.ArtifactV3Surface Uwueave.Preo.Quickstart)
     if wave27_api_available "$root" authenticated_context; then
       targets+=(Uwueave.AuthenticatedWorldContext)
@@ -283,7 +296,7 @@ prepare_wave29_root() {
     wave29_api_available "$root" finite_history_delivery &&
       targets+=(Uwueave.FiniteHistoryDelivery)
     if (( ${#targets[@]} > 0 )); then
-      echo "preo-bench: refreshing Wave29 benchmark dependencies in $root" >&2
+      echo "preo-bench: refreshing history-delivery benchmark dependencies in $root" >&2
       (cd -- "$root" && lake build "${targets[@]}") >&2
     fi
   fi
@@ -416,7 +429,7 @@ wave26_golden_check() {
   local file
   for file in names-types-rows.tsv diagnostics-rollback.tsv api-status.tsv; do
     if ! cmp -s -- "$wave26_expected_dir/$file" "$actual/$file"; then
-      echo "preo-bench: Wave26 golden mismatch: $file" >&2
+      echo "preo-bench: program-surface golden mismatch: $file" >&2
       diff -u -- "$wave26_expected_dir/$file" "$actual/$file" >&2 || true
       failed=1
     fi
@@ -478,7 +491,7 @@ wave27_golden_check() {
   local file
   for file in export-prefix.tsv rollback.tsv api-status.tsv; do
     if ! cmp -s -- "$wave27_expected_dir/$file" "$actual/$file"; then
-      echo "preo-bench: Wave27 golden mismatch: $file" >&2
+      echo "preo-bench: export-schema golden mismatch: $file" >&2
       diff -u -- "$wave27_expected_dir/$file" "$actual/$file" >&2 || true
       failed=1
     fi
@@ -487,7 +500,7 @@ wave27_golden_check() {
   count=$(LC_ALL=C awk '$1 == "CONST" { n++ } END { print n + 0 }' \
     "$actual/export-prefix.tsv")
   if [[ $count != 37 ]]; then
-    echo "preo-bench: Wave27 export prefix has $count constants; expected 37" >&2
+    echo "preo-bench: export-schema export prefix has $count constants; expected 37" >&2
     failed=1
   fi
   (( failed == 0 )) || exit 1
@@ -531,7 +544,7 @@ wave29_golden_check() {
   capture_wave29_goldens "$repo_root" "$actual"
   for file in repair-output.txt history-output.txt api-status.tsv; do
     if ! cmp -s -- "$wave29_expected_dir/$file" "$actual/$file"; then
-      echo "preo-bench: Wave29 golden mismatch: $file" >&2
+      echo "preo-bench: history-delivery golden mismatch: $file" >&2
       diff -u -- "$wave29_expected_dir/$file" "$actual/$file" >&2 || true
       failed=1
     fi
@@ -722,7 +735,7 @@ wave26_profile_root() {
     if [[ $(cut -f6 <<<"$row") == 1 ]]; then saw_noisy=1; fi
   done
   if (( saw_noisy )); then
-    echo "preo-bench: one or more Wave26 cases remain infrastructure-noisy" >&2
+    echo "preo-bench: one or more program-surface cases remain infrastructure-noisy" >&2
     return 3
   fi
 }
@@ -748,7 +761,7 @@ wave27_profile_root() {
     if [[ $(cut -f6 <<<"$row") == 1 ]]; then saw_noisy=1; fi
   done
   if (( saw_noisy )); then
-    echo "preo-bench: one or more Wave27 cases remain infrastructure-noisy" >&2
+    echo "preo-bench: one or more export-schema cases remain infrastructure-noisy" >&2
     return 3
   fi
 }
@@ -771,7 +784,7 @@ wave29_profile_root() {
     if [[ $(cut -f6 <<<"$row") == 1 ]]; then saw_noisy=1; fi
   done
   if (( saw_noisy )); then
-    echo "preo-bench: one or more Wave29 cases remain infrastructure-noisy" >&2
+    echo "preo-bench: one or more history-delivery cases remain infrastructure-noisy" >&2
     return 3
   fi
 }
@@ -989,8 +1002,8 @@ compare_profiles() {
 
 compare_wave26_profiles() {
   local baseline=$1 current=$2
-  [[ -f $baseline ]] || { echo "preo-bench: missing Wave26 baseline: $baseline" >&2; exit 2; }
-  [[ -f $current ]] || { echo "preo-bench: missing Wave26 current profile: $current" >&2; exit 2; }
+  [[ -f $baseline ]] || { echo "preo-bench: missing program-surface baseline: $baseline" >&2; exit 2; }
+  [[ -f $current ]] || { echo "preo-bench: missing program-surface current profile: $current" >&2; exit 2; }
   awk -F '\t' '
     BEGIN {
       OFS = "\t"
@@ -1081,8 +1094,8 @@ compare_wave26_profiles() {
 
 compare_wave27_profiles() {
   local baseline=$1 current=$2
-  [[ -f $baseline ]] || { echo "preo-bench: missing Wave27 baseline: $baseline" >&2; exit 2; }
-  [[ -f $current ]] || { echo "preo-bench: missing Wave27 current profile: $current" >&2; exit 2; }
+  [[ -f $baseline ]] || { echo "preo-bench: missing export-schema baseline: $baseline" >&2; exit 2; }
+  [[ -f $current ]] || { echo "preo-bench: missing export-schema current profile: $current" >&2; exit 2; }
   awk -F '\t' '
     BEGIN {
       OFS = "\t"
@@ -1172,8 +1185,8 @@ compare_wave27_profiles() {
 
 compare_wave29_profiles() {
   local baseline=$1 current=$2
-  [[ -f $baseline ]] || { echo "preo-bench: missing Wave29 baseline: $baseline" >&2; exit 2; }
-  [[ -f $current ]] || { echo "preo-bench: missing Wave29 current profile: $current" >&2; exit 2; }
+  [[ -f $baseline ]] || { echo "preo-bench: missing history-delivery baseline: $baseline" >&2; exit 2; }
+  [[ -f $current ]] || { echo "preo-bench: missing history-delivery current profile: $current" >&2; exit 2; }
   awk -F '\t' '
     BEGIN { OFS="\t"; print "case", "metric", "baseline", "current", "delta", "percent", "status" }
     FNR == 1 { next }
@@ -1233,6 +1246,12 @@ compare_wave29_profiles() {
 }
 
 mode=${1:-}
+# Earlier development-era spellings stay accepted for existing automation.
+case "$mode" in
+  wave26-*) mode="program-surface-${mode#wave26-}" ;;
+  wave27-*) mode="export-schema-${mode#wave27-}" ;;
+  wave29-*) mode="history-delivery-${mode#wave29-}" ;;
+esac
 case "$mode" in
   -h|--help|'') usage; [[ -n $mode ]] || exit 2 ;;
   golden) golden_check ;;
@@ -1247,19 +1266,19 @@ case "$mode" in
     [[ $# == 3 ]] || { usage >&2; exit 2; }
     compare_profiles "$2" "$3"
     ;;
-  wave26-golden) wave26_golden_check ;;
-  wave26-record-goldens)
+  program-surface-golden) wave26_golden_check ;;
+  program-surface-record-goldens)
     [[ $# == 2 ]] || { usage >&2; exit 2; }
     prepare_wave26_root "$repo_root"
     capture_wave26_goldens "$repo_root" "$2"
     ;;
-  wave26-profile) wave26_profile_root "${2:-$repo_root}" ;;
-  wave26-baseline) wave26_baseline_profile "${2:-49881d3}" ;;
-  wave26-compare)
+  program-surface-profile) wave26_profile_root "${2:-$repo_root}" ;;
+  program-surface-baseline) wave26_baseline_profile "${2:-49881d3}" ;;
+  program-surface-compare)
     [[ $# == 3 ]] || { usage >&2; exit 2; }
     compare_wave26_profiles "$2" "$3"
     ;;
-  wave26-all)
+  program-surface-all)
     make_tmp
     wave26_golden_check
     wave26_current="$tmp_dir/wave26-current.tsv"
@@ -1268,19 +1287,19 @@ case "$mode" in
     wave26_profile_root "$repo_root" >"$wave26_current"
     compare_wave26_profiles "$wave26_baseline" "$wave26_current"
     ;;
-  wave27-golden) wave27_golden_check ;;
-  wave27-record-goldens)
+  export-schema-golden) wave27_golden_check ;;
+  export-schema-record-goldens)
     [[ $# == 2 ]] || { usage >&2; exit 2; }
     prepare_wave27_root "$repo_root"
     capture_wave27_goldens "$repo_root" "$2"
     ;;
-  wave27-profile) wave27_profile_root "${2:-$repo_root}" ;;
-  wave27-baseline) wave27_baseline_profile "${2:-81aa899}" ;;
-  wave27-compare)
+  export-schema-profile) wave27_profile_root "${2:-$repo_root}" ;;
+  export-schema-baseline) wave27_baseline_profile "${2:-81aa899}" ;;
+  export-schema-compare)
     [[ $# == 3 ]] || { usage >&2; exit 2; }
     compare_wave27_profiles "$2" "$3"
     ;;
-  wave27-all)
+  export-schema-all)
     make_tmp
     wave27_golden_check
     wave27_current="$tmp_dir/wave27-current.tsv"
@@ -1289,19 +1308,19 @@ case "$mode" in
     wave27_profile_root "$repo_root" >"$wave27_current"
     compare_wave27_profiles "$wave27_baseline" "$wave27_current"
     ;;
-  wave29-golden) wave29_golden_check ;;
-  wave29-record-goldens)
+  history-delivery-golden) wave29_golden_check ;;
+  history-delivery-record-goldens)
     [[ $# == 2 ]] || { usage >&2; exit 2; }
     prepare_wave29_root "$repo_root"
     capture_wave29_goldens "$repo_root" "$2"
     ;;
-  wave29-profile) wave29_profile_root "${2:-$repo_root}" ;;
-  wave29-baseline) wave29_baseline_profile "${2:-8f649c8}" ;;
-  wave29-compare)
+  history-delivery-profile) wave29_profile_root "${2:-$repo_root}" ;;
+  history-delivery-baseline) wave29_baseline_profile "${2:-8f649c8}" ;;
+  history-delivery-compare)
     [[ $# == 3 ]] || { usage >&2; exit 2; }
     compare_wave29_profiles "$2" "$3"
     ;;
-  wave29-all)
+  history-delivery-all)
     make_tmp
     wave29_golden_check
     wave29_current="$tmp_dir/wave29-current.tsv"

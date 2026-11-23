@@ -640,6 +640,27 @@ committing that move to the isolated recovery execution state. Any refusal,
 unavailable dependency, projection error, or field mismatch prevents a ready
 runtime.
 
+**Checkpointed preflight.** The host indexes the immutable weave and authority
+substrate once. For an in-order candidate, the last committed effective-parent
+block is the starting state for one FORMAT-v3 kernel step. Preflight keeps its
+prospective checkpoint private until the journal append succeeds. For a late
+arrival the host selects a snapshot strictly below the candidate and replays
+missing predecessors in batches of up to 64. It discards snapshots invalidated
+by the insertion. Up to 16 historical snapshots supplement the current one.
+A very old move can require linear replay work. Each new certificate contains
+only that move on its exact predecessor base, regardless of the cache policy.
+
+`checkpoint_suffix_preflight_eq_full_replay` proves agreement on the
+effective tree, verdicts, replay order and gate refusals for an ordered suffix.
+`candidate_statuses_before_later_moves` justifies stopping at the selected
+operation. `crash_recovery_eq_full_replay` covers replay of ordered durable
+batches in the model. Rust's snapshot selection, external providers and disk
+recovery are exercised by differential, mixed-journal and crash tests.
+
+The signed kind-3 wire still encodes the Lamport clock in unary. The journal
+packs repeated bytes on disk. Projection and signature verification consume
+the original bytes. Section 21 of `PERFORMANCE.md` gives both clock schedules.
+
 This is an executable host composition boundary, exercised by **11/11 focused
 end-to-end tests**, not a formal end-to-end authentication theorem.
 The final serialized all-target checkpoint passed **177/177** in **125.72s
@@ -825,12 +846,24 @@ additive and loud:
 `rust/src/persistence/authenticated.rs` is a separate physical domain, not a
 new tag in legacy `UWDJRN01`. `AuthenticatedMoveJournal` uses marker
 `UWAMV401` and domain `uwueave.authenticated-move-journal.v1`. Each canonical
-v1 body preserves one crate-private already-checked kind-3 record: exact request,
+record preserves a Lean-checked v2 certificate for one kind-3 request: exact request,
 signing and signature bytes; nonce and operation scopes; nonempty context plus
 the exact framed execution-base binding and resolver/authority/membership
 policy versions; stable ids, projection and
 concrete `MoveOp`; prior head; and the prefix-relative `Applied` or
 `SkippedCycle` observation.
+
+The physical body is either a verbatim v2 certificate (tag 2) or a packed
+certificate (tag 3). Each packed segment has two little-endian u32 counts
+followed by the literal bytes. Decoding copies those literals and then emits
+the counted run of byte 1. The writer packs maximal runs of at least 16 bytes
+and selects this form only when it saves space. Opening bounds expansion by
+the configured record limit and the Lean certificate ceiling, checks canonical
+packing, and recovers the exact bytes for Lean validation. The chain commitment
+covers the physical body. Legacy full-history v2 records retain their original
+pins and retry encoding. Earlier readers cannot recover new singleton traces
+or packed records. Record and trace size ceilings apply to the new encoding.
+A move whose full-history trace once exceeded a limit can now fit.
 
 The same record owns nonce/operation retry-versus-collision indexing and the
 append. Indexes advance only after the physical append succeeds. A domain-

@@ -60,6 +60,14 @@ use crate::causal::{CausalWeave, NodeId};
 use crate::ffi;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::ops::Bound;
+
+/// Interval between retained historical snapshots and maximum replay batch.
+pub(crate) const CHECKPOINT_INTERVAL: usize = 64;
+
+/// Checkpoints retained for operations arriving out of timestamp order. An
+/// operation older than every retained checkpoint rebuilds its preceding prefix.
+pub(crate) const MAX_RETAINED_CHECKPOINTS: usize = 16;
 
 /// A delegation grant — `Uwueave/Authority.lean`'s `(id, parent, scope)`
 /// triple. `parent == 0` means "issued by the root authority"; `0` is never a
@@ -360,6 +368,14 @@ impl MoveLog {
         &self,
         weave: &CausalWeave<T>,
     ) -> CertifiedReplay {
+        self.replay_sorted(weave, self.ops.iter())
+    }
+
+    fn replay_sorted<'a, T: AsRef<[u8]> + Clone + PartialEq>(
+        &self,
+        weave: &CausalWeave<T>,
+        operations: impl Iterator<Item = &'a MoveOp>,
+    ) -> CertifiedReplay {
         // Dense, deterministic indexing: BTreeMap iteration is sorted by id,
         // identical on every replica with the same weave.
         let ids: Vec<NodeId> = weave.nodes().map(|n| n.id()).collect();
@@ -376,7 +392,9 @@ impl MoveLog {
         // Lean, not this code, turns these values into FORMAT-v3 bytes.
         let mut request_slots: Vec<ReplayRequestSlot> = Vec::with_capacity(self.ops.len());
         let mut ops_encoded: Vec<ffi::ReplayOpInput> = Vec::with_capacity(self.ops.len());
-        for (li, op) in self.ops.iter().enumerate() {
+        let mut outcomes = Vec::with_capacity(self.ops.len());
+        for (li, op) in operations.enumerate() {
+            outcomes.push((*op, OpOutcome::OmittedUnknownNode));
             let (child, dest) = match (
                 index.get(&op.child),
                 match op.dest {
@@ -400,41 +418,7 @@ impl MoveLog {
             });
         }
         let m = ops_encoded.len();
-        let mut first_parent = Vec::with_capacity(n);
-        for id in &ids {
-            let node = weave
-                .get(id)
-                .expect("ids were just enumerated from this weave");
-            let fp: i64 = match node.parents().first() {
-                None => -1,
-                Some(p) => {
-                    // ExecRefine's `GroundedBase` hypothesis, enforced where
-                    // Rust meets Lean: every acyclicity theorem about the
-                    // kernel (`absReplay_acyclic` and kin) assumes some rank
-                    // strictly descends along the encoded firstParent edges.
-                    // `CausalWeave` supplies exactly that rank (grounded by
-                    // construction at insert), so this can only fire on a
-                    // corrupted store or a refactor that breaks the
-                    // invariant — at which point the kernel's cycle verdicts
-                    // would be garbage (`Exec.lean` header's footgun), and
-                    // refusing loudly here is the theorem's precondition
-                    // speaking. Cost: one integer compare per node.
-                    let parent = weave
-                        .get(p)
-                        .expect("weave is causally closed: parents are present");
-                    assert!(
-                        parent.rank() < node.rank(),
-                        "non-grounded base: rank does not descend along firstParent \
-                         ({} -> {}); the kernel's acyclicity theorem does not cover \
-                         this input (GroundedBase, Uwueave/ExecRefine.lean)",
-                        node.rank(),
-                        parent.rank(),
-                    );
-                    *index.get(p).expect("parents are present, hence indexed") as i64
-                }
-            };
-            first_parent.push(fp);
-        }
+        let first_parent = grounded_first_parents(weave, &ids, &index);
         // BTreeSet order is a function of each authority set, so equal merged
         // substrates present the same typed values to Lean.
         let grants: Vec<ffi::ReplayGrantInput> = self
@@ -487,30 +471,10 @@ impl MoveLog {
         // (log order): ops we never sent are reported, not dropped.
         let statuses: Vec<OpOutcome> = st_bytes
             .chunks_exact(8)
-            .map(
-                |chunk| match i64::from_le_bytes(chunk.try_into().unwrap()) {
-                    0 => OpOutcome::Applied,
-                    1 => OpOutcome::SkippedCycle,
-                    2 => OpOutcome::SkippedInvalid,
-                    3 => OpOutcome::SkippedUnauthorised,
-                    v => panic!("unknown status word {v} — kernel speaks a newer format"),
-                },
-            )
+            .map(|chunk| decode_status(i64::from_le_bytes(chunk.try_into().unwrap())))
             .collect();
-        let mut outcomes = Vec::with_capacity(self.ops.len());
-        let mut sent_cursor = request_slots
-            .iter()
-            .zip(statuses.iter().copied())
-            .peekable();
-        for (li, op) in self.ops.iter().enumerate() {
-            let outcome = match sent_cursor.peek() {
-                Some(&(slot, st)) if slot.log_index == li => {
-                    sent_cursor.next();
-                    st
-                }
-                _ => OpOutcome::OmittedUnknownNode,
-            };
-            outcomes.push((*op, outcome));
+        for (slot, &status) in request_slots.iter().zip(&statuses) {
+            outcomes[slot.log_index].1 = status;
         }
 
         CertifiedReplay {
@@ -533,15 +497,298 @@ impl MoveLog {
         weave: &CausalWeave<T>,
         operation: MoveOp,
     ) -> ProspectiveCertifiedReplay {
-        let mut prospective = self.clone();
-        let operation_was_new = prospective.ops.insert(operation);
-        let replay = prospective.replay_certified(weave);
+        let operation_was_new = !self.ops.contains(&operation);
+        let operations = self
+            .ops
+            .range(..operation)
+            .chain(std::iter::once(&operation))
+            .chain(
+                self.ops
+                    .range((Bound::Excluded(operation), Bound::Unbounded)),
+            );
+        let replay = self.replay_sorted(weave, operations);
         let selected_request_slot = replay.request_slot(&operation);
         ProspectiveCertifiedReplay {
             replay,
             operation_was_new,
             selected_request_slot,
         }
+    }
+}
+
+/// The structural first-parent block, indexed by the weave's dense node order.
+fn grounded_first_parents<T: AsRef<[u8]> + Clone + PartialEq>(
+    weave: &CausalWeave<T>,
+    ids: &[NodeId],
+    index: &BTreeMap<NodeId, u64>,
+) -> Vec<i64> {
+    let mut first_parent = Vec::with_capacity(ids.len());
+    for id in ids {
+        let node = weave
+            .get(id)
+            .expect("ids were just enumerated from this weave");
+        let fp: i64 = match node.parents().first() {
+            None => -1,
+            Some(p) => {
+                // ExecRefine's `GroundedBase` hypothesis, enforced where
+                // Rust meets Lean: every acyclicity theorem about the
+                // kernel (`absReplay_acyclic` and kin) assumes some rank
+                // strictly descends along the encoded firstParent edges.
+                // `CausalWeave` supplies exactly that rank (grounded by
+                // construction at insert), so this can only fire on a
+                // corrupted store or a refactor that breaks the
+                // invariant — at which point the kernel's cycle verdicts
+                // would be garbage (`Exec.lean` header's footgun), and
+                // refusing loudly here is the theorem's precondition
+                // speaking. Cost: one integer compare per node.
+                let parent = weave
+                    .get(p)
+                    .expect("weave is causally closed: parents are present");
+                assert!(
+                    parent.rank() < node.rank(),
+                    "non-grounded base: rank does not descend along firstParent \
+                     ({} -> {}); the kernel's acyclicity theorem does not cover \
+                     this input (GroundedBase, Uwueave/ExecRefine.lean)",
+                    node.rank(),
+                    parent.rank(),
+                );
+                *index.get(p).expect("parents are present, hence indexed") as i64
+            }
+        };
+        first_parent.push(fp);
+    }
+    first_parent
+}
+
+fn decode_status(word: i64) -> OpOutcome {
+    match word {
+        0 => OpOutcome::Applied,
+        1 => OpOutcome::SkippedCycle,
+        2 => OpOutcome::SkippedInvalid,
+        3 => OpOutcome::SkippedUnauthorised,
+        v => panic!("unknown status word {v} — kernel speaks a newer format"),
+    }
+}
+
+/// One operation in the kernel's carrier. Lexicographic tuple order is exactly
+/// `Uwueave.Exec.opLt`: `(lamport, replica, child, dest, cite)`, with `-1` as
+/// the move-to-root destination.
+type KernelKey = (u64, u64, u64, i64, u64);
+
+fn kernel_input(key: KernelKey) -> ffi::ReplayOpInput {
+    ffi::ReplayOpInput {
+        lamport: key.0,
+        replica: key.1,
+        child: key.2,
+        dest: key.3,
+        cite: key.4,
+    }
+}
+
+/// `CheckpointedLogState` from `Uwueave/IncrementalCheckpointPreflight.lean`:
+/// the effective-parent view after every operation at or below `clock`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReplayCheckpoint {
+    clock: KernelKey,
+    summarized: usize,
+    base: Vec<i64>,
+}
+
+/// Exact kernel evidence for one bounded preflight.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BoundedPreflight {
+    pub(crate) canonical_request: Vec<u8>,
+    pub(crate) raw_response: Vec<u8>,
+    pub(crate) selected_request_slot: usize,
+    pub(crate) checkpoint: ReplayCheckpoint,
+    pub(crate) selected_status: OpOutcome,
+    pub(crate) operation_was_new: bool,
+}
+
+/// Live node index and replay checkpoints for one fixed weave and authority
+/// substrate.
+///
+/// A preflight is a pure read: it asks the unchanged Lean kernel to replay the
+/// operations after the newest checkpoint strictly below the candidate, on a
+/// first-parent block rebased to that checkpoint. A refused candidate therefore
+/// leaves nothing to roll back. `checkpoint_suffix_preflight_eq_full_replay`
+/// proves the verdict equals full replay whenever the suffix lies strictly
+/// above the checkpoint's clock, which is the invariant [`Self::commit`] keeps
+/// by discarding every checkpoint a late-arriving operation sorts beneath.
+///
+/// In-order replay takes one kernel step on the fixed node/authority base.
+/// Ordered-set membership and insertion still cost O(log N). A late move may
+/// rebuild every predecessor in bounded batches.
+#[derive(Debug, Clone)]
+pub(crate) struct IncrementalPreflight {
+    ids: Vec<NodeId>,
+    index: BTreeMap<NodeId, u64>,
+    first_parent: Vec<i64>,
+    grants: Vec<ffi::ReplayGrantInput>,
+    revocations: Vec<u64>,
+    ops: BTreeSet<KernelKey>,
+    checkpoints: Vec<ReplayCheckpoint>,
+    tip: Option<ReplayCheckpoint>,
+}
+
+impl IncrementalPreflight {
+    pub(crate) fn new<T: AsRef<[u8]> + Clone + PartialEq>(
+        log: &MoveLog,
+        weave: &CausalWeave<T>,
+    ) -> Self {
+        let ids: Vec<NodeId> = weave.nodes().map(|node| node.id()).collect();
+        let index: BTreeMap<NodeId, u64> = ids
+            .iter()
+            .enumerate()
+            .map(|(position, id)| (*id, position as u64))
+            .collect();
+        let first_parent = grounded_first_parents(weave, &ids, &index);
+        let grants = log
+            .grants
+            .iter()
+            .map(|grant| ffi::ReplayGrantInput {
+                id: grant.id,
+                parent: grant.parent,
+                scope: grant.scope,
+            })
+            .collect();
+        let revocations = log.revocations.iter().copied().collect();
+        let mut incremental = Self {
+            ids,
+            index,
+            first_parent,
+            grants,
+            revocations,
+            ops: BTreeSet::new(),
+            checkpoints: Vec::new(),
+            tip: None,
+        };
+        let keys = log
+            .ops
+            .iter()
+            .filter_map(|operation| incremental.key(operation))
+            .collect();
+        incremental.ops = keys;
+        incremental
+    }
+
+    /// The dense execution node order used by every request.
+    pub(crate) fn execution_nodes(&self) -> &[NodeId] {
+        &self.ids
+    }
+
+    pub(crate) fn node_index(&self, node: &NodeId) -> Option<u64> {
+        self.index.get(node).copied()
+    }
+
+    fn key(&self, operation: &MoveOp) -> Option<KernelKey> {
+        let child = *self.index.get(&operation.child)?;
+        let dest = match operation.dest {
+            None => -1,
+            Some(node) => *self.index.get(&node)? as i64,
+        };
+        Some((
+            operation.lamport,
+            operation.replica,
+            child,
+            dest,
+            operation.cite,
+        ))
+    }
+
+    /// Last valid snapshot strictly before the selected operation.
+    fn start_for(&self, key: KernelKey) -> Option<&ReplayCheckpoint> {
+        if let Some(tip) = self.tip.as_ref().filter(|tip| tip.clock < key) {
+            return Some(tip);
+        }
+        let end = self.checkpoints.partition_point(|cp| cp.clock < key);
+        self.checkpoints[..end].last()
+    }
+
+    fn replay_batch(&self, base: &[i64], ops: &[ffi::ReplayOpInput]) -> (Vec<u8>, Vec<u8>) {
+        let request = ffi::encode_replay_request(base, ops, &self.grants, &self.revocations);
+        let response = ffi::replay_kernel(&request);
+        assert_eq!(
+            response.len(),
+            8 * (base.len() + ops.len()),
+            "invalid FORMAT-v3 response"
+        );
+        (request, response)
+    }
+
+    fn apply_overrides(base: &mut [i64], response: &[u8]) {
+        for (parent, word) in base.iter_mut().zip(response.chunks_exact(8)) {
+            let value = i64::from_le_bytes(word.try_into().unwrap());
+            if value != -2 {
+                *parent = value;
+            }
+        }
+    }
+
+    /// The verdict at a sorted slot depends only on predecessors. Rebuild any
+    /// missing prefix in bounded batches, then certify just the selected move
+    /// on its exact effective-parent base. Thus checkpoint retention is a cache
+    /// policy: evicting a snapshot never changes the certificate bytes.
+    pub(crate) fn preflight(&self, operation: MoveOp) -> Option<BoundedPreflight> {
+        let key = self.key(&operation)?;
+        let start = self.start_for(key);
+        let mut base = start.map_or(&self.first_parent, |cp| &cp.base).clone();
+        let lower = start.map_or(Bound::Unbounded, |cp| Bound::Excluded(cp.clock));
+        let mut summarized = start.map_or(0, |cp| cp.summarized);
+        let mut predecessors = self.ops.range((lower, Bound::Excluded(key)));
+        let mut batch = Vec::new();
+        loop {
+            batch.extend(
+                predecessors
+                    .by_ref()
+                    .take(CHECKPOINT_INTERVAL)
+                    .copied()
+                    .map(kernel_input),
+            );
+            if batch.is_empty() {
+                break;
+            }
+            let (_, response) = self.replay_batch(&base, &batch);
+            Self::apply_overrides(&mut base, &response);
+            summarized += batch.len();
+            batch.clear();
+        }
+        let (canonical_request, raw_response) = self.replay_batch(&base, &[kernel_input(key)]);
+        let at = 8 * base.len();
+        let status = i64::from_le_bytes(raw_response[at..].try_into().unwrap());
+        Self::apply_overrides(&mut base, &raw_response);
+        Some(BoundedPreflight {
+            canonical_request,
+            raw_response,
+            selected_request_slot: 0,
+            selected_status: decode_status(status),
+            operation_was_new: !self.ops.contains(&key),
+            checkpoint: ReplayCheckpoint {
+                clock: key,
+                summarized: summarized + 1,
+                base,
+            },
+        })
+    }
+
+    /// Install the kernel result only after durable append. A late insertion
+    /// invalidates later snapshots. Later operations stay in the ordered set.
+    pub(crate) fn commit(&mut self, checkpoint: ReplayCheckpoint) {
+        if !self.ops.insert(checkpoint.clock) {
+            return;
+        }
+        let end = self
+            .checkpoints
+            .partition_point(|cp| cp.clock < checkpoint.clock);
+        self.checkpoints.truncate(end);
+        let previous = self.checkpoints.last().map_or(0, |cp| cp.summarized);
+        if checkpoint.summarized - previous >= CHECKPOINT_INTERVAL {
+            if self.checkpoints.len() == MAX_RETAINED_CHECKPOINTS {
+                self.checkpoints.remove(0);
+            }
+            self.checkpoints.push(checkpoint.clone());
+        }
+        self.tip = Some(checkpoint);
     }
 }
 
@@ -897,5 +1144,215 @@ mod tests {
             None,
             "the peer's revocation applies"
         );
+    }
+
+    /// A small deterministic generator, so a failure reproduces from its seed.
+    struct Lfsr(u64);
+
+    impl Lfsr {
+        fn below(&mut self, bound: u64) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0 % bound
+        }
+    }
+
+    fn differential_weave() -> (CausalWeave<Vec<u8>>, Vec<NodeId>) {
+        let mut weave = CausalWeave::new();
+        let root = weave.insert(vec![], b"root".to_vec()).unwrap();
+        let mut inserted = vec![root];
+        for label in 0..11u8 {
+            let parent = inserted[usize::from(label) / 2];
+            inserted.push(weave.insert(vec![parent], vec![label]).unwrap());
+        }
+        let ids = weave.nodes().map(|node| node.id()).collect();
+        (weave, ids)
+    }
+
+    fn differential_log() -> MoveLog {
+        let mut log = MoveLog::new();
+        log.issue(Grant::universal(1));
+        log.issue(Grant::delegate(2, 1, 8));
+        log.issue(Grant::universal(3));
+        log.issue(Grant::delegate(4, 3, u64::MAX));
+        log.revoke(3);
+        log
+    }
+
+    /// Every bounded preflight must equal the full-history replay it replaces:
+    /// the verdict, newness, and, after commit, the whole view. The schedule
+    /// mixes in-order runs with late arrivals, redeliveries, cycles, scope
+    /// refusals, and revoked citations across several checkpoint intervals.
+    #[test]
+    fn bounded_preflight_is_full_replay_on_adversarial_schedules() {
+        let (weave, ids) = differential_weave();
+        for seed in 1..=6u64 {
+            let mut random = Lfsr(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+            let mut log = differential_log();
+            let mut incremental = IncrementalPreflight::new(&log, &weave);
+            let mut clock = 1_000u64;
+            let mut history: Vec<MoveOp> = Vec::new();
+            for step in 0..420 {
+                let operation = match random.below(10) {
+                    0 if !history.is_empty() => {
+                        history[random.below(history.len() as u64) as usize]
+                    }
+                    1 | 2 => MoveOp {
+                        lamport: clock.saturating_sub(1 + random.below(300)),
+                        replica: random.below(3),
+                        child: ids[random.below(ids.len() as u64) as usize],
+                        dest: Some(ids[random.below(ids.len() as u64) as usize]),
+                        cite: 1 + random.below(5),
+                    },
+                    _ => {
+                        clock += 1;
+                        let dest = random.below(ids.len() as u64 + 1) as usize;
+                        MoveOp {
+                            lamport: clock,
+                            replica: random.below(3),
+                            child: ids[random.below(ids.len() as u64) as usize],
+                            dest: ids.get(dest).copied(),
+                            cite: 1 + random.below(5),
+                        }
+                    }
+                };
+                let bounded = incremental.preflight(operation).expect("resolvable");
+                let full = log.prospective_replay_certified(&weave, operation);
+                assert_eq!(
+                    Some(bounded.selected_status),
+                    full.selected_status(),
+                    "seed {seed} step {step}: verdict"
+                );
+                assert_eq!(
+                    bounded.operation_was_new,
+                    full.operation_was_new(),
+                    "seed {seed} step {step}: newness"
+                );
+                assert_eq!(bounded.selected_request_slot, 0);
+                if step % 3 == 0 {
+                    // A refused candidate leaves no trace in either structure.
+                    continue;
+                }
+                log.record(operation);
+                incremental.commit(bounded.checkpoint);
+                history.push(operation);
+                assert_checkpoints_are_exact(&incremental, &log, &weave, seed, step);
+            }
+            assert!(
+                incremental
+                    .tip
+                    .as_ref()
+                    .is_some_and(|cp| cp.summarized >= CHECKPOINT_INTERVAL),
+                "seed {seed}: the schedule must exercise real checkpoints"
+            );
+        }
+    }
+
+    fn response_words(bytes: &[u8]) -> Vec<i64> {
+        bytes
+            .chunks_exact(8)
+            .map(|chunk| i64::from_le_bytes(chunk.try_into().unwrap()))
+            .collect()
+    }
+
+    /// Each retained checkpoint must be byte-for-byte the override block of a
+    /// genesis replay over exactly the operations at or below its clock.
+    fn assert_checkpoints_are_exact(
+        incremental: &IncrementalPreflight,
+        log: &MoveLog,
+        weave: &CausalWeave<Vec<u8>>,
+        seed: u64,
+        step: usize,
+    ) {
+        for checkpoint in incremental.checkpoints.iter().chain(&incremental.tip) {
+            let mut prefix = MoveLog::new();
+            log.grants().for_each(|grant| prefix.issue(*grant));
+            log.revocations().for_each(|id| prefix.revoke(*id));
+            for operation in log.ops() {
+                if incremental.key(operation).expect("resolvable") <= checkpoint.clock {
+                    prefix.record(*operation);
+                }
+            }
+            assert_eq!(
+                prefix.len(),
+                checkpoint.summarized,
+                "seed {seed} step {step}"
+            );
+            let replayed = prefix.replay_certified(weave);
+            let words = response_words(&replayed.raw_response()[..8 * incremental.ids.len()]);
+            let parents: Vec<_> = words
+                .iter()
+                .zip(&incremental.first_parent)
+                .map(|(&word, &parent)| if word == -2 { parent } else { word })
+                .collect();
+            assert_eq!(parents, checkpoint.base, "seed {seed} step {step}");
+        }
+    }
+
+    /// Dropping all derived state changes work, never durable evidence.
+    #[test]
+    fn eviction_preserves_certificate_bytes_for_late_moves() {
+        let (weave, ids) = differential_weave();
+        let mut log = differential_log();
+        let mut incremental = IncrementalPreflight::new(&log, &weave);
+        for lamport in 1..=1200 {
+            let operation = MoveOp {
+                lamport,
+                replica: 0,
+                child: ids[1],
+                dest: None,
+                cite: 1,
+            };
+            let bounded = incremental.preflight(operation).unwrap();
+            incremental.commit(bounded.checkpoint);
+            log.record(operation);
+        }
+        let cold = IncrementalPreflight::new(&log, &weave);
+        for lamport in [1, 300, 923, 1201] {
+            let late = MoveOp {
+                lamport,
+                replica: 1,
+                child: ids[2],
+                dest: Some(ids[1]),
+                cite: 1,
+            };
+            let hot = incremental.preflight(late).unwrap();
+            assert_eq!(hot, cold.preflight(late).unwrap());
+            assert_eq!(
+                hot.selected_status,
+                log.prospective_replay_certified(&weave, late)
+                    .selected_status()
+                    .unwrap()
+            );
+            assert_eq!(
+                hot.canonical_request.len(),
+                8 * (5 + ids.len() + 5 + 3 * 4 + 1)
+            );
+        }
+    }
+
+    /// In-order admission certifies one operation, however long the log.
+    #[test]
+    fn in_order_request_size_is_independent_of_log_length() {
+        let (weave, ids) = differential_weave();
+        let log = differential_log();
+        let mut incremental = IncrementalPreflight::new(&log, &weave);
+        let mut largest = 0;
+        for offset in 0..(CHECKPOINT_INTERVAL as u64 * 12) {
+            let operation = MoveOp {
+                lamport: 10 + offset,
+                replica: 0,
+                child: ids[1 + offset as usize % (ids.len() - 1)],
+                dest: None,
+                cite: 1,
+            };
+            let bounded = incremental.preflight(operation).unwrap();
+            largest = largest.max(bounded.canonical_request.len());
+            incremental.commit(bounded.checkpoint);
+        }
+        let words = 5 + ids.len() + 3 * 4 + 1 + 5;
+        assert_eq!(largest, 8 * words);
+        assert!(incremental.checkpoints.len() <= MAX_RETAINED_CHECKPOINTS);
     }
 }

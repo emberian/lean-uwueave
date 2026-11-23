@@ -226,6 +226,7 @@ import Uwueave.RuntimeAuthV4Kernel
 import Uwueave.RuntimeAuthV4AdmissionRefinement
 import Uwueave.RuntimeAuthV4AdmissionTraceKernel
 import Uwueave.RuntimeAuthV4AdmissionTraceRefinement
+import Uwueave.IncrementalCheckpointPreflight
 import Uwueave.Preo.RuntimeAuthV4Data
 import Uwueave.Preo.RuntimeAuthV4Checked
 import Uwueave.Preo.RuntimeAuthV4Durable

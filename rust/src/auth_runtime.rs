@@ -20,6 +20,11 @@
 //! only relative to the externally supplied journal head pin and historical
 //! context provider.
 //!
+//! Execution preflight replays only the operations after a replay checkpoint,
+//! on a first-parent block rebased to that checkpoint. Lean proves the verdict
+//! equal to full replay in `IncrementalCheckpointPreflight`, for candidates
+//! ordered after the checkpoint's clock; the host chooses such a checkpoint.
+//!
 //! Construction and recovery do not claim Lean `Authority.WF` or
 //! `Authority.UniqueGrant` for the provider's grant substrate. The runtime
 //! scope carries no root-scope policy from which to check `WF`, while a finite
@@ -37,6 +42,7 @@ use crate::auth::{
 use crate::auth_verifier::{
     RequestVerifier, VerificationAcceptance, VerificationInput, VerificationRefusal,
 };
+use crate::movelog::{IncrementalPreflight, ReplayCheckpoint};
 use crate::persistence::{
     AdmissionContextRef, AdmissionStageReceipts, AdmissionTrace, AppendStatus,
     AuthenticatedJournalError, AuthenticatedMoveJournal, CheckedAdmission,
@@ -45,6 +51,7 @@ use crate::persistence::{
 };
 use crate::{CausalWeave, MoveLog, MoveOp, NodeId, OpOutcome};
 use std::collections::BTreeSet;
+use std::sync::OnceLock;
 
 /// One immutable historical context returned by the deployment.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -311,11 +318,18 @@ pub trait MoveMembership<C> {
 pub struct LeanMoveExecution<T> {
     log: MoveLog,
     weave: CausalWeave<T>,
+    /// Derived from `log` and `weave` on first use. The weave and authority
+    /// substrate are immutable here, and `commit` keeps the move set in step.
+    incremental: OnceLock<IncrementalPreflight>,
 }
 
 impl<T> LeanMoveExecution<T> {
     pub fn new(log: MoveLog, weave: CausalWeave<T>) -> Self {
-        Self { log, weave }
+        Self {
+            log,
+            weave,
+            incremental: OnceLock::new(),
+        }
     }
 
     pub fn log(&self) -> &MoveLog {
@@ -365,60 +379,111 @@ impl<T> LeanMoveExecution<T> {
         *hasher.finalize().as_bytes()
     }
 
-    fn preflight(&self, operation: MoveOp) -> Result<KernelPreflightEvidence, ExecutionRefusal>
+    fn incremental(&self) -> &IncrementalPreflight
     where
         T: AsRef<[u8]> + Clone + PartialEq,
     {
-        let prospective = self
-            .log
-            .prospective_replay_certified(&self.weave, operation);
-        let selected_request_slot = prospective
-            .selected_request_slot()
+        self.incremental
+            .get_or_init(|| IncrementalPreflight::new(&self.log, &self.weave))
+    }
+
+    /// Replay `operation` from the newest applicable checkpoint.
+    ///
+    /// During recovery `recorded_request` is the stored FORMAT-v3 request. A
+    /// journal written before checkpointing holds the full-history request, so
+    /// a stored request that differs from the bounded one is rebuilt from
+    /// genesis. Recovery still demands byte equality with whichever form it
+    /// rebuilds, so an unmatched record is refused.
+    fn preflight(
+        &self,
+        operation: MoveOp,
+        recorded_request: Option<&[u8]>,
+    ) -> Result<KernelPreflightEvidence, ExecutionRefusal>
+    where
+        T: AsRef<[u8]> + Clone + PartialEq,
+    {
+        let incremental = self.incremental();
+        let bounded = incremental
+            .preflight(operation)
             .ok_or(ExecutionRefusal::OmittedUnknownNode)?;
+        let full_history = recorded_request
+            .filter(|recorded| *recorded != bounded.canonical_request.as_slice())
+            .and_then(|recorded| {
+                let full = self
+                    .log
+                    .prospective_replay_certified(&self.weave, operation);
+                (full.replay().canonical_request() == recorded).then_some(full)
+            });
+        let (canonical_request, raw_response, selected_request_slot, status, operation_was_new) =
+            match full_history {
+                Some(full) => {
+                    let slot = full
+                        .selected_request_slot()
+                        .ok_or(ExecutionRefusal::OmittedUnknownNode)?;
+                    let status = full
+                        .selected_status()
+                        .ok_or(ExecutionRefusal::OmittedUnknownNode)?;
+                    let was_new = full.operation_was_new();
+                    let replay = full.into_replay();
+                    (
+                        replay.canonical_request().to_vec(),
+                        replay.raw_response().to_vec(),
+                        slot,
+                        status,
+                        was_new,
+                    )
+                }
+                None => (
+                    bounded.canonical_request,
+                    bounded.raw_response,
+                    bounded.selected_request_slot,
+                    bounded.selected_status,
+                    bounded.operation_was_new,
+                ),
+            };
         let selected_request_slot = u64::try_from(selected_request_slot)
             .map_err(|_| ExecutionRefusal::RequestSlotTooLarge)?;
-        let admission = match prospective.selected_status() {
-            Some(OpOutcome::Applied) => KernelAdmissionObservation::Applied,
-            Some(OpOutcome::SkippedCycle) => KernelAdmissionObservation::SkippedCycle,
-            Some(OpOutcome::SkippedUnauthorised) => {
-                return Err(ExecutionRefusal::SkippedUnauthorised)
-            }
-            Some(OpOutcome::SkippedInvalid) => return Err(ExecutionRefusal::SkippedInvalid),
-            Some(OpOutcome::OmittedUnknownNode) | None => {
-                return Err(ExecutionRefusal::OmittedUnknownNode)
-            }
+        let admission = match status {
+            OpOutcome::Applied => KernelAdmissionObservation::Applied,
+            OpOutcome::SkippedCycle => KernelAdmissionObservation::SkippedCycle,
+            OpOutcome::SkippedUnauthorised => return Err(ExecutionRefusal::SkippedUnauthorised),
+            OpOutcome::SkippedInvalid => return Err(ExecutionRefusal::SkippedInvalid),
+            OpOutcome::OmittedUnknownNode => return Err(ExecutionRefusal::OmittedUnknownNode),
         };
         Ok(KernelPreflightEvidence {
-            execution_nodes: self.weave.nodes().map(|node| node.id()).collect(),
-            canonical_request: prospective.replay().canonical_request().to_vec(),
-            raw_response: prospective.replay().raw_response().to_vec(),
+            checkpoint: bounded.checkpoint,
+            execution_nodes: incremental.execution_nodes().to_vec(),
+            canonical_request,
+            raw_response,
             selected_request_slot,
-            operation_was_new: prospective.operation_was_new(),
+            operation_was_new,
             admission,
         })
     }
 
-    fn commit(&mut self, operation: MoveOp) {
+    fn commit(&mut self, operation: MoveOp, checkpoint: ReplayCheckpoint) {
         self.log.record(operation);
+        if let Some(incremental) = self.incremental.get_mut() {
+            incremental.commit(checkpoint);
+        }
     }
 
     fn kernel_index(&self, node_id: NodeId) -> Option<u64>
     where
         T: AsRef<[u8]> + Clone + PartialEq,
     {
-        self.weave.nodes().enumerate().find_map(|(index, node)| {
-            (node.id() == node_id)
-                .then(|| u64::try_from(index).ok())
-                .flatten()
-        })
+        self.incremental().node_index(&node_id)
     }
 }
 
 /// Exact native replay evidence used to construct the semantic certificate.
 /// The dense node-id vector comes from the same weave order used to encode
 /// FORMAT-v3 indices; all request/response bytes come from the production Lean
-/// encoder/kernel path retained by [`MoveLog::prospective_replay_certified`].
+/// encoder and kernel, on a request rebased to a replay checkpoint. Lean proves
+/// that request's verdict equal to full replay in
+/// `IncrementalCheckpointPreflight.checkpoint_suffix_preflight_eq_full_replay`.
 struct KernelPreflightEvidence {
+    checkpoint: ReplayCheckpoint,
     execution_nodes: Vec<NodeId>,
     canonical_request: Vec<u8>,
     raw_response: Vec<u8>,
@@ -709,6 +774,7 @@ where
                 &scope,
                 record.admission().context().previous_admission_commitment,
                 &projection,
+                record.admission().trace().format_v3_request(),
             );
             let validated = match checked {
                 Ok(value) => value,
@@ -725,7 +791,7 @@ where
             if validated.certificate != stored_certificate {
                 return Err(RuntimeRecoveryError::RecordMismatch { sequence });
             }
-            execution.commit(validated.operation);
+            execution.commit(validated.operation, validated.checkpoint);
             validated_records.push(ValidatedRecoveryRecord {
                 sequence,
                 commitment: record.commitment,
@@ -848,6 +914,7 @@ where
             self.journal.head_commitment(),
             projection,
             acceptance,
+            None,
         ) {
             Ok(value) => value,
             Err(StageFailure::Refused(reason)) => return AdmissionOutcome::Refused(reason),
@@ -855,6 +922,7 @@ where
         };
         let sequence = self.journal.next_sequence();
         let ValidatedAdmission {
+            checkpoint,
             checked,
             certificate,
             operation,
@@ -868,7 +936,7 @@ where
                 receipt,
                 head_commitment,
             }) if receipt.status == AppendStatus::Appended => {
-                self.execution.commit(operation);
+                self.execution.commit(operation, checkpoint);
                 self.validated_records.push(ValidatedRecoveryRecord {
                     sequence: receipt.sequence,
                     commitment: head_commitment,
@@ -956,6 +1024,7 @@ where
 }
 
 struct ValidatedAdmission {
+    checkpoint: ReplayCheckpoint,
     checked: CheckedAdmission,
     certificate: LeanValidatedAdmissionTrace,
     operation: MoveOp,
@@ -1011,6 +1080,7 @@ fn validate_fresh<V, C, R, A, M, T>(
     scope: &RuntimeScope,
     previous: Option<[u8; 32]>,
     projection: &RuntimeAuthV4AdmissionProjection,
+    recorded_request: &[u8],
 ) -> Result<ValidatedAdmission, StageFailure>
 where
     V: RequestVerifier,
@@ -1042,6 +1112,7 @@ where
         previous,
         projection.clone(),
         acceptance,
+        Some(recorded_request),
     )
 }
 
@@ -1055,6 +1126,7 @@ fn validate_after_verification<C, R, A, M, T>(
     previous: Option<[u8; 32]>,
     projection: RuntimeAuthV4AdmissionProjection,
     verification_acceptance: VerificationAcceptance,
+    recorded_request: Option<&[u8]>,
 ) -> Result<ValidatedAdmission, StageFailure>
 where
     C: AdmissionContextProvider,
@@ -1160,7 +1232,7 @@ where
         })?;
     let membership_acceptance = MembershipAcceptance::from_membership_acceptance(membership_input);
     let preflight = execution
-        .preflight(operation)
+        .preflight(operation, recorded_request)
         .map_err(|reason| StageFailure::Refused(AdmissionRefusal::Execution(reason)))?;
     let kernel_observation = preflight.admission;
     let nonce = nonce_key(&projection);
@@ -1222,6 +1294,7 @@ where
     let checked = CheckedAdmission::from_lean_validated(&certificate)
         .map_err(|reason| StageFailure::Refused(AdmissionRefusal::CheckedBoundary(reason)))?;
     Ok(ValidatedAdmission {
+        checkpoint: preflight.checkpoint,
         checked,
         certificate,
         operation,
@@ -1280,6 +1353,10 @@ fn require_execution_index<T: AsRef<[u8]> + Clone + PartialEq>(
 }
 
 #[cfg(test)]
+#[path = "../tests/support/incremental_preflight.rs"]
+mod incremental_harness;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::Grant;
@@ -1297,6 +1374,108 @@ mod tests {
         assert_ne!(
             LeanMoveExecution::new(grant_log, weave.clone()).base_binding(),
             LeanMoveExecution::new(revocation_log, weave).base_binding()
+        );
+    }
+
+    /// A journal written before checkpointing stores a full-history FORMAT-v3
+    /// request in every record. It must recover unchanged, continue with bounded
+    /// records, and recover again as a mixed journal.
+    #[test]
+    fn full_history_journal_recovers_and_continues_with_bounded_records() {
+        use super::incremental_harness as harness;
+        use crate::persistence::{RecoveryExpectation, TornTailPolicy};
+
+        const LEGACY: usize = 150;
+        let rows = harness::in_order_rows(220);
+        let requests = harness::signed_requests(&rows);
+        let temp = harness::TempJournal::new("legacy-full-history");
+        let (mut execution, substrate) = harness::execution();
+        let nodes: Vec<NodeId> = execution.weave().nodes().map(|node| node.id()).collect();
+        let scope = harness::scope(execution.base_binding());
+        let contexts = harness::Contexts(substrate);
+        let mut journal = AuthenticatedMoveJournal::open_pinned(
+            &temp.0,
+            harness::journal_options(TornTailPolicy::Refuse),
+            RecoveryExpectation::EMPTY,
+        )
+        .unwrap();
+        for (sequence, raw) in requests[..LEGACY].iter().enumerate() {
+            let RuntimeAuthV4AdmissionOutcome::Accepted(projection) =
+                project_runtime_auth_v4_admission(harness::MAX_BYTES, raw)
+            else {
+                panic!("corpus request {sequence} did not project");
+            };
+            let acceptance = harness::Verifier
+                .verify(verification_input(&projection))
+                .unwrap();
+            let operation = harness::move_op(&nodes, rows[sequence]);
+            let full = execution
+                .log()
+                .prospective_replay_certified(execution.weave(), operation);
+            let Ok(validated) = validate_after_verification(
+                &contexts,
+                &harness::Resolver,
+                &ContextGrantHolderAuthority,
+                &harness::Membership,
+                &execution,
+                &scope,
+                journal.head_commitment(),
+                projection,
+                acceptance,
+                Some(full.replay().canonical_request()),
+            ) else {
+                panic!("full-history record {sequence} did not validate");
+            };
+            let stored = validated.checked.trace().format_v3_request();
+            assert_eq!(stored, full.replay().canonical_request());
+            let operations = u64::from_le_bytes(stored[16..24].try_into().unwrap());
+            assert_eq!(
+                operations,
+                sequence as u64 + 1,
+                "record holds the whole log"
+            );
+            journal
+                .append_checked_at(sequence as u64, validated.checked)
+                .unwrap();
+            execution.commit(validated.operation, validated.checkpoint);
+        }
+        let pin = journal.recovery_expectation();
+        let legacy_bytes = std::fs::read(&temp.0).unwrap();
+        drop(journal);
+
+        let mut recovered = harness::recover_runtime(&temp.0, pin, TornTailPolicy::Refuse);
+        assert_eq!(recovered.validated_records().len(), LEGACY);
+        assert_eq!(recovered.execution().log(), execution.log());
+        for raw in &requests[LEGACY..] {
+            assert!(matches!(
+                recovered.admit(harness::MAX_BYTES, raw),
+                AdmissionOutcome::Accepted(_)
+            ));
+        }
+        let appended = std::fs::read(&temp.0).unwrap();
+        assert_eq!(&appended[..legacy_bytes.len()], legacy_bytes.as_slice());
+        let last = recovered.journal().records().last().unwrap();
+        let bounded_operations = u64::from_le_bytes(
+            last.admission().trace().format_v3_request()[16..24]
+                .try_into()
+                .unwrap(),
+        );
+        assert!(
+            bounded_operations == 1,
+            "new records certify one operation, got {bounded_operations}"
+        );
+
+        let view = recovered
+            .execution()
+            .log()
+            .replay(recovered.execution().weave());
+        let pin = recovered.journal().recovery_expectation();
+        drop(recovered);
+        let mixed = harness::recover_runtime(&temp.0, pin, TornTailPolicy::Refuse);
+        assert_eq!(mixed.validated_records().len(), rows.len());
+        assert_eq!(
+            mixed.execution().log().replay(mixed.execution().weave()),
+            view
         );
     }
 }

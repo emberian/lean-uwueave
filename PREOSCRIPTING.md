@@ -190,7 +190,7 @@ semantic construction is unsound. Reproduce the retained hard surface checks
 without rebuilding dependencies with:
 
 ```sh
-PREO_BENCH_SKIP_BUILD=1 scripts/preo-bench.sh wave27-golden
+PREO_BENCH_SKIP_BUILD=1 scripts/preo-bench.sh export-schema-golden
 ```
 
 ### Positional holes, attribution, and generic framing
@@ -625,7 +625,7 @@ benchmark-facing API/output goldens are available without rebuilding
 dependencies:
 
 ```sh
-PREO_BENCH_SKIP_BUILD=1 scripts/preo-bench.sh wave29-golden
+PREO_BENCH_SKIP_BUILD=1 scripts/preo-bench.sh history-delivery-golden
 ```
 
 That gate passed five exact repair outputs, six exact history outputs, and the

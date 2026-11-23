@@ -122,11 +122,23 @@ impl From<io::Error> for RawJournalError {
 pub(crate) struct RawJournal {
     path: PathBuf,
     file: File,
+    owner_pid: u32,
     records: Vec<Vec<u8>>,
     spec: RecordSpec,
     options: JournalOptions,
     poisoned: bool,
     report: RawOpenReport,
+}
+
+impl Drop for RawJournal {
+    fn drop(&mut self) {
+        // flock follows the open file description. A concurrent fork can keep
+        // it alive until exec, past the owning handle's close and next reopen.
+        // A child dropping an inherited handle must not unlock its parent.
+        if self.owner_pid == std::process::id() {
+            let _ = self.file.unlock();
+        }
+    }
 }
 
 impl RawJournal {
@@ -193,6 +205,7 @@ impl RawJournal {
         Ok(Self {
             path,
             file,
+            owner_pid: std::process::id(),
             records,
             spec,
             options,
@@ -747,6 +760,25 @@ mod tests {
             marker: *b"UWTEST01",
             hash_domain: b"uwueave.test.retry-sync.v1",
         }
+    }
+
+    #[test]
+    fn owner_drop_releases_lock_while_an_inherited_descriptor_lives() {
+        let nonce = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "uwueave-inherited-lock-{}-{nonce}.journal",
+            std::process::id()
+        ));
+        let open = || RawJournal::open(&path, test_spec(), JournalOptions::default());
+        let owner = open().unwrap();
+        let inherited = owner.file.try_clone().unwrap();
+        assert!(matches!(open(), Err(RawJournalError::Locked)));
+        drop(owner);
+        let next = open().unwrap();
+        drop(inherited);
+        assert!(matches!(open(), Err(RawJournalError::Locked)));
+        drop(next);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

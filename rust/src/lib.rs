@@ -133,6 +133,10 @@ pub mod seq;
 pub mod status;
 pub mod weave;
 
+// Lets the shared integration-test harness name this crate from unit tests.
+#[cfg(test)]
+extern crate self as uwueave;
+
 pub use causal::{CausalWeave, InsertError, MergeError, NodeId, NodeIdDisplay};
 pub use era::{
     EraEvent, EraEventStatus, EraGroup, EraMergeError, EraMergeStats, EraRecordError,

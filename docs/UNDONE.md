@@ -4,122 +4,13 @@
 
 This is a deterministic, lexical inventory of every `⟨UNDONE…⟩`-family marker in `Uwueave/**/*.lean`. Regenerate it with `scripts/undone-census.sh`; use `scripts/undone-census.sh --check` as a CI gate.
 
-- **Marker occurrences:** 54
-- **Extracted blocks (marker-bearing source lines):** 54
-- **Lean files containing markers:** 23
+- **Marker occurrences:** 12
+- **Extracted blocks (marker-bearing source lines):** 12
+- **Lean files containing markers:** 7
 
 The matching grammar is the literal stem `⟨UNDONE` followed immediately by `⟩`, a comma, whitespace, or a dash (`-`, `–`, or `—`). Qualifier text and its closing `⟩` may continue onto later source lines. Identifier-like and punctuation substrings such as `⟨UNDONENESS⟩` and `⟨UNDONE.fake⟩` do not match.
 
 Each block begins at one marker-bearing source line and includes its following continuation lines up to the next blank line, list item, Markdown heading, or Lean comment terminator. Two markers on one source line therefore count as two occurrences but one extracted block. This ledger intentionally includes definitions, quotations, inherited caveats, and references to older items: it gates lexical drift, not the semantic status of the work.
-
-## `Uwueave/Budget.lean`
-
-### [`Uwueave/Budget.lean:74`](../Uwueave/Budget.lean#L74)
-
-````text
-  * ⟨UNDONE U-0004⟩ **`unavoidableFloor` is not a function.** The floor is a supremum
-    over clash decompositions, and nothing here computes that global supremum.
-    `ForcedFloor wl n` says "`n` is *a* forced floor", witnessed by a
-    decomposition; `rejected` carries that witness. §2.1 now computes a
-    different and deliberately bounded quantity: the exact achieved minimum of
-    an explicit finite list of witnessed plans. Its refusal quantifies only over
-    that list. Reading either a `ForcedFloor` or a finite-menu minimum as "the"
-    unrestricted floor is exactly the scope error the types prevent.
-````
-
-## `Uwueave/CertificateScope.lean`
-
-### [`Uwueave/CertificateScope.lean:108`](../Uwueave/CertificateScope.lean#L108)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0007⟩ = work wearing a caveat's clothes.
-````
-
-## `Uwueave/Choreo.lean`
-
-### [`Uwueave/Choreo.lean:149`](../Uwueave/Choreo.lean#L149)
-
-````text
-  * ⟨UNDONE U-0013 only for infinitary recursion⟩ **No coinductive or infinite-trace
-    semantics.** The finite approximants do not define a limit object, a
-    bisimulation on infinite behavior, or temporal liveness of a recursive
-    protocol. Those stronger claims remain unbuilt.
-````
-
-### [`Uwueave/Choreo.lean:153`](../Uwueave/Choreo.lean#L153)
-
-````text
-  * ⟨UNDONE U-0014 as temporal liveness⟩ **Deadlock-freedom in their sense.** Our only
-    blocking construct is `barrier`. `Uwueave.ChoreoRec` now proves the narrow
-    operational facts that one guarded barrier loop can take a step and one
-    mismatched barrier is deadlocked. Whether every roster replica eventually
-    reaches a barrier remains a *liveness* question (`Uwueave.Liveness` owns that
-    axis): no fairness, eventual-delivery, or temporal deadlock-freedom theorem is
-    claimed.
-````
-
-## `Uwueave/CoordEffect.lean`
-
-### [`Uwueave/CoordEffect.lean:121`](../Uwueave/CoordEffect.lean#L121)
-
-````text
-  * ⟨UNDONE U-0019, narrowed to the native surface and general subsumption⟩ **The
-    semantic typing target has landed.** `Protocol.Elaboration` produces checked
-    schedules and exact currency-profile bounds, and Preo has checked
-    `protocol`/`session` forms whose bodies are typed `Protocol.Term`s. What is
-    still absent is a custom parser for those six protocol constructors and a
-    general graded weakening/subsumption judgement over `CoordEffect.Profile`;
-    `SeamAlgebra`'s candidate laws are not connected to such a judgement here.
-````
-
-## `Uwueave/EraCertificate.lean`
-
-### [`Uwueave/EraCertificate.lean:117`](../Uwueave/EraCertificate.lean#L117)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0030⟩ = work wearing a caveat's clothes.
-````
-
-## `Uwueave/Evidence.lean`
-
-### [`Uwueave/Evidence.lean:150`](../Uwueave/Evidence.lean#L150)
-
-````text
-⟨TERMINAL⟩ = a theorem of the model; ⟨UNDONE U-0038⟩ = work wearing a caveat's
-clothes.
-````
-
-### [`Uwueave/Evidence.lean:157`](../Uwueave/Evidence.lean#L157)
-
-````text
-    `Evidence.values`. ⟨UNDONE U-0039 for this old carrier and deployment⟩
-    `ResultEvidence` still stores no timestamp. `AuthenticatedFrontier` now
-    authenticates an accepted-and-issued progress record and binds its decoded
-    sets to a lawful advance; `AuthenticatedWorldContext` binds that advance to
-    an exact typed consuming delivery. No theorem generates those messages or
-    proves a runtime honestly advances its frontier, and full `render`
-    stability is still not claimed.
-````
-
-## `Uwueave/ForkGrade.lean`
-
-### [`Uwueave/ForkGrade.lean:100`](../Uwueave/ForkGrade.lean#L100)
-
-````text
-  * ⟨UNDONE U-0047⟩ **Minimum colourings.** `SeamColoring`'s greedy colourer synthesises
-    *a* proper colouring, never the minimum one; nothing here computes an optimal
-    live strategy, only bounds the optimum.
-````
-
-## `Uwueave/Frontier.lean`
-
-### [`Uwueave/Frontier.lean:53`](../Uwueave/Frontier.lean#L53)
-
-````text
-    bridge, ⟨UNDONE U-0050⟩ for the old carrier⟩ `ResultEvidence` stores no timestamp,
-    so a bridge takes `stamp : (alpha x Source) -> T`.  Smuggling a timestamp
-    into `Source` would recreate the flat model rather than repair it.
-````
 
 ## `Uwueave/Gated.lean`
 
@@ -164,32 +55,9 @@ clothes.
     rebuilt-versus-incremental index equality after every supported trace.
 ````
 
-## `Uwueave/Gluing.lean`
-
-### [`Uwueave/Gluing.lean:894`](../Uwueave/Gluing.lean#L894)
-
-````text
-**⟨UNDONE U-0058⟩ — real work, not done here.**
-````
-
 ## `Uwueave/Histories.lean`
 
-### [`Uwueave/Histories.lean:12`](../Uwueave/Histories.lean#L12)
-
-````text
-`Ancestral.lean`'s own §"Honest scope" and `MergeModel.lean`'s last ⟨UNDONE U-0059⟩ say
-the same thing in the other direction ("Repeated/criss-cross merging needs Kaki
-et al.'s further conditions and gets no verdict here"). The flag was right. This
-file is the frontier it named.
-````
-
-### [`Uwueave/Histories.lean:146`](../Uwueave/Histories.lean#L146)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0060⟩ = work wearing a caveat's clothes.
-````
-
-### [`Uwueave/Histories.lean:191`](../Uwueave/Histories.lean#L191)
+### [`Uwueave/Histories.lean:196`](../Uwueave/Histories.lean#L196)
 
 ````text
   * ⟨UNDONE U-0064, narrowed to repeated/generalized version growth⟩ **The
@@ -214,63 +82,9 @@ file is the frontier it named.
     refinement; no endpoint-only patch reconstruction is claimed.
 ````
 
-## `Uwueave/HistoryBase.lean`
-
-### [`Uwueave/HistoryBase.lean:118`](../Uwueave/HistoryBase.lean#L118)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0065⟩ = work wearing a caveat's clothes.
-````
-
-### [`Uwueave/HistoryBase.lean:135`](../Uwueave/HistoryBase.lean#L135)
-
-````text
-  * ⟨UNDONE U-0066⟩ **No convergence, still.** Nothing here says two replicas agree.
-    `selected_unique` narrows the licence — the state level licenses the two
-    bases `Histories.swap_never_converges` builds its eternal two-cycle from,
-    and the history level licenses at most one of them
-    (`the_two_cycle_needs_two_bases_the_history_licenses_one`) — but "at most one
-    valid base" is not a proof that a run converges, and no such proof is here.
-````
-
-### [`Uwueave/HistoryBase.lean:152`](../Uwueave/HistoryBase.lean#L152)
-
-````text
-  * ⟨UNDONE U-0069⟩ **Two witnesses, not a classification.** §7's pairing — ambiguity is
-    expressible at the state level in the lock, where it costs nothing, and
-    inexpressible in the counter, where it decides the invariant — is two
-    histories. No theorem here says that is the general pattern.
-````
-
-### [`Uwueave/HistoryBase.lean:265`](../Uwueave/HistoryBase.lean#L265)
-
-````text
-    answer exists — the ⟨UNDONE U-0070⟩ `MergeModel` §9's own docstring records;
-````
-
-### [`Uwueave/HistoryBase.lean:515`](../Uwueave/HistoryBase.lean#L515)
-
-````text
-`selected_unique`, which forbids the pair at the history level. ⟨UNDONE U-0071⟩ This
-withdraws the *licence*; it is not a convergence proof. -/
-````
-
-### [`Uwueave/HistoryBase.lean:1279`](../Uwueave/HistoryBase.lean#L1279)
-
-````text
-⟨UNDONE U-0073⟩ Two histories, not a classification: nothing here says visibility and
-harmlessness are always anti-correlated. -/
-````
-
 ## `Uwueave/HistoryPolicy.lean`
 
-### [`Uwueave/HistoryPolicy.lean:107`](../Uwueave/HistoryPolicy.lean#L107)
-
-````text
-⟨TERMINAL⟩ = a theorem of this model; ⟨UNDONE U-0074⟩ = work wearing a caveat's clothes.
-````
-
-### [`Uwueave/HistoryPolicy.lean:123`](../Uwueave/HistoryPolicy.lean#L123)
+### [`Uwueave/HistoryPolicy.lean:124`](../Uwueave/HistoryPolicy.lean#L124)
 
 ````text
   * ⟨UNDONE U-0075, narrowed to automatic semantic decision synthesis⟩ **Declared
@@ -287,7 +101,7 @@ harmlessness are always anti-correlated. -/
     an authenticated/out-of-order delivery protocol, remain open.
 ````
 
-### [`Uwueave/HistoryPolicy.lean:135`](../Uwueave/HistoryPolicy.lean#L135)
+### [`Uwueave/HistoryPolicy.lean:136`](../Uwueave/HistoryPolicy.lean#L136)
 
 ````text
   * ⟨UNDONE U-0076, narrowed to unrestricted selection and kernel synthesis⟩ **A
@@ -302,51 +116,9 @@ harmlessness are always anti-correlated. -/
     and synthesizing those semantic reconciliation inputs remain open.
 ````
 
-## `Uwueave/HonestRender.lean`
-
-### [`Uwueave/HonestRender.lean:132`](../Uwueave/HonestRender.lean#L132)
-
-````text
-    question, ⟨UNDONE U-0082⟩ as deployment⟩ Honesty is a predicate on renderers, not a
-    property of the carrier. A deployment that wants the *type* to refuse must
-    export `renderReport` and not `report`; nothing here enforces that, and no
-    theorem below assumes it.
-````
-
-### [`Uwueave/HonestRender.lean:148`](../Uwueave/HonestRender.lean#L148)
-
-````text
-  * **The eliminator is `Type 0`-valued.** ⟨UNDONE U-0083⟩ `Carrier.elim` eliminates
-    into `Type`; a `Prop`-valued consumer goes through `Says`, and
-    `Classical.choice` can turn `says_total` into a projection. So the barrier
-    against extraction is `no_honest_projection` — a statement about what such a
-    function can *mean* — and never the absence of one.
-````
-
-## `Uwueave/JoinHom.lean`
-
-### [`Uwueave/JoinHom.lean:92`](../Uwueave/JoinHom.lean#L92)
-
-````text
-  * **`IncrementallyMergeable` says nothing about cost.** ⟨UNDONE U-0086⟩ It asks for a
-    combiner to exist, not for it to be cheap, small or shippable — the
-    `canonicalCombine` witnessing the ⟸ direction of
-    `incrementallyMergeable_iff_resultDetermined` is built from
-    `Classical.choice` and is not an algorithm. A verdict that also priced the
-    combiner is what an implementation would want and is not here.
-````
-
 ## `Uwueave/MergeModel.lean`
 
-### [`Uwueave/MergeModel.lean:127`](../Uwueave/MergeModel.lean#L127)
-
-````text
-  * ⟨UNDONE U-0107⟩ **No verdict routes, no exits.** The field-kind sketch has three
-    more slots (`classify` routes, exits with prices, obligation types). This
-    file settles only the merge slot, which is the one codex refused.
-````
-
-### [`Uwueave/MergeModel.lean:140`](../Uwueave/MergeModel.lean#L140)
+### [`Uwueave/MergeModel.lean:149`](../Uwueave/MergeModel.lean#L149)
 
 ````text
   * ⟨UNDONE U-0109, narrowed to operational convergence⟩ **Repeated and criss-cross
@@ -356,63 +128,6 @@ harmlessness are always anti-correlated. -/
     views under explicit selectors. What remains absent is a network execution
     proving replicas reach the same history and a convergence theorem for
     repeated merging under stated delivery and selector hypotheses.
-````
-
-## `Uwueave/MinimalSummary.lean`
-
-### [`Uwueave/MinimalSummary.lean:112`](../Uwueave/MinimalSummary.lean#L112)
-
-````text
-    states.** ⟨UNDONE U-0112 beyond a supplied finite context universe⟩
-    `ContextCompiler` can instead compile exactly the contexts a caller lists;
-    `signature_eq_iff` proves exactness for that relative relation, and
-    `restricted_contexts_can_coarsen` exhibits `{0}` and `{1}` collapsing when
-    the separating context is unavailable. What remains is deriving a complete
-    reachable-context enumeration from an actual shipping API, rather than
-    trusting the caller's list.
-````
-
-### [`Uwueave/MinimalSummary.lean:128`](../Uwueave/MinimalSummary.lean#L128)
-
-````text
-  * **No syntax, so no classifier.** ⟨UNDONE U-0113⟩ `f` is an arbitrary Lean
-    function; the quotient is computed per query by hand. Exactly the unbuilt
-    part named in `Holes.lean` and `JoinHom.lean`, unchanged.
-````
-
-### [`Uwueave/MinimalSummary.lean:132`](../Uwueave/MinimalSummary.lean#L132)
-
-````text
-    for the refutations, ⟨UNDONE U-0114⟩ for a formula⟩ Two- and three-element
-    universes: a counterexample only needs to be a counterexample, and the
-    positive results (§1–§3) carry no carrier assumption. But "five classes"
-    is a fact about `|U| = 3, k = 2`; no general formula for the threshold
-    quotient's size is proved.
-````
-
-## `Uwueave/Recoverable.lean`
-
-### [`Uwueave/Recoverable.lean:106`](../Uwueave/Recoverable.lean#L106)
-
-````text
-  * ⟨UNDONE U-0117, narrowed to endpoint-only reconstruction/generic merge synthesis⟩
-    **This file's converse is proved at one-operation resolution**
-    (`StepConfluent`), which is the resolution `Ancestral.Serializing` and
-    `serialization_clash_defeats_every_merge` are stated in. §5 lifts it with
-    `StepGenerated`, "every reachable branch is the ancestor or one admitted
-    step from it". The lock satisfies that local bridge; the counter does not.
-    The sibling `Uwueave.CompositeDelta` now closes the explicit-patch route for
-    arbitrary finite runs: `Patch.admitted_of_runsTo` exposes successful runs,
-    `LegalUnderComposition` is proved equivalent to full
-    `AncestralConfluent`, and `Algebra` carries residual admission, commutation,
-    merge execution, and legality. Its `stepConfluent_counter_fails_composite_law`
-    preserves this file's length-two counter as a failure of that named law,
-    while `cheapLockAlgebra` supplies a one-step positive instance. What remains
-    genuinely open is a generic **state-only** constructor that reconstructs or
-    residualizes an arbitrary run delta from endpoints and synthesizes the merge
-    without a carried patch. Cyclic operations show why no such reconstruction
-    follows from `DeltaRecoveryOn`; no theorem here or in `CompositeDelta`
-    claims otherwise.
 ````
 
 ## `Uwueave/RenderSix.lean`
@@ -429,61 +144,9 @@ harmlessness are always anti-correlated. -/
     future property into temporal eventuality; those stronger claims remain open.
 ````
 
-## `Uwueave/Repair.lean`
-
-### [`Uwueave/Repair.lean:85`](../Uwueave/Repair.lean#L85)
-
-````text
-  * ⟨UNDONE U-0122⟩ **`Price.add` is a declared accumulation, not a minimum.** Chaining
-    adds the fields. It is NOT claimed that the sum is the least price achievable
-    for the composite: `SeamAlgebra.linked_segmented` is a case where two seams
-    share one crossing, and codex's own structural verdict on our cost measure
-    (`min_σ (c₁ + c₂) ≠ min_σ c₁ + min_σ c₂`) says a scalar minimum is not
-    compositional at all. A cost *profile over the strategy space*, minimised only
-    when the session closes, is what a budgeting language needs; this is not it.
-````
-
-### [`Uwueave/Repair.lean:92`](../Uwueave/Repair.lean#L92)
-
-````text
-  * ⟨UNDONE U-0123⟩ **`singularObservation` is the provable fragment of "the
-    observation changed".** A full account would compare `Demand` types up to
-    equivalence and say what downstream must rewrite. What is proved here is the
-    one component this tree can refute: singularity of the read
-    (`fork_loses_singularity`). A repair that changes the observation type while
-    keeping singularity is not distinguished by this axis.
-````
-
-### [`Uwueave/Repair.lean:246`](../Uwueave/Repair.lean#L246)
-
-````text
-accumulate. ⟨UNDONE U-0126⟩ this is a *declared* accumulation and is not claimed
-minimal — see the module header. -/
-````
-
-### [`Uwueave/Repair.lean:451`](../Uwueave/Repair.lean#L451)
-
-````text
-  it. ⟨UNDONE U-0129⟩ this is the provable fragment of "the observation changed"; see
-  the module header. -/
-````
-
 ## `Uwueave/TextSummary.lean`
 
-### [`Uwueave/TextSummary.lean:141`](../Uwueave/TextSummary.lean#L141)
-
-````text
-    refutations, ⟨UNDONE U-0142⟩ as a model⟩ `glyph : Nat → Glyph` is faithful exactly
-    because ids are content-addressed in the crate (`blake3("uwueave.seq.v1" ‖
-    anchor ‖ contents)`), so an id determines its character; what it drops is two
-    ops disagreeing about one id's content, which the crate's identity scheme
-    forbids as well. The cost is visible in `tombstoned_content_never_read`,
-    which is therefore stated over *labellings* rather than as a `CtxEquiv`
-    collapse: content is not in the carrier, so the quotient cannot be asked
-    about it directly.
-````
-
-### [`Uwueave/TextSummary.lean:149`](../Uwueave/TextSummary.lean#L149)
+### [`Uwueave/TextSummary.lean:148`](../Uwueave/TextSummary.lean#L148)
 
 ````text
   * **This is the model, not the kernel.** ⟨UNDONE U-0143⟩ `visible` is
@@ -495,54 +158,7 @@ minimal — see the module header. -/
     where that file says so.
 ````
 
-### [`Uwueave/TextSummary.lean:157`](../Uwueave/TextSummary.lean#L157)
-
-````text
-    ⟨UNDONE U-0144⟩ `CtxEquiv`'s `∀ z` ranges over every state, including ones the
-    shipping merge refuses. So `no_gc_summary_sufficient` proves garbage
-    collection unsound **on local state alone**; it does not prove GC
-    impossible. The real escape — knowing no future op can name the element
-    (causal stability, Baquero–Almeida–Shoker's compaction condition) — is a
-    restriction on the set of contexts, and nothing here provides or refutes
-    one. Naming that as the missing hypothesis is the content of this bullet.
-````
-
-### [`Uwueave/TextSummary.lean:170`](../Uwueave/TextSummary.lean#L170)
-
-````text
-  * **Fugue is entered through a wrapper.** ⟨UNDONE U-0145⟩ `Fugue.docOrder` is called
-    for real, but `Fugue.OpSet` is a `List InsOp` merged by append — associative,
-    not commutative, not idempotent, hence not a `MergeState` — so §6 uses
-    `GSet InsOp` materialised in a canonical enumeration order, and filters the
-    dense id space down to minted elements (`Fugue.lean` treats every in-range
-    index as an element). The *verdict* transfers through
-    `rendered_order_requiresEvidence`, which knows nothing about any of that;
-    the *witness computation* depends on the wrapper.
-````
-
-### [`Uwueave/TextSummary.lean:183`](../Uwueave/TextSummary.lean#L183)
-
-````text
-  * **No cost model, no representation, no classifier.** ⟨UNDONE U-0146⟩ Inherited
-    verbatim from `JoinHom.lean` and `MinimalSummary.lean`: `IncrementallyMergeable`
-    asks only that a combiner exist, `CtxQuot` is a partition with no bound on
-    the bits a class takes, and the verdict is proved per computation by hand
-    because there is no syntax to recurse over.
-````
-
 ## `Uwueave/Wellformed.lean`
-
-### [`Uwueave/Wellformed.lean:113`](../Uwueave/Wellformed.lean#L113)
-
-````text
-  * ⟨UNDONE U-0147, narrowed to bidirectional term typing⟩ **Typed edits are not a
-    typed term language.** `WovenEdit.Edit` is a state-indexed command type:
-    its constructors carry freshness, target-existence, and clock/horizon
-    evidence. That pays operation admissibility, but there is still no term
-    AST, synthesis/checking judgement, or hole-aware bidirectional typing;
-    `WellFormed` remains referential integrity plus per-structure
-    well-formedness, not a term-typing judgement.
-````
 
 ### [`Uwueave/Wellformed.lean:120`](../Uwueave/Wellformed.lean#L120)
 
@@ -557,61 +173,5 @@ minimal — see the module header. -/
     histories, delivery/redelivery semantics, and a CmRDT theorem quantifying
     over their interleavings. This file still quantifies over pairs and folds
     of states, not delivered edit logs.
-````
-
-### [`Uwueave/Wellformed.lean:130`](../Uwueave/Wellformed.lean#L130)
-
-````text
-  * ⟨UNDONE U-0149⟩ **No cross-tree references and no holes.** Our conflict
-    representation is *retention* — both pins present, both writes in view —
-    not a hole term carrying provenance. Retention is a different
-    representation, not a weaker one, but nothing here defines how a renderer
-    should present it, and there is no relocation to represent in the first
-    place (`Move.lean` prices node moves as an op-log with a derived view and
-    refuses them as replicated state).
-````
-
-### [`Uwueave/Wellformed.lean:362`](../Uwueave/Wellformed.lean#L362)
-
-````text
-⟨UNDONE U-0150⟩ item. -/
-````
-
-## `Uwueave/WorldFuture.lean`
-
-### [`Uwueave/WorldFuture.lean:175`](../Uwueave/WorldFuture.lean#L175)
-
-````text
-    settled worlds to stability of `Evidence.values`. ⟨UNDONE U-0156 for this carrier
-    and deployment⟩ `World.frontier` remains a `GSet Source`, and timestamps or
-    authentication records are not stored in `ResultEvidence`.
-    `Uwueave.AuthenticatedFrontier` and
-    `Uwueave.AuthenticatedWorldContext` authenticate proof-level progress and
-    bind it to a lawful decoded advance, but no runtime generates that progress
-    or discharges the deployed signature premise. Full `render` stability is
-    not claimed. `roster` bounds accepted membership, but a roster is not an
-    antichain.
-````
-
-### [`Uwueave/WorldFuture.lean:192`](../Uwueave/WorldFuture.lean#L192)
-
-````text
-  * **`Wf` and `RosterKnown` are hypotheses, not invariants.** ⟨UNDONE U-0158⟩
-    Wellformedness (`observe w ⊑ pool w`) is carried as a side condition on the
-    future relations and proved for the concrete witnesses. No theorem says a
-    running system's worlds are wellformed, because there is no running system
-    here — that is what a state machine over these worlds would establish and
-    none is built.
-````
-
-### [`Uwueave/WorldFuture.lean:201`](../Uwueave/WorldFuture.lean#L201)
-
-````text
-  * **The separation is one witness, not a classification.** ⟨UNDONE U-0159⟩ §3 proves
-    that *some* pair of worlds is separated by the pool, which is what refutes
-    the collapse. It does **not** characterise which state/world pairs are
-    separated, or give a decidable test for when a state-indexed reading is
-    safe. `Quiesced` is one sufficient condition and there is no claim it is
-    necessary.
 ````
 

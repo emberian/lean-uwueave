@@ -1762,3 +1762,43 @@ B/item** below the hard cap.  The frozen source SHA-256 was
 the result TSV SHA-256 was
 `659c384e7897f146de8a610b2d43112d1aac834615a0b6d00fa698b898a05dc4`.
 This is compiler peak-memory evidence, not runtime throughput or query latency.
+
+## 21. Checkpointed authenticated admission — 2026-11-23
+
+Release build on an Apple M2 Max. The fixture uses a fixed 16-node weave,
+three grants, one revocation, an accepting verifier and membership provider,
+and a real file with buffered appends. Request generation happens before
+timing. At each mark the timer covers 64 consecutive complete admissions,
+including historical snapshot creation and receipt destruction. Each cell is
+the median of five window means on fresh journals.
+
+```sh
+cd rust
+cargo test --release --test incremental_preflight -- --ignored --nocapture admission_latency
+```
+
+| Clock schedule | 100, µs/commit | 500 | 2,000 | Time ratio | Journal bytes at 100 / 500 / 2,000 |
+|---|---:|---:|---:|---:|---:|
+| One tick per 120 moves | 498.8 | 511.9 | 523.2 | 1.05× | 207,476 / 1,044,676 / 4,234,768 |
+| One tick per move | 619.5 | 1,420.9 | 4,303.0 | 6.95× | 209,318 / 1,047,558 / 4,190,958 |
+
+Every new FORMAT-v3 trace contains exactly one operation. Historical snapshot
+eviction changes how much replay a late operation needs to reconstruct its
+predecessor state. Its certificate stays the same size. Journal bodies pack
+long unary runs losslessly, including copies in the signing and projection
+lanes. Physical files grew 20.41× and 20.02× over 20× as many operations.
+
+**The single-writer end-to-end latency target remains open.** With the current
+kind-3 signing domain the Lamport field itself grows one byte per tick. Lean
+projects, re-encodes and checks those bytes. The runtime also retains unpacked
+certificates in memory. A flat measurement on the slow clock cannot establish
+clock-independent latency. The ordered sets and journal indexes also perform
+logarithmic lookups and insertions. The benchmark enforces the 2× limit on both
+schedules and exits with a failure on the single writer. The benchmark excludes device sync latency,
+production signature verification and recovery. The legacy Lean decoder also
+retains the stack-depth limitation observed during Stage 1 for long requests.
+
+For historical context, on baseline `0a1169f` the same request schedules wrote
+100,786,128 and 114,616,688 bytes respectively at 2,000 commits. Its Stage 1
+timing harness selected the fastest median per mark, so those latency results
+use a different statistic.

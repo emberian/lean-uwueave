@@ -15,6 +15,14 @@ independently versioned wire and persistence formats.
 
 ### Changed
 
+- Authenticated admission certifies one move on its checkpointed predecessor
+  state. New journals pack unary runs and recover the exact signed and replay
+  bytes. Existing full-history journals can be reopened and extended. Earlier
+  runtimes cannot recover the new records. Single-writer projection latency
+  still grows with the signed Lamport clock.
+- `scripts/preo-bench.sh` commands are named by purpose: `program-surface-*`,
+  `export-schema-*`, and `history-delivery-*`. The `wave26-*`, `wave27-*`, and
+  `wave29-*` spellings still work.
 - Cargo publication is disabled until an extracted crate contains the Lean
   sources and Lake metadata required by `build.rs`.
 - Cargo metadata now advertises the repository's actual Unlicense grant.

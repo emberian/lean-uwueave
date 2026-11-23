@@ -12,11 +12,19 @@
 //! before provider replay or execution commit. Storage itself does not verify
 //! signatures or context commitments and cannot turn an unpinned reopen into
 //! a secure ready state.
+//!
+//! The FORMAT-v3 trace is the exact kernel exchange for that admission. Its
+//! first-parent block may be rebased to a replay checkpoint and its operations
+//! limited to the suffix after that checkpoint, so one record need not carry
+//! the whole log. Records holding a full-history request remain valid. The Lean
+//! checker judges each certificate alone; only recovery's exact rebuild ties a
+//! stored trace to the journal's earlier operations.
 
 use super::record::{RawJournal, RawJournalError, RecordSpec};
 use super::{AppendReceipt, JournalOptions, SyncPolicy};
 use crate::auth::LeanValidatedAdmissionTrace;
 use crate::{MoveOp, NodeId};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io;
@@ -271,7 +279,7 @@ impl CheckedAdmission {
             .ok_or("Lean-validated admission certificate is not canonical v2")
     }
 
-    /// Exact canonical bytes accepted by Lean and written as the raw journal
+    /// Exact canonical bytes accepted by Lean and recovered from the journal
     /// record body. Recovery must recheck these same bytes before use.
     pub fn certificate_bytes(&self) -> &[u8] {
         &self.certificate_bytes
@@ -473,6 +481,7 @@ impl From<RawJournalError> for AuthenticatedJournalError {
 #[derive(Debug)]
 pub struct AuthenticatedMoveJournal {
     raw: RawJournal,
+    max_record_bytes: u64,
     records: Vec<AuthenticatedMoveRecord>,
     nonce_index: BTreeMap<NonceKey, (Vec<u8>, u64)>,
     operation_index: BTreeMap<OperationKey, (Vec<u8>, u64)>,
@@ -513,7 +522,8 @@ impl AuthenticatedMoveJournal {
                     sequence: u64::MAX,
                     reason: "record count exceeds sequence space",
                 })?;
-            let admission = decode_admission(body).ok_or(Self::record_error(sequence))?;
+            let certificate = unpack_record(body, options.max_record_bytes, sequence)?;
+            let admission = decode_admission(&certificate).ok_or(Self::record_error(sequence))?;
             if admission.context().previous_admission_commitment != head {
                 return Err(AuthenticatedJournalError::BrokenChain { sequence });
             }
@@ -563,6 +573,7 @@ impl AuthenticatedMoveJournal {
         };
         Ok(Self {
             raw,
+            max_record_bytes: options.max_record_bytes,
             records,
             nonce_index,
             operation_index,
@@ -668,10 +679,16 @@ impl AuthenticatedMoveJournal {
                 actual: admission.context().previous_admission_commitment,
             });
         }
-        let commitment = record_commitment(admission.certificate_bytes());
-        let receipt = self
-            .raw
-            .append_at(sequence, admission.certificate_bytes())?;
+        let certificate = admission.certificate_bytes();
+        // Let RawJournal return its usual size/poisoning error if the logical
+        // certificate exceeds the configured bound, even when it compresses.
+        let body = if certificate.len() as u64 > self.max_record_bytes {
+            Cow::Borrowed(certificate)
+        } else {
+            pack_record(certificate)
+        };
+        let commitment = record_commitment(&body);
+        let receipt = self.raw.append_at(sequence, &body)?;
         if receipt.status == super::AppendStatus::Appended {
             self.nonce_index.insert(
                 admission.nonce_key().clone(),
@@ -723,8 +740,14 @@ impl AuthenticatedMoveJournal {
                 sequence: existing_sequence,
                 reason: "indexed sequence has no recovered record",
             })?;
-        self.raw
-            .append_at(existing_sequence, record.admission.certificate_bytes())?;
+        // Legacy records were written verbatim even when compressible. Repeat
+        // the original physical encoding for RawJournal's exact retry check.
+        let certificate = record.admission.certificate_bytes();
+        let body = match self.raw.records()[index].first() {
+            Some(&PACKED_VERSION) => pack_record(certificate),
+            _ => Cow::Borrowed(certificate),
+        };
+        self.raw.append_at(existing_sequence, &body)?;
         Ok(StoreDecision::Retry {
             existing_sequence,
             head_commitment: self
@@ -817,6 +840,87 @@ fn validate_admission(value: &AdmissionFields) -> Result<(), &'static str> {
         return Err("citation zero cannot cross the checked boundary");
     }
     Ok(())
+}
+
+// Physical body tag only. The v2 Lean certificate contains the original kind-3 signing bytes.
+// A packed segment is (literal length, ones length) as two u32le words,
+// followed by the literal bytes. Counts fit because the checker caps v2
+// certificates at 16 MiB. Only long unary runs pay for a segment header.
+const PACKED_VERSION: u8 = 3;
+const MIN_RUN: usize = 16;
+
+fn pack_record(certificate: &[u8]) -> Cow<'_, [u8]> {
+    let mut rest = certificate;
+    let mut packed = Vec::new();
+    while let Some(literals) = rest.windows(MIN_RUN).position(|word| word == [1; MIN_RUN]) {
+        let (literal, run_and_tail) = rest.split_at(literals);
+        let run = MIN_RUN
+            + run_and_tail[MIN_RUN..]
+                .iter()
+                .take_while(|&&b| b == 1)
+                .count();
+        if packed.is_empty() {
+            packed.push(PACKED_VERSION);
+        }
+        packed.extend_from_slice(&(literals as u32).to_le_bytes());
+        packed.extend_from_slice(&(run as u32).to_le_bytes());
+        packed.extend_from_slice(literal);
+        rest = &run_and_tail[run..];
+    }
+    if packed.is_empty() {
+        return Cow::Borrowed(certificate);
+    }
+    if !rest.is_empty() {
+        packed.extend_from_slice(&(rest.len() as u32).to_le_bytes());
+        packed.extend_from_slice(&0u32.to_le_bytes());
+        packed.extend_from_slice(rest);
+    }
+    if packed.len() < certificate.len() {
+        Cow::Owned(packed)
+    } else {
+        Cow::Borrowed(certificate)
+    }
+}
+
+fn unpack_record(
+    body: &[u8],
+    maximum: u64,
+    sequence: u64,
+) -> Result<Cow<'_, [u8]>, AuthenticatedJournalError> {
+    if body.first() != Some(&PACKED_VERSION) {
+        return Ok(Cow::Borrowed(body));
+    }
+    let malformed = || AuthenticatedMoveJournal::record_error(sequence);
+    let mut rest = &body[1..];
+    let mut certificate = Vec::new();
+    let mut length = 0u64;
+    while !rest.is_empty() {
+        let (header, tail) = rest.split_at_checked(8).ok_or_else(malformed)?;
+        let literals = u32::from_le_bytes(header[..4].try_into().unwrap());
+        let run = u32::from_le_bytes(header[4..].try_into().unwrap());
+        let (literal, tail) = tail
+            .split_at_checked(literals as usize)
+            .ok_or_else(malformed)?;
+        length += u64::from(literals) + u64::from(run);
+        if length > crate::auth::MAX_ADMISSION_TRACE_BYTES as u64 {
+            return Err(malformed());
+        }
+        if length <= maximum {
+            certificate.extend_from_slice(literal);
+            certificate.resize(length as usize, 1);
+        }
+        rest = tail;
+    }
+    if length > maximum {
+        return Err(AuthenticatedJournalError::RecordTooLarge {
+            actual: length,
+            maximum,
+        });
+    }
+    if certificate.first() != Some(&RECORD_VERSION) || pack_record(&certificate).as_ref() != body {
+        return Err(malformed());
+    }
+    Ok(Cow::Owned(certificate))
 }
 
 fn record_commitment(body: &[u8]) -> [u8; 32] {
@@ -1209,6 +1313,32 @@ mod tests {
         )
         .unwrap();
         checked_from_canonical_bytes(unchecked.certificate_bytes()).unwrap()
+    }
+
+    #[test]
+    fn unary_packing_is_lossless_canonical_and_bounded() {
+        let mut certificate = vec![RECORD_VERSION];
+        for run in [15, 16, 31, 512, 2048] {
+            certificate.extend(std::iter::repeat_n(1, run));
+            certificate.extend_from_slice(&[0, 255]);
+        }
+        let packed = pack_record(&certificate);
+        assert_eq!(packed[0], PACKED_VERSION);
+        assert!(packed.len() < 120);
+        assert_eq!(
+            unpack_record(&packed, certificate.len() as u64, 0).unwrap(),
+            certificate
+        );
+        assert!(
+            matches!(unpack_record(&packed, certificate.len() as u64 - 1, 0),
+            Err(AuthenticatedJournalError::RecordTooLarge {actual, maximum})
+                if actual == certificate.len() as u64 && actual == maximum + 1)
+        );
+        let mut redundant = packed.to_vec();
+        redundant.extend_from_slice(&[0; 8]);
+        assert!(unpack_record(&redundant, u64::MAX, 0).is_err());
+        assert!(unpack_record(&packed[..packed.len() - 1], u64::MAX, 0).is_err());
+        assert!(unpack_record(&[3, 0, 0, 0, 0, 255, 255, 255, 255], u64::MAX, 0).is_err());
     }
 
     #[test]
