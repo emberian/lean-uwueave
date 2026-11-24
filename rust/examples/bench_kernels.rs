@@ -75,7 +75,10 @@ fn bench(mut f: impl FnMut()) -> Sample {
         iters += 1;
         let elapsed = start.elapsed();
         if elapsed >= BUDGET || iters >= MAX_ITERS {
-            return Sample { secs: elapsed.as_secs_f64() / iters as f64, iters };
+            return Sample {
+                secs: elapsed.as_secs_f64() / iters as f64,
+                iters,
+            };
         }
     }
 }
@@ -118,7 +121,14 @@ impl Table {
                 } else {
                     f64::NAN
                 };
-                (format!("{r:>6.2}"), if e.is_finite() { format!("{e:>5.2}") } else { "    -".into() })
+                (
+                    format!("{r:>6.2}"),
+                    if e.is_finite() {
+                        format!("{e:>5.2}")
+                    } else {
+                        "    -".into()
+                    },
+                )
             }
         };
         println!(
@@ -165,7 +175,9 @@ fn chain_weave(n: usize) -> (CausalWeave<Vec<u8>>, Vec<NodeId>) {
     let mut ids = Vec::with_capacity(n);
     let mut parent: Vec<NodeId> = vec![];
     for i in 0..n {
-        let id = w.insert(parent.clone(), (i as u64).to_le_bytes().to_vec()).unwrap();
+        let id = w
+            .insert(parent.clone(), (i as u64).to_le_bytes().to_vec())
+            .unwrap();
         ids.push(id);
         parent = vec![id];
     }
@@ -222,8 +234,11 @@ fn encode_request(
 ) -> Vec<u8> {
     use std::collections::BTreeMap;
     let ids: Vec<NodeId> = weave.nodes().map(|n| n.id()).collect();
-    let index: BTreeMap<NodeId, u64> =
-        ids.iter().enumerate().map(|(i, id)| (*id, i as u64)).collect();
+    let index: BTreeMap<NodeId, u64> = ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (*id, i as u64))
+        .collect();
     let n = ids.len();
 
     let mut sorted: Vec<MoveOp> = ops.to_vec();
@@ -402,7 +417,13 @@ fn bench_replay(max: usize) {
             let one = Instant::now();
             let _ = log.replay(&w);
             if one.elapsed() > WALL {
-                t.row(n as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -436,7 +457,10 @@ fn bench_replay(max: usize) {
         // from the destination; on a chain base that walk is O(depth), on a flat
         // base it terminates at once. Same n, same m, same everything else — so
         // the difference between this table and 1b IS the ancestor walk.
-        let mut t = Table::new("1b'. weave fixed at 1000 nodes (FLAT base), ops grow", "m ops");
+        let mut t = Table::new(
+            "1b'. weave fixed at 1000 nodes (FLAT base), ops grow",
+            "m ops",
+        );
         let (w, ids) = flat_weave(1000);
         for &m in &[0usize, 10, 100, 1000, 10000] {
             let log = log_of(&move_ops(&ids, m), 1);
@@ -465,7 +489,13 @@ fn bench_replay(max: usize) {
             let one = Instant::now();
             let _ = log.replay(&w);
             if one.elapsed() > WALL {
-                t.row(n as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -477,7 +507,10 @@ fn bench_replay(max: usize) {
     }
 
     {
-        let mut t = Table::new("1d. ops fixed at 100, weave grows (FLAT base, depth 1)", "n nodes");
+        let mut t = Table::new(
+            "1d. ops fixed at 100, weave grows (FLAT base, depth 1)",
+            "n nodes",
+        );
         for &n in &[100usize, 1000, 3000, 10000, 30000] {
             if n > max {
                 t.stopped(n as f64, "over BENCH_MAX");
@@ -508,7 +541,13 @@ fn bench_replay(max: usize) {
             let one = Instant::now();
             let _ = log.replay(&w);
             if one.elapsed() > WALL {
-                t.row(ng as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    ng as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -534,7 +573,13 @@ fn bench_replay(max: usize) {
             let one = Instant::now();
             let _ = log.replay(&w);
             if one.elapsed() > WALL {
-                t.row(ng as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    ng as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -559,8 +604,14 @@ fn bench_split() {
         "\n    {:>7} {:>7}  {:>12} {:>12} {:>12} {:>12} {:>12}",
         "n", "m", "total", "encode", "kernel", "decode", "canonical"
     );
-    for &(n, m) in &[(100usize, 0usize), (100, 100), (1000, 0), (1000, 1000), (3000, 3000), (10000, 1000)]
-    {
+    for &(n, m) in &[
+        (100usize, 0usize),
+        (100, 100),
+        (1000, 0),
+        (1000, 1000),
+        (3000, 3000),
+        (10000, 1000),
+    ] {
         let (w, ids) = chain_weave(n);
         let ops = move_ops(&ids, m);
         let log = log_of(&ops, 1);
@@ -638,7 +689,11 @@ fn bench_split() {
     let s2 = bench(|| {
         let _ = log.replay(&w);
     });
-    println!("    the same through MoveLog::replay:      {}  ({} iters)", fmt_time(s2.secs), s2.iters);
+    println!(
+        "    the same through MoveLog::replay:      {}  ({} iters)",
+        fmt_time(s2.secs),
+        s2.iters
+    );
 }
 
 fn bench_seq(max: usize) {
@@ -659,7 +714,13 @@ fn bench_seq(max: usize) {
             let _ = s.visible();
             let single = one.elapsed();
             if single > WALL {
-                t.row(n as f64, &Sample { secs: single.as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: single.as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -671,7 +732,10 @@ fn bench_seq(max: usize) {
     }
 
     {
-        let mut t = Table::new("3b. text() on the same CHAIN document (visible + contents splice)", "n elems");
+        let mut t = Table::new(
+            "3b. text() on the same CHAIN document (visible + contents splice)",
+            "n elems",
+        );
         for &n in &[10usize, 100, 500, 1000, 2000, 5000] {
             if n > max {
                 t.stopped(n as f64, "over BENCH_MAX");
@@ -681,7 +745,13 @@ fn bench_seq(max: usize) {
             let one = Instant::now();
             let _ = s.text();
             if one.elapsed() > WALL {
-                t.row(n as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 break;
             }
             let sm = bench(|| {
@@ -711,7 +781,13 @@ fn bench_seq(max: usize) {
             let one = Instant::now();
             let _ = s.visible();
             if one.elapsed() > WALL {
-                t.row(n as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 break;
             }
             let sm = bench(|| {
@@ -735,7 +811,13 @@ fn bench_seq(max: usize) {
             let one = Instant::now();
             let _ = s.visible();
             if one.elapsed() > WALL {
-                t.row(n as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 break;
             }
             let sm = bench(|| {
@@ -788,12 +870,14 @@ fn bench_seq(max: usize) {
             for a in &anchor_idx {
                 words.push(*a as u64);
             }
-            for _ in 0..ids.len() {
-                words.push(0);
-            }
+            words.extend(std::iter::repeat_n(0, ids.len()));
             let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
             let out = raw_seq(&bytes);
-            assert_eq!(out / 8, 1 + n, "reconstructed seq request did not linearize all {n}");
+            assert_eq!(
+                out / 8,
+                1 + n,
+                "reconstructed seq request did not linearize all {n}"
+            );
             let tot = bench(|| {
                 let _ = s.visible();
             });
@@ -816,7 +900,10 @@ fn bench_era(max: usize) {
     section("4. ERA RESOLVE  (EraGroup::resolve -> Era.resolve)");
 
     {
-        let mut t = Table::new("4a. events grow, no arbiter cuts (everything pending)", "ne events");
+        let mut t = Table::new(
+            "4a. events grow, no arbiter cuts (everything pending)",
+            "ne events",
+        );
         for &ne in &[10usize, 100, 500, 1000, 2000, 5000] {
             if ne > max {
                 t.stopped(ne as f64, "over BENCH_MAX");
@@ -826,7 +913,13 @@ fn bench_era(max: usize) {
             let one = Instant::now();
             let _ = g.resolve();
             if one.elapsed() > WALL {
-                t.row(ne as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    ne as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -838,7 +931,10 @@ fn bench_era(max: usize) {
     }
 
     {
-        let mut t = Table::new("4b. events and cuts grow together (every event finalized)", "ne = nc");
+        let mut t = Table::new(
+            "4b. events and cuts grow together (every event finalized)",
+            "ne = nc",
+        );
         for &ne in &[10usize, 100, 500, 1000, 2000] {
             if ne > max {
                 t.stopped(ne as f64, "over BENCH_MAX");
@@ -848,7 +944,13 @@ fn bench_era(max: usize) {
             let one = Instant::now();
             let _ = g.resolve();
             if one.elapsed() > WALL {
-                t.row(ne as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    ne as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -871,7 +973,10 @@ fn bench_era(max: usize) {
     }
 
     {
-        let mut t = Table::new("4d. events fixed at 500, distinct users grow (roster width)", "users");
+        let mut t = Table::new(
+            "4d. events fixed at 500, distinct users grow (roster width)",
+            "users",
+        );
         for &u in &[2u64, 8, 32, 128, 500] {
             let g = era_group(500, u, 0);
             let s = bench(|| {
@@ -898,7 +1003,13 @@ fn bench_era(max: usize) {
             let one = Instant::now();
             let _ = g.resolve();
             if one.elapsed() > WALL {
-                t.row(ne as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    ne as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -926,7 +1037,13 @@ fn bench_era(max: usize) {
             let one = Instant::now();
             let _ = g.resolve();
             if one.elapsed() > WALL {
-                t.row(ne as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    ne as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -949,7 +1066,10 @@ fn bench_merge(max: usize) {
     section("5. MERGE  (CausalWeave::merge, Weave::merge) and 6. THE COMPOSITE VIEW");
 
     {
-        let mut t = Table::new("5a. CausalWeave::merge, two disjoint flat weaves of n each", "n nodes");
+        let mut t = Table::new(
+            "5a. CausalWeave::merge, two disjoint flat weaves of n each",
+            "n nodes",
+        );
         for &n in &[10usize, 100, 1000, 10000, 50000] {
             if n > max * 5 {
                 t.stopped(n as f64, "over BENCH_MAX");
@@ -958,7 +1078,8 @@ fn bench_merge(max: usize) {
             let (a, _) = flat_weave(n);
             let mut b = CausalWeave::new();
             for i in 0..n {
-                b.insert(vec![], (i as u64 + 1_000_000).to_le_bytes().to_vec()).unwrap();
+                b.insert(vec![], (i as u64 + 1_000_000).to_le_bytes().to_vec())
+                    .unwrap();
             }
             let s = bench(|| {
                 let mut left = a.clone();
@@ -970,7 +1091,10 @@ fn bench_merge(max: usize) {
     }
 
     {
-        let mut t = Table::new("5b. SeqCrdt::merge, two chain documents of n each", "n elems");
+        let mut t = Table::new(
+            "5b. SeqCrdt::merge, two chain documents of n each",
+            "n elems",
+        );
         for &n in &[10usize, 100, 1000, 5000] {
             if n > max {
                 t.stopped(n as f64, "over BENCH_MAX");
@@ -1000,7 +1124,8 @@ fn bench_merge(max: usize) {
             let a = build_weave(n, 0, 1);
             let mut b = build_weave(0, 0, 1);
             for i in 0..n {
-                b.add_node(1, vec![], (i as u64 + 5_000_000).to_le_bytes().to_vec()).unwrap();
+                b.add_node(1, vec![], (i as u64 + 5_000_000).to_le_bytes().to_vec())
+                    .unwrap();
             }
             let one = Instant::now();
             {
@@ -1008,7 +1133,13 @@ fn bench_merge(max: usize) {
                 left.merge(&b).unwrap();
             }
             if one.elapsed() > WALL {
-                t.row(n as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 break;
             }
             let s = bench(|| {
@@ -1017,7 +1148,9 @@ fn bench_merge(max: usize) {
             });
             t.row(n as f64, &s);
         }
-        println!("      (Weave::merge clones itself first, to refuse wholesale rather than half-apply)");
+        println!(
+            "      (Weave::merge clones itself first, to refuse wholesale rather than half-apply)"
+        );
     }
 
     {
@@ -1035,11 +1168,14 @@ fn bench_merge(max: usize) {
             let s = bench(|| {
                 let mut ww = w.clone();
                 k += 1;
-                ww.add_node(1, vec![], (k + 9_000_000).to_le_bytes().to_vec()).unwrap();
+                ww.add_node(1, vec![], (k + 9_000_000).to_le_bytes().to_vec())
+                    .unwrap();
             });
             t.row(n as f64, &s);
         }
-        println!("      (includes the Weave::clone the harness does to keep each call a fresh insert)");
+        println!(
+            "      (includes the Weave::clone the harness does to keep each call a fresh insert)"
+        );
     }
 
     {
@@ -1053,7 +1189,8 @@ fn bench_merge(max: usize) {
             let one = Instant::now();
             {
                 let mut ww = w.clone();
-                ww.add_node(1, vec![], 42u64.to_le_bytes().to_vec()).unwrap();
+                ww.add_node(1, vec![], 42u64.to_le_bytes().to_vec())
+                    .unwrap();
             }
             if one.elapsed() > WALL {
                 t.stopped(ne as f64, "over the wall");
@@ -1062,7 +1199,8 @@ fn bench_merge(max: usize) {
             let s = bench(|| {
                 let mut ww = w.clone();
                 k += 1;
-                ww.add_node(1, vec![], (k + 7_000_000).to_le_bytes().to_vec()).unwrap();
+                ww.add_node(1, vec![], (k + 7_000_000).to_le_bytes().to_vec())
+                    .unwrap();
             });
             t.row(ne as f64, &s);
         }
@@ -1082,7 +1220,13 @@ fn bench_merge(max: usize) {
             let one = Instant::now();
             let _ = w.view();
             if one.elapsed() > WALL {
-                t.row(n as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    n as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -1105,13 +1249,22 @@ fn bench_merge(max: usize) {
             for id in &node_ids {
                 let mut anchor = None;
                 for i in 0..l {
-                    anchor = Some(w.insert_text(1, *id, anchor, &(i as u64).to_le_bytes()).unwrap());
+                    anchor = Some(
+                        w.insert_text(1, *id, anchor, &(i as u64).to_le_bytes())
+                            .unwrap(),
+                    );
                 }
             }
             let one = Instant::now();
             let _ = w.view();
             if one.elapsed() > WALL {
-                t.row(l as f64, &Sample { secs: one.elapsed().as_secs_f64(), iters: 1 });
+                t.row(
+                    l as f64,
+                    &Sample {
+                        secs: one.elapsed().as_secs_f64(),
+                        iters: 1,
+                    },
+                );
                 println!("      (single iteration only: over the {WALL:?} wall)");
                 break;
             }
@@ -1129,11 +1282,15 @@ fn build_weave(n: usize, m: usize, ne: usize) -> Weave<Vec<u8>> {
     let mut w = Weave::new([(1u64, 1u64 << 40)]);
     w.record_membership(EraEvent::join(1, 1)).unwrap();
     for i in 1..ne {
-        w.record_membership(EraEvent::write(i as u64 + 1, 1)).unwrap();
+        w.record_membership(EraEvent::write(i as u64 + 1, 1))
+            .unwrap();
     }
     let mut ids = Vec::with_capacity(n);
     for i in 0..n {
-        ids.push(w.add_node(1, vec![], (i as u64).to_le_bytes().to_vec()).unwrap());
+        ids.push(
+            w.add_node(1, vec![], (i as u64).to_le_bytes().to_vec())
+                .unwrap(),
+        );
     }
     for i in 0..m {
         let child = ids[(i * 7 + 3) % n.max(1)];
@@ -1148,7 +1305,10 @@ fn build_weave(n: usize, m: usize, ne: usize) -> Weave<Vec<u8>> {
 // ---------------------------------------------------------------------------
 
 fn main() {
-    let max: usize = std::env::var("BENCH_MAX").ok().and_then(|s| s.parse().ok()).unwrap_or(30000);
+    let max: usize = std::env::var("BENCH_MAX")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30000);
 
     // First library call initializes the Lean runtime before measurement.
     let init = Instant::now();
@@ -1160,11 +1320,25 @@ fn main() {
     println!("{}", "#".repeat(74));
     println!("# uwueave kernel benchmarks");
     println!("#");
-    println!("#   profile          : {}", if cfg!(debug_assertions) { "DEBUG (debug_assertions ON: the canonicality differential runs on every replay)" } else { "RELEASE (debug_assertions off: no canonicality differential)" });
-    println!("#   target           : {} / {}", std::env::consts::ARCH, std::env::consts::OS);
+    println!(
+        "#   profile          : {}",
+        if cfg!(debug_assertions) {
+            "DEBUG (debug_assertions ON: the canonicality differential runs on every replay)"
+        } else {
+            "RELEASE (debug_assertions off: no canonicality differential)"
+        }
+    );
+    println!(
+        "#   target           : {} / {}",
+        std::env::consts::ARCH,
+        std::env::consts::OS
+    );
     println!("#   BENCH_MAX        : {max}");
     println!("#   per-point budget : {BUDGET:?}, wall per iteration: {WALL:?}");
-    println!("#   Lean runtime init + first kernel call: {}", fmt_time(init.as_secs_f64()));
+    println!(
+        "#   Lean runtime init + first kernel call: {}",
+        fmt_time(init.as_secs_f64())
+    );
     println!("#");
     println!("#   Reproduce: cd rust && cargo run --release --example bench_kernels");
     println!("{}", "#".repeat(74));

@@ -17,10 +17,10 @@ use std::time::Instant;
 
 use harness::{
     admit_against_full_replay, adversarial_rows, authority_log, bounded_clock_rows, in_order_rows,
-    move_op, new_runtime, node_ids, recover_runtime, signed_requests, weave, Row, TempJournal,
-    MAX_BYTES,
+    legacy_signed_requests, move_op, new_runtime, node_ids, recover_runtime, signed_requests,
+    weave, Row, TempJournal, LIVE_GRANT, MAX_BYTES,
 };
-use uwueave::auth_runtime::{AdmissionDisposition, AdmissionOutcome};
+use uwueave::auth_runtime::{AdmissionDisposition, AdmissionOutcome, AdmissionRefusal};
 use uwueave::persistence::{RecoveryExpectation, TornTailPolicy};
 use uwueave::MoveLog;
 
@@ -276,9 +276,20 @@ fn cross_version_recover() {
 
     let mut runtime = recover_runtime(&path, pin, TornTailPolicy::Refuse);
     let legacy = fs::read(&path).unwrap();
+    let legacy_retry_requests = if runtime.journal().records()[0]
+        .admission()
+        .canonical_request()
+        != requests[0]
+    {
+        Some(legacy_signed_requests(&rows[..160]))
+    } else {
+        None
+    };
     for sequence in [0, 63, 149] {
-        let AdmissionOutcome::Accepted(retry) = runtime.admit(MAX_BYTES, &requests[sequence])
-        else {
+        let retry_payload = legacy_retry_requests
+            .as_ref()
+            .map_or(&requests[sequence], |legacy_reqs| &legacy_reqs[sequence]);
+        let AdmissionOutcome::Accepted(retry) = runtime.admit(MAX_BYTES, retry_payload) else {
             panic!("legacy retry failed at {sequence}");
         };
         assert_eq!(retry.disposition, AdmissionDisposition::Retry);
@@ -309,4 +320,135 @@ fn cross_version_recover() {
         shadow.replay(&weave)
     );
     println!("recovered 160 older records and appended 80 newer ones");
+}
+
+/// Canonical fixed-width Lamport encoding keeps both kind-3 request size and
+/// persisted v2 certificate size strictly constant across `[1 ..= u64::MAX]`.
+#[test]
+fn canonical_lamport_wire_and_certificate_have_constant_width_up_to_u64_max() {
+    let rows = [1u64, 2_000, 1_000_000_000_000, u64::MAX]
+        .into_iter()
+        .map(|lamport| Row {
+            lamport,
+            child: 1,
+            dest: Some(0),
+            cite: LIVE_GRANT,
+        })
+        .collect::<Vec<_>>();
+    let requests = signed_requests(&rows);
+    let expected_req_len = requests[0].len();
+    for (index, request) in requests.iter().enumerate() {
+        assert_eq!(
+            request.len(),
+            expected_req_len,
+            "kind-3 request byte length varied at index {index} (lamport = {})",
+            rows[index].lamport
+        );
+    }
+
+    let journal = TempJournal::new("constant-lamport-width");
+    let mut runtime = new_runtime(&journal.0);
+    admit_all(&mut runtime, &requests);
+    let records = runtime.journal().records();
+    assert_eq!(records.len(), rows.len());
+    let first_cert_len = records[0].admission().certificate_bytes().len();
+    for (index, record) in records.iter().enumerate() {
+        assert_eq!(
+            record.admission().observation().lamport,
+            rows[index].lamport
+        );
+        // Record 0 has `previous_admission_commitment = None`; every subsequent
+        // record carries the 32-byte predecessor commitment and must otherwise
+        // have identical byte width through `u64::MAX`.
+        let expected_cert_len = if index == 0 {
+            first_cert_len
+        } else {
+            first_cert_len + 32
+        };
+        assert_eq!(
+            record.admission().certificate_bytes().len(),
+            expected_cert_len,
+            "certificate byte length varied at index {index} (lamport = {})",
+            rows[index].lamport
+        );
+    }
+}
+
+/// Legacy unary-Lamport (tag 66 / tag 172) frames remain accepted, retry-safe,
+/// domain-separated from canonical fixed-width frames, and recoverable in mixed
+/// journals alongside canonical fixed-width records.
+#[test]
+fn legacy_unary_journal_recovers_retries_and_continues_with_fixed_width_lamport() {
+    const LEGACY_COUNT: usize = 80;
+    const TOTAL_COUNT: usize = 160;
+    let rows = in_order_rows(TOTAL_COUNT);
+    let legacy_requests = legacy_signed_requests(&rows[..LEGACY_COUNT]);
+    let fixed_requests = signed_requests(&rows);
+
+    let last_legacy = LEGACY_COUNT - 1;
+    assert_eq!(
+        legacy_requests[last_legacy].len(),
+        fixed_requests[last_legacy].len() + (rows[last_legacy].lamport as usize + 1) - 8,
+        "legacy unary corpus must encode lamport in O(lamport) unary bytes"
+    );
+
+    let weave = weave();
+    let nodes = node_ids(&weave);
+    let journal = TempJournal::new("mixed-lamport-wire");
+    let mut runtime = new_runtime(&journal.0);
+    let mut shadow = authority_log();
+    for (position, row) in rows[..LEGACY_COUNT].iter().enumerate() {
+        admit_against_full_replay(
+            &mut runtime,
+            &mut shadow,
+            &weave,
+            move_op(&nodes, *row),
+            &legacy_requests[position],
+            &format!("legacy row {position}"),
+        );
+    }
+
+    let pin = runtime.journal().recovery_expectation();
+    drop(runtime);
+    let legacy_journal_bytes = fs::read(&journal.0).unwrap();
+
+    let mut recovered = recover_runtime(&journal.0, pin, TornTailPolicy::Refuse);
+    for sequence in [0usize, 63, LEGACY_COUNT - 1] {
+        match recovered.admit(MAX_BYTES, &legacy_requests[sequence]) {
+            AdmissionOutcome::Accepted(receipt) => {
+                assert_eq!(receipt.disposition, AdmissionDisposition::Retry);
+                assert_eq!(receipt.sequence, sequence as u64);
+            }
+            other => panic!("legacy retry at {sequence} failed: {other:?}"),
+        }
+        assert!(
+            matches!(
+                recovered.admit(MAX_BYTES, &fixed_requests[sequence]),
+                AdmissionOutcome::Refused(AdmissionRefusal::NonceCollision { existing_sequence })
+                    if existing_sequence == sequence as u64
+            ),
+            "re-encoding a legacy request under fixed-width tag 70 must not alias legacy signing bytes"
+        );
+    }
+    assert_eq!(fs::read(&journal.0).unwrap(), legacy_journal_bytes);
+
+    for (position, row) in rows.iter().enumerate().skip(LEGACY_COUNT) {
+        admit_against_full_replay(
+            &mut recovered,
+            &mut shadow,
+            &weave,
+            move_op(&nodes, *row),
+            &fixed_requests[position],
+            &format!("fixed row {position}"),
+        );
+    }
+    let mixed_pin = recovered.journal().recovery_expectation();
+    drop(recovered);
+
+    let mixed = recover_runtime(&journal.0, mixed_pin, TornTailPolicy::Refuse);
+    assert_eq!(mixed.journal().records().len(), TOTAL_COUNT);
+    assert_eq!(
+        mixed.execution().log().replay(&weave),
+        shadow.replay(&weave)
+    );
 }

@@ -145,7 +145,11 @@ fn draw<T: std::fmt::Display>(label: &str, w: &SemanticWidget<T>, licence: &str)
     ));
     row(&format!(
         "  loading  : {}",
-        if loading(w) { "YES  (*** spinner on screen ***)" } else { "no" }
+        if loading(w) {
+            "YES  (*** spinner on screen ***)"
+        } else {
+            "no"
+        }
     ));
     match &w.candidates {
         CandidatePresentation::Nothing => row("  shows    : (nothing)"),
@@ -177,7 +181,8 @@ fn genesis() -> (Doc, NodeId) {
         EraEvent::join(2, GRACE),
         EraEvent::promote(3, ADA, GRACE, EraRole::Writer),
     ] {
-        doc.record_membership(ev).expect("fresh event ids, so no eid collision");
+        doc.record_membership(ev)
+            .expect("fresh event ids, so no eid collision");
     }
     for eid in 1..=3 {
         doc.record_cut(1, eid);
@@ -206,7 +211,12 @@ fn write_notes(doc: &mut Doc, actor: u64, root: NodeId, notes: &[&str]) -> Vec<N
 /// replay kernel. Returns the short content addresses, which are stable across
 /// replicas because they are hashes of the bytes.
 fn scan(doc: &Doc, needle: &str) -> Vec<String> {
-    doc.view().nodes.iter().filter(|n| n.contents.contains(needle)).map(|n| short(&n.id)).collect()
+    doc.view()
+        .nodes
+        .iter()
+        .filter(|n| n.contents.contains(needle))
+        .map(|n| short(&n.id))
+        .collect()
 }
 
 /// One replica's mentions, attributed to the source that saw them.
@@ -278,20 +288,29 @@ fn main() {
     mentions.owe(ADA).owe(GRACE);
 
     let cell = count_position(&mentions, DERIVED);
-    println!("  mention evidence:  candidates {{}}   obligations {{ada, grace}}   certificates {{}}");
+    println!(
+        "  mention evidence:  candidates {{}}   obligations {{ada, grace}}   certificates {{}}"
+    );
     println!("  count position  :  no candidate at all - NOT the number 0.");
     println!(
         "\n  Publishing `0` here would be `RenderSix.giveUpRender` at the count\n  \
          layer: the empty state asserted while a source is still owed. The count\n  \
          position holds no candidate until somebody has spoken.\n"
     );
-    assert_eq!(status_of(&cell), Status::Pending, "nobody has spoken and grace is uncertified");
+    assert_eq!(
+        status_of(&cell),
+        Status::Pending,
+        "nobody has spoken and grace is uncertified"
+    );
     draw(
         &format!("notes mentioning `{NEEDLE}`   [status: pending]"),
         &widget_of(status_of(&cell)),
         "RenderProgress.widgetOf - pending -> finality = open; honest_widget_loads_at_pending",
     );
-    println!("  what this cell is waiting for: sources {:?}", cell.open_sources());
+    println!(
+        "  what this cell is waiting for: sources {:?}",
+        cell.open_sources()
+    );
     println!(
         "\n  The button is `stop waiting`, not a promise about liveness. It is\n  \
          `RenderProgress.sealAll`: certify every source still owed. The candidate\n  \
@@ -323,7 +342,11 @@ fn main() {
         mentions.certificates(),
         mentions.is_closed()
     );
-    assert_eq!(status_of(&cell), Status::Provisional(2), "ada saw two of her three notes match");
+    assert_eq!(
+        status_of(&cell),
+        Status::Provisional(2),
+        "ada saw two of her three notes match"
+    );
     draw(
         &format!("notes mentioning `{NEEDLE}`   [status: provisional]"),
         &widget_of(status_of(&cell)),
@@ -339,10 +362,15 @@ fn main() {
     // -- act 4: EXACT ------------------------------------------------------
     rule("ACT 4. exact - the merge delivers, and the obligation closes");
 
-    let report = ada_doc.merge(&grace_doc).expect("both replicas forked from one seam");
+    let report = ada_doc
+        .merge(&grace_doc)
+        .expect("both replicas forked from one seam");
     println!("  ada.merge(&grace) - the real Weave merge, through the real kernels:");
     println!("      nodes learned      : {}", report.nodes.inserted);
-    println!("      membership events  : {}", report.membership.events_inserted);
+    println!(
+        "      membership events  : {}",
+        report.membership.events_inserted
+    );
     println!("      move ops learned   : {}", report.moves_learned);
 
     // The merge IS grace's delivery, so her obligation closes — and what she
@@ -358,7 +386,11 @@ fn main() {
         println!("      [{id}]  seen by {who}");
     }
     println!("  closed? {}\n", mentions.is_closed());
-    assert_eq!(status_of(&cell), Status::Exact(5), "two of ada's plus three of grace's");
+    assert_eq!(
+        status_of(&cell),
+        Status::Exact(5),
+        "two of ada's plus three of grace's"
+    );
     draw(
         &format!("notes mentioning `{NEEDLE}`   [status: exact]"),
         &widget_of(status_of(&cell)),
@@ -402,7 +434,10 @@ fn main() {
     summary.observe(grace_count, GRACE);
 
     let forked_open = status_of(&summary);
-    assert!(matches!(forked_open, Status::ForkedOpen(_)), "two values, nobody certified");
+    assert!(
+        matches!(forked_open, Status::ForkedOpen(_)),
+        "two values, nobody certified"
+    );
     draw(
         &format!("notes mentioning `{NEEDLE}` (summary-replicated)   [forkedOpen]"),
         &widget_of(forked_open),
@@ -411,7 +446,10 @@ fn main() {
 
     summary.certify(ADA).certify(GRACE);
     let forked_closed = status_of(&summary);
-    assert!(matches!(forked_closed, Status::ForkedClosed(_)), "both sources certified");
+    assert!(
+        matches!(forked_closed, Status::ForkedClosed(_)),
+        "both sources certified"
+    );
     draw(
         &format!("notes mentioning `{NEEDLE}` (summary-replicated)   [forkedClosed]"),
         &widget_of(forked_closed),
@@ -432,10 +470,16 @@ fn main() {
                 println!("      policy {:<18} -> {}", r.policy, r.value);
                 println!(
                     "        suppressed, and RETAINED: {:?}",
-                    r.alternatives.iter().filter(|(v, _)| *v != r.value).collect::<Vec<_>>()
+                    r.alternatives
+                        .iter()
+                        .filter(|(v, _)| *v != r.value)
+                        .collect::<Vec<_>>()
                 );
             }
-            None => println!("      policy {:<18} -> declines (it names a source that never spoke)", policy.name),
+            None => println!(
+                "      policy {:<18} -> declines (it names a source that never spoke)",
+                policy.name
+            ),
         }
     }
     println!(
@@ -462,11 +506,8 @@ fn main() {
     // answered. There is no answer and there will not be one.
     let mut pin_evidence: Evidence<String> = Evidence::new();
     pin_evidence.owe(ADA).owe(GRACE);
-    match ada_doc.seam().pin {
-        Some(id) => {
-            pin_evidence.observe(short(&id), ADA);
-        }
-        None => {}
+    if let Some(id) = ada_doc.seam().pin {
+        pin_evidence.observe(short(&id), ADA);
     }
     pin_evidence.certify(ADA).certify(GRACE);
 
@@ -477,7 +518,11 @@ fn main() {
     println!("      closed?      : {}\n", pin_evidence.is_closed());
 
     let honest = status_of(&pin_evidence);
-    assert_eq!(honest, Status::Absent, "no candidate, and every source certified");
+    assert_eq!(
+        honest,
+        Status::Absent,
+        "no candidate, and every source certified"
+    );
     draw(
         "the pinned summary note   [status: absent]",
         &widget_of(honest.clone()),
@@ -497,13 +542,22 @@ fn main() {
 
     let lie = spinner_render(&pin_evidence);
     println!("      status_of(evidence)      = {}", honest.name());
-    println!("      spinner_render(evidence) = {}   <-- the lie\n", lie.name());
+    println!(
+        "      spinner_render(evidence) = {}   <-- the lie\n",
+        lie.name()
+    );
 
     println!("  1. THE FIVE-CELL FOLD CANNOT SEE IT. `RenderSix.spinnerRender_folds");
     println!("     _to_render`: forgetting the zero-row split turns the lie back into");
     println!("     the sanctioned view, exactly.");
-    println!("         forget(status_of(e))      = {:?}", forget(honest.clone()));
-    println!("         forget(spinner_render(e)) = {:?}", forget(lie.clone()));
+    println!(
+        "         forget(status_of(e))      = {:?}",
+        forget(honest.clone())
+    );
+    println!(
+        "         forget(spinner_render(e)) = {:?}",
+        forget(lie.clone())
+    );
     println!(
         "         equal? {}   <-- the FIVE-status honesty predicate is SATISFIED by the spinner\n",
         forget(honest.clone()) == forget(lie.clone())
@@ -512,9 +566,10 @@ fn main() {
     println!("  2. IT SPINS FOREVER. `spinnerRender_spins_forever`: the evidence is");
     println!("     closed, so every permitted (sealed) future is `absent` again and");
     println!("     the swap keeps re-badging it. The wait has NO end state.");
-    for (name, future) in
-        [("itself", pin_evidence.clone()), ("after `stop waiting`", pin_evidence.seal_all())]
-    {
+    for (name, future) in [
+        ("itself", pin_evidence.clone()),
+        ("after `stop waiting`", pin_evidence.seal_all()),
+    ] {
         println!(
             "         sealed future {:<22} -> spinner still says {:<8} (sealed? {})",
             name,
@@ -528,7 +583,10 @@ fn main() {
     println!("     .spinnerRender_is_not_pendingSound` needs NO future reasoning -");
     println!("     only the fact that this evidence is closed:");
     let states = [pin_evidence.clone()];
-    println!("         pending_sound(status_of,      ..) = {:?}", pending_sound(status_of, &states));
+    println!(
+        "         pending_sound(status_of,      ..) = {:?}",
+        pending_sound(status_of, &states)
+    );
     println!(
         "         pending_sound(spinner_render, ..) = {:?}\n",
         pending_sound(spinner_render, &states)
@@ -614,13 +672,24 @@ fn two_worlds() {
         write_notes(&mut g, GRACE, root, grace_notes);
         let ea = mentions_of(&a, ADA, NEEDLE);
         let eg = mentions_of(&g, GRACE, NEEDLE);
-        (count_from_evidence(&ea), count_from_evidence(&eg), count_from_evidence(&ea.merged(&eg)))
+        (
+            count_from_evidence(&ea),
+            count_from_evidence(&eg),
+            count_from_evidence(&ea.merged(&eg)),
+        )
     };
 
     let (a1, g1, m1) = world(GRACE_NOTES);
     let (a2, g2, m2) = world(GRACE_NOTES_OVERLAPPING);
-    assert_eq!((a1, g1), (a2, g2), "the two worlds must present the SAME input pair");
-    assert_ne!(m1, m2, "…and different merged answers, or there is nothing to refute");
+    assert_eq!(
+        (a1, g1),
+        (a2, g2),
+        "the two worlds must present the SAME input pair"
+    );
+    assert_ne!(
+        m1, m2,
+        "…and different merged answers, or there is nothing to refute"
+    );
     println!();
     println!("      world A (grace's notes are all new)   : ada={a1}  grace={g1}  merged={m1}");
     println!("      world B (two of grace's ARE ada's)    : ada={a2}  grace={g2}  merged={m2}");

@@ -963,6 +963,9 @@ where
 // §8. Resolution, with the policy retained (§6 of ResultStatus)
 // ---------------------------------------------------------------------------
 
+/// Selector function used by a [`Policy`] to pick one candidate from [`Evidence`].
+pub type PolicySelector<T> = Box<dyn Fn(&Evidence<T>) -> Option<T>>;
+
 /// **A resolution policy**: a named rule that selects one candidate from
 /// evidence, or declines.
 ///
@@ -976,7 +979,7 @@ pub struct Policy<T: Ord> {
     /// who has only the value cannot reconstruct it.
     pub name: &'static str,
     /// The rule.
-    pub select: Box<dyn Fn(&Evidence<T>) -> Option<T>>,
+    pub select: PolicySelector<T>,
 }
 
 impl<T: Ord + Clone + 'static> Policy<T> {

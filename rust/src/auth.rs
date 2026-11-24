@@ -148,6 +148,7 @@ pub enum RuntimeAuthV4AdmissionRefusal {
 
 /// Result of bounded canonical decoding and neutral projection in Lean.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)] // By-value payload shape is pinned by debt closure U-0052.
 pub enum RuntimeAuthV4AdmissionOutcome {
     Accepted(RuntimeAuthV4AdmissionProjection),
     Refused(RuntimeAuthV4AdmissionRefusal),
@@ -231,6 +232,8 @@ pub fn project_runtime_auth_v4_admission(
 }
 
 const ADMISSION_RESPONSE_PREFIX: &[u8] = b"UWV4\x04\x04";
+const FIXED_LAMPORT_PROJECTION_TAG: u8 = 179;
+const LEGACY_LAMPORT_PROJECTION_TAG: u8 = 172;
 
 fn interpret_admission_response(bytes: &[u8]) -> RuntimeAuthV4AdmissionOutcome {
     let mut cursor = ResponseCursor::new(bytes);
@@ -301,7 +304,7 @@ fn parse_projection(
         key_epoch: cursor.field_u64(169)?,
         nonce: cursor.field_bytes(170)?,
         operation_id: cursor.field_bytes(171)?,
-        lamport: cursor.field_u64(172)?,
+        lamport: cursor.field_lamport()?,
         child: cursor.field_node_ref(173)?,
         destination: cursor.field_optional_node_ref(174)?,
         exec_replica: cursor.field_u64(175)?,
@@ -412,6 +415,21 @@ impl<'a> ResponseCursor<'a> {
         self.nat_u64()
     }
 
+    fn u64_le(&mut self) -> Option<u64> {
+        let end = self.offset.checked_add(8)?;
+        let word: [u8; 8] = self.bytes.get(self.offset..end)?.try_into().ok()?;
+        self.offset = end;
+        Some(u64::from_le_bytes(word))
+    }
+
+    fn field_lamport(&mut self) -> Option<u64> {
+        match self.byte()? {
+            FIXED_LAMPORT_PROJECTION_TAG => self.u64_le(),
+            LEGACY_LAMPORT_PROJECTION_TAG => self.nat_u64(),
+            _ => None,
+        }
+    }
+
     fn node_ref(&mut self) -> Option<RuntimeAuthV4NodeRef> {
         Some(RuntimeAuthV4NodeRef {
             stable_id: self.field_bytes(49)?,
@@ -467,7 +485,12 @@ mod tests {
         output.extend(unary(value));
     }
 
-    fn accepted_response(exec_child: u64) -> Vec<u8> {
+    fn push_u64_le(output: &mut Vec<u8>, tag: u8, value: u64) {
+        output.push(tag);
+        output.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn accepted_response_with_lamport(exec_child: u64, lamport_field: &[u8]) -> Vec<u8> {
         let mut output = ADMISSION_RESPONSE_PREFIX.to_vec();
         output.push(0);
         push_bytes(&mut output, 161, b"canonical");
@@ -481,7 +504,7 @@ mod tests {
         push_nat(&mut output, 169, 8);
         push_bytes(&mut output, 170, b"nonce");
         push_bytes(&mut output, 171, b"operation");
-        push_nat(&mut output, 172, 9);
+        output.extend_from_slice(lamport_field);
         output.push(173);
         push_bytes(&mut output, 49, b"child");
         push_nat(&mut output, 50, 2);
@@ -494,6 +517,12 @@ mod tests {
         output.extend(unary(3));
         push_nat(&mut output, 178, 4);
         output
+    }
+
+    fn accepted_response(exec_child: u64) -> Vec<u8> {
+        let mut lamport_field = Vec::new();
+        push_u64_le(&mut lamport_field, FIXED_LAMPORT_PROJECTION_TAG, 9);
+        accepted_response_with_lamport(exec_child, &lamport_field)
     }
 
     #[test]
@@ -582,6 +611,33 @@ mod tests {
 
         assert_eq!(
             interpret_admission_response(&accepted_response(99)),
+            RuntimeAuthV4AdmissionOutcome::KernelContractViolation
+        );
+    }
+
+    #[test]
+    fn accepted_projection_supports_legacy_unary_and_u64_max_and_rejects_short_word() {
+        let mut legacy_field = Vec::new();
+        push_nat(&mut legacy_field, LEGACY_LAMPORT_PROJECTION_TAG, 9);
+        let RuntimeAuthV4AdmissionOutcome::Accepted(legacy) =
+            interpret_admission_response(&accepted_response_with_lamport(2, &legacy_field))
+        else {
+            panic!("legacy unary lamport response was not accepted")
+        };
+        assert_eq!(legacy.lamport, 9);
+
+        let mut max_field = Vec::new();
+        push_u64_le(&mut max_field, FIXED_LAMPORT_PROJECTION_TAG, u64::MAX);
+        let RuntimeAuthV4AdmissionOutcome::Accepted(max_proj) =
+            interpret_admission_response(&accepted_response_with_lamport(2, &max_field))
+        else {
+            panic!("u64::MAX fixed-width lamport response was not accepted")
+        };
+        assert_eq!(max_proj.lamport, u64::MAX);
+
+        let short_field = [FIXED_LAMPORT_PROJECTION_TAG, 1, 2, 3, 4, 5, 6, 7];
+        assert_eq!(
+            interpret_admission_response(&accepted_response_with_lamport(2, &short_field)),
             RuntimeAuthV4AdmissionOutcome::KernelContractViolation
         );
     }

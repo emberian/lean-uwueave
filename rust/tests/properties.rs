@@ -8,12 +8,12 @@
 //! chain, falling back to the first weave parent when no override exists),
 //! which is the reading direction the kernel's output contract defines.
 
+use proptest::prelude::*;
+use std::collections::BTreeSet;
 use uwueave::{
     CausalWeave, EraEvent, EraGroup, EraRole, Grant, MoveLog, MoveOp, NodeId, OpOutcome, SeqCrdt,
     TracedReplay,
 };
-use proptest::prelude::*;
-use std::collections::BTreeSet;
 
 type Weave = CausalWeave<Vec<u8>>;
 
@@ -31,8 +31,14 @@ struct InsertPlan {
 }
 
 fn insert_plan() -> impl Strategy<Value = InsertPlan> {
-    (prop::collection::vec(any::<usize>(), 0..=3), prop::collection::vec(any::<u8>(), 0..6))
-        .prop_map(|(parent_picks, contents)| InsertPlan { parent_picks, contents })
+    (
+        prop::collection::vec(any::<usize>(), 0..=3),
+        prop::collection::vec(any::<u8>(), 0..6),
+    )
+        .prop_map(|(parent_picks, contents)| InsertPlan {
+            parent_picks,
+            contents,
+        })
 }
 
 fn plan_seq(max: usize) -> impl Strategy<Value = Vec<InsertPlan>> {
@@ -46,7 +52,9 @@ fn apply_plans(w: &mut Weave, ids: &mut Vec<NodeId>, plans: &[InsertPlan]) {
         } else {
             p.parent_picks.iter().map(|k| ids[k % ids.len()]).collect()
         };
-        let id = w.insert(parents, p.contents.clone()).expect("parents exist by construction");
+        let id = w
+            .insert(parents, p.contents.clone())
+            .expect("parents exist by construction");
         ids.push(id);
     }
 }
@@ -63,7 +71,8 @@ fn build_weave(prefix: &[InsertPlan], suffix: &[InsertPlan]) -> (Weave, Vec<Node
 
 fn merged(a: &Weave, b: &Weave) -> Weave {
     let mut m = a.clone();
-    m.merge(b).expect("API-built weaves are causally closed and collision-free");
+    m.merge(b)
+        .expect("API-built weaves are causally closed and collision-free");
     m
 }
 
@@ -93,8 +102,14 @@ struct OpSpec {
 }
 
 fn op_spec() -> impl Strategy<Value = OpSpec> {
-    (0u64..6, 0u64..3, node_sel(), prop::option::of(node_sel()))
-        .prop_map(|(lamport, replica, child, dest)| OpSpec { lamport, replica, child, dest })
+    (0u64..6, 0u64..3, node_sel(), prop::option::of(node_sel())).prop_map(
+        |(lamport, replica, child, dest)| OpSpec {
+            lamport,
+            replica,
+            child,
+            dest,
+        },
+    )
 }
 
 fn resolve_sel(sel: &NodeSel, ids: &[NodeId]) -> NodeId {
@@ -456,8 +471,13 @@ proptest! {
 /// insert with no pick (or an empty state) lands at the root.
 #[derive(Debug, Clone)]
 enum SeqEdit {
-    Insert { anchor_pick: Option<usize>, contents: Vec<u8> },
-    Delete { pick: usize },
+    Insert {
+        anchor_pick: Option<usize>,
+        contents: Vec<u8>,
+    },
+    Delete {
+        pick: usize,
+    },
 }
 
 fn seq_edit() -> impl Strategy<Value = SeqEdit> {
@@ -471,18 +491,24 @@ fn seq_edit() -> impl Strategy<Value = SeqEdit> {
 fn apply_seq_edits(s: &mut SeqCrdt, ids: &mut Vec<NodeId>, edits: &[SeqEdit]) {
     for e in edits {
         match e {
-            SeqEdit::Insert { anchor_pick, contents } => {
+            SeqEdit::Insert {
+                anchor_pick,
+                contents,
+            } => {
                 let anchor = if ids.is_empty() {
                     None
                 } else {
                     anchor_pick.map(|k| ids[k % ids.len()])
                 };
-                let id = s.insert(anchor, contents).expect("anchors exist by construction");
+                let id = s
+                    .insert(anchor, contents)
+                    .expect("anchors exist by construction");
                 ids.push(id);
             }
             SeqEdit::Delete { pick } => {
                 if !ids.is_empty() {
-                    s.delete(&ids[pick % ids.len()]).expect("ids exist by construction");
+                    s.delete(&ids[pick % ids.len()])
+                        .expect("ids exist by construction");
                 }
             }
         }
@@ -556,10 +582,16 @@ fn era_event(eid: u64, kind: u64, actor: u64, target: u64, role_sel: u64) -> Era
 
 #[allow(clippy::type_complexity)]
 fn era_inputs() -> impl Strategy<
-    Value = (Vec<EraEvent>, Vec<EraEvent>, Vec<(u64, u64)>, Vec<(u64, u64)>, Vec<prop::sample::Index>),
+    Value = (
+        Vec<EraEvent>,
+        Vec<EraEvent>,
+        Vec<(u64, u64)>,
+        Vec<(u64, u64)>,
+        Vec<prop::sample::Index>,
+    ),
 > {
-    let events = prop::collection::vec((0u64..4, 0u64..4, 0u64..4, 0u64..4), 0..12).prop_map(
-        |specs| {
+    let events =
+        prop::collection::vec((0u64..4, 0u64..4, 0u64..4, 0u64..4), 0..12).prop_map(|specs| {
             specs
                 .into_iter()
                 .enumerate()
@@ -567,8 +599,7 @@ fn era_inputs() -> impl Strategy<
                     era_event(i as u64, kind, actor, target, role_sel)
                 })
                 .collect::<Vec<_>>()
-        },
-    );
+        });
     let cuts = prop::collection::vec((0u64..4, 0u64..16), 0..8);
     (events, cuts).prop_flat_map(|(evs, cuts)| {
         (

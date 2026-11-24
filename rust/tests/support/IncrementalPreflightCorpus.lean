@@ -34,16 +34,24 @@ def requestOfRow (row : Nat) (line : String) : Option ContextSignedRequest := do
     ⟨identity, UInt64.ofNat lamport, nodeRef child, destination, cite⟩
   pure ⟨⟨[1, 2], [3, 4], 1, 17, 2, identity, move, [30, 31]⟩, [0xAA]⟩
 
+def parseArgs : List String → IO (Bool × String)
+  | [specPath] => pure (false, specPath)
+  | ["--legacy-unary", specPath] => pure (true, specPath)
+  | _ => throw <| IO.userError "usage: [--legacy-unary] SPEC_FILE"
+
 def main (args : List String) : IO Unit := do
-  let [specPath] := args
-    | throw <| IO.userError "usage: SPEC_FILE"
+  let (legacyUnary, specPath) ← parseArgs args
   let lines ← IO.FS.lines specPath
   let mut output := ByteArray.empty
   for h : row in [:lines.size] do
     let line := lines[row]'h.upper
     let some request := requestOfRow row line
       | throw <| IO.userError s!"malformed corpus row {row}: {line}"
-    let bytes := encodeContextRequest request
+    let bytes :=
+      if legacyUnary then
+        encodeLegacyContextRequest request
+      else
+        encodeContextRequest request
     output := (littleEndian bytes.length).foldl ByteArray.push output
     output := bytes.foldl ByteArray.push output
   let stdout ← IO.getStdout

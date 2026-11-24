@@ -286,10 +286,12 @@ private def destinationLanesMatch (projection : AdmissionProjection)
   | _, _, _, _ => false
 
 /-- All projection-origin lanes are tied back to the one decoded kind-3
-request and to the persisted Rust observation. -/
+request (with its exact `LamportWireFormat`) and to the persisted Rust
+observation. -/
 def projectionLanesMatch (c : AdmissionTraceCertificate)
-    (request : ContextSignedRequest) (projection : AdmissionProjection) : Bool :=
-  decide (projection = AdmissionProjection.ofRequest request ∧
+    (fmt : LamportWireFormat) (request : ContextSignedRequest)
+    (projection : AdmissionProjection) : Bool :=
+  decide (projection = AdmissionProjection.ofRequestAt fmt request ∧
   projection.canonicalRequest = c.canonicalRequest ∧
   projection.signingBytes = c.signingBytes ∧
   projection.signatureAlgorithm = c.signatureAlgorithm ∧
@@ -351,10 +353,11 @@ def executionTraceMatches (c : AdmissionTraceCertificate)
 /-- Evidence retained by the checker after both canonical decoders and every
 semantic comparison succeed. -/
 structure AdmissionTraceEvidence (c : AdmissionTraceCertificate) where
+  wireFormat : LamportWireFormat
   request : ContextSignedRequest
   projection : AdmissionProjection
-  requestDecoded : decodeContextRequestBounded c.projectionBound.toNat
-    c.canonicalRequest = .accepted request
+  requestDecoded : decodeContextRequestWithFormatBounded c.projectionBound.toNat
+    c.canonicalRequest = .accepted wireFormat request
   projectionDecoded : decodeAdmissionResponse c.projectionResponse =
     some (.accepted projection)
   exactProjection : c.projectionResponse =
@@ -362,7 +365,7 @@ structure AdmissionTraceEvidence (c : AdmissionTraceCertificate) where
   exactProjectionBound : c.projectionBound.toNat = c.canonicalRequest.length
   projectionBounded : c.projectionBound.toNat ≤ maximumProjectionBytes
   nonzeroCitation : c.cite ≠ 0
-  projectionLanes : projectionLanesMatch c request projection = true
+  projectionLanes : projectionLanesMatch c wireFormat request projection = true
   executionTrace : executionTraceMatches c request = true
 
 /-- The exact kind-4 response evidence exposes the decision-layer result,
@@ -429,10 +432,10 @@ theorem expectedStatus_eq_zero_or_one (admission : KernelAdmission) :
 
 def admissionTraceEvidence? (c : AdmissionTraceCertificate) :
     Option (AdmissionTraceEvidence c) :=
-  match hrequest : decodeContextRequestBounded c.projectionBound.toNat
+  match hrequest : decodeContextRequestWithFormatBounded c.projectionBound.toNat
       c.canonicalRequest with
   | .refused _ => none
-  | .accepted request =>
+  | .accepted fmt request =>
       match hprojection : decodeAdmissionResponse c.projectionResponse with
       | some (.accepted projection) =>
           if hexact : c.projectionResponse =
@@ -440,9 +443,9 @@ def admissionTraceEvidence? (c : AdmissionTraceCertificate) :
             if hboundExact : c.projectionBound.toNat = c.canonicalRequest.length then
               if hbound : c.projectionBound.toNat ≤ maximumProjectionBytes then
                 if hcite : c.cite ≠ 0 then
-                  if hlanes : projectionLanesMatch c request projection = true then
+                  if hlanes : projectionLanesMatch c fmt request projection = true then
                     if hexecution : executionTraceMatches c request = true then
-                      some ⟨request, projection, hrequest, hprojection, hexact,
+                      some ⟨fmt, request, projection, hrequest, hprojection, hexact,
                         hboundExact, hbound, hcite, hlanes, hexecution⟩
                     else none
                   else none

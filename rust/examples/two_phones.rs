@@ -47,7 +47,9 @@ type List = CausalWeave<Vec<u8>>;
 /// intention; it is identical on every replica, which is the property that
 /// matters.
 fn items(list: &List) -> Vec<String> {
-    list.nodes().map(|n| String::from_utf8_lossy(n.contents()).into_owned()).collect()
+    list.nodes()
+        .map(|n| String::from_utf8_lossy(n.contents()).into_owned())
+        .collect()
 }
 
 fn shopping_list() {
@@ -64,8 +66,12 @@ fn shopping_list() {
     // nothing to be missing. (`InsertError::MissingParent` is the only way it
     // refuses, and it exists to make the shape `acyclicity_not_iconfluent`
     // refutes — an edge to a node you have never seen — unrepresentable.)
-    let eggs = phone_a.insert(vec![], b"eggs".to_vec()).expect("a root node has no parents");
-    let bread = phone_b.insert(vec![], b"bread".to_vec()).expect("a root node has no parents");
+    let eggs = phone_a
+        .insert(vec![], b"eggs".to_vec())
+        .expect("a root node has no parents");
+    let bread = phone_b
+        .insert(vec![], b"bread".to_vec())
+        .expect("a root node has no parents");
 
     println!("  phone A, offline:  + eggs   [{}]", short(&eggs));
     println!("  phone B, offline:  + bread  [{}]", short(&bread));
@@ -75,9 +81,13 @@ fn shopping_list() {
     // `Acyclicity.grounded_iconfluent` it needs no cycle check and no
     // coordination, at any number of replicas.
     let mut a_then_b = phone_a.clone();
-    a_then_b.merge(&phone_b).expect("both stores were built by this API, so both are closed");
+    a_then_b
+        .merge(&phone_b)
+        .expect("both stores were built by this API, so both are closed");
     let mut b_then_a = phone_b.clone();
-    b_then_a.merge(&phone_a).expect("both stores were built by this API, so both are closed");
+    b_then_a
+        .merge(&phone_a)
+        .expect("both stores were built by this API, so both are closed");
 
     println!("  phone A now holds:  {}", items(&a_then_b).join(", "));
     println!("  phone B now holds:  {}", items(&b_then_a).join(", "));
@@ -86,13 +96,24 @@ fn shopping_list() {
     // The three lattice laws, checked on the real objects rather than
     // asserted. `Uwueave/Lace.lean` is where they are proved in general; this
     // is what they look like on your kitchen table.
-    println!("  A.merge(B) == B.merge(A):        {}   (commutative)", a_then_b == b_then_a);
+    println!(
+        "  A.merge(B) == B.merge(A):        {}   (commutative)",
+        a_then_b == b_then_a
+    );
 
     let mut twice = a_then_b.clone();
-    twice.merge(&phone_b).expect("re-merging a store already absorbed");
-    println!("  merging the same delta twice:    {}   (idempotent — gossip may repeat)", twice == a_then_b);
+    twice
+        .merge(&phone_b)
+        .expect("re-merging a store already absorbed");
+    println!(
+        "  merging the same delta twice:    {}   (idempotent — gossip may repeat)",
+        twice == a_then_b
+    );
 
-    println!("  still acyclic, no check run:     {}   (grounded_acyclic)", a_then_b.grounded());
+    println!(
+        "  still acyclic, no check run:     {}   (grounded_acyclic)",
+        a_then_b.grounded()
+    );
 
     println!(
         "\n  Nothing was lost, nobody waited, and there was no server. This is\n  \
@@ -126,7 +147,10 @@ struct SharedBalance {
 
 impl SharedBalance {
     fn new(start: i64) -> Self {
-        Self { start, withdrawn: BTreeMap::new() }
+        Self {
+            start,
+            withdrawn: BTreeMap::new(),
+        }
     }
 
     fn balance(&self) -> i64 {
@@ -177,9 +201,18 @@ fn shared_balance() {
     let mut other_way = phone_b.clone();
     other_way.merge(&phone_a);
 
-    println!("  merged:                      ${}   ← the rule is broken", merged.balance());
-    println!("  merged the other way:        ${}   ← and it converges perfectly", other_way.balance());
-    println!("  both directions agree:       {}   (it is a correct CRDT)", merged == other_way);
+    println!(
+        "  merged:                      ${}   ← the rule is broken",
+        merged.balance()
+    );
+    println!(
+        "  merged the other way:        ${}   ← and it converges perfectly",
+        other_way.balance()
+    );
+    println!(
+        "  both directions agree:       {}   (it is a correct CRDT)",
+        merged == other_way
+    );
 
     println!(
         "\n  Each phone, alone, was being perfectly responsible. The merge was not\n  \
@@ -223,7 +256,9 @@ fn priced_exit() {
         EraEvent::join(2, BOB),
         EraEvent::promote(3, ALICE, BOB, EraRole::Writer),
     ] {
-        shared.record_membership(ev).expect("fresh event ids, so no eid collision");
+        shared
+            .record_membership(ev)
+            .expect("fresh event ids, so no eid collision");
     }
     for eid in 1..=3 {
         shared.record_cut(1, eid);
@@ -245,14 +280,25 @@ fn priced_exit() {
         .add_node(BOB, vec![], vec![b'b'; 40])
         .expect("40 bytes fits bob's slice of 50");
 
-    println!("  phone A, offline:  stores 40 bytes   ok — spent {}/50", phone_a.spent(ALICE));
-    println!("  phone B, offline:  stores 40 bytes   ok — spent {}/50", phone_b.spent(BOB));
+    println!(
+        "  phone A, offline:  stores 40 bytes   ok — spent {}/50",
+        phone_a.spent(ALICE)
+    );
+    println!(
+        "  phone B, offline:  stores 40 bytes   ok — spent {}/50",
+        phone_b.spent(BOB)
+    );
 
     // Running out is local and immediate. It is not a wait, not a round trip,
     // and not a maybe: `afford` compares two integers this replica already
     // holds.
     match phone_a.add_node(ALICE, vec![], vec![b'A'; 20]) {
-        Err(WeaveOpError::QuotaExceeded { allocated, spent, requested, .. }) => {
+        Err(WeaveOpError::QuotaExceeded {
+            allocated,
+            spent,
+            requested,
+            ..
+        }) => {
             println!(
                 "  phone A, offline:  stores 20 more   REFUSED — allocated {allocated}, \
                  spent {spent}, asked {requested}"
@@ -265,7 +311,9 @@ fn priced_exit() {
     println!("\n  ...the phones sync...\n");
 
     let mut merged = phone_a.clone();
-    merged.merge(&phone_b).expect("same seam on both sides, so the merge is licensed");
+    merged
+        .merge(&phone_b)
+        .expect("same seam on both sides, so the merge is licensed");
     println!(
         "  merged:  alice {}/50, bob {}/50 — both spends kept, budget intact",
         merged.spent(ALICE),
@@ -277,21 +325,29 @@ fn priced_exit() {
     // merge. Any meeting schedule is a separate deployment witness.
     let redivide = SeamChange::Reallocate(BTreeMap::from([(ALICE, 45), (BOB, 55)]));
     let mut phone_a = merged.clone();
-    phone_a.apply_seam_change(&redivide).expect("sum is unchanged and nobody drops below spend");
+    phone_a
+        .apply_seam_change(&redivide)
+        .expect("sum is unchanged and nobody drops below spend");
 
     match phone_a.clone().merge(&merged) {
         Err(WeaveMergeError::SeamDisagreement { mine, theirs }) => {
             println!("\n  phone A re-divides to alice=45 bob=55, alone. It can no longer sync:");
             println!("      SeamDisagreement — mine {:?}", mine.allocation);
             println!("                         theirs {:?}", theirs.allocation);
-            println!("      ^ the merge refuses rather than inventing a division nobody agreed to.");
+            println!(
+                "      ^ the merge refuses rather than inventing a division nobody agreed to."
+            );
         }
         other => println!("  unexpected: {other:?}"),
     }
 
     let mut phone_b = merged.clone();
-    phone_b.apply_seam_change(&redivide).expect("the identical change, applied by the other side");
-    phone_a.merge(&phone_b).expect("the meeting happened: both seams agree again");
+    phone_b
+        .apply_seam_change(&redivide)
+        .expect("the identical change, applied by the other side");
+    phone_a
+        .merge(&phone_b)
+        .expect("the meeting happened: both seams agree again");
     println!("\n  Both apply the same change — that IS the meeting — and syncing resumes:");
     println!(
         "      alice={}  bob={}",

@@ -79,6 +79,15 @@ fn repo() -> PathBuf {
 
 /// Ask Lean for one canonical signed kind-3 request per row.
 pub fn signed_requests(rows: &[Row]) -> Vec<Vec<u8>> {
+    signed_requests_with_format(rows, false)
+}
+
+/// Ask Lean for one legacy unary-Lamport (tag 66) signed kind-3 request per row.
+pub fn legacy_signed_requests(rows: &[Row]) -> Vec<Vec<u8>> {
+    signed_requests_with_format(rows, true)
+}
+
+fn signed_requests_with_format(rows: &[Row], legacy_unary: bool) -> Vec<Vec<u8>> {
     let spec = TempJournal::new("corpus-spec");
     let mut text = String::new();
     for row in rows {
@@ -89,13 +98,17 @@ pub fn signed_requests(rows: &[Row]) -> Vec<Vec<u8>> {
         ));
     }
     fs::write(&spec.0, text).expect("write corpus spec");
-    let output = Command::new("lake")
-        .args([
-            "env",
-            "lean",
-            "--run",
-            "rust/tests/support/IncrementalPreflightCorpus.lean",
-        ])
+    let mut command = Command::new("lake");
+    command.args([
+        "env",
+        "lean",
+        "--run",
+        "rust/tests/support/IncrementalPreflightCorpus.lean",
+    ]);
+    if legacy_unary {
+        command.arg("--legacy-unary");
+    }
+    let output = command
         .arg(&spec.0)
         .current_dir(repo())
         .output()
@@ -119,8 +132,7 @@ pub fn signed_requests(rows: &[Row]) -> Vec<Vec<u8>> {
 }
 
 /// `count` moves in strictly increasing replay order whose Lamport clock
-/// advances once per 120 moves. The signed UWV4 wire encodes numbers in unary,
-/// so this isolates checkpointing from the request's own Lamport-sized bytes.
+/// advances once per 120 moves (slow-clock multi-move tick schedule).
 pub fn bounded_clock_rows(count: usize) -> Vec<Row> {
     (0..count)
         .map(|position| {

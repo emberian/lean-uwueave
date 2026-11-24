@@ -119,7 +119,8 @@ fn genesis() -> (Doc, NodeId, NodeId, NodeId) {
         EraEvent::join(2, GRACE),
         EraEvent::promote(3, ADA, GRACE, EraRole::Writer),
     ] {
-        doc.record_membership(ev).expect("fresh event ids, so no eid collision");
+        doc.record_membership(ev)
+            .expect("fresh event ids, so no eid collision");
     }
     // The finality arbiter announces that events 1..3 lie in epoch 1's closed
     // past. Note what a cut is *not*: it does not decide anything. It only
@@ -132,11 +133,15 @@ fn genesis() -> (Doc, NodeId, NodeId, NodeId) {
     // Three nodes. Parents are fixed at creation — they are part of the id —
     // so this DAG cannot contain a cycle and no cycle check is ever run
     // (`Acyclicity.grounded_acyclic`).
-    let notebook = doc.add_node(ADA, vec![], b"notebook".to_vec()).expect("ada is admin, 8 bytes");
-    let intro =
-        doc.add_node(ADA, vec![notebook], b"intro".to_vec()).expect("parent exists, 5 bytes");
-    let method =
-        doc.add_node(ADA, vec![notebook], b"method".to_vec()).expect("parent exists, 6 bytes");
+    let notebook = doc
+        .add_node(ADA, vec![], b"notebook".to_vec())
+        .expect("ada is admin, 8 bytes");
+    let intro = doc
+        .add_node(ADA, vec![notebook], b"intro".to_vec())
+        .expect("parent exists, 5 bytes");
+    let method = doc
+        .add_node(ADA, vec![notebook], b"method".to_vec())
+        .expect("parent exists, 6 bytes");
 
     (doc, notebook, intro, method)
 }
@@ -149,9 +154,7 @@ fn main() {
 
     // A naming table, so the output reads as prose rather than as hashes.
     let name = |id: &NodeId| -> String {
-        for (candidate, label) in
-            [(notebook, "notebook"), (intro, "intro"), (method, "method")]
-        {
+        for (candidate, label) in [(notebook, "notebook"), (intro, "intro"), (method, "method")] {
             if *id == candidate {
                 return label.to_string();
             }
@@ -179,7 +182,10 @@ fn main() {
     let why = ada
         .add_node(ADA, vec![intro], b"why this matters".to_vec())
         .expect("intro exists here; 16 bytes fits her slice");
-    println!("  + node  \"why this matters\"  under intro   [{}]", short(&why));
+    println!(
+        "  + node  \"why this matters\"  under intro   [{}]",
+        short(&why)
+    );
 
     // Text lives in a per-node sequence CRDT. `anchor = None` means "at the
     // start of this node's text"; chaining the second insert after the first
@@ -194,19 +200,27 @@ fn main() {
     // A move is *recorded*, not applied. The effective parent map is derived
     // at view time by the Lean replay kernel — which is the only shape that
     // survives, since replicated mutable parents are refuted outright.
-    ada.move_node(ADA, 9, method, Some(intro)).expect("ada is a writer; both nodes exist");
+    ada.move_node(ADA, 9, method, Some(intro))
+        .expect("ada is a writer; both nodes exist");
     println!("  ~ move  method under intro                (lamport 9)");
 
     // Membership is grow-only like everything else; Ada can admit Lin without
     // asking Grace, and the arbitration will agree.
-    ada.record_membership(EraEvent::join(10, LIN)).expect("eid 10 is fresh");
+    ada.record_membership(EraEvent::join(10, LIN))
+        .expect("eid 10 is fresh");
     println!("  + join  lin");
 
     println!("\n  On Ada's own screen, right now, her move is in effect:");
     let before = ada.view();
     println!(
         "      method's effective parent = {}",
-        before.node(&method).map(|n| n.effective_parent.map(|p| name(&p)).unwrap_or_else(|| "the root".into())).unwrap_or_default()
+        before
+            .node(&method)
+            .map(|n| n
+                .effective_parent
+                .map(|p| name(&p))
+                .unwrap_or_else(|| "the root".into()))
+            .unwrap_or_default()
     );
 
     rule("grace, in the lab (offline)");
@@ -214,25 +228,34 @@ fn main() {
     let apparatus = grace
         .add_node(GRACE, vec![method], b"apparatus".to_vec())
         .expect("method exists here; 9 bytes fits her slice");
-    println!("  + node  \"apparatus\"  under method        [{}]", short(&apparatus));
+    println!(
+        "  + node  \"apparatus\"  under method        [{}]",
+        short(&apparatus)
+    );
 
     // The *same* anchor Ada used — `None`, the start of intro's text. Two
     // concurrent runs at one anchor is the case `Sequence.run_order_by_id`
     // prices: both survive, and their relative order is decided by content
     // address, which is nobody's intention and everybody's answer.
-    grace.insert_text(GRACE, intro, None, b"Draft: ").expect("intro exists; 7 bytes fits");
+    grace
+        .insert_text(GRACE, intro, None, b"Draft: ")
+        .expect("intro exists; 7 bytes fits");
     println!("  + text  into intro: \"Draft: \"          ← same anchor as ada's");
 
     // The older op. Grace's clock was behind; this is ordinary, not
     // pathological, and it is exactly what makes the next section happen.
-    grace.move_node(GRACE, 4, intro, Some(method)).expect("grace is a writer; both nodes exist");
+    grace
+        .move_node(GRACE, 4, intro, Some(method))
+        .expect("grace is a writer; both nodes exist");
     println!("  ~ move  intro under method                (lamport 4)  ← OLDER than ada's");
 
     // Grace admits someone too. Ada admitted Lin; the two replicas therefore
     // learn their membership events in opposite orders, which is what makes
     // the "byte-identical / view-identical" contrast below a real measurement
     // rather than a claim.
-    grace.record_membership(EraEvent::join(11, HOPPER)).expect("eid 11 is fresh");
+    grace
+        .record_membership(EraEvent::join(11, HOPPER))
+        .expect("eid 11 is fresh");
     println!("  + join  hopper");
 
     // -----------------------------------------------------------------
@@ -242,15 +265,22 @@ fn main() {
     rule("they sync — in both directions");
 
     let mut ada_merged = ada.clone();
-    ada_merged.merge(&grace).expect("same seam, both built by this API");
+    ada_merged
+        .merge(&grace)
+        .expect("same seam, both built by this API");
     let mut grace_merged = grace.clone();
-    grace_merged.merge(&ada).expect("same seam, both built by this API");
+    grace_merged
+        .merge(&ada)
+        .expect("same seam, both built by this API");
 
     // The two replicas are NOT byte-equal: ERA keeps its substrates in
     // arrival order, and the arrivals differed. Equality of the *view* is the
     // convergence object, which is what `Era.resolve_same_sets` and
     // `GatedEra.ge_deterministic` are statements about.
-    println!("  the two replicas hold identical STATE:  {}", ada_merged == grace_merged);
+    println!(
+        "  the two replicas hold identical STATE:  {}",
+        ada_merged == grace_merged
+    );
     println!("      (no — ada learned of hopper after lin, grace the other way round)");
     println!(
         "  their derived VIEWS are identical:      {}",
@@ -272,7 +302,12 @@ fn main() {
     println!("\n  intro's text, after two people wrote into the same anchor:");
     println!(
         "      “{}”",
-        String::from_utf8_lossy(&view.node(&intro).map(|n| n.text.clone()).unwrap_or_default())
+        String::from_utf8_lossy(
+            &view
+                .node(&intro)
+                .map(|n| n.text.clone())
+                .unwrap_or_default()
+        )
     );
     println!(
         "      both runs survived. their ORDER was decided by content address\n      \
@@ -330,10 +365,16 @@ fn main() {
 
     rule("for contrast: nothing here was denied");
 
-    println!("  move ops the ROLE gate denied:  {}", view.denied_moves().count());
+    println!(
+        "  move ops the ROLE gate denied:  {}",
+        view.denied_moves().count()
+    );
     println!("  (both authors were Writers when they moved. `cargo run --example gated`");
     println!("   is the same trace when authority is the thing that changes.)\n");
     println!("  lin may read:   {}", view.may(LIN, Capability::Read));
-    println!("  lin may write:  {}   ← she joined after the promotion round", view.may(LIN, Capability::Write));
+    println!(
+        "  lin may write:  {}   ← she joined after the promotion round",
+        view.may(LIN, Capability::Write)
+    );
     println!();
 }

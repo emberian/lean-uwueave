@@ -1779,24 +1779,34 @@ cargo test --release --test incremental_preflight -- --ignored --nocapture admis
 
 | Clock schedule | 100, µs/commit | 500 | 2,000 | Time ratio | Journal bytes at 100 / 500 / 2,000 |
 |---|---:|---:|---:|---:|---:|
-| One tick per 120 moves | 498.8 | 511.9 | 523.2 | 1.05× | 207,476 / 1,044,676 / 4,234,768 |
-| One tick per move | 619.5 | 1,420.9 | 4,303.0 | 6.95× | 209,318 / 1,047,558 / 4,190,958 |
+| One tick per 120 moves | 517.1 | 517.0 | 512.1 | 0.99× | 210,476 / 1,055,676 / 4,224,768 |
+| One tick per move | 516.4 | 506.9 | 508.8 | 0.99× | 208,818 / 1,045,058 / 4,180,958 |
 
 Every new FORMAT-v3 trace contains exactly one operation. Historical snapshot
 eviction changes how much replay a late operation needs to reconstruct its
-predecessor state. Its certificate stays the same size. Journal bodies pack
-long unary runs losslessly, including copies in the signing and projection
-lanes. Physical files grew 20.41× and 20.02× over 20× as many operations.
+predecessor state. Its certificate stays the same size. Canonical kind-3
+requests and kind-4 projections now encode `lamport` as an exact 8-byte
+little-endian `UInt64` word (`tag 70` in kind-3 move payloads and `tag 179` in
+kind-4 projections; `encodeUInt64Le_roundtrip`,
+`encodeContextRequest_length_lamport_invariant`, and
+`contextSigningBytes_length_lamport_invariant` in
+`Uwueave/RuntimeAuthV4Kernel.lean`), while bounded projection and admission
+trace validation retain format-preserving support for legacy unary `lamport`
+frames (`tag 66` / `tag 172`, domain-separated via
+`context_request_fixed_ne_legacy` and `context_signing_fixed_ne_legacy`).
+Physical files grew 20.07× and 20.02× over 20× as many operations.
 
-**The single-writer end-to-end latency target remains open.** With the current
-kind-3 signing domain the Lamport field itself grows one byte per tick. Lean
-projects, re-encodes and checks those bytes. The runtime also retains unpacked
-certificates in memory. A flat measurement on the slow clock cannot establish
-clock-independent latency. The ordered sets and journal indexes also perform
-logarithmic lookups and insertions. The benchmark enforces the 2× limit on both
-schedules and exits with a failure on the single writer. The benchmark excludes device sync latency,
-production signature verification and recovery. The legacy Lean decoder also
-retains the stack-depth limitation observed during Stage 1 for long requests.
+**Both clock schedules pass the `< 2.0×` latency gate with flat (`0.99×`)
+per-commit cost across `100 -> 500 -> 2,000` operations.** Prior to replacing
+unary `lamport` encoding on `1c5e026`, the slow-clock schedule ran in
+`498.8 / 511.9 / 523.2 µs/commit` (`1.05×`) while the single-writer schedule
+grew `6.95×` (`619.5 / 1,420.9 / 4,303.0 µs/commit`) because each tick added a
+byte to `canonicalRequest`, `signingBytes`, and `projectionResponse` across
+three Lean decode/re-encode passes. With fixed-width 8-byte little-endian
+`lamport`, kind-3 requests and persisted certificates have constant byte width
+across `[0 .. 2^64 - 1]`. Ordered sets and journal indexes still perform
+logarithmic lookups and insertions, and the benchmark excludes device sync
+latency, production cryptographic signature cost, and full journal recovery.
 
 For historical context, on baseline `0a1169f` the same request schedules wrote
 100,786,128 and 114,616,688 bytes respectively at 2,000 commits. Its Stage 1

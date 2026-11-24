@@ -270,6 +270,11 @@ pub enum KeySnapshotInsertRefusal {
     DuplicateBinding { issuer: u64, key_epoch: u64 },
 }
 
+type EpochKeyMap = BTreeMap<u64, StoredKey>;
+type IssuerKeyMap = BTreeMap<u64, EpochKeyMap>;
+type GenesisKeyMap = BTreeMap<Vec<u8>, IssuerKeyMap>;
+type DocumentKeyMap = BTreeMap<Vec<u8>, GenesisKeyMap>;
+
 /// A deterministic process-local registry suitable for embedded deployments
 /// and tests.
 ///
@@ -280,10 +285,7 @@ pub enum KeySnapshotInsertRefusal {
 /// responsibility.
 #[derive(Default)]
 pub struct InMemoryKeyRegistry {
-    contexts: BTreeMap<
-        Vec<u8>,
-        BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, BTreeMap<u64, BTreeMap<u64, StoredKey>>>>,
-    >,
+    contexts: BTreeMap<Vec<u8>, DocumentKeyMap>,
 }
 
 enum StoredKey {

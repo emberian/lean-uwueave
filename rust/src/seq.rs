@@ -318,7 +318,7 @@ impl SeqCrdt {
 
         let mut words: Vec<u64> = Vec::with_capacity(1 + 2 * n);
         words.push(n as u64);
-        for (_, el) in &self.elems {
+        for el in self.elems.values() {
             let a: i64 = match &el.anchor {
                 None => -1,
                 Some(a) => {
@@ -347,7 +347,7 @@ impl SeqCrdt {
             };
             words.push(a as u64);
         }
-        for (_, el) in &self.elems {
+        for el in self.elems.values() {
             words.push(if el.deleted { 1 } else { 0 });
         }
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
@@ -358,7 +358,7 @@ impl SeqCrdt {
         // index words. Anything else means the two sides disagree about the
         // wire format — refuse rather than reinterpret.
         assert!(
-            out.len() >= 8 && out.len() % 8 == 0,
+            out.len() >= 8 && out.len().is_multiple_of(8),
             "kernel response is not whole words"
         );
         let mut w = out

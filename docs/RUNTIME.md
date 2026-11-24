@@ -657,9 +657,11 @@ operation. `crash_recovery_eq_full_replay` covers replay of ordered durable
 batches in the model. Rust's snapshot selection, external providers and disk
 recovery are exercised by differential, mixed-journal and crash tests.
 
-The signed kind-3 wire still encodes the Lamport clock in unary. The journal
-packs repeated bytes on disk. Projection and signature verification consume
-the original bytes. Section 21 of `PERFORMANCE.md` gives both clock schedules.
+Canonical kind-3 requests and kind-4 projections encode the `UInt64` Lamport
+clock as a fixed-width 8-byte little-endian word (`tag 70` and `tag 179`),
+while bounded decoding and trace checking retain format-preserving acceptance
+for legacy unary Lamport frames (`tag 66` and `tag 172`) across historical
+recovery and retries. Section 21 of `PERFORMANCE.md` gives both clock schedules.
 
 This is an executable host composition boundary, exercised by **11/11 focused
 end-to-end tests**, not a formal end-to-end authentication theorem.

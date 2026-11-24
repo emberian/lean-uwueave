@@ -21,6 +21,7 @@
 //!     the Lean: a FREE row may not cite a `¬ IConfluent` theorem and must
 //!     cite a positive one, an ESCALATES row must cite a negation, a SEAM row
 //!     must cite both the `SegmentedIConfluent` seam and the global negation.
+//!
 //! Pairs the Lean development does not settle are reported UNCLASSIFIED —
 //! never guessed.
 //!
@@ -134,11 +135,19 @@ impl Kind {
 }
 
 fn shape_tokens_joined() -> String {
-    ALL_SHAPES.iter().map(|s| s.token()).collect::<Vec<_>>().join(", ")
+    ALL_SHAPES
+        .iter()
+        .map(|s| s.token())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn kind_tokens_joined() -> String {
-    ALL_KINDS.iter().map(|k| k.token()).collect::<Vec<_>>().join(", ")
+    ALL_KINDS
+        .iter()
+        .map(|k| k.token())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 // ============================================================================
@@ -181,7 +190,11 @@ struct Cite {
 /// `&[cite!(…)]` still promotes to `'static` in the table.)
 macro_rules! cite {
     ($thm:expr, $file:expr) => {
-        Cite { thm: $thm, file: $file, keystone: true }
+        Cite {
+            thm: $thm,
+            file: $file,
+            keystone: true,
+        }
     };
 }
 
@@ -192,7 +205,11 @@ macro_rules! cite {
 /// directions.
 macro_rules! cite_unlisted {
     ($thm:expr, $file:expr) => {
-        Cite { thm: $thm, file: $file, keystone: false }
+        Cite {
+            thm: $thm,
+            file: $file,
+            keystone: false,
+        }
     };
 }
 
@@ -218,7 +235,8 @@ struct Ruling {
 const UNCLASSIFIED_MSG: &str =
     "no theorem in this repo covers this pair; classify it in Lean first";
 
-const DISCLAIMER: &str = "Verdicts are lookups into machine-checked theorems (see Uwueave/), not a \
+const DISCLAIMER: &str =
+    "Verdicts are lookups into machine-checked theorems (see Uwueave/), not a \
      checker running here. The counterexamples are real states you can replay in tests.";
 
 // The Lean files cited below (paths relative to the repo root).
@@ -689,7 +707,10 @@ fn classify(shape: Shape, kind: Kind) -> Option<Ruling> {
         // thm: clset_cross_element_not_iconfluent
         (ClSet, CrossField) => Some(Ruling {
             verdict: Verdict::Escalates,
-            cites: &[cite_unlisted!("clset_cross_element_not_iconfluent", ORSET_L)],
+            cites: &[cite_unlisted!(
+                "clset_cross_element_not_iconfluent",
+                ORSET_L
+            )],
             story: Some(
                 "The invariant links elements: if 0 is present then 1 is present. \
                  Replica A holds counts {0 ↦ 3, 1 ↦ 1} — both odd, both present. \
@@ -1122,14 +1143,14 @@ fn render(source: &str, schema: &Schema) -> String {
             line.push('\n');
             line
         };
-        out.push_str(&fmt_row([headers[0], headers[1], headers[2], headers[3], headers[4]]));
+        out.push_str(&fmt_row([
+            headers[0], headers[1], headers[2], headers[3], headers[4],
+        ]));
         let total: usize = widths.iter().sum::<usize>() + 4 * 2;
         out.push_str(&"-".repeat(total.min(100)));
         out.push('\n');
         for row in &cells {
-            out.push_str(&fmt_row([
-                &row[0], &row[1], &row[2], &row[3], &row[4],
-            ]));
+            out.push_str(&fmt_row([&row[0], &row[1], &row[2], &row[3], &row[4]]));
         }
 
         // If any rendered citation lacks its audit receipt, say what the
@@ -1235,77 +1256,215 @@ fn help_text() -> String {
         h.push_str(s);
         h.push('\n');
     };
-    p(&mut h, "uwueave-check — is your invariant safe to replicate?");
+    p(
+        &mut h,
+        "uwueave-check — is your invariant safe to replicate?",
+    );
     p(&mut h, "");
     p(&mut h, "USAGE");
     p(&mut h, "  uwueave-check <schema-file>");
     p(&mut h, "  uwueave-check --help");
     p(&mut h, "");
-    p(&mut h, "Describe your replicated fields and the invariants you care about; this tool");
-    p(&mut h, "answers, per invariant, whether the merge can break it — by looking the pair");
-    p(&mut h, "up in this repo's catalog of machine-checked theorems and citing the exact");
-    p(&mut h, "theorem that settles it. Where no theorem covers a pair, it says so plainly");
+    p(
+        &mut h,
+        "Describe your replicated fields and the invariants you care about; this tool",
+    );
+    p(
+        &mut h,
+        "answers, per invariant, whether the merge can break it — by looking the pair",
+    );
+    p(
+        &mut h,
+        "up in this repo's catalog of machine-checked theorems and citing the exact",
+    );
+    p(
+        &mut h,
+        "theorem that settles it. Where no theorem covers a pair, it says so plainly",
+    );
     p(&mut h, "instead of guessing.");
     p(&mut h, "");
-    p(&mut h, "SCHEMA FORMAT (line-based; `#` starts a comment, blank lines are fine)");
+    p(
+        &mut h,
+        "SCHEMA FORMAT (line-based; `#` starts a comment, blank lines are fine)",
+    );
     p(&mut h, "");
-    p(&mut h, "  field <name>: <shape>         declare a replicated field");
-    p(&mut h, "  invariant <field>: <kind>     ask about an invariant on that field");
+    p(
+        &mut h,
+        "  field <name>: <shape>         declare a replicated field",
+    );
+    p(
+        &mut h,
+        "  invariant <field>: <kind>     ask about an invariant on that field",
+    );
     p(&mut h, "");
-    p(&mut h, "  Declarations may come in any order; one field may carry several invariants.");
+    p(
+        &mut h,
+        "  Declarations may come in any order; one field may carry several invariants.",
+    );
     p(&mut h, "");
     p(&mut h, "SHAPES");
     p(&mut h, "  gset         grow-only set (merge = union)");
-    p(&mut h, "  gcounter     per-replica grow-only counter (merge = pointwise max)");
-    p(&mut h, "  pncounter    increments and decrements; the observable is the net");
-    p(&mut h, "  lww          last-writer-wins register (timestamped; the join selects)");
-    p(&mut h, "  mvreg        multi-value register (concurrent writes stay visible)");
-    p(&mut h, "  orset        observed-remove set (add-wins via tags)");
-    p(&mut h, "  clset        causal-length set (presence = counter parity)");
-    p(&mut h, "  escrow       per-replica quota'd spends (the escrowed bounded counter)");
-    p(&mut h, "  causal-dag   content-addressed append-only DAG (parents fixed at creation)");
-    p(&mut h, "  movelog      grow-only op log; structure derived by cycle-skipping replay");
+    p(
+        &mut h,
+        "  gcounter     per-replica grow-only counter (merge = pointwise max)",
+    );
+    p(
+        &mut h,
+        "  pncounter    increments and decrements; the observable is the net",
+    );
+    p(
+        &mut h,
+        "  lww          last-writer-wins register (timestamped; the join selects)",
+    );
+    p(
+        &mut h,
+        "  mvreg        multi-value register (concurrent writes stay visible)",
+    );
+    p(
+        &mut h,
+        "  orset        observed-remove set (add-wins via tags)",
+    );
+    p(
+        &mut h,
+        "  clset        causal-length set (presence = counter parity)",
+    );
+    p(
+        &mut h,
+        "  escrow       per-replica quota'd spends (the escrowed bounded counter)",
+    );
+    p(
+        &mut h,
+        "  causal-dag   content-addressed append-only DAG (parents fixed at creation)",
+    );
+    p(
+        &mut h,
+        "  movelog      grow-only op log; structure derived by cycle-skipping replay",
+    );
     p(&mut h, "");
     p(&mut h, "INVARIANT KINDS");
-    p(&mut h, "  member             this element/value stays present");
+    p(
+        &mut h,
+        "  member             this element/value stays present",
+    );
     p(&mut h, "  not-member         this element stays absent");
-    p(&mut h, "  lower-bound        at least k (a grow-only floor)");
-    p(&mut h, "  ceiling            at most k (a cap on size or value)");
-    p(&mut h, "  unique             at most one — one pin, one entry per key");
-    p(&mut h, "  mutex              exactly one of several parties holds it");
-    p(&mut h, "  balance            a resource never goes negative");
-    p(&mut h, "  per-replica-quota  each replica stays within its own allocation");
-    p(&mut h, "  acyclic            the graph/tree stays cycle-free");
-    p(&mut h, "  active-path        one shared active root-to-leaf path");
-    p(&mut h, "  cross-field        an invariant relating two fields or elements");
+    p(
+        &mut h,
+        "  lower-bound        at least k (a grow-only floor)",
+    );
+    p(
+        &mut h,
+        "  ceiling            at most k (a cap on size or value)",
+    );
+    p(
+        &mut h,
+        "  unique             at most one — one pin, one entry per key",
+    );
+    p(
+        &mut h,
+        "  mutex              exactly one of several parties holds it",
+    );
+    p(
+        &mut h,
+        "  balance            a resource never goes negative",
+    );
+    p(
+        &mut h,
+        "  per-replica-quota  each replica stays within its own allocation",
+    );
+    p(
+        &mut h,
+        "  acyclic            the graph/tree stays cycle-free",
+    );
+    p(
+        &mut h,
+        "  active-path        one shared active root-to-leaf path",
+    );
+    p(
+        &mut h,
+        "  cross-field        an invariant relating two fields or elements",
+    );
     p(&mut h, "");
     p(&mut h, "VERDICTS");
-    p(&mut h, "  FREE           the merge provably cannot break it; the theorem is cited");
-    p(&mut h, "  ESCALATES      two legal replicas can merge into an illegal state — the");
-    p(&mut h, "                 exact pair is in the theorem, retold in the report, along");
-    p(&mut h, "                 with suggested exits (escrow / op-log / MV / per-user)");
-    p(&mut h, "  SEAM           free within an allocation; coordination only at the seam");
-    p(&mut h, "                 (re-allocation) — the segmented-confluence verdict");
-    p(&mut h, "  PATTERN        maintained by the op-log / derived-view pattern, with a");
-    p(&mut h, "                 proved price (an older remote op can rewrite what you saw)");
-    p(&mut h, "  UNCLASSIFIED   no theorem in this repo covers this pair; classify it in");
-    p(&mut h, "                 Lean first — this tool never guesses");
+    p(
+        &mut h,
+        "  FREE           the merge provably cannot break it; the theorem is cited",
+    );
+    p(
+        &mut h,
+        "  ESCALATES      two legal replicas can merge into an illegal state — the",
+    );
+    p(
+        &mut h,
+        "                 exact pair is in the theorem, retold in the report, along",
+    );
+    p(
+        &mut h,
+        "                 with suggested exits (escrow / op-log / MV / per-user)",
+    );
+    p(
+        &mut h,
+        "  SEAM           free within an allocation; coordination only at the seam",
+    );
+    p(
+        &mut h,
+        "                 (re-allocation) — the segmented-confluence verdict",
+    );
+    p(
+        &mut h,
+        "  PATTERN        maintained by the op-log / derived-view pattern, with a",
+    );
+    p(
+        &mut h,
+        "                 proved price (an older remote op can rewrite what you saw)",
+    );
+    p(
+        &mut h,
+        "  UNCLASSIFIED   no theorem in this repo covers this pair; classify it in",
+    );
+    p(
+        &mut h,
+        "                 Lean first — this tool never guesses",
+    );
     p(&mut h, "");
-    p(&mut h, "EXAMPLE (save as loom.schema, then run `uwueave-check loom.schema`)");
+    p(
+        &mut h,
+        "EXAMPLE (save as loom.schema, then run `uwueave-check loom.schema`)",
+    );
     p(&mut h, "");
     p(&mut h, "  # a tiny loom, field by field");
-    p(&mut h, "  field nodes: causal-dag       # hash-linked, parents fixed at creation");
+    p(
+        &mut h,
+        "  field nodes: causal-dag       # hash-linked, parents fixed at creation",
+    );
     p(&mut h, "  field bookmarks: gset");
     p(&mut h, "  field wallet: pncounter");
     p(&mut h, "  field title: lww");
     p(&mut h, "  field moves: movelog");
     p(&mut h, "");
-    p(&mut h, "  invariant nodes: acyclic      # FREE — causal_dag_free");
-    p(&mut h, "  invariant bookmarks: member   # FREE — gset_mem_iconfluent");
-    p(&mut h, "  invariant bookmarks: ceiling  # ESCALATES — with escrow/seam exits");
-    p(&mut h, "  invariant wallet: balance     # ESCALATES — Bailis's bank account");
-    p(&mut h, "  invariant title: cross-field  # ESCALATES — the LWW interleaving");
-    p(&mut h, "  invariant moves: acyclic      # PATTERN — derived view, priced honestly");
+    p(
+        &mut h,
+        "  invariant nodes: acyclic      # FREE — causal_dag_free",
+    );
+    p(
+        &mut h,
+        "  invariant bookmarks: member   # FREE — gset_mem_iconfluent",
+    );
+    p(
+        &mut h,
+        "  invariant bookmarks: ceiling  # ESCALATES — with escrow/seam exits",
+    );
+    p(
+        &mut h,
+        "  invariant wallet: balance     # ESCALATES — Bailis's bank account",
+    );
+    p(
+        &mut h,
+        "  invariant title: cross-field  # ESCALATES — the LWW interleaving",
+    );
+    p(
+        &mut h,
+        "  invariant moves: acyclic      # PATTERN — derived view, priced honestly",
+    );
     p(&mut h, "");
     h.push_str(&wrap(DISCLAIMER, ""));
     h.push_str(&wrap(&ledger_footer(), ""));
@@ -1467,7 +1626,11 @@ mod tests {
         assert_eq!(errs.len(), 1);
         assert!(errs[0].contains("unknown shape `gsett`"));
         assert!(errs[0].contains("valid shapes"));
-        assert!(errs[0].contains("causal-dag"), "options are listed: {}", errs[0]);
+        assert!(
+            errs[0].contains("causal-dag"),
+            "options are listed: {}",
+            errs[0]
+        );
     }
 
     #[test]
@@ -1475,7 +1638,11 @@ mod tests {
         let errs = parse_schema("field x: gset\ninvariant x: uniq\n").unwrap_err();
         assert_eq!(errs.len(), 1);
         assert!(errs[0].contains("unknown invariant kind `uniq`"));
-        assert!(errs[0].contains("per-replica-quota"), "options listed: {}", errs[0]);
+        assert!(
+            errs[0].contains("per-replica-quota"),
+            "options listed: {}",
+            errs[0]
+        );
     }
 
     #[test]
@@ -1700,7 +1867,7 @@ mod tests {
             let before_ok = stripped[..abs]
                 .chars()
                 .last()
-                .map_or(true, |c| !(c.is_ascii_alphanumeric() || c == '_'));
+                .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
             if after_ok && before_ok {
                 return Some(abs);
             }
@@ -1834,9 +2001,12 @@ mod tests {
         let mut start = 0;
         while let Some(pos) = text[start..].find(token) {
             let abs = start + pos;
-            let before_ok = text[..abs].chars().last().map_or(true, |c| !is_ident_char(c));
+            let before_ok = text[..abs].chars().last().is_none_or(|c| !is_ident_char(c));
             let after = abs + token.len();
-            let after_ok = text[after..].chars().next().map_or(true, |c| !is_ident_char(c));
+            let after_ok = text[after..]
+                .chars()
+                .next()
+                .is_none_or(|c| !is_ident_char(c));
             if before_ok && after_ok {
                 out.push(abs);
             }
@@ -1908,9 +2078,7 @@ mod tests {
                         cite.file
                     )
                 });
-            let listed = ledger
-                .iter()
-                .any(|(n, m)| n == cite.thm && m == module);
+            let listed = ledger.iter().any(|(n, m)| n == cite.thm && m == module);
             if cite.keystone {
                 assert!(
                     listed,

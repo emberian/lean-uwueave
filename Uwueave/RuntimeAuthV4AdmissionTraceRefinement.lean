@@ -34,13 +34,15 @@ set_option autoImplicit false
 set_option maxHeartbeats 800000
 
 /-- The operational premises which byte checking deliberately cannot create.
-Both predicates are stated over the exact request retained by the dependent
-checker evidence, rather than over separately reconstructed host fields. -/
+Both predicates are stated over the exact request and wire format retained by
+the dependent checker evidence, rather than over separately reconstructed host
+fields. -/
 structure OperationalReceipts
     (boundary : HostVerificationBoundary)
     (holder : GrantHolder)
     (checked : CheckedAdmissionTrace) : Prop where
-  hostVerified : HostVerified boundary checked.evidence.request
+  hostVerified : HostVerifiedAt boundary checked.evidence.wireFormat
+    checked.evidence.request
   holderAccepted : holder checked.evidence.request.content.issuer.toNat
     checked.evidence.request.content.move.cite
 
@@ -173,7 +175,7 @@ structure RefinedAdmissionTrace
     checked.certificate.cite.toNat
 
 /-- Checker acceptance supplies every structural premise of
-`hostAdmission_refines_authenticatedGatedOp`; only the exact operational
+`hostAdmission_refines_authenticatedGatedOpAt`; only the exact operational
 verification/holder receipts and U-0001 adapter remain explicit.  The entire
 certificate/evidence pair is retained in the conclusion. -/
 def checkedTrace_refines_authenticatedGatedOp
@@ -207,13 +209,16 @@ def checkedTrace_refines_authenticatedGatedOp
       some operations[index] = operations[index]? :=
         (Array.getElem?_eq_getElem hindex).symm
       _ = some (RuntimeAuthV4.toExecOp evidence.request.toLegacy) := hexecution
-  have horigin : c.canonicalRequest = encodeContextRequest evidence.request :=
-    accepted_decode_has_canonical_origin c.projectionBound.toNat
-      c.canonicalRequest evidence.request evidence.requestDecoded
+  have horigin :
+      c.canonicalRequest =
+        encodeContextRequestAt evidence.wireFormat evidence.request :=
+    accepted_decode_with_format_has_canonical_origin c.projectionBound.toNat
+      c.canonicalRequest evidence.wireFormat evidence.request
+      evidence.requestDecoded
   have hstatus := modelStatus_zero_or_one evidence
-  let refined := hostAdmission_refines_authenticatedGatedOp crypto
-    c.projectionBound.toNat c.canonicalRequest evidence.request
-    evidence.projection evidence.projectAdmission_eq horigin
+  let refined := hostAdmission_refines_authenticatedGatedOpAt crypto
+    evidence.wireFormat c.projectionBound.toNat c.canonicalRequest
+    evidence.request evidence.projection evidence.projectAdmission_eq horigin
     operational.hostVerified operational.holderAccepted grants revocations
     firstParent operations index hindex hexecution'
     hstatus
@@ -225,11 +230,11 @@ def checkedTrace_refines_authenticatedGatedOp
   have hostExact : boundary.Accepts c.signatureAlgorithm c.signingBytes
       c.signature := by
     rw [← halgorithm, ← hsigning, ← hsignature, hprojection]
-    simpa [AdmissionProjection.ofRequest, HostVerified] using
+    simpa [AdmissionProjection.ofRequestAt, HostVerifiedAt] using
       operational.hostVerified
   have holderExact : holder c.nonceIssuer.toNat c.cite.toNat := by
     rw [← congrArg UInt64.toNat hissuer, ← hcite, hprojection]
-    simpa [AdmissionProjection.ofRequest] using operational.holderAccepted
+    simpa [AdmissionProjection.ofRequestAt] using operational.holderAccepted
   exact {
     submittedCertificate := submittedCertificate
     checkerAccepted := hchecked

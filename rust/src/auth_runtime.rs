@@ -570,6 +570,7 @@ pub struct AdmissionReceipt {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // By-value receipt shape is pinned by debt closure U-0052.
 pub enum AdmissionOutcome {
     Accepted(AdmissionReceipt),
     Refused(AdmissionRefusal),
@@ -672,6 +673,7 @@ where
     M: MoveMembership<C::Context>,
     T: AsRef<[u8]> + Clone + PartialEq,
 {
+    #[allow(clippy::too_many_arguments)] // Positional constructor is pinned by debt closures U-0052 / U-0054.
     pub fn new(
         scope: RuntimeScope,
         verifier: V,
@@ -713,6 +715,7 @@ where
     /// against its exact historical context, re-authorized, re-membership
     /// checked, and re-executed.  The supplied executor is consumed on failure,
     /// so callers must provide an isolated recovery instance.
+    #[allow(clippy::too_many_arguments)] // Positional constructor is pinned by debt closures U-0052 / U-0054.
     pub fn recover(
         maximum_bytes: usize,
         scope: RuntimeScope,
@@ -764,14 +767,17 @@ where
                     return Err(RuntimeRecoveryError::Projection { sequence })
                 }
             };
+            let pipeline = ValidationPipeline {
+                contexts: &contexts,
+                resolver: &resolver,
+                authority: &authority,
+                membership: &membership,
+                execution: &execution,
+                scope: &scope,
+            };
             let checked = validate_fresh(
                 &verifier,
-                &contexts,
-                &resolver,
-                &authority,
-                &membership,
-                &execution,
-                &scope,
+                &pipeline,
                 record.admission().context().previous_admission_commitment,
                 &projection,
                 record.admission().trace().format_v3_request(),
@@ -904,13 +910,16 @@ where
             }
         }
 
+        let pipeline = ValidationPipeline {
+            contexts: &self.contexts,
+            resolver: &self.resolver,
+            authority: &self.authority,
+            membership: &self.membership,
+            execution: &self.execution,
+            scope: &self.scope,
+        };
         let validated = match validate_after_verification(
-            &self.contexts,
-            &self.resolver,
-            &self.authority,
-            &self.membership,
-            &self.execution,
-            &self.scope,
+            &pipeline,
             self.journal.head_commitment(),
             projection,
             acceptance,
@@ -1070,14 +1079,18 @@ fn operation_key(projection: &RuntimeAuthV4AdmissionProjection) -> OperationKey 
     }
 }
 
+struct ValidationPipeline<'a, C, R, A, M, T> {
+    contexts: &'a C,
+    resolver: &'a R,
+    authority: &'a A,
+    membership: &'a M,
+    execution: &'a LeanMoveExecution<T>,
+    scope: &'a RuntimeScope,
+}
+
 fn validate_fresh<V, C, R, A, M, T>(
     verifier: &V,
-    contexts: &C,
-    resolver: &R,
-    authority: &A,
-    membership: &M,
-    execution: &LeanMoveExecution<T>,
-    scope: &RuntimeScope,
+    pipeline: &ValidationPipeline<'_, C, R, A, M, T>,
     previous: Option<[u8; 32]>,
     projection: &RuntimeAuthV4AdmissionProjection,
     recorded_request: &[u8],
@@ -1103,12 +1116,7 @@ where
         ));
     }
     validate_after_verification(
-        contexts,
-        resolver,
-        authority,
-        membership,
-        execution,
-        scope,
+        pipeline,
         previous,
         projection.clone(),
         acceptance,
@@ -1117,12 +1125,7 @@ where
 }
 
 fn validate_after_verification<C, R, A, M, T>(
-    contexts: &C,
-    resolver: &R,
-    authority: &A,
-    membership: &M,
-    execution: &LeanMoveExecution<T>,
-    scope: &RuntimeScope,
+    pipeline: &ValidationPipeline<'_, C, R, A, M, T>,
     previous: Option<[u8; 32]>,
     projection: RuntimeAuthV4AdmissionProjection,
     verification_acceptance: VerificationAcceptance,
@@ -1135,6 +1138,14 @@ where
     M: MoveMembership<C::Context>,
     T: AsRef<[u8]> + Clone + PartialEq,
 {
+    let ValidationPipeline {
+        contexts,
+        resolver,
+        authority,
+        membership,
+        execution,
+        scope,
+    } = *pipeline;
     if projection.document != scope.document
         || projection.genesis != scope.genesis
         || projection.context_commitment != scope.context_commitment
@@ -1412,13 +1423,16 @@ mod tests {
             let full = execution
                 .log()
                 .prospective_replay_certified(execution.weave(), operation);
+            let pipeline = ValidationPipeline {
+                contexts: &contexts,
+                resolver: &harness::Resolver,
+                authority: &ContextGrantHolderAuthority,
+                membership: &harness::Membership,
+                execution: &execution,
+                scope: &scope,
+            };
             let Ok(validated) = validate_after_verification(
-                &contexts,
-                &harness::Resolver,
-                &ContextGrantHolderAuthority,
-                &harness::Membership,
-                &execution,
-                &scope,
+                &pipeline,
                 journal.head_commitment(),
                 projection,
                 acceptance,

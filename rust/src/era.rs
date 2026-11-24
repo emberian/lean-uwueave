@@ -351,7 +351,7 @@ impl EraGroup {
         // Anything else means the two sides disagree about the wire format —
         // refuse rather than reinterpret.
         assert!(
-            out.len() >= 24 && out.len() % 8 == 0,
+            out.len() >= 24 && out.len().is_multiple_of(8),
             "kernel response is not ERA format v1 (short or ragged)"
         );
         let resp: Vec<u64> = out

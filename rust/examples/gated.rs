@@ -56,7 +56,9 @@ fn rule(title: &str) {
 fn folders() -> (CausalWeave<Vec<u8>>, Vec<(String, NodeId)>) {
     let mut weave: CausalWeave<Vec<u8>> = CausalWeave::new();
     for label in ["inbox", "drafts", "archive", "trash"] {
-        weave.insert(vec![], label.as_bytes().to_vec()).expect("a root node has no parents");
+        weave
+            .insert(vec![], label.as_bytes().to_vec())
+            .expect("a root node has no parents");
     }
     // `nodes()` iterates in ascending content-address order, which is exactly
     // the indexing the request encoder uses. Two replicas holding the same
@@ -91,7 +93,11 @@ fn print_trace(traced: &TracedReplay, name: impl Fn(&NodeId) -> String) {
         };
         println!(
             "      t={:<3} {:<7} move {:<8} under {:<8}  cites g{}   {verdict}",
-            op.lamport, actor, name(&op.child), dest, op.cite
+            op.lamport,
+            actor,
+            name(&op.child),
+            dest,
+            op.cite
         );
     }
 }
@@ -181,14 +187,29 @@ fn main() {
     rule("work, under that authority");
 
     // The phone moves a folder, citing its own key.
-    let phone_move =
-        MoveOp { lamport: 1, replica: PHONE, child: table[2].1, dest: Some(table[1].1), cite: PHONE_KEY };
+    let phone_move = MoveOp {
+        lamport: 1,
+        replica: PHONE,
+        child: table[2].1,
+        dest: Some(table[1].1),
+        cite: PHONE_KEY,
+    };
     // The bot moves a folder inside its scope, citing the narrowed key.
-    let bot_move =
-        MoveOp { lamport: 2, replica: BOT, child: covered, dest: Some(covered_dest), cite: BOT_KEY };
+    let bot_move = MoveOp {
+        lamport: 2,
+        replica: BOT,
+        child: covered,
+        dest: Some(covered_dest),
+        cite: BOT_KEY,
+    };
     // ...and one outside it. Same bot, same key, one index too far.
-    let bot_overreach =
-        MoveOp { lamport: 3, replica: BOT, child: uncovered, dest: Some(covered_dest), cite: BOT_KEY };
+    let bot_overreach = MoveOp {
+        lamport: 3,
+        replica: BOT,
+        child: uncovered,
+        dest: Some(covered_dest),
+        cite: BOT_KEY,
+    };
 
     for op in [phone_move, bot_move, bot_overreach] {
         phone_log.record(op);
@@ -285,8 +306,20 @@ fn main() {
     log.issue(Grant::delegate(KEY_B, OWNER_KEY, u64::MAX));
 
     // The earlier op wins the order; the later one would close a cycle.
-    let early = MoveOp { lamport: 1, replica: PHONE, child: a, dest: Some(b), cite: KEY_A };
-    let late = MoveOp { lamport: 2, replica: BOT, child: b, dest: Some(a), cite: KEY_B };
+    let early = MoveOp {
+        lamport: 1,
+        replica: PHONE,
+        child: a,
+        dest: Some(b),
+        cite: KEY_A,
+    };
+    let late = MoveOp {
+        lamport: 2,
+        replica: BOT,
+        child: b,
+        dest: Some(a),
+        cite: KEY_B,
+    };
     log.record(early);
     log.record(late);
 
